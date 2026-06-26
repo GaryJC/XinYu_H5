@@ -1,0 +1,7 @@
+node_modules/
+dist/
+server/data/
+work/*.png
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
