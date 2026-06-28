@@ -94,3 +94,36 @@ insert into audit_logs (order_id, at, actor, action) values
   ('WT-20260626-017', '2026-06-26T10:10:00+08:00', '林佳', '提交派工池'),
   ('WT-20260626-016', '2026-06-26T10:10:00+08:00', '刘峰', '维修完成提报'),
   ('WT-20260626-016', '2026-06-26T10:20:00+08:00', '黄检', '检验通过');
+
+update work_orders set
+  dispatch_no = replace(id, 'WT-', 'PG-'),
+  arrival_date = to_char(created_at at time zone 'Asia/Shanghai', 'YYYY-MM-DD'),
+  shop_id = 'shop-hq',
+  shop_name = '上海虹桥店',
+  shop_address = '上海市闵行区虹桥汽修服务中心',
+  shop_phone = '021-6000-8618';
+
+update repair_items set status = '维修中', start_at = '2026-06-26 10:30', inspector = '黄检'
+where order_id = 'WT-20260626-018';
+update repair_items set status = '已完工', start_at = '2026-06-26 09:10', finish_at = '2026-06-26 10:05', inspector = '黄检'
+where order_id = 'WT-20260626-016';
+
+delete from platform_sync_records where order_id in ('WT-20260626-018', 'WT-20260626-016');
+insert into platform_sync_records (id, order_id, platform_order_no, status, message, synced_at) values
+  ('sync_seed_018', 'WT-20260626-018', 'PLAT-20260626-018', '已同步', '已生成维修业务平台工单和模拟出库单', '2026-06-26T10:05:00+08:00'),
+  ('sync_seed_016', 'WT-20260626-016', 'PLAT-20260626-016', '已同步', '已同步结算来源数据', '2026-06-26T10:15:00+08:00');
+
+update work_orders set platform_order_no = 'PLAT-20260626-018' where id = 'WT-20260626-018';
+update work_orders set platform_order_no = 'PLAT-20260626-016' where id = 'WT-20260626-016';
+
+delete from outbound_orders where order_id in ('WT-20260626-018');
+insert into outbound_orders (id, order_id, dispatch_no, platform_order_no, technician, status, created_at)
+values ('out_seed_018', 'WT-20260626-018', 'PG-20260626-018', 'PLAT-20260626-018', '陈立', '已领料', '2026-06-26T10:10:00+08:00');
+delete from outbound_order_items where outbound_order_id = 'out_seed_018';
+insert into outbound_order_items (id, outbound_order_id, repair_item_id, name, quantity, picked) values
+  ('outi_seed_018_1', 'out_seed_018', 1, '更换前刹车片', 1, true),
+  ('outi_seed_018_2', 'out_seed_018', 2, '发动机舱异响检查', 1, true);
+
+delete from settlement_statements where order_id in ('WT-20260626-016');
+insert into settlement_statements (id, order_id, dispatch_no, plate, technician, amount, source, match_status, synced_at)
+values ('settle_seed_016', 'WT-20260626-016', 'PG-20260626-016', '苏E·45M8A', '刘峰', 980, '维修业务平台', '已匹配', '2026-06-26T10:25:00+08:00');

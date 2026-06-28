@@ -24,3 +24,6 @@ enabled = false
 
 [edge_runtime]
 enabled = false
+
+[analytics]
+enabled = false

@@ -1,4 +1,4 @@
-import { RoleKey, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "./types";
+import { DashboardSummary, OcrFieldKey, OcrRecord, RoleKey, UserProfile, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "./types";
 
 export type WorkOrderApi = {
   list(role: RoleKey): Promise<WorkOrder[]>;
@@ -8,6 +8,13 @@ export type WorkOrderApi = {
   createSignatureToken(id: string, actor: string): Promise<WorkOrder>;
   signByToken(token: string, signature: string): Promise<WorkOrder>;
   findByToken(token: string): Promise<WorkOrder | undefined>;
+  createOcrRecord(orderId: string | undefined, field: OcrFieldKey, source: string, value: string, confidence: number): Promise<OcrRecord>;
+  confirmOcrRecord(id: string, value: string, actor: string): Promise<OcrRecord>;
+  syncPlatform(id: string, actor: string): Promise<WorkOrder>;
+  repairItemAction(id: string, itemId: number, action: string, actor: string, patch?: Record<string, unknown>): Promise<WorkOrder>;
+  createSettlement(id: string, actor: string): Promise<WorkOrder>;
+  dashboard(role: RoleKey): Promise<DashboardSummary>;
+  users(): Promise<UserProfile[]>;
 };
 
 export const workOrderApi: WorkOrderApi = {
@@ -35,6 +42,30 @@ export const workOrderApi: WorkOrderApi = {
     } catch {
       return undefined;
     }
+  },
+  createOcrRecord(orderId, field, source, value, confidence) {
+    return request(`/api/work-orders/${orderId ?? "draft"}/ocr-records`, {
+      method: "POST",
+      body: { field, source, fileId: `mock-upload-${Date.now()}`, value, confidence }
+    });
+  },
+  confirmOcrRecord(id, value, actor) {
+    return request(`/api/ocr-records/${id}/confirm`, { method: "POST", body: { value, actor } });
+  },
+  syncPlatform(id, actor) {
+    return request(`/api/work-orders/${id}/platform-sync`, { method: "POST", body: { actor } });
+  },
+  repairItemAction(id, itemId, action, actor, patch = {}) {
+    return request(`/api/work-orders/${id}/repair-items/${itemId}/action`, { method: "POST", body: { action, actor, patch } });
+  },
+  createSettlement(id, actor) {
+    return request(`/api/work-orders/${id}/settlement-statements`, { method: "POST", body: { actor } });
+  },
+  dashboard(role) {
+    return request(`/api/dashboard?role=${role}`);
+  },
+  users() {
+    return request("/api/users");
   }
 };
 

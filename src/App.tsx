@@ -27,7 +27,7 @@ import {
 import { useEffect, useId, useMemo, useState } from "react";
 import { MetricCard, StatusChip } from "./components";
 import { dingTalkAuthAdapter, notificationAdapter, ocrAdapter } from "./adapters";
-import { createEmptyDraft, roles, sumLabor, technicians, validateWorkOrderDraft, workflow } from "./domain";
+import { createEmptyDraft, roles, sumLabor, validateWorkOrderDraft, workflow } from "./domain";
 import { workOrderApi } from "./mockApi";
 import {
   canCompleteRepair,
@@ -37,7 +37,7 @@ import {
   canSettle,
   canSubmitDispatch
 } from "./permissions";
-import { OcrFieldKey, OcrFieldState, RepairItem, RoleKey, WorkOrder, WorkOrderDraft } from "./types";
+import { DashboardSummary, OcrFieldKey, OcrFieldState, RepairItem, RoleKey, UserProfile, WorkOrder, WorkOrderDraft } from "./types";
 
 const navItems: Array<{ label: string; icon: typeof LayoutDashboard; roles: RoleKey[] }> = [
   { label: "工作台", icon: LayoutDashboard, roles: ["advisor", "dispatcher", "technician", "inspector", "manager"] },
@@ -122,12 +122,17 @@ function Workbench() {
   const [signatureLink, setSignatureLink] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [syncLabel, setSyncLabel] = useState("钉钉组织已同步");
+  const [ocrRecordIds, setOcrRecordIds] = useState<Partial<Record<OcrFieldKey, string>>>({});
+  const [dashboard, setDashboard] = useState<DashboardSummary>();
+  const [users, setUsers] = useState<UserProfile[]>([]);
 
   const selectedOrder = orders.find((order) => order.id === selectedId);
   const actor = roles[role].name;
   const visibleNavItems = useMemo(() => navItems.filter((item) => item.roles.includes(role)), [role]);
   const canEditForm = canCreateOrder(role);
   const totalLabor = useMemo(() => sumLabor(draft.repairItems), [draft.repairItems]);
+  const technicianOptions = useMemo(() => users.filter((user) => user.active && user.role === "technician").map((user) => user.name), [users]);
+  const inspectorOptions = useMemo(() => users.filter((user) => user.active && user.role === "inspector").map((user) => user.name), [users]);
 
   const searchedOrders = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -150,7 +155,9 @@ function Workbench() {
 
   useEffect(() => {
     void loadOrders(role);
+    void loadDashboard(role);
     void dingTalkAuthAdapter.syncOrganization().then((result) => setSyncLabel(`钉钉组织已同步 ${result.users} 人`));
+    void workOrderApi.users().then(setUsers).catch(() => setUsers([]));
   }, [role]);
 
   useEffect(() => {
@@ -180,12 +187,21 @@ function Workbench() {
     }
   }
 
+  async function loadDashboard(nextRole = role) {
+    try {
+      setDashboard(await workOrderApi.dashboard(nextRole));
+    } catch {
+      setDashboard(undefined);
+    }
+  }
+
   function selectOrder(order: WorkOrder) {
     setSelectedId(order.id);
     setDraft(orderToDraft(order));
     setFormErrors([]);
     setSignatureLink(order.signatureToken ? buildSignatureLink(order.signatureToken) : "");
     setOcrState(initialOcrState);
+    setOcrRecordIds({});
   }
 
   function startNewOrder() {
@@ -194,6 +210,7 @@ function Workbench() {
     setSignatureLink("");
     setFormErrors([]);
     setOcrState(initialOcrState);
+    setOcrRecordIds({});
   }
 
   async function saveDraft() {
@@ -253,6 +270,9 @@ function Workbench() {
 
   async function settleOrder() {
     if (!selectedOrder) return;
+    if (!selectedOrder.settlementStatements.length) {
+      await workOrderApi.createSettlement(selectedOrder.id, actor);
+    }
     const updated = await workOrderApi.transition(selectedOrder.id, "完成", actor, "确认结算并归档", {
       settlementAmount: Number(draft.settlementAmount || draft.estimatedFee || totalLabor),
       feeNote: draft.feeNote
@@ -263,6 +283,8 @@ function Workbench() {
   async function runOcr(field: OcrFieldKey) {
     setOcrState((current) => ({ ...current, [field]: { ...current[field], status: "识别中" } }));
     const result = await ocrAdapter.recognize(field);
+    const record = await workOrderApi.createOcrRecord(selectedOrder?.id, field, initialOcrState[field].source, result.value, result.confidence);
+    setOcrRecordIds((current) => ({ ...current, [field]: record.id }));
     setOcrState((current) => ({ ...current, [field]: { ...current[field], status: "待确认", value: result.value } }));
     setDraft((current) => ({
       ...current,
@@ -274,7 +296,30 @@ function Workbench() {
   }
 
   function confirmOcr(field: OcrFieldKey) {
+    const recordId = ocrRecordIds[field];
+    if (recordId) void workOrderApi.confirmOcrRecord(recordId, ocrState[field].value, actor);
     setOcrState((current) => ({ ...current, [field]: { ...current[field], status: "已确认" } }));
+  }
+
+  async function syncPlatform() {
+    if (!selectedOrder) return;
+    const updated = await workOrderApi.syncPlatform(selectedOrder.id, actor);
+    await loadOrders(role, updated.id);
+    await loadDashboard(role);
+  }
+
+  async function updateRepairAction(itemId: number, action: string, patch: Record<string, unknown> = {}) {
+    if (!selectedOrder) return;
+    const updated = await workOrderApi.repairItemAction(selectedOrder.id, itemId, action, actor, patch);
+    await loadOrders(role, updated.id);
+    await loadDashboard(role);
+  }
+
+  async function createSettlement() {
+    if (!selectedOrder) return;
+    const updated = await workOrderApi.createSettlement(selectedOrder.id, actor);
+    await loadOrders(role, updated.id);
+    await loadDashboard(role);
   }
 
   function validateBeforeSignature() {
@@ -445,6 +490,10 @@ function Workbench() {
             </div>
 
             <div className="field-grid">
+              <Field disabled={!canEditForm} label="派工号" value={draft.dispatchNo} onChange={(value) => updateDraft({ dispatchNo: value })} />
+              <Field disabled={!canEditForm} label="进厂日期" value={draft.arrivalDate} onChange={(value) => updateDraft({ arrivalDate: value })} />
+              <Field disabled label="门店地址" value={draft.shop.address} onChange={() => undefined} />
+              <Field disabled label="门店联系电话" value={draft.shop.phone} onChange={() => undefined} />
               <Field disabled={!canEditForm} label="车牌号码" value={draft.vehicle.plate} onChange={(value) => updateVehicle("plate", value)} />
               <Field disabled={!canEditForm} label="VIN/底盘号" value={draft.vehicle.vin} onChange={(value) => updateVehicle("vin", value)} />
               <Field disabled={!canEditForm} label="进厂里程" value={draft.vehicle.mileage} suffix="km" onChange={(value) => updateVehicle("mileage", value)} />
@@ -489,7 +538,7 @@ function Workbench() {
                 onClick={() =>
                   setDraft((current) => ({
                     ...current,
-                    repairItems: [...current.repairItems, { id: Date.now(), name: "", laborFee: 0, owner: "待派工" }]
+                    repairItems: [...current.repairItems, { id: Date.now(), name: "", laborFee: 0, owner: "待派工", startAt: "", finishAt: "", inspector: "待检验", status: "待派工" }]
                   }))
                 }
               >
@@ -503,6 +552,10 @@ function Workbench() {
                 <span>项目</span>
                 <span>工费</span>
                 <span>主修人</span>
+                <span>开工</span>
+                <span>完工</span>
+                <span>过程检查</span>
+                <span>状态</span>
                 <span>操作</span>
               </div>
               {draft.repairItems.map((item) => (
@@ -511,10 +564,19 @@ function Workbench() {
                   <input disabled={!canEditForm} aria-label="工费" type="number" value={item.laborFee} onChange={(event) => updateRepairItem(item.id, { laborFee: Number(event.target.value) })} />
                   <select disabled={!canEditForm} aria-label="主修人" value={item.owner} onChange={(event) => updateRepairItem(item.id, { owner: event.target.value })}>
                     <option>待派工</option>
-                    {technicians.map((name) => (
+                    {technicianOptions.map((name) => (
                       <option key={name}>{name}</option>
                     ))}
                   </select>
+                  <input disabled={!canEditForm} aria-label="开工时间" value={item.startAt} onChange={(event) => updateRepairItem(item.id, { startAt: event.target.value })} />
+                  <input disabled={!canEditForm} aria-label="完工时间" value={item.finishAt} onChange={(event) => updateRepairItem(item.id, { finishAt: event.target.value })} />
+                  <select disabled={!canEditForm} aria-label="过程检查人" value={item.inspector} onChange={(event) => updateRepairItem(item.id, { inspector: event.target.value })}>
+                    <option>待检验</option>
+                    {inspectorOptions.map((name) => (
+                      <option key={name}>{name}</option>
+                    ))}
+                  </select>
+                  <span>{item.status}</span>
                   <button
                     className="icon-inline"
                     type="button"
@@ -532,6 +594,24 @@ function Workbench() {
                 </div>
               ))}
             </div>
+
+            {selectedOrder ? (
+              <div className="item-action-grid">
+                {selectedOrder.repairItems.map((item) => (
+                  <div className="mini-card" key={item.id}>
+                    <strong>{item.name || `项目 ${item.id}`}</strong>
+                    <span>{item.owner} · {item.status}</span>
+                    <div className="button-row">
+                      <button className="text-button" type="button" disabled={!canDispatch(role, selectedOrder) || technicianOptions.length === 0} onClick={() => updateRepairAction(item.id, "assign", { technician: draft.technician || technicianOptions[0] || item.owner })}>指派</button>
+                      <button className="text-button" type="button" disabled={!(role === "technician" || role === "manager")} onClick={() => updateRepairAction(item.id, "pick")}>领料</button>
+                      <button className="text-button" type="button" disabled={!(role === "technician" || role === "manager")} onClick={() => updateRepairAction(item.id, "start")}>开工</button>
+                      <button className="text-button" type="button" disabled={!(role === "technician" || role === "manager")} onClick={() => updateRepairAction(item.id, "finish")}>完工</button>
+                      <button className="text-button" type="button" disabled={!(role === "inspector" || role === "manager")} onClick={() => updateRepairAction(item.id, "inspect", { inspector: actor })}>检验</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
 
             <div className="field-grid settlement-grid">
               <Field disabled={!canEditForm} label="预计修理费" value={String(draft.estimatedFee)} suffix="元" onChange={(value) => updateDraft({ estimatedFee: Number(value) })} />
@@ -585,9 +665,13 @@ function Workbench() {
               role={role}
               onSubmitDispatch={submitDispatch}
               onDispatch={dispatchToTechnician}
+              technicians={technicianOptions}
               onCompleteRepair={completeRepair}
               onSettle={settleOrder}
             />
+
+            <PlatformPanel order={selectedOrder} role={role} onSync={syncPlatform} />
+            <SettlementPanel order={selectedOrder} role={role} onCreateSettlement={createSettlement} />
 
             <div className="permission-card">
               <div className="permission-head">
@@ -603,6 +687,8 @@ function Workbench() {
             </div>
           </aside>
         </section>
+
+        <ModulePanel activeNav={activeNav} orders={orders} dashboard={dashboard} users={users} />
 
         <section className="panel lower-panel">
           <div className="panel-header">
@@ -646,11 +732,174 @@ function Workbench() {
   );
 }
 
+function PlatformPanel({ order, role, onSync }: { order?: WorkOrder; role: RoleKey; onSync: () => void }) {
+  const canSync = Boolean(order && (role === "advisor" || role === "manager") && order.status !== "草稿");
+  return (
+    <div className="permission-card">
+      <div className="permission-head">
+        <RefreshCcw size={18} />
+        <strong>平台同步 / 出库单</strong>
+      </div>
+      {!order ? <p>选择委托单后可同步维修业务平台。</p> : (
+        <>
+          <p>平台工单：{order.platformOrderNo || "未同步"}；派工号：{order.dispatchNo || "待生成"}</p>
+          <button className="secondary-button full-width" type="button" disabled={!canSync} onClick={onSync}>同步并生成出库单</button>
+          <div className="mini-list">
+            {order.platformSyncRecords.map((item) => (
+              <span key={item.id}>{item.status} · {item.platformOrderNo} · {item.message}</span>
+            ))}
+            {order.outboundOrders.map((outbound) => (
+              <span key={outbound.id}>出库单 {outbound.id} · {outbound.status} · {outbound.items.length} 项</span>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function SettlementPanel({ order, role, onCreateSettlement }: { order?: WorkOrder; role: RoleKey; onCreateSettlement: () => void }) {
+  return (
+    <div className="permission-card">
+      <div className="permission-head">
+        <ReceiptText size={18} />
+        <strong>结算清单</strong>
+      </div>
+      {!order ? <p>选择委托单后查看结算匹配。</p> : (
+        <>
+          <button className="secondary-button full-width" type="button" disabled={!(role === "advisor" || role === "manager")} onClick={onCreateSettlement}>同步/生成结算清单</button>
+          <div className="mini-list">
+            {order.settlementStatements.length ? order.settlementStatements.map((item) => (
+              <span key={item.id}>{item.matchStatus} · {item.dispatchNo} · ¥{item.amount}</span>
+            )) : <span>暂无结算清单</span>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ModulePanel({ activeNav, orders, dashboard, users }: { activeNav: string; orders: WorkOrder[]; dashboard?: DashboardSummary; users: UserProfile[] }) {
+  if (activeNav === "数据看板") return <DashboardPanel dashboard={dashboard} />;
+  if (activeNav === "权限设置") return <UsersPanel users={users} />;
+  if (activeNav === "结算清单") return <SettlementList orders={orders} />;
+  if (activeNav === "派工管理") return <OutboundList orders={orders} />;
+  if (activeNav === "维修进度") return <TechnicianTaskList orders={orders} />;
+  return null;
+}
+
+function DashboardPanel({ dashboard }: { dashboard?: DashboardSummary }) {
+  if (!dashboard) return null;
+  return (
+    <section className="panel module-panel">
+      <div className="panel-header">
+        <div>
+          <h2>数据看板</h2>
+          <p>基于当前委托单实时聚合，后续可替换为 BI/图表服务。</p>
+        </div>
+      </div>
+      <div className="dashboard-grid">
+        <ChartBlock title="单据状态" data={dashboard.statusCounts} />
+        <ChartBlock title="维修项目占比" data={dashboard.repairItemCounts} />
+        <ChartBlock title="进厂里程区间" data={dashboard.mileageBuckets} />
+        <ChartBlock title="员工接单量" data={dashboard.employeeRanking} />
+      </div>
+    </section>
+  );
+}
+
+function ChartBlock({ title, data }: { title: string; data: Record<string, number> }) {
+  const max = Math.max(1, ...Object.values(data));
+  return (
+    <div className="chart-block">
+      <strong>{title}</strong>
+      {Object.entries(data).slice(0, 8).map(([label, value]) => (
+        <div className="bar-row" key={label}>
+          <span>{label}</span>
+          <em style={{ width: `${Math.max(8, (value / max) * 100)}%` }} />
+          <b>{value}</b>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function UsersPanel({ users }: { users: UserProfile[] }) {
+  return (
+    <section className="panel module-panel">
+      <div className="panel-header">
+        <div>
+          <h2>权限设置</h2>
+          <p>当前为钉钉组织同步占位，后续以钉钉 userId 绑定业务角色。</p>
+        </div>
+      </div>
+      <div className="compact-grid">
+        {users.map((user) => (
+          <div className="mini-card" key={user.id}>
+            <strong>{user.name}</strong>
+            <span>{roles[user.role].name} · {user.active ? "启用" : "停用"}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SettlementList({ orders }: { orders: WorkOrder[] }) {
+  return (
+    <section className="panel module-panel">
+      <div className="panel-header"><h2>结算清单匹配</h2></div>
+      <div className="compact-grid">
+        {orders.flatMap((order) => order.settlementStatements).map((item) => (
+          <div className="mini-card" key={item.id}>
+            <strong>{item.dispatchNo} · {item.plate}</strong>
+            <span>{item.technician} · ¥{item.amount} · {item.matchStatus}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function OutboundList({ orders }: { orders: WorkOrder[] }) {
+  return (
+    <section className="panel module-panel">
+      <div className="panel-header"><h2>出库单 / 领料</h2></div>
+      <div className="compact-grid">
+        {orders.flatMap((order) => order.outboundOrders).map((item) => (
+          <div className="mini-card" key={item.id}>
+            <strong>{item.id}</strong>
+            <span>{item.dispatchNo} · {item.technician} · {item.status}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TechnicianTaskList({ orders }: { orders: WorkOrder[] }) {
+  const tasks = orders.flatMap((order) => order.repairItems.map((item) => ({ order, item })));
+  return (
+    <section className="panel module-panel">
+      <div className="panel-header"><h2>维修项目任务</h2></div>
+      <div className="compact-grid">
+        {tasks.map(({ order, item }) => (
+          <div className="mini-card" key={`${order.id}-${item.id}`}>
+            <strong>{item.name || "未命名维修项目"}</strong>
+            <span>{order.vehicle.plate} · {item.owner} · {item.status}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ActionPanel({
   order,
   role,
   onSubmitDispatch,
   onDispatch,
+  technicians,
   onCompleteRepair,
   onSettle
 }: {
@@ -658,6 +907,7 @@ function ActionPanel({
   role: RoleKey;
   onSubmitDispatch: () => void;
   onDispatch: (technician: string) => void;
+  technicians: string[];
   onCompleteRepair: () => void;
   onSettle: () => void;
 }) {
@@ -671,11 +921,15 @@ function ActionPanel({
       {canSubmitDispatch(role, order) ? <button className="primary-button" type="button" onClick={onSubmitDispatch}>提交派工池</button> : null}
       {canDispatch(role, order) ? (
         <div className="stacked-actions">
-          {technicians.map((name) => (
-            <button className="secondary-button" type="button" key={name} onClick={() => onDispatch(name)}>
-              指派给{name}
-            </button>
-          ))}
+          {technicians.length ? (
+            technicians.map((name) => (
+              <button className="secondary-button" type="button" key={name} onClick={() => onDispatch(name)}>
+                指派给{name}
+              </button>
+            ))
+          ) : (
+            <p>暂无可派技师，请先在权限设置中维护维修技师角色。</p>
+          )}
         </div>
       ) : null}
       {(canCompleteRepair(role, order) || (role === "inspector" && order?.status === "维修中")) ? (

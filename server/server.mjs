@@ -1,12 +1,19 @@
 import { createServer } from "node:http";
 import {
   HttpError,
+  confirmOcrRecord,
+  createOcrRecord,
   createSignatureTokenForOrder,
+  createSettlementForOrder,
   createWorkOrder,
+  dashboardSummary,
   findWorkOrderByToken,
   healthCheck,
+  listUsers,
   listWorkOrders,
+  repairItemAction,
   signWorkOrderByToken,
+  syncWorkOrderToPlatform,
   transitionWorkOrder,
   updateWorkOrder
 } from "./db.mjs";
@@ -25,6 +32,15 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/work-orders") {
       const role = url.searchParams.get("role") || "manager";
       return send(res, 200, await listWorkOrders(role));
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/users") {
+      return send(res, 200, await listUsers());
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/dashboard") {
+      const role = url.searchParams.get("role") || "manager";
+      return send(res, 200, await dashboardSummary(role));
     }
 
     if (req.method === "POST" && url.pathname === "/api/work-orders") {
@@ -49,6 +65,36 @@ const server = createServer(async (req, res) => {
     if (tokenMatch && req.method === "POST") {
       const { actor } = await readJson(req);
       return send(res, 200, await createSignatureTokenForOrder(tokenMatch[1], actor));
+    }
+
+    const ocrMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/ocr-records$/);
+    if (ocrMatch && req.method === "POST") {
+      const body = await readJson(req);
+      return send(res, 201, await createOcrRecord({ ...body, orderId: ocrMatch[1] === "draft" ? null : ocrMatch[1] }));
+    }
+
+    const ocrConfirmMatch = url.pathname.match(/^\/api\/ocr-records\/([^/]+)\/confirm$/);
+    if (ocrConfirmMatch && req.method === "POST") {
+      const { value, actor } = await readJson(req);
+      return send(res, 200, await confirmOcrRecord(ocrConfirmMatch[1], value, actor));
+    }
+
+    const platformMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/platform-sync$/);
+    if (platformMatch && req.method === "POST") {
+      const { actor } = await readJson(req);
+      return send(res, 200, await syncWorkOrderToPlatform(platformMatch[1], actor));
+    }
+
+    const itemActionMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/repair-items\/([^/]+)\/action$/);
+    if (itemActionMatch && req.method === "POST") {
+      const { action, actor, patch } = await readJson(req);
+      return send(res, 200, await repairItemAction(itemActionMatch[1], itemActionMatch[2], action, actor, patch));
+    }
+
+    const settlementMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/settlement-statements$/);
+    if (settlementMatch && req.method === "POST") {
+      const { actor } = await readJson(req);
+      return send(res, 200, await createSettlementForOrder(settlementMatch[1], actor));
     }
 
     const signatureMatch = url.pathname.match(/^\/api\/signatures\/([^/]+)$/);

@@ -8,6 +8,7 @@ Prerequisites:
 
 - Supabase CLI is installed as a local dev dependency.
 - Docker or a Docker-compatible runtime is available on the machine.
+- On macOS, this workspace uses Homebrew `docker` + `colima` as the local Docker runtime.
 
 Commands:
 
@@ -28,3 +29,7 @@ Override `DATABASE_URL` when using Supabase Cloud or another hosted Postgres pro
 ## Schema
 
 The initial migration creates users, work orders, repair items, signature tokens, signatures, and audit logs. Core query fields are regular columns; inspection details remain `jsonb` so the work-order form can evolve without immediate table churn.
+
+## Notes
+
+`supabase/config.toml` disables analytics for local development. With Colima, the Supabase analytics/vector container can fail while mounting the Docker socket; analytics is not needed for this app's local Postgres workflow.

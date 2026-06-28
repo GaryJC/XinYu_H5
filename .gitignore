@@ -1,6 +1,8 @@
 node_modules/
 dist/
 server/data/
+supabase/.branches/
+supabase/.temp/
 work/*.png
 *.tsbuildinfo
 vite.config.js

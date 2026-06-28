@@ -1,7 +1,11 @@
 import { AuditLogEntry, RepairItem, RoleKey, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "./types";
 
-export const technicians = ["陈立", "刘峰", "张明"];
-export const inspectors = ["黄检", "王检"];
+export const shopProfile = {
+  id: "shop-hq",
+  name: "上海虹桥店",
+  address: "上海市闵行区虹桥汽修服务中心",
+  phone: "021-6000-8618"
+};
 
 export const workflow: WorkOrderStatus[] = ["草稿", "待客户签字", "已委托", "待派工", "维修中", "待结算", "完成"];
 
@@ -38,8 +42,12 @@ export function makeAudit(actor: string, action: string): AuditLogEntry {
 }
 
 export function createEmptyDraft(): WorkOrderDraft {
+  const today = new Date().toISOString().slice(0, 10);
   return {
+    dispatchNo: "",
+    arrivalDate: today,
     status: "草稿",
+    shop: shopProfile,
     advisor: "林佳",
     technician: "待派工",
     inspector: "待检验",
@@ -62,7 +70,7 @@ export function createEmptyDraft(): WorkOrderDraft {
       exteriorIssues: []
     },
     faultDescription: "",
-    repairItems: [{ id: 1, name: "", laborFee: 0, owner: "待派工" }],
+    repairItems: [{ id: 1, name: "", laborFee: 0, owner: "待派工", startAt: "", finishAt: "", inspector: "待检验", status: "待派工" }],
     estimatedFee: 0,
     oldPartsHandling: "环保处理",
     estimatedDeliveryAt: "",
@@ -71,7 +79,11 @@ export function createEmptyDraft(): WorkOrderDraft {
     signatures: {
       advisor: "林佳"
     },
-    signatureTokenUsed: false
+    signatureTokenUsed: false,
+    ocrRecords: [],
+    platformSyncRecords: [],
+    outboundOrders: [],
+    settlementStatements: []
   };
 }
 
@@ -102,8 +114,8 @@ export function createSeedOrders(): WorkOrder[] {
         },
         faultDescription: "刹车异响，发动机舱低速异响。",
         repairItems: [
-          { id: 1, name: "更换前刹车片", laborFee: 260, owner: "陈立" },
-          { id: 2, name: "发动机舱异响检查", laborFee: 180, owner: "陈立" }
+          { id: 1, name: "更换前刹车片", laborFee: 260, owner: "陈立", startAt: "2026-06-26 10:30", finishAt: "", inspector: "黄检", status: "维修中" },
+          { id: 2, name: "发动机舱异响检查", laborFee: 180, owner: "陈立", startAt: "2026-06-26 10:35", finishAt: "", inspector: "黄检", status: "维修中" }
         ],
         estimatedFee: 880,
         estimatedDeliveryAt: "2026-06-27 18:00",
@@ -133,7 +145,7 @@ export function createSeedOrders(): WorkOrder[] {
           address: "上海市长宁区"
         },
         faultDescription: "空调制冷效果差。",
-        repairItems: [{ id: 1, name: "空调系统检测", laborFee: 220, owner: "待派工" }],
+        repairItems: [{ id: 1, name: "空调系统检测", laborFee: 220, owner: "待派工", startAt: "", finishAt: "", inspector: "待检验", status: "待派工" }],
         estimatedFee: 520,
         signatures: {
           customer: "沈女士",
@@ -163,8 +175,8 @@ export function createSeedOrders(): WorkOrder[] {
         },
         faultDescription: "保养并更换机油滤芯。",
         repairItems: [
-          { id: 1, name: "小保养", laborFee: 180, owner: "刘峰" },
-          { id: 2, name: "底盘检查", laborFee: 120, owner: "刘峰" }
+          { id: 1, name: "小保养", laborFee: 180, owner: "刘峰", startAt: "2026-06-26 09:10", finishAt: "2026-06-26 10:05", inspector: "黄检", status: "已完工" },
+          { id: 2, name: "底盘检查", laborFee: 120, owner: "刘峰", startAt: "2026-06-26 09:20", finishAt: "2026-06-26 10:00", inspector: "黄检", status: "已完工" }
         ],
         estimatedFee: 980,
         settlementAmount: 980,
@@ -184,6 +196,7 @@ export function createOrderFromDraft(draft: WorkOrderDraft, id = createOrderId()
   const now = new Date().toLocaleString("zh-CN", { hour12: false });
   return {
     ...draft,
+    dispatchNo: draft.dispatchNo || id.replace("WT-", "PG-"),
     id,
     createdAt: now,
     updatedAt: now,
