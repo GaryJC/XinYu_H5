@@ -1,4 +1,4 @@
-import { AuditLogEntry, RepairItem, RoleKey, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "./types";
+import { AuditLogEntry, RepairItem, RoleKey, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "../../shared/types";
 
 export const shopProfile = {
   id: "shop-hq",

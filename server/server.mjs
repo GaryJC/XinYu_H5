@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { createServer } from "node:http";
 import { authenticateRequest, loginWithDingTalk } from "./auth.mjs";
 import { saveUploadedFile } from "./storage.mjs";
@@ -22,6 +24,7 @@ import {
 import { recognizeVehicleLicense } from "./ocr.mjs";
 
 const port = Number(process.env.API_PORT || 8787);
+const distDir = path.resolve("dist");
 
 const server = createServer(async (req, res) => {
   try {
@@ -135,7 +138,8 @@ const server = createServer(async (req, res) => {
       return send(res, 200, await signWorkOrderByToken(signMatch[1], signature));
     }
 
-    return send(res, 404, { error: "Not found" });
+    if (url.pathname.startsWith("/api/")) return send(res, 404, { error: "Not found" });
+    return serveStatic(res, url.pathname);
   } catch (error) {
     console.error(error);
     const status = error instanceof HttpError ? error.status : 500;
@@ -152,6 +156,45 @@ async function readJson(req) {
   for await (const chunk of req) chunks.push(chunk);
   if (!chunks.length) return {};
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+async function serveStatic(res, pathname) {
+  const requested = pathname === "/" ? "/index.html" : pathname;
+  const target = path.normalize(path.join(distDir, requested));
+  if (!target.startsWith(distDir)) return send(res, 403, { error: "Forbidden" });
+
+  try {
+    const stat = await fs.stat(target);
+    if (stat.isFile()) {
+      res.statusCode = 200;
+      res.setHeader("Content-Type", contentType(target));
+      res.end(await fs.readFile(target));
+      return;
+    }
+  } catch {
+    // Fall through to SPA fallback.
+  }
+
+  try {
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.end(await fs.readFile(path.join(distDir, "index.html")));
+  } catch {
+    send(res, 404, { error: "Not found" });
+  }
+}
+
+function contentType(filePath) {
+  const ext = path.extname(filePath);
+  if (ext === ".html") return "text/html; charset=utf-8";
+  if (ext === ".js") return "text/javascript; charset=utf-8";
+  if (ext === ".css") return "text/css; charset=utf-8";
+  if (ext === ".json") return "application/json; charset=utf-8";
+  if (ext === ".svg") return "image/svg+xml";
+  if (ext === ".png") return "image/png";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".ico") return "image/x-icon";
+  return "application/octet-stream";
 }
 
 function send(res, status, body) {

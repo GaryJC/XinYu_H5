@@ -37,7 +37,7 @@ import {
   canSettle,
   canSubmitDispatch
 } from "./permissions";
-import { DashboardSummary, OcrFieldKey, OcrFieldState, RepairItem, RoleKey, UserProfile, VehicleLicenseOcrResult, WorkOrder, WorkOrderDraft } from "./types";
+import { DashboardSummary, OcrFieldKey, OcrFieldState, RepairItem, RoleKey, UserProfile, VehicleLicenseOcrResult, WorkOrder, WorkOrderDraft } from "../../shared/types";
 
 const navItems: Array<{ label: string; icon: typeof LayoutDashboard; roles: RoleKey[] }> = [
   { label: "工作台", icon: LayoutDashboard, roles: ["advisor", "dispatcher", "technician", "inspector", "manager"] },

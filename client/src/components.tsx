@@ -1,4 +1,4 @@
-import { WorkOrderStatus } from "./types";
+import { WorkOrderStatus } from "../../shared/types";
 
 const statusTone: Record<WorkOrderStatus, "amber" | "blue" | "green" | "violet" | "gray"> = {
   草稿: "gray",

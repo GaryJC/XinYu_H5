@@ -1,4 +1,4 @@
-import { RoleKey, WorkOrder } from "./types";
+import { RoleKey, WorkOrder } from "../../shared/types";
 
 export function canCreateOrder(role: RoleKey) {
   return role === "advisor" || role === "manager";

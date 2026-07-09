@@ -2,6 +2,8 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "api": "node server/server.mjs",
+    "start": "node server/server.mjs",
+    "migrate": "node scripts/migrate.mjs",
     "db:start": "supabase start",
     "db:reset": "supabase db reset",
     "db:stop": "supabase stop",

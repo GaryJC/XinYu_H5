@@ -1,4 +1,4 @@
-import { WorkOrder } from "./types";
+import { WorkOrder } from "../../shared/types";
 
 export const dingTalkAuthAdapter = {
   async getCurrentUser() {

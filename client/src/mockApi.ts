@@ -1,4 +1,4 @@
-import { AuthResult, DashboardSummary, OcrFieldKey, OcrRecord, RoleKey, StoredFile, UserProfile, VehicleLicenseOcrResult, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "./types";
+import { AuthResult, DashboardSummary, OcrFieldKey, OcrRecord, RoleKey, StoredFile, UserProfile, VehicleLicenseOcrResult, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "../../shared/types";
 
 export type WorkOrderApi = {
   loginWithDingTalk(authCode: string): Promise<AuthResult>;
