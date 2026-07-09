@@ -15,18 +15,6 @@ export const fileUploadAdapter = {
   }
 };
 
-export const ocrAdapter = {
-  async recognize(field: "plate" | "vin" | "mileage") {
-    await delay(450);
-    const values = {
-      plate: "沪A·7K92D",
-      vin: "LSGPC52U9MF018736",
-      mileage: "68240"
-    };
-    return { value: values[field], confidence: field === "mileage" ? 0.82 : 0.96 };
-  }
-};
-
 export const notificationAdapter = {
   async sendSignatureTodo(order: WorkOrder) {
     await delay(250);

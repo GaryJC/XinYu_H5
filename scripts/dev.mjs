@@ -1,9 +1,16 @@
 import { spawn } from "node:child_process";
 
+const apiPort = process.env.API_PORT || "8787";
+const viteHost = process.env.VITE_HOST || "0.0.0.0";
+const vitePort = process.env.VITE_PORT || "5173";
+
 const commands = [
   ["node", ["server/server.mjs"]],
-  ["vite", ["--host", "0.0.0.0", "--port", "5173"]]
+  ["vite", ["--host", viteHost, "--port", vitePort]]
 ];
+
+process.env.API_PORT = apiPort;
+process.env.API_PROXY_TARGET ||= `http://localhost:${apiPort}`;
 
 const children = commands.map(([cmd, args]) => {
   const child = spawn(cmd, args, { stdio: "inherit", shell: true });

@@ -215,7 +215,8 @@ button {
   color: var(--text);
 }
 
-button:disabled {
+button:disabled,
+.file-button.disabled {
   cursor: not-allowed;
   opacity: 0.52;
 }
@@ -409,6 +410,18 @@ button:disabled {
   padding: 0 12px;
 }
 
+.file-button {
+  cursor: pointer;
+}
+
+.file-button.disabled {
+  pointer-events: none;
+}
+
+.file-button input {
+  display: none;
+}
+
 .text-button {
   border: 0;
   background: transparent;
@@ -431,7 +444,7 @@ button:disabled {
 
 .ocr-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -443,7 +456,60 @@ button:disabled {
 }
 
 .compact-ocr .button-row {
-  justify-content: space-between;
+  justify-content: flex-end;
+}
+
+.vehicle-license-ocr {
+  align-items: flex-start;
+}
+
+.ocr-main {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.ocr-main strong,
+.ocr-main span,
+.ocr-main em {
+  min-width: 0;
+}
+
+.ocr-main > span {
+  color: var(--muted-strong);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.ocr-main > em {
+  color: #9a3d00;
+  font-size: 13px;
+  font-style: normal;
+}
+
+.ocr-result-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ocr-result-grid span {
+  min-height: 34px;
+  padding: 7px 8px;
+  border: 1px solid #c8e4e6;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.ocr-result-grid b {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .error-box {
@@ -1140,6 +1206,10 @@ button:disabled {
   .panel-header .secondary-button,
   .ocr-strip .secondary-button {
     width: 100%;
+  }
+
+  .ocr-result-grid {
+    grid-template-columns: 1fr;
   }
 
   .field-grid {

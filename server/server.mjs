@@ -1,4 +1,6 @@
 import { createServer } from "node:http";
+import { authenticateRequest, loginWithDingTalk } from "./auth.mjs";
+import { saveUploadedFile } from "./storage.mjs";
 import {
   HttpError,
   confirmOcrRecord,
@@ -17,6 +19,7 @@ import {
   transitionWorkOrder,
   updateWorkOrder
 } from "./db.mjs";
+import { recognizeVehicleLicense } from "./ocr.mjs";
 
 const port = Number(process.env.API_PORT || 8787);
 
@@ -29,9 +32,21 @@ const server = createServer(async (req, res) => {
       return send(res, 200, await healthCheck());
     }
 
+    if (req.method === "POST" && url.pathname === "/api/auth/dingtalk-login") {
+      const { authCode } = await readJson(req);
+      return send(res, 200, await loginWithDingTalk(authCode, requestContext(req)));
+    }
+
+    const currentUser = await authenticateRequest(req);
+
+    if (req.method === "GET" && url.pathname === "/api/auth/me") {
+      if (!currentUser) return send(res, 401, { error: "未登录" });
+      return send(res, 200, currentUser);
+    }
+
     if (req.method === "GET" && url.pathname === "/api/work-orders") {
-      const role = url.searchParams.get("role") || "manager";
-      return send(res, 200, await listWorkOrders(role));
+      const role = currentUser?.role || url.searchParams.get("role") || "manager";
+      return send(res, 200, await listWorkOrders(role, currentUser));
     }
 
     if (req.method === "GET" && url.pathname === "/api/users") {
@@ -39,32 +54,42 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/api/dashboard") {
-      const role = url.searchParams.get("role") || "manager";
-      return send(res, 200, await dashboardSummary(role));
+      const role = currentUser?.role || url.searchParams.get("role") || "manager";
+      return send(res, 200, await dashboardSummary(role, currentUser));
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/ocr/vehicle-license") {
+      const { imageBase64 } = await readJson(req);
+      return send(res, 200, await recognizeVehicleLicense(imageBase64));
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/files") {
+      const body = await readJson(req);
+      return send(res, 201, await saveUploadedFile({ ...body, uploadedBy: currentUser?.id || body.uploadedBy || null }));
     }
 
     if (req.method === "POST" && url.pathname === "/api/work-orders") {
       const { draft, actor } = await readJson(req);
-      return send(res, 201, await createWorkOrder(draft, actor));
+      return send(res, 201, await createWorkOrder(draft, currentUser?.name || actor));
     }
 
     const workOrderMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)$/);
     if (workOrderMatch && req.method === "PUT") {
       const { order, actor, action } = await readJson(req);
       if (!order || order.id !== workOrderMatch[1]) return send(res, 400, { error: "委托单参数不一致" });
-      return send(res, 200, await updateWorkOrder(order, actor, action));
+      return send(res, 200, await updateWorkOrder(order, currentUser?.name || actor, action));
     }
 
     const transitionMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/transition$/);
     if (transitionMatch && req.method === "POST") {
       const { status, actor, action, patch = {} } = await readJson(req);
-      return send(res, 200, await transitionWorkOrder(transitionMatch[1], status, actor, action, patch));
+      return send(res, 200, await transitionWorkOrder(transitionMatch[1], status, currentUser?.name || actor, action, patch));
     }
 
     const tokenMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/signature-token$/);
     if (tokenMatch && req.method === "POST") {
       const { actor } = await readJson(req);
-      return send(res, 200, await createSignatureTokenForOrder(tokenMatch[1], actor));
+      return send(res, 200, await createSignatureTokenForOrder(tokenMatch[1], currentUser?.name || actor));
     }
 
     const ocrMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/ocr-records$/);
@@ -76,25 +101,25 @@ const server = createServer(async (req, res) => {
     const ocrConfirmMatch = url.pathname.match(/^\/api\/ocr-records\/([^/]+)\/confirm$/);
     if (ocrConfirmMatch && req.method === "POST") {
       const { value, actor } = await readJson(req);
-      return send(res, 200, await confirmOcrRecord(ocrConfirmMatch[1], value, actor));
+      return send(res, 200, await confirmOcrRecord(ocrConfirmMatch[1], value, currentUser?.name || actor));
     }
 
     const platformMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/platform-sync$/);
     if (platformMatch && req.method === "POST") {
       const { actor } = await readJson(req);
-      return send(res, 200, await syncWorkOrderToPlatform(platformMatch[1], actor));
+      return send(res, 200, await syncWorkOrderToPlatform(platformMatch[1], currentUser?.name || actor));
     }
 
     const itemActionMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/repair-items\/([^/]+)\/action$/);
     if (itemActionMatch && req.method === "POST") {
       const { action, actor, patch } = await readJson(req);
-      return send(res, 200, await repairItemAction(itemActionMatch[1], itemActionMatch[2], action, actor, patch));
+      return send(res, 200, await repairItemAction(itemActionMatch[1], itemActionMatch[2], action, currentUser?.name || actor, patch));
     }
 
     const settlementMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/settlement-statements$/);
     if (settlementMatch && req.method === "POST") {
       const { actor } = await readJson(req);
-      return send(res, 200, await createSettlementForOrder(settlementMatch[1], actor));
+      return send(res, 200, await createSettlementForOrder(settlementMatch[1], currentUser?.name || actor));
     }
 
     const signatureMatch = url.pathname.match(/^\/api\/signatures\/([^/]+)$/);
@@ -133,8 +158,15 @@ function send(res, status, body) {
   res.statusCode = status;
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (body == null) return res.end();
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.end(JSON.stringify(body));
+}
+
+function requestContext(req) {
+  return {
+    userAgent: req.headers["user-agent"] || "",
+    ipAddress: String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim()
+  };
 }

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import pg from "pg";
 
 const { Pool } = pg;
@@ -19,8 +20,8 @@ export async function healthCheck() {
   return { ok: true, database: "postgres" };
 }
 
-export async function listWorkOrders(role = "manager") {
-  const { where, params } = roleFilter(role);
+export async function listWorkOrders(role = "manager", user) {
+  const { where, params } = roleFilter(role, user);
   const { rows } = await pool.query(
     `
       select wo.*, st.token as signature_token, st.used as signature_token_used
@@ -41,14 +42,49 @@ export async function listWorkOrders(role = "manager") {
 }
 
 export async function listUsers() {
-  const { rows } = await pool.query("select id, name, role, dingtalk_user_id, active from users order by role, name");
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    role: row.role,
-    dingtalkUserId: row.dingtalk_user_id || undefined,
-    active: row.active
-  }));
+  const { rows } = await pool.query("select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at from users order by role, name");
+  return rows.map(rowToUser);
+}
+
+export async function findUserById(id) {
+  const { rows } = await pool.query("select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at from users where id = $1", [id]);
+  return rows[0] ? rowToUser(rows[0]) : undefined;
+}
+
+export async function findUserByDingTalkUserId(dingTalkUserId) {
+  const { rows } = await pool.query("select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at from users where dingtalk_user_id = $1", [dingTalkUserId]);
+  return rows[0] ? rowToUser(rows[0]) : undefined;
+}
+
+export async function markUserLogin(id) {
+  await pool.query("update users set last_login_at = now() where id = $1", [id]);
+}
+
+export async function createAuthSession({ token, userId, userAgent, ipAddress, expiresAt }) {
+  const id = createId("sess");
+  await pool.query(
+    `
+      insert into auth_sessions (id, user_id, token_hash, user_agent, ip_address, expires_at)
+      values ($1, $2, $3, $4, $5, $6)
+    `,
+    [id, userId, hashToken(token), userAgent || "", ipAddress || "", expiresAt]
+  );
+  return id;
+}
+
+export async function isAuthSessionActive(token) {
+  const { rows } = await pool.query(
+    `
+      select 1
+      from auth_sessions
+      where token_hash = $1
+        and revoked_at is null
+        and expires_at > now()
+      limit 1
+    `,
+    [hashToken(token)]
+  );
+  return Boolean(rows[0]);
 }
 
 export async function createWorkOrder(draft, actor) {
@@ -249,8 +285,48 @@ export async function createSettlementForOrder(orderId, actor) {
   });
 }
 
-export async function dashboardSummary(role = "manager") {
-  const orders = await listWorkOrders(role);
+export async function createFileRecord({ orderId, kind, storageProvider, bucket, objectKey, originalName, mimeType, sizeBytes, uploadedBy }) {
+  const id = createId("file");
+  await pool.query(
+    `
+      insert into files (
+        id, order_id, kind, storage_provider, bucket, object_key,
+        original_name, mime_type, size_bytes, uploaded_by
+      ) values (
+        $1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10
+      )
+    `,
+    [
+      id,
+      orderId || null,
+      kind,
+      storageProvider || "oss",
+      bucket,
+      objectKey,
+      originalName || "",
+      mimeType || "",
+      Number(sizeBytes || 0),
+      uploadedBy || null
+    ]
+  );
+  return {
+    id,
+    orderId: orderId || undefined,
+    kind,
+    storageProvider: storageProvider || "oss",
+    bucket,
+    objectKey,
+    originalName: originalName || "",
+    mimeType: mimeType || "",
+    sizeBytes: Number(sizeBytes || 0),
+    uploadedBy: uploadedBy || undefined,
+    createdAt: nowString()
+  };
+}
+
+export async function dashboardSummary(role = "manager", user) {
+  const orders = await listWorkOrders(role, user);
   const statusCounts = countBy(orders, (order) => order.status);
   const repairItemCounts = countBy(orders.flatMap((order) => order.repairItems), (item) => item.name || "未命名项目");
   const mileageBuckets = {
@@ -507,11 +583,11 @@ async function transaction(callback) {
   }
 }
 
-function roleFilter(role) {
+function roleFilter(role, user) {
   if (!validRoles.has(role)) return { where: "", params: [] };
-  if (role === "technician") return { where: "where wo.technician = $1", params: ["陈立"] };
+  if (role === "technician") return { where: "where wo.technician = $1", params: [user?.name || "陈立"] };
   if (role === "dispatcher") return { where: "where wo.status = any($1::text[])", params: [["待派工", "维修中"]] };
-  if (role === "advisor") return { where: "where wo.advisor = $1", params: ["林佳"] };
+  if (role === "advisor") return { where: "where wo.advisor = $1", params: [user?.name || "林佳"] };
   if (role === "inspector") return { where: "where wo.status = any($1::text[])", params: [["维修中", "待结算"]] };
   return { where: "", params: [] };
 }
@@ -708,6 +784,23 @@ function rowToOcrRecord(row) {
     createdAt: formatDate(row.created_at),
     confirmedAt: row.confirmed_at ? formatDate(row.confirmed_at) : undefined
   };
+}
+
+function rowToUser(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    role: row.role,
+    dingtalkUserId: row.dingtalk_user_id || undefined,
+    active: row.active,
+    shopId: row.shop_id || "shop-hq",
+    phone: row.phone || undefined,
+    lastLoginAt: row.last_login_at ? formatDate(row.last_login_at) : undefined
+  };
+}
+
+function hashToken(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
 }
 
 async function upsertOutboundOrder(client, orderId, dispatchNo, platformOrderNo, repairItems, technician) {

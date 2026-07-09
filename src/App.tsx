@@ -24,9 +24,9 @@ import {
   UsersRound,
   Wrench
 } from "lucide-react";
-import { useEffect, useId, useMemo, useState } from "react";
+import { type ChangeEvent, useEffect, useId, useMemo, useState } from "react";
 import { MetricCard, StatusChip } from "./components";
-import { dingTalkAuthAdapter, notificationAdapter, ocrAdapter } from "./adapters";
+import { dingTalkAuthAdapter, notificationAdapter } from "./adapters";
 import { createEmptyDraft, roles, sumLabor, validateWorkOrderDraft, workflow } from "./domain";
 import { workOrderApi } from "./mockApi";
 import {
@@ -37,7 +37,7 @@ import {
   canSettle,
   canSubmitDispatch
 } from "./permissions";
-import { DashboardSummary, OcrFieldKey, OcrFieldState, RepairItem, RoleKey, UserProfile, WorkOrder, WorkOrderDraft } from "./types";
+import { DashboardSummary, OcrFieldKey, OcrFieldState, RepairItem, RoleKey, UserProfile, VehicleLicenseOcrResult, WorkOrder, WorkOrderDraft } from "./types";
 
 const navItems: Array<{ label: string; icon: typeof LayoutDashboard; roles: RoleKey[] }> = [
   { label: "工作台", icon: LayoutDashboard, roles: ["advisor", "dispatcher", "technician", "inspector", "manager"] },
@@ -53,9 +53,7 @@ const belongings = ["音响系统", "点烟器", "天窗", "四门玻璃机", "�
 const exteriorIssues = ["石击", "凹凸", "划伤", "损坏"];
 
 const initialOcrState: Record<OcrFieldKey, OcrFieldState> = {
-  plate: { source: "车牌照片", status: "未识别", value: "" },
-  vin: { source: "行驶证照片", status: "未识别", value: "" },
-  mileage: { source: "仪表盘照片", status: "未识别", value: "" }
+  vehicleLicense: { source: "行驶证照片", status: "未识别", value: "" }
 };
 
 const roleFocus: Record<RoleKey, { title: string; dataScope: string; primary: string; blocked: string[] }> = {
@@ -123,11 +121,13 @@ function Workbench() {
   const [searchTerm, setSearchTerm] = useState("");
   const [syncLabel, setSyncLabel] = useState("钉钉组织已同步");
   const [ocrRecordIds, setOcrRecordIds] = useState<Partial<Record<OcrFieldKey, string>>>({});
+  const [vehicleLicenseOcr, setVehicleLicenseOcr] = useState<VehicleLicenseOcrResult>();
   const [dashboard, setDashboard] = useState<DashboardSummary>();
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [currentUser, setCurrentUser] = useState<UserProfile>();
 
   const selectedOrder = orders.find((order) => order.id === selectedId);
-  const actor = roles[role].name;
+  const actor = currentUser?.name || roles[role].name;
   const visibleNavItems = useMemo(() => navItems.filter((item) => item.roles.includes(role)), [role]);
   const canEditForm = canCreateOrder(role);
   const totalLabor = useMemo(() => sumLabor(draft.repairItems), [draft.repairItems]);
@@ -154,10 +154,14 @@ function Workbench() {
   }, [orders]);
 
   useEffect(() => {
-    void loadOrders(role);
-    void loadDashboard(role);
+    void bootstrapAuth();
     void dingTalkAuthAdapter.syncOrganization().then((result) => setSyncLabel(`钉钉组织已同步 ${result.users} 人`));
     void workOrderApi.users().then(setUsers).catch(() => setUsers([]));
+  }, []);
+
+  useEffect(() => {
+    void loadOrders(role);
+    void loadDashboard(role);
   }, [role]);
 
   useEffect(() => {
@@ -195,6 +199,29 @@ function Workbench() {
     }
   }
 
+  async function bootstrapAuth() {
+    try {
+      const user = await workOrderApi.me();
+      setCurrentUser(user);
+      setRole(user.role);
+      setSyncLabel(`已登录：${user.name}`);
+      return;
+    } catch {
+      // No local session yet. In plain browser development we keep the role switcher.
+    }
+
+    try {
+      const authCode = await getDingTalkAuthCode();
+      if (!authCode) return;
+      const result = await workOrderApi.loginWithDingTalk(authCode);
+      setCurrentUser(result.user);
+      setRole(result.user.role);
+      setSyncLabel(`钉钉免登成功：${result.user.name}`);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "钉钉免登失败");
+    }
+  }
+
   function selectOrder(order: WorkOrder) {
     setSelectedId(order.id);
     setDraft(orderToDraft(order));
@@ -202,6 +229,7 @@ function Workbench() {
     setSignatureLink(order.signatureToken ? buildSignatureLink(order.signatureToken) : "");
     setOcrState(initialOcrState);
     setOcrRecordIds({});
+    setVehicleLicenseOcr(undefined);
   }
 
   function startNewOrder() {
@@ -211,6 +239,7 @@ function Workbench() {
     setFormErrors([]);
     setOcrState(initialOcrState);
     setOcrRecordIds({});
+    setVehicleLicenseOcr(undefined);
   }
 
   async function saveDraft() {
@@ -280,25 +309,65 @@ function Workbench() {
     await loadOrders(role, updated.id);
   }
 
-  async function runOcr(field: OcrFieldKey) {
-    setOcrState((current) => ({ ...current, [field]: { ...current[field], status: "识别中" } }));
-    const result = await ocrAdapter.recognize(field);
-    const record = await workOrderApi.createOcrRecord(selectedOrder?.id, field, initialOcrState[field].source, result.value, result.confidence);
-    setOcrRecordIds((current) => ({ ...current, [field]: record.id }));
-    setOcrState((current) => ({ ...current, [field]: { ...current[field], status: "待确认", value: result.value } }));
-    setDraft((current) => ({
+  async function scanVehicleLicense(file: File) {
+    setOcrState((current) => ({
       ...current,
-      vehicle: {
-        ...current.vehicle,
-        [field]: result.value
-      }
+      vehicleLicense: { ...current.vehicleLicense, status: "识别中", error: undefined }
     }));
+    setVehicleLicenseOcr(undefined);
+
+    try {
+      const imageBase64 = await fileToBase64(file);
+      const uploadedFile = await workOrderApi.uploadFile({
+        orderId: selectedOrder?.id,
+        kind: "vehicle_license",
+        fileName: file.name || "vehicle-license.jpg",
+        mimeType: file.type || "image/jpeg",
+        imageBase64
+      });
+      const result = await workOrderApi.recognizeVehicleLicense(imageBase64);
+      const summary = formatVehicleLicenseSummary(result);
+      const record = await workOrderApi.createOcrRecord(selectedOrder?.id, "vehicleLicense", initialOcrState.vehicleLicense.source, JSON.stringify(result), result.confidence, uploadedFile.id);
+      setOcrRecordIds((current) => ({ ...current, vehicleLicense: record.id }));
+      setVehicleLicenseOcr(result);
+      setOcrState((current) => ({
+        ...current,
+        vehicleLicense: { ...current.vehicleLicense, status: "待确认", value: summary }
+      }));
+      setDraft((current) => ({
+        ...current,
+        vehicle: {
+          ...current.vehicle,
+          plate: result.plate || current.vehicle.plate,
+          vin: result.vin || current.vehicle.vin,
+          model: result.model || current.vehicle.model,
+          purchaseDate: normalizeOcrDate(result.registerDate) || current.vehicle.purchaseDate
+        },
+        customer: {
+          ...current.customer,
+          name: result.owner || current.customer.name,
+          contact: result.owner || current.customer.contact,
+          address: result.address || current.customer.address
+        }
+      }));
+    } catch (error) {
+      setOcrState((current) => ({
+        ...current,
+        vehicleLicense: {
+          ...current.vehicleLicense,
+          status: "未识别",
+          value: "",
+          error: error instanceof Error ? error.message : "行驶证识别失败"
+        }
+      }));
+    }
   }
 
-  function confirmOcr(field: OcrFieldKey) {
-    const recordId = ocrRecordIds[field];
-    if (recordId) void workOrderApi.confirmOcrRecord(recordId, ocrState[field].value, actor);
-    setOcrState((current) => ({ ...current, [field]: { ...current[field], status: "已确认" } }));
+  function confirmVehicleLicenseOcr() {
+    const recordId = ocrRecordIds.vehicleLicense;
+    const value = vehicleLicenseOcr ? JSON.stringify(vehicleLicenseOcr) : ocrState.vehicleLicense.value;
+    if (recordId) void workOrderApi.confirmOcrRecord(recordId, value, actor);
+    setOcrState((current) => ({ ...current, vehicleLicense: { ...current.vehicleLicense, status: "已确认" } }));
   }
 
   async function syncPlatform() {
@@ -408,7 +477,7 @@ function Workbench() {
             </div>
             <label className="role-switcher">
               <UserRound size={16} />
-              <select value={role} onChange={(event) => setRole(event.target.value as RoleKey)}>
+              <select value={role} disabled={Boolean(currentUser)} onChange={(event) => setRole(event.target.value as RoleKey)}>
                 {Object.entries(roles).map(([key, value]) => (
                   <option key={key} value={key}>
                     {value.name}
@@ -484,9 +553,13 @@ function Workbench() {
             ) : null}
 
             <div className="ocr-grid">
-              <OcrControl disabled={!canEditForm} label="车牌号码" state={ocrState.plate} onRun={() => runOcr("plate")} onConfirm={() => confirmOcr("plate")} />
-              <OcrControl disabled={!canEditForm} label="VIN/底盘号" state={ocrState.vin} onRun={() => runOcr("vin")} onConfirm={() => confirmOcr("vin")} />
-              <OcrControl disabled={!canEditForm} label="进厂里程" state={ocrState.mileage} onRun={() => runOcr("mileage")} onConfirm={() => confirmOcr("mileage")} />
+              <VehicleLicenseOcrControl
+                disabled={!canEditForm}
+                result={vehicleLicenseOcr}
+                state={ocrState.vehicleLicense}
+                onScan={scanVehicleLicense}
+                onConfirm={confirmVehicleLicenseOcr}
+              />
             </div>
 
             <div className="field-grid">
@@ -960,24 +1033,99 @@ function ActionPanel({
   );
 }
 
-function OcrControl({ label, state, disabled, onRun, onConfirm }: { label: string; state: OcrFieldState; disabled?: boolean; onRun: () => void; onConfirm: () => void }) {
+function VehicleLicenseOcrControl({
+  state,
+  result,
+  disabled,
+  onScan,
+  onConfirm
+}: {
+  state: OcrFieldState;
+  result?: VehicleLicenseOcrResult;
+  disabled?: boolean;
+  onScan: (file: File) => Promise<void>;
+  onConfirm: () => void;
+}) {
+  const inputId = useId();
+  const resultFields = result
+    ? [
+        ["车牌", result.plate],
+        ["VIN", result.vin],
+        ["车型", result.model],
+        ["车主", result.owner],
+        ["住址", result.address],
+        ["注册日期", normalizeOcrDate(result.registerDate) || result.registerDate]
+      ].filter(([, value]) => Boolean(value))
+    : [];
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (file) await onScan(file);
+  }
+
   return (
-    <div className="ocr-strip compact-ocr">
-      <div>
-        <strong>{label}</strong>
+    <div className="ocr-strip compact-ocr vehicle-license-ocr">
+      <div className="ocr-main">
+        <strong>扫描行驶证</strong>
         <span>{state.source} · {state.status}{state.value ? ` · ${state.value}` : ""}</span>
+        {state.error ? <em>{state.error}</em> : null}
+        {resultFields.length ? (
+          <div className="ocr-result-grid">
+            {resultFields.map(([label, value]) => (
+              <span key={label}>
+                <b>{label}</b>
+                {value}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
       <div className="button-row">
-        <button className="secondary-button" type="button" onClick={onRun} disabled={disabled || state.status === "识别中"}>
+        <label className={`secondary-button file-button${disabled || state.status === "识别中" ? " disabled" : ""}`} htmlFor={inputId}>
           {state.status === "识别中" ? <Sparkles size={16} /> : <Camera size={16} />}
-          识别
-        </button>
+          拍照识别
+          <input id={inputId} type="file" accept="image/*" capture="environment" disabled={disabled || state.status === "识别中"} onChange={handleFileChange} />
+        </label>
         <button className="text-button" type="button" onClick={onConfirm} disabled={disabled || state.status !== "待确认"}>
           确认
         </button>
       </div>
     </div>
   );
+}
+
+function fileToBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== "string") {
+        reject(new Error("图片读取失败"));
+        return;
+      }
+      resolve(result);
+    };
+    reader.onerror = () => reject(new Error("图片读取失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatVehicleLicenseSummary(result: VehicleLicenseOcrResult) {
+  const items = [
+    result.plate && `车牌 ${result.plate}`,
+    result.vin && `VIN ${result.vin}`,
+    result.owner && `车主 ${result.owner}`
+  ].filter(Boolean);
+  return items.join(" · ") || "已识别行驶证";
+}
+
+function normalizeOcrDate(value: string) {
+  const raw = value.trim();
+  if (!raw) return "";
+  const compact = raw.replace(/[^\d]/g, "");
+  if (compact.length === 8) return `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}`;
+  return raw;
 }
 
 function SignaturePage({ token, onBack }: { token: string; onBack: () => void }) {
@@ -1112,4 +1260,71 @@ function buildSignatureLink(token: string) {
 function getSignTokenFromHash() {
   const match = window.location.hash.match(/^#\/sign\/(.+)$/);
   return match?.[1] ?? null;
+}
+
+function getDingTalkAuthCode() {
+  const corpId = import.meta.env.VITE_DINGTALK_CORP_ID;
+  const dd = window.dd;
+  if (!corpId || !dd) return Promise.resolve("");
+
+  return new Promise<string>((resolve, reject) => {
+    const request = () => {
+      if (dd.runtime?.permission?.requestAuthCode) {
+        dd.runtime.permission.requestAuthCode({
+          corpId,
+          onSuccess: (result: { code?: string }) => resolve(result.code || ""),
+          onFail: (error: unknown) => reject(new Error(formatDingTalkError(error)))
+        });
+        return;
+      }
+
+      if (dd.getAuthCode) {
+        dd.getAuthCode({
+          corpId,
+          success: (result: { authCode?: string; code?: string }) => resolve(result.authCode || result.code || ""),
+          fail: (error: unknown) => reject(new Error(formatDingTalkError(error)))
+        });
+        return;
+      }
+
+      resolve("");
+    };
+
+    if (dd.ready) dd.ready(request);
+    else request();
+    if (dd.error) dd.error((error: unknown) => reject(new Error(formatDingTalkError(error))));
+  });
+}
+
+function formatDingTalkError(error: unknown) {
+  if (!error) return "钉钉 JSAPI 调用失败";
+  if (typeof error === "string") return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "钉钉 JSAPI 调用失败";
+  }
+}
+
+declare global {
+  interface Window {
+    dd?: {
+      ready?: (callback: () => void) => void;
+      error?: (callback: (error: unknown) => void) => void;
+      runtime?: {
+        permission?: {
+          requestAuthCode?: (options: {
+            corpId: string;
+            onSuccess: (result: { code?: string }) => void;
+            onFail: (error: unknown) => void;
+          }) => void;
+        };
+      };
+      getAuthCode?: (options: {
+        corpId: string;
+        success: (result: { authCode?: string; code?: string }) => void;
+        fail: (error: unknown) => void;
+      }) => void;
+    };
+  }
 }

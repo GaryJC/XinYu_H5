@@ -9,13 +9,28 @@ export type WorkOrderStatus =
   | "待结算"
   | "完成";
 
-export type OcrFieldKey = "plate" | "vin" | "mileage";
+export type OcrFieldKey = "vehicleLicense";
 export type RepairItemStatus = "待派工" | "待领料" | "待开工" | "维修中" | "待检验" | "已完工";
 
 export type OcrFieldState = {
-  source: "车牌照片" | "行驶证照片" | "仪表盘照片";
+  source: "行驶证照片";
   status: "未识别" | "识别中" | "待确认" | "已确认";
   value: string;
+  error?: string;
+};
+
+export type VehicleLicenseOcrResult = {
+  plate: string;
+  vehicleType: string;
+  owner: string;
+  address: string;
+  useCharacter: string;
+  model: string;
+  vin: string;
+  engineNo: string;
+  registerDate: string;
+  issueDate: string;
+  confidence: number;
 };
 
 export type RepairItem = {
@@ -42,6 +57,15 @@ export type UserProfile = {
   role: RoleKey;
   dingtalkUserId?: string;
   active: boolean;
+  shopId?: string;
+  phone?: string;
+  lastLoginAt?: string;
+};
+
+export type AuthResult = {
+  token: string;
+  user: UserProfile;
+  expiresAt: string;
 };
 
 export type OcrRecord = {
@@ -56,6 +80,20 @@ export type OcrRecord = {
   error?: string;
   createdAt: string;
   confirmedAt?: string;
+};
+
+export type StoredFile = {
+  id: string;
+  orderId?: string;
+  kind: "vehicle_license" | "repair_order_photo" | "damage_photo" | "signature_image" | "other";
+  storageProvider: "oss" | "local";
+  bucket: string;
+  objectKey: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedBy?: string;
+  createdAt: string;
 };
 
 export type PlatformSyncRecord = {

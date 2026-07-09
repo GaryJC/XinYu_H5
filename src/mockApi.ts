@@ -1,6 +1,8 @@
-import { DashboardSummary, OcrFieldKey, OcrRecord, RoleKey, UserProfile, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "./types";
+import { AuthResult, DashboardSummary, OcrFieldKey, OcrRecord, RoleKey, StoredFile, UserProfile, VehicleLicenseOcrResult, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "./types";
 
 export type WorkOrderApi = {
+  loginWithDingTalk(authCode: string): Promise<AuthResult>;
+  me(): Promise<UserProfile>;
   list(role: RoleKey): Promise<WorkOrder[]>;
   create(draft: WorkOrderDraft, actor: string): Promise<WorkOrder>;
   update(order: WorkOrder, actor: string, action: string): Promise<WorkOrder>;
@@ -8,7 +10,9 @@ export type WorkOrderApi = {
   createSignatureToken(id: string, actor: string): Promise<WorkOrder>;
   signByToken(token: string, signature: string): Promise<WorkOrder>;
   findByToken(token: string): Promise<WorkOrder | undefined>;
-  createOcrRecord(orderId: string | undefined, field: OcrFieldKey, source: string, value: string, confidence: number): Promise<OcrRecord>;
+  recognizeVehicleLicense(imageBase64: string): Promise<VehicleLicenseOcrResult>;
+  uploadFile(file: { orderId?: string; kind: StoredFile["kind"]; fileName: string; mimeType: string; imageBase64: string }): Promise<StoredFile>;
+  createOcrRecord(orderId: string | undefined, field: OcrFieldKey, source: string, value: string, confidence: number, fileId?: string): Promise<OcrRecord>;
   confirmOcrRecord(id: string, value: string, actor: string): Promise<OcrRecord>;
   syncPlatform(id: string, actor: string): Promise<WorkOrder>;
   repairItemAction(id: string, itemId: number, action: string, actor: string, patch?: Record<string, unknown>): Promise<WorkOrder>;
@@ -18,6 +22,14 @@ export type WorkOrderApi = {
 };
 
 export const workOrderApi: WorkOrderApi = {
+  async loginWithDingTalk(authCode) {
+    const result = await request<AuthResult>("/api/auth/dingtalk-login", { method: "POST", body: { authCode }, skipAuth: true });
+    setAuthToken(result.token);
+    return result;
+  },
+  me() {
+    return request("/api/auth/me");
+  },
   list(role) {
     return request(`/api/work-orders?role=${role}`);
   },
@@ -43,10 +55,16 @@ export const workOrderApi: WorkOrderApi = {
       return undefined;
     }
   },
-  createOcrRecord(orderId, field, source, value, confidence) {
+  recognizeVehicleLicense(imageBase64) {
+    return request("/api/ocr/vehicle-license", { method: "POST", body: { imageBase64 } });
+  },
+  uploadFile(file) {
+    return request("/api/files", { method: "POST", body: file });
+  },
+  createOcrRecord(orderId, field, source, value, confidence, fileId) {
     return request(`/api/work-orders/${orderId ?? "draft"}/ocr-records`, {
       method: "POST",
-      body: { field, source, fileId: `mock-upload-${Date.now()}`, value, confidence }
+      body: { field, source, fileId: fileId || `mock-upload-${Date.now()}`, value, confidence }
     });
   },
   confirmOcrRecord(id, value, actor) {
@@ -69,10 +87,25 @@ export const workOrderApi: WorkOrderApi = {
   }
 };
 
-async function request<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
+const authTokenKey = "repair-h5-auth-token";
+
+export function setAuthToken(token: string) {
+  window.localStorage.setItem(authTokenKey, token);
+}
+
+export function getAuthToken() {
+  return window.localStorage.getItem(authTokenKey) || "";
+}
+
+async function request<T>(path: string, options: { method?: string; body?: unknown; skipAuth?: boolean } = {}): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (options.body) headers["Content-Type"] = "application/json";
+  const token = options.skipAuth ? "" : getAuthToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
   const response = await fetch(path, {
     method: options.method ?? "GET",
-    headers: options.body ? { "Content-Type": "application/json" } : undefined,
+    headers: Object.keys(headers).length ? headers : undefined,
     body: options.body ? JSON.stringify(options.body) : undefined
   });
 
