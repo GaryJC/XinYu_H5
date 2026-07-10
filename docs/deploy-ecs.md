@@ -35,12 +35,12 @@ ECS 安全组放行：
 - `80`：HTTP，申请证书/跳转 HTTPS
 - `443`：HTTPS，钉钉 H5 必须使用 HTTPS
 
-服务器安装 Node.js 20、Git、Nginx。Ubuntu 示例：
+服务器安装 Node.js 22 LTS、Git、Nginx。Ubuntu 示例：
 
 ```bash
 sudo apt update
 sudo apt install -y git nginx
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
 node -v
 npm -v
@@ -94,51 +94,21 @@ OSS_BUCKET=
 ```bash
 cd /opt/repair-h5-dingtalk
 npm ci
-set -a
-source .env.production
-set +a
 npm run build
 npm run migrate
 ```
 
-## 5. 用 systemd 启动 Node 服务
-
-创建服务文件：
+## 5. 用 PM2 启动 Node 服务
 
 ```bash
-sudo nano /etc/systemd/system/repair-h5.service
+sudo npm install -g pm2
+cd /opt/repair-h5-dingtalk
+pm2 start npm --name xinyu-h5 -- start
+pm2 save
+pm2 startup
 ```
 
-内容：
-
-```ini
-[Unit]
-Description=Repair H5 DingTalk App
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=/opt/repair-h5-dingtalk
-EnvironmentFile=/opt/repair-h5-dingtalk/.env.production
-ExecStart=/usr/bin/npm start
-Restart=always
-RestartSec=5
-User=www-data
-Group=www-data
-
-[Install]
-WantedBy=multi-user.target
-```
-
-启动：
-
-```bash
-sudo chown -R www-data:www-data /opt/repair-h5-dingtalk
-sudo systemctl daemon-reload
-sudo systemctl enable repair-h5
-sudo systemctl start repair-h5
-sudo systemctl status repair-h5
-```
+执行 `pm2 startup` 输出的 sudo 命令，使服务随 ECS 启动。
 
 本机检查：
 
@@ -164,7 +134,7 @@ server {
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
     server_name repair.example.com;
 
     ssl_certificate /etc/nginx/certs/repair.example.com.pem;
@@ -172,13 +142,24 @@ server {
 
     client_max_body_size 20m;
 
-    location / {
+    root /opt/repair-h5-dingtalk/dist;
+    index index.html;
+
+    gzip on;
+    gzip_min_length 1024;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    location /api/ {
         proxy_pass http://127.0.0.1:8787;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
     }
 }
 ```

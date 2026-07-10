@@ -1,19 +1,22 @@
-import crypto from "node:crypto";
-import pg from "pg";
-
-const { Pool } = pg;
-
-const DATABASE_URL = process.env.DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
-const pool = new Pool({ connectionString: DATABASE_URL });
+import { pool, transaction } from "./database/pool.mjs";
+import { HttpError } from "./http/HttpError.mjs";
+import {
+  buildTrend,
+  countBy,
+  createId,
+  createOrderFromDraft,
+  createSignatureToken,
+  formatDate,
+  groupBy,
+  nowString,
+  parseDate,
+  repairActionText,
+  rowToOcrRecord,
+  rowToWorkOrder,
+  workOrderValues
+} from "./domain/workOrderModel.mjs";
 
 const validRoles = new Set(["advisor", "dispatcher", "technician", "inspector", "manager"]);
-
-export class HttpError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
 
 export async function healthCheck() {
   await pool.query("select 1");
@@ -39,52 +42,6 @@ export async function listWorkOrders(role = "manager", user) {
     params
   );
   return hydrateOrders(rows);
-}
-
-export async function listUsers() {
-  const { rows } = await pool.query("select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at from users order by role, name");
-  return rows.map(rowToUser);
-}
-
-export async function findUserById(id) {
-  const { rows } = await pool.query("select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at from users where id = $1", [id]);
-  return rows[0] ? rowToUser(rows[0]) : undefined;
-}
-
-export async function findUserByDingTalkUserId(dingTalkUserId) {
-  const { rows } = await pool.query("select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at from users where dingtalk_user_id = $1", [dingTalkUserId]);
-  return rows[0] ? rowToUser(rows[0]) : undefined;
-}
-
-export async function markUserLogin(id) {
-  await pool.query("update users set last_login_at = now() where id = $1", [id]);
-}
-
-export async function createAuthSession({ token, userId, userAgent, ipAddress, expiresAt }) {
-  const id = createId("sess");
-  await pool.query(
-    `
-      insert into auth_sessions (id, user_id, token_hash, user_agent, ip_address, expires_at)
-      values ($1, $2, $3, $4, $5, $6)
-    `,
-    [id, userId, hashToken(token), userAgent || "", ipAddress || "", expiresAt]
-  );
-  return id;
-}
-
-export async function isAuthSessionActive(token) {
-  const { rows } = await pool.query(
-    `
-      select 1
-      from auth_sessions
-      where token_hash = $1
-        and revoked_at is null
-        and expires_at > now()
-      limit 1
-    `,
-    [hashToken(token)]
-  );
-  return Boolean(rows[0]);
 }
 
 export async function createWorkOrder(draft, actor) {
@@ -568,21 +525,6 @@ async function addAudit(client, orderId, actor, action) {
   await client.query("insert into audit_logs (order_id, actor, action) values ($1, $2, $3)", [orderId, actor || "系统", action || "更新委托单"]);
 }
 
-async function transaction(callback) {
-  const client = await pool.connect();
-  try {
-    await client.query("begin");
-    const result = await callback(client);
-    await client.query("commit");
-    return result;
-  } catch (error) {
-    await client.query("rollback");
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
 function roleFilter(role, user) {
   if (!validRoles.has(role)) return { where: "", params: [] };
   if (role === "technician") return { where: "where wo.technician = $1", params: [user?.name || "陈立"] };
@@ -592,215 +534,9 @@ function roleFilter(role, user) {
   return { where: "", params: [] };
 }
 
-function workOrderValues(order) {
-  const inspection = order.inspection || { belongings: [], fuelLevel: "1/2", exteriorIssues: [] };
-  return [
-    order.id,
-    order.status,
-    order.advisor || "林佳",
-    order.technician || "待派工",
-    order.inspector || "待检验",
-    order.dispatchNo || "",
-    order.arrivalDate || "",
-    order.shop?.id || "shop-hq",
-    order.shop?.name || "上海虹桥店",
-    order.shop?.address || "上海市闵行区虹桥汽修服务中心",
-    order.shop?.phone || "021-6000-8618",
-    order.vehicle?.plate || "",
-    order.vehicle?.vin || "",
-    order.vehicle?.mileage || "",
-    order.vehicle?.model || "",
-    order.vehicle?.purchaseDate || "",
-    order.customer?.name || "",
-    order.customer?.phone || "",
-    order.customer?.contact || "",
-    order.customer?.address || "",
-    JSON.stringify(inspection),
-    order.faultDescription || "",
-    Number(order.estimatedFee || 0),
-    order.oldPartsHandling || "环保处理",
-    order.estimatedDeliveryAt || "",
-    Number(order.settlementAmount || 0),
-    order.feeNote || "",
-    order.platformOrderNo || null,
-    parseDate(order.createdAt),
-    parseDate(order.updatedAt)
-  ];
-}
-
-function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecords, syncRecords, outboundOrders, settlements) {
-  return {
-    id: row.id,
-    dispatchNo: row.dispatch_no || "",
-    arrivalDate: row.arrival_date || "",
-    status: row.status,
-    createdAt: formatDate(row.created_at),
-    updatedAt: formatDate(row.updated_at),
-    shop: {
-      id: row.shop_id || "shop-hq",
-      name: row.shop_name || "上海虹桥店",
-      address: row.shop_address || "上海市闵行区虹桥汽修服务中心",
-      phone: row.shop_phone || "021-6000-8618"
-    },
-    advisor: row.advisor,
-    technician: row.technician,
-    inspector: row.inspector,
-    vehicle: {
-      plate: row.vehicle_plate,
-      vin: row.vehicle_vin,
-      mileage: row.vehicle_mileage,
-      model: row.vehicle_model,
-      purchaseDate: row.vehicle_purchase_date
-    },
-    customer: {
-      name: row.customer_name,
-      phone: row.customer_phone,
-      contact: row.customer_contact,
-      address: row.customer_address
-    },
-    inspection: normalizeInspection(row.inspection),
-    faultDescription: row.fault_description,
-    repairItems: repairItems.map((item) => ({
-      id: Number(item.client_item_id),
-      name: item.name,
-      laborFee: Number(item.labor_fee || 0),
-      owner: item.owner,
-      startAt: item.start_at || "",
-      finishAt: item.finish_at || "",
-      inspector: item.inspector || "待检验",
-      status: item.status || "待派工"
-    })),
-    estimatedFee: Number(row.estimated_fee || 0),
-    oldPartsHandling: row.old_parts_handling,
-    estimatedDeliveryAt: row.estimated_delivery_at,
-    settlementAmount: Number(row.settlement_amount || 0),
-    feeNote: row.fee_note,
-    signatures: signatures.reduce((acc, item) => ({ ...acc, [item.signer_type]: item.signer_name }), {}),
-    signatureToken: row.signature_token || undefined,
-    signatureTokenUsed: row.signature_token_used ?? undefined,
-    platformOrderNo: row.platform_order_no || undefined,
-    ocrRecords: ocrRecords.map(rowToOcrRecord),
-    platformSyncRecords: syncRecords.map((item) => ({
-      id: item.id,
-      orderId: item.order_id,
-      platformOrderNo: item.platform_order_no,
-      status: item.status,
-      message: item.message,
-      syncedAt: formatDate(item.synced_at)
-    })),
-    outboundOrders: outboundOrders.map((item) => ({
-      id: item.id,
-      orderId: item.order_id,
-      dispatchNo: item.dispatch_no,
-      platformOrderNo: item.platform_order_no,
-      technician: item.technician,
-      status: item.status,
-      createdAt: formatDate(item.created_at),
-      items: (item.items || []).map((child) => ({
-        id: child.id,
-        repairItemId: Number(child.repair_item_id),
-        name: child.name,
-        quantity: Number(child.quantity || 0),
-        picked: Boolean(child.picked)
-      }))
-    })),
-    settlementStatements: settlements.map((item) => ({
-      id: item.id,
-      orderId: item.order_id,
-      dispatchNo: item.dispatch_no,
-      plate: item.plate,
-      technician: item.technician,
-      amount: Number(item.amount || 0),
-      source: item.source,
-      matchStatus: item.match_status,
-      syncedAt: formatDate(item.synced_at)
-    })),
-    auditLog: auditLog.map((item) => ({
-      at: formatDate(item.at),
-      actor: item.actor,
-      action: item.action
-    }))
-  };
-}
-
-function normalizeInspection(value) {
-  const inspection = value || {};
-  return {
-    belongings: Array.isArray(inspection.belongings) ? inspection.belongings : [],
-    fuelLevel: inspection.fuelLevel || "1/2",
-    exteriorIssues: Array.isArray(inspection.exteriorIssues) ? inspection.exteriorIssues : []
-  };
-}
-
-function createOrderFromDraft(draft) {
-  const at = nowString();
-  return {
-    ...draft,
-    dispatchNo: draft.dispatchNo || "",
-    arrivalDate: draft.arrivalDate || new Date().toISOString().slice(0, 10),
-    shop: draft.shop || {
-      id: "shop-hq",
-      name: "上海虹桥店",
-      address: "上海市闵行区虹桥汽修服务中心",
-      phone: "021-6000-8618"
-    },
-    id: createOrderId(),
-    createdAt: at,
-    updatedAt: at,
-    auditLog: []
-  };
-}
-
-function createOrderId() {
-  const stamp = new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  return `WT-${stamp}-${Math.floor(100 + Math.random() * 900)}`;
-}
-
-function createSignatureToken(orderId) {
-  return `sig_${orderId}_${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function createId(prefix) {
-  const stamp = new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  return `${prefix}_${stamp}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
 async function findOcrRecord(id) {
   const { rows } = await pool.query("select * from ocr_records where id = $1", [id]);
   return rows[0] ? rowToOcrRecord(rows[0]) : undefined;
-}
-
-function rowToOcrRecord(row) {
-  return {
-    id: row.id,
-    orderId: row.order_id || undefined,
-    field: row.field,
-    source: row.source,
-    fileId: row.file_id,
-    status: row.status,
-    value: row.value,
-    confidence: Number(row.confidence || 0),
-    error: row.error || undefined,
-    createdAt: formatDate(row.created_at),
-    confirmedAt: row.confirmed_at ? formatDate(row.confirmed_at) : undefined
-  };
-}
-
-function rowToUser(row) {
-  return {
-    id: row.id,
-    name: row.name,
-    role: row.role,
-    dingtalkUserId: row.dingtalk_user_id || undefined,
-    active: row.active,
-    shopId: row.shop_id || "shop-hq",
-    phone: row.phone || undefined,
-    lastLoginAt: row.last_login_at ? formatDate(row.last_login_at) : undefined
-  };
-}
-
-function hashToken(token) {
-  return crypto.createHash("sha256").update(token).digest("hex");
 }
 
 async function upsertOutboundOrder(client, orderId, dispatchNo, platformOrderNo, repairItems, technician) {
@@ -840,53 +576,4 @@ async function refreshOutboundPickedState(client, orderId, repairItems) {
   const stats = rows[0] || { total: 0, picked: 0 };
   const status = stats.picked === 0 ? "待领料" : stats.picked === stats.total ? "已领料" : "部分领料";
   await client.query("update outbound_orders set status = $2 where id = $1", [outboundId, status]);
-}
-
-function repairActionText(action) {
-  const labels = {
-    assign: "按项目指派维修技师",
-    pick: "确认领料",
-    start: "维修项目开工",
-    finish: "维修项目完工提报",
-    inspect: "维修项目检验通过"
-  };
-  return labels[action] || "更新维修项目";
-}
-
-function countBy(items, getKey) {
-  return items.reduce((acc, item) => {
-    const key = getKey(item);
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
-}
-
-function buildTrend(orders) {
-  const day = countBy(orders, (order) => (order.arrivalDate || order.createdAt || "").slice(0, 10) || "未登记");
-  const entries = Object.entries(day).sort(([a], [b]) => a.localeCompare(b));
-  return entries.map(([label, value]) => ({ label, value }));
-}
-
-function groupBy(rows, key) {
-  const result = new Map();
-  for (const row of rows) {
-    const value = row[key];
-    result.set(value, [...(result.get(value) || []), row]);
-  }
-  return result;
-}
-
-function parseDate(value) {
-  if (!value) return new Date();
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? new Date() : new Date(parsed);
-}
-
-function nowString() {
-  return formatDate(new Date());
-}
-
-function formatDate(value) {
-  if (!value) return "";
-  return new Date(value).toLocaleString("zh-CN", { hour12: false });
 }

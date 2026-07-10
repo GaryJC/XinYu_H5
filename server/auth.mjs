@@ -1,5 +1,12 @@
 import crypto from "node:crypto";
-import { HttpError, createAuthSession, findUserByDingTalkUserId, findUserById, isAuthSessionActive, markUserLogin } from "./db.mjs";
+import { HttpError } from "./http/HttpError.mjs";
+import {
+  createAuthSession,
+  findUserByDingTalkUserId,
+  findUserById,
+  isAuthSessionActive,
+  markUserLogin
+} from "./repositories/userRepository.mjs";
 
 const DINGTALK_ACCESS_TOKEN_TTL_MS = 90 * 60 * 1000;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;

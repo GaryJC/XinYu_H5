@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import OSS from "ali-oss";
-import { HttpError, createFileRecord } from "./db.mjs";
+import { createFileRecord } from "./db.mjs";
+import { HttpError } from "./http/HttpError.mjs";
 
 let ossClient;
 

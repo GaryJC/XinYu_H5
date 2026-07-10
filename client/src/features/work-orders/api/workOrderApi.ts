@@ -1,4 +1,17 @@
-import { AuthResult, DashboardSummary, OcrFieldKey, OcrRecord, RoleKey, StoredFile, UserProfile, VehicleLicenseOcrResult, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "../../shared/types";
+import {
+  AuthResult,
+  DashboardSummary,
+  OcrFieldKey,
+  OcrRecord,
+  RoleKey,
+  StoredFile,
+  UserProfile,
+  VehicleLicenseOcrResult,
+  WorkOrder,
+  WorkOrderDraft,
+  WorkOrderStatus
+} from "../../../../../shared/types";
+import { request, setAuthToken } from "../../../shared/api/httpClient";
 
 export type WorkOrderApi = {
   loginWithDingTalk(authCode: string): Promise<AuthResult>;
@@ -86,32 +99,3 @@ export const workOrderApi: WorkOrderApi = {
     return request("/api/users");
   }
 };
-
-const authTokenKey = "repair-h5-auth-token";
-
-export function setAuthToken(token: string) {
-  window.localStorage.setItem(authTokenKey, token);
-}
-
-export function getAuthToken() {
-  return window.localStorage.getItem(authTokenKey) || "";
-}
-
-async function request<T>(path: string, options: { method?: string; body?: unknown; skipAuth?: boolean } = {}): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (options.body) headers["Content-Type"] = "application/json";
-  const token = options.skipAuth ? "" : getAuthToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const response = await fetch(path, {
-    method: options.method ?? "GET",
-    headers: Object.keys(headers).length ? headers : undefined,
-    body: options.body ? JSON.stringify(options.body) : undefined
-  });
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(payload?.error ?? `API request failed: ${response.status}`);
-  }
-  return payload as T;
-}

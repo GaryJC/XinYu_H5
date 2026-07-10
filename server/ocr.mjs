@@ -2,7 +2,7 @@ import { Readable } from "node:stream";
 import * as OpenApiClient from "@alicloud/openapi-client";
 import * as OcrApi from "@alicloud/ocr-api20210707";
 import { RuntimeOptions } from "@darabonba/typescript";
-import { HttpError } from "./db.mjs";
+import { HttpError } from "./http/HttpError.mjs";
 
 const DEFAULT_ALIYUN_OCR_ENDPOINT = "ocr-api.cn-hangzhou.aliyuncs.com";
 

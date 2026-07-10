@@ -1,4 +1,4 @@
-import { WorkOrderStatus } from "../../shared/types";
+import { WorkOrderStatus } from "../../../../shared/types";
 
 const statusTone: Record<WorkOrderStatus, "amber" | "blue" | "green" | "violet" | "gray"> = {
   草稿: "gray",
@@ -23,3 +23,4 @@ export function MetricCard({ label, value }: { label: string; value: number }) {
 export function StatusChip({ status }: { status: WorkOrderStatus }) {
   return <span className={`status-chip ${statusTone[status]}`}>{status}</span>;
 }
+

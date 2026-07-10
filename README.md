@@ -6,12 +6,17 @@
 
 ```text
 repair-h5-dingtalk/
-├── client/   # React H5 前端
-├── server/   # Node API、OCR、钉钉、数据库、文件存储
-├── shared/   # 前后端共享 TypeScript 类型
-├── supabase/ # PostgreSQL 数据库迁移
-├── scripts/  # 开发、迁移脚本
-└── docs/     # 部署和功能说明
+├── client/src/app/          # React 应用入口
+├── client/src/features/     # 按业务功能组织的页面、组件、hooks、API
+├── client/src/integrations/ # 钉钉浏览器集成
+├── client/src/shared/       # 通用 UI 与 HTTP 基础设施
+├── server/config/           # 服务端环境配置
+├── server/database/         # PostgreSQL 连接与事务
+├── server/repositories/     # 数据访问
+├── server/routes/           # HTTP API 路由
+├── shared/                  # 前后端共享 TypeScript 类型
+├── supabase/                # PostgreSQL 数据库迁移
+└── docs/                    # 架构与部署说明
 ```
 
 ## 本地开发
@@ -60,6 +65,7 @@ cp .env.example .env.local
 npm run build     # 构建前端
 npm run migrate   # 执行数据库迁移
 npm start         # 启动生产服务
+npm run check     # 测试、类型检查和生产构建
 ```
 
-ECS 部署说明见 `docs/deploy-ecs.md`。
+架构说明见 `docs/architecture.md`，ECS 部署说明见 `docs/deploy-ecs.md`。

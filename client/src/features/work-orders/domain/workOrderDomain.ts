@@ -1,4 +1,4 @@
-import { AuditLogEntry, RepairItem, RoleKey, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "../../shared/types";
+import { AuditLogEntry, RepairItem, RoleKey, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "../../../../../shared/types";
 
 export const shopProfile = {
   id: "shop-hq",
@@ -228,3 +228,4 @@ export function validateWorkOrderDraft(draft: WorkOrderDraft) {
   if (!draft.repairItems.length || draft.repairItems.some((item) => !item.name.trim())) errors.push("维修项目不能为空");
   return errors;
 }
+
