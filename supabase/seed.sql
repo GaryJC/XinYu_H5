@@ -100,7 +100,7 @@ update work_orders set
   arrival_date = to_char(created_at at time zone 'Asia/Shanghai', 'YYYY-MM-DD'),
   shop_id = 'shop-hq',
   shop_name = '上海虹桥店',
-  shop_address = '上海市闵行区虹桥汽修服务中心',
+  shop_address = '抚顺路店',
   shop_phone = '021-6000-8618';
 
 update repair_items set status = '维修中', start_at = '2026-06-26 10:30', inspector = '黄检'

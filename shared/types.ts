@@ -196,6 +196,7 @@ export type WorkOrder = {
   outboundOrders: OutboundOrder[];
   settlementStatements: SettlementStatement[];
   auditLog: AuditLogEntry[];
+  files?: StoredFile[];
 };
 
 export type AuditLogEntry = {

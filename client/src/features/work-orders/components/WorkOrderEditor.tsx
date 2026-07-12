@@ -1,8 +1,8 @@
 import { FileSignature, LockKeyhole, Plus, RefreshCcw, Save, Send, Trash2 } from "lucide-react";
-import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Tooltip } from "antd";
+import { Alert, Button, Card, Form, Input, Modal, Select, Tooltip } from "antd";
 import { useState } from "react";
 import { WorkOrder, WorkOrderDraft } from "../../../../../shared/types";
-import { canCreateOrder, canDispatch, canSendSignature } from "../domain/permissions";
+import { canCreateOrder, canSendSignature } from "../domain/permissions";
 import { Checklist, Field, TextArea } from "../../../shared/ui/FormControls";
 import { VehicleLicenseOcrControl } from "../../vehicle-license-ocr/VehicleLicenseOcrControl";
 import { WorkbenchController } from "../../workbench/useWorkbenchController";
@@ -20,8 +20,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     selectedOrder, startNewOrder, canEditForm, saveDraft, role, sendSignature,
     formErrors, vehicleLicenseOcr, ocrState, scanVehicleLicense,
     confirmVehicleLicenseOcr, draft, updateDraft, updateVehicle, updateCustomer,
-    toggleArrayField, setDraft, totalLabor, updateRepairItem, technicianOptions,
-    inspectorOptions, updateRepairAction, actor, syncPlatform, actionLoading, completeSignature
+    toggleArrayField, setDraft, totalLabor, updateRepairItem,
+    syncPlatform, actionLoading, completeSignature
   } = controller;
   const canSyncPlatform = Boolean(selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) && (role === "advisor" || role === "manager"));
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
@@ -70,10 +70,6 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               <div className="button-row">
                 <Button icon={<Plus size={16} />} onClick={startNewOrder} disabled={!canEditForm}>新建</Button>
                 <Button icon={<Save size={16} />} onClick={saveDraft} loading={actionLoading === "save"} disabled={!canCreateOrder(role)}>保存草稿</Button>
-                <Tooltip title={signatureDisabledReason}>
-                  <span><Button type="primary" icon={<Send size={16} />} onClick={handleSendSignature} loading={actionLoading === "signature"} disabled={signatureDisabled}>{canResumeSignature ? "继续签字" : "发起签字"}</Button></span>
-                </Tooltip>
-                <Button icon={<RefreshCcw size={16} />} onClick={syncPlatform} loading={actionLoading === "sync"} disabled={!canSyncPlatform}>同步维修平台</Button>
               </div>
             </div>
 
@@ -165,23 +161,11 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             <div className="repair-table" role="table" aria-label="维修项目明细">
               <div className="repair-row repair-head" role="row">
                 <span>项目</span>
-                <span>工费</span>
-                <span>主修人</span>
-                <span>开工</span>
-                <span>完工</span>
-                <span>过程检查</span>
-                <span>状态</span>
                 <span>操作</span>
               </div>
               {draft.repairItems.map((item) => (
                 <div className="repair-row" role="row" key={item.id}>
                   <div data-label="项目"><Input required aria-required="true" status={fieldError("维修项目") && !item.name.trim() ? "error" : undefined} disabled={!canEditForm} aria-label="项目名称" value={item.name} onChange={(event) => updateRepairItem(item.id, { name: event.target.value })} /></div>
-                  <div data-label="工费"><InputNumber disabled={!canEditForm} aria-label="工费" min={0} value={item.laborFee} onChange={(value) => updateRepairItem(item.id, { laborFee: Number(value) })} /></div>
-                  <div data-label="主修人"><Select disabled={!canEditForm} aria-label="主修人" value={item.owner} onChange={(value) => updateRepairItem(item.id, { owner: value })} options={["待派工", ...technicianOptions].map((name) => ({ value: name }))} /></div>
-                  <div data-label="开工"><Input disabled={!canEditForm} aria-label="开工时间" value={item.startAt} onChange={(event) => updateRepairItem(item.id, { startAt: event.target.value })} /></div>
-                  <div data-label="完工"><Input disabled={!canEditForm} aria-label="完工时间" value={item.finishAt} onChange={(event) => updateRepairItem(item.id, { finishAt: event.target.value })} /></div>
-                  <div data-label="检查人"><Select disabled={!canEditForm} aria-label="过程检查人" value={item.inspector} onChange={(value) => updateRepairItem(item.id, { inspector: value })} options={["待检验", ...inspectorOptions].map((name) => ({ value: name }))} /></div>
-                  <div data-label="状态"><span>{item.status}</span></div>
                   <div data-label="操作"><Button
                     type="text"
                     danger
@@ -200,27 +184,25 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               ))}
             </div>
 
-            {selectedOrder ? (
-              <div className="item-action-grid">
-                {selectedOrder.repairItems.map((item) => (
-                  <div className="mini-card" key={item.id}>
-                    <strong>{item.name || `项目 ${item.id}`}</strong>
-                    <span>{item.owner} · {item.status}</span>
-                    <div className="button-row">
-                      <Button type="link" size="small" disabled={!canDispatch(role, selectedOrder) || technicianOptions.length === 0} onClick={() => updateRepairAction(item.id, "assign", { technician: draft.technician || technicianOptions[0] || item.owner })}>指派</Button>
-                      {role === "manager" ? <><Button type="link" size="small" onClick={() => updateRepairAction(item.id, "pick")}>领料</Button><Button type="link" size="small" onClick={() => updateRepairAction(item.id, "start")}>开工</Button><Button type="link" size="small" onClick={() => updateRepairAction(item.id, "finish")}>完工</Button><Button type="link" size="small" onClick={() => updateRepairAction(item.id, "inspect", { inspector: actor })}>检验</Button></> : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
             <div className="field-grid settlement-grid">
               <Field disabled={!canEditForm} label="预计修理费" value={String(draft.estimatedFee)} suffix="元" onChange={(value) => updateDraft({ estimatedFee: Number(value) })} />
               <Form.Item className="field" label="旧件处置方式"><Select aria-label="旧件处置方式" disabled={!canEditForm} value={draft.oldPartsHandling} onChange={(value) => updateDraft({ oldPartsHandling: value as WorkOrderDraft["oldPartsHandling"] })} options={["客户带走", "门店回收", "环保处理"].map((value) => ({ value }))} /></Form.Item>
               <Field disabled={!(role === "advisor" || role === "manager")} label="结算金额占位" value={String(draft.settlementAmount || draft.estimatedFee || totalLabor)} suffix="元" onChange={(value) => updateDraft({ settlementAmount: Number(value) })} />
             </div>
             <TextArea disabled={!(role === "advisor" || role === "manager")} label="费用备注" value={draft.feeNote} onChange={(value) => updateDraft({ feeNote: value })} />
+
+            <div className="workflow-actions">
+              <div>
+                <strong>完成开单流程</strong>
+                <span>{canSyncPlatform ? "客户已签字，可以同步维修平台。" : "请先完成客户签字，再同步维修平台。"}</span>
+              </div>
+              <div className="workflow-action-buttons">
+                <Tooltip title={signatureDisabledReason}>
+                  <span><Button size="large" color="blue" variant="solid" icon={<Send size={17} />} onClick={handleSendSignature} loading={actionLoading === "signature"} disabled={signatureDisabled}>{canResumeSignature ? "继续签字" : "发起签字"}</Button></span>
+                </Tooltip>
+                <Button size="large" color="green" variant="solid" icon={<RefreshCcw size={17} />} onClick={syncPlatform} loading={actionLoading === "sync"} disabled={!canSyncPlatform}>同步维修平台</Button>
+              </div>
+            </div>
 
           </Form>
           <Modal

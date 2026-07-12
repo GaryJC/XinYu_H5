@@ -19,7 +19,7 @@ import {
 import { readJson, requestContext, sendJson } from "../http/response.mjs";
 import { recognizeVehicleLicense } from "../ocr.mjs";
 import { listUsers } from "../repositories/userRepository.mjs";
-import { saveUploadedFile } from "../storage.mjs";
+import { readStoredFile, saveUploadedFile } from "../storage.mjs";
 
 export async function handleApiRequest(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/health") {
@@ -67,6 +67,18 @@ export async function handleApiRequest(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/files") {
     const body = await readJson(req);
     sendJson(res, 201, await saveUploadedFile({ ...body, uploadedBy: currentUser?.id || body.uploadedBy || null }));
+    return true;
+  }
+
+  const fileContentMatch = url.pathname.match(/^\/api\/files\/([^/]+)\/content$/);
+  if (fileContentMatch && req.method === "GET") {
+    const { record, body } = await readStoredFile(fileContentMatch[1]);
+    res.statusCode = 200;
+    res.setHeader("Content-Type", record.mimeType || "application/octet-stream");
+    res.setHeader("Content-Length", body.byteLength);
+    res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(record.originalName || record.id)}"`);
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.end(body);
     return true;
   }
 

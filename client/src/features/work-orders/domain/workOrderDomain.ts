@@ -3,7 +3,7 @@ import { AuditLogEntry, RepairItem, RoleKey, WorkOrder, WorkOrderDraft, WorkOrde
 export const shopProfile = {
   id: "shop-hq",
   name: "上海虹桥店",
-  address: "上海市闵行区虹桥汽修服务中心",
+  address: "抚顺路店",
   phone: "021-6000-8618"
 };
 
@@ -228,4 +228,3 @@ export function validateWorkOrderDraft(draft: WorkOrderDraft) {
   if (!draft.repairItems.length || draft.repairItems.some((item) => !item.name.trim())) errors.push("维修项目不能为空");
   return errors;
 }
-

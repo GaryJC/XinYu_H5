@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import OSS from "ali-oss";
-import { createFileRecord } from "./db.mjs";
+import { createFileRecord, findFileRecord } from "./db.mjs";
 import { HttpError } from "./http/HttpError.mjs";
 
 let ossClient;
@@ -28,6 +28,20 @@ export async function saveUploadedFile({ orderId, kind, fileName, mimeType, imag
     sizeBytes: buffer.length,
     uploadedBy: uploadedBy || null
   });
+}
+
+export async function readStoredFile(fileId) {
+  const record = await findFileRecord(fileId);
+  if (record.storageProvider === "oss") {
+    const result = await getOssClient().get(record.objectKey);
+    return { record, body: result.content };
+  }
+
+  const uploadRoot = path.resolve("server/data/uploads");
+  const target = path.resolve(uploadRoot, record.objectKey);
+  const relative = path.relative(uploadRoot, target);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) throw new HttpError(403, "文件路径非法");
+  return { record, body: await fs.readFile(target) };
 }
 
 async function putObject(objectKey, buffer, mimeType) {

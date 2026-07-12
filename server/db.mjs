@@ -318,6 +318,25 @@ export async function createFileRecord({ orderId, kind, storageProvider, bucket,
   };
 }
 
+export async function findFileRecord(fileId) {
+  const { rows } = await pool.query("select * from files where id = $1", [fileId]);
+  const row = rows[0];
+  if (!row) throw new HttpError(404, "文件不存在");
+  return {
+    id: row.id,
+    orderId: row.order_id || undefined,
+    kind: row.kind,
+    storageProvider: row.storage_provider,
+    bucket: row.bucket,
+    objectKey: row.object_key,
+    originalName: row.original_name || "",
+    mimeType: row.mime_type || "application/octet-stream",
+    sizeBytes: Number(row.size_bytes || 0),
+    uploadedBy: row.uploaded_by || undefined,
+    createdAt: formatDate(row.created_at)
+  };
+}
+
 export async function attachFileToOrder(fileId, orderId) {
   const { rows } = await pool.query(
     `
@@ -468,6 +487,15 @@ async function hydrateOrders(rows, client = pool) {
     `,
     [ids]
   );
+  const files = await client.query(
+    `
+      select *
+      from files
+      where order_id = any($1::text[])
+      order by order_id, created_at desc
+    `,
+    [ids]
+  );
 
   const itemsByOrder = groupBy(repairItems.rows, "order_id");
   const signaturesByOrder = groupBy(signatures.rows, "order_id");
@@ -476,6 +504,7 @@ async function hydrateOrders(rows, client = pool) {
   const syncByOrder = groupBy(syncRecords.rows, "order_id");
   const outboundByOrder = groupBy(outboundOrders.rows, "order_id");
   const settlementByOrder = groupBy(settlements.rows, "order_id");
+  const filesByOrder = groupBy(files.rows, "order_id");
 
   return rows.map((row) =>
     rowToWorkOrder(
@@ -486,7 +515,8 @@ async function hydrateOrders(rows, client = pool) {
       ocrByOrder.get(row.id) || [],
       syncByOrder.get(row.id) || [],
       outboundByOrder.get(row.id) || [],
-      settlementByOrder.get(row.id) || []
+      settlementByOrder.get(row.id) || [],
+      filesByOrder.get(row.id) || []
     )
   );
 }

@@ -10,7 +10,7 @@ export function workOrderValues(order) {
     order.arrivalDate || "",
     order.shop?.id || "shop-hq",
     order.shop?.name || "上海虹桥店",
-    order.shop?.address || "上海市闵行区虹桥汽修服务中心",
+    order.shop?.address || "抚顺路店",
     order.shop?.phone || "021-6000-8618",
     order.vehicle?.plate || "",
     order.vehicle?.vin || "",
@@ -34,7 +34,7 @@ export function workOrderValues(order) {
   ];
 }
 
-export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecords, syncRecords, outboundOrders, settlements) {
+export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecords, syncRecords, outboundOrders, settlements, files = []) {
   return {
     id: row.id,
     dispatchNo: row.dispatch_no || "",
@@ -45,7 +45,7 @@ export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecord
     shop: {
       id: row.shop_id || "shop-hq",
       name: row.shop_name || "上海虹桥店",
-      address: row.shop_address || "上海市闵行区虹桥汽修服务中心",
+      address: row.shop_id === "shop-hq" ? "抚顺路店" : row.shop_address || "抚顺路店",
       phone: row.shop_phone || "021-6000-8618"
     },
     advisor: row.advisor,
@@ -125,6 +125,19 @@ export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecord
       at: formatDate(item.at),
       actor: item.actor,
       action: item.action
+    })),
+    files: files.map((item) => ({
+      id: item.id,
+      orderId: item.order_id || undefined,
+      kind: item.kind,
+      storageProvider: item.storage_provider,
+      bucket: item.bucket,
+      objectKey: item.object_key,
+      originalName: item.original_name || "",
+      mimeType: item.mime_type || "application/octet-stream",
+      sizeBytes: Number(item.size_bytes || 0),
+      uploadedBy: item.uploaded_by || undefined,
+      createdAt: formatDate(item.created_at)
     }))
   };
 }
@@ -147,7 +160,7 @@ export function createOrderFromDraft(draft) {
     shop: draft.shop || {
       id: "shop-hq",
       name: "上海虹桥店",
-      address: "上海市闵行区虹桥汽修服务中心",
+      address: "抚顺路店",
       phone: "021-6000-8618"
     },
     id: createOrderId(),
@@ -237,4 +250,3 @@ export function formatDate(value) {
   if (!value) return "";
   return new Date(value).toLocaleString("zh-CN", { hour12: false });
 }
-
