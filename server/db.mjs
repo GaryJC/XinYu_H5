@@ -79,6 +79,23 @@ export async function createSignatureTokenForOrder(id, actor) {
   return transaction(async (client) => {
     const order = await findWorkOrderById(client, id);
     if (!order) throw new HttpError(404, "委托单不存在");
+    if (order.status !== "草稿") throw new HttpError(409, `当前状态“${order.status}”不能发起签字`);
+    validateOrderForSignature(order);
+    const confirmedLicense = await client.query(
+      `
+        select ocr.id
+        from ocr_records ocr
+        join files f on f.id = ocr.file_id
+        where ocr.order_id = $1
+          and ocr.field = 'vehicleLicense'
+          and ocr.status = '已确认'
+          and f.kind = 'vehicle_license'
+        order by ocr.confirmed_at desc
+        limit 1
+      `,
+      [id]
+    );
+    if (!confirmedLicense.rows[0]) throw new HttpError(400, "请上传并确认行驶证照片后再发起签字");
     const token = createSignatureToken(id);
     await upsertWorkOrder(client, { ...order, status: "待客户签字", updatedAt: nowString() });
     await client.query(
@@ -107,7 +124,7 @@ export async function findWorkOrderByToken(token) {
   return (await hydrateOrders(rows))[0];
 }
 
-export async function signWorkOrderByToken(token, signature) {
+export async function signWorkOrderByToken(token, signature, signatureFileId) {
   return transaction(async (client) => {
     const tokenResult = await client.query(
       `
@@ -125,6 +142,12 @@ export async function signWorkOrderByToken(token, signature) {
 
     const order = await findWorkOrderById(client, tokenRow.order_id);
     if (!order) throw new HttpError(404, "委托单不存在");
+    if (!signatureFileId) throw new HttpError(400, "请完成手写签名");
+    const signatureFile = await client.query(
+      "select id from files where id = $1 and order_id = $2 and kind = 'signature_image'",
+      [signatureFileId, order.id]
+    );
+    if (!signatureFile.rows[0]) throw new HttpError(400, "签字图片不存在或未关联当前委托单");
 
     const next = {
       ...order,
@@ -173,6 +196,7 @@ export async function syncWorkOrderToPlatform(id, actor) {
   return transaction(async (client) => {
     const order = await findWorkOrderById(client, id);
     if (!order) throw new HttpError(404, "委托单不存在");
+    if (["草稿", "待客户签字"].includes(order.status)) throw new HttpError(409, "客户完成签字后才能同步维修平台");
     const platformOrderNo = order.platformOrderNo || createId("PLAT");
     const dispatchNo = order.dispatchNo || createId("PG");
     const syncId = createId("sync");
@@ -198,6 +222,18 @@ export async function syncWorkOrderToPlatform(id, actor) {
     await addAudit(client, id, actor, "同步至维修业务平台并生成出库单");
     return findWorkOrderById(client, id);
   });
+}
+
+function validateOrderForSignature(order) {
+  const missing = [];
+  if (!order.vehicle?.plate?.trim()) missing.push("车牌号码");
+  if (!/^[A-Z0-9]{17}$/i.test(order.vehicle?.vin?.trim() || "")) missing.push("17 位 VIN");
+  if (!/^\d+(\.\d+)?$/.test(order.vehicle?.mileage?.trim() || "")) missing.push("进厂里程");
+  if (!order.customer?.name?.trim()) missing.push("车主名称");
+  if (!order.customer?.phone?.trim()) missing.push("联系电话");
+  if (!order.faultDescription?.trim()) missing.push("故障描述");
+  if (!order.repairItems?.length || order.repairItems.some((item) => !item.name?.trim())) missing.push("维修项目");
+  if (missing.length) throw new HttpError(400, `请完善必填项：${missing.join("、")}`);
 }
 
 export async function repairItemAction(orderId, itemId, action, actor, patch = {}) {
@@ -279,6 +315,38 @@ export async function createFileRecord({ orderId, kind, storageProvider, bucket,
     sizeBytes: Number(sizeBytes || 0),
     uploadedBy: uploadedBy || undefined,
     createdAt: nowString()
+  };
+}
+
+export async function attachFileToOrder(fileId, orderId) {
+  const { rows } = await pool.query(
+    `
+      update files
+      set order_id = $2
+      where id = $1
+        and (order_id is null or order_id = $2)
+      returning *
+    `,
+    [fileId, orderId]
+  );
+  const row = rows[0];
+  if (!row) throw new HttpError(404, "文件不存在或已关联其他委托单");
+  await pool.query(
+    "update ocr_records set order_id = $2 where file_id = $1 and (order_id is null or order_id = $2)",
+    [fileId, orderId]
+  );
+  return {
+    id: row.id,
+    orderId: row.order_id,
+    kind: row.kind,
+    storageProvider: row.storage_provider,
+    bucket: row.bucket,
+    objectKey: row.object_key,
+    originalName: row.original_name || "",
+    mimeType: row.mime_type || "",
+    sizeBytes: Number(row.size_bytes || 0),
+    uploadedBy: row.uploaded_by || undefined,
+    createdAt: formatDate(row.created_at)
   };
 }
 

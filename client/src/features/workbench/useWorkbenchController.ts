@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { DashboardSummary, RoleKey, UserProfile, WorkOrder } from "../../../../shared/types";
-import { signatureNotificationAdapter } from "../signature/notificationAdapter";
 import { roles, sumLabor, validateWorkOrderDraft } from "../work-orders/domain/workOrderDomain";
 import { canCreateOrder } from "../work-orders/domain/permissions";
 import { getDingTalkAuthCode } from "../../integrations/dingtalk/auth";
@@ -18,16 +17,16 @@ export function useWorkbenchController() {
   const { draft, setDraft, resetDraft, updateDraft, updateVehicle, updateCustomer, updateRepairItem, toggleArrayField } = useWorkOrderDraft();
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [apiError, setApiError] = useState("");
-  const [signatureLink, setSignatureLink] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [syncLabel, setSyncLabel] = useState("钉钉组织已同步");
   const [dashboard, setDashboard] = useState<DashboardSummary>();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [currentUser, setCurrentUser] = useState<UserProfile>();
+  const [actionLoading, setActionLoading] = useState<"save" | "signature" | "sync" | "">("");
 
   const selectedOrder = orders.find((order) => order.id === selectedId);
   const actor = currentUser?.name || roles[role].name;
-  const { ocrState, vehicleLicenseOcr, resetOcr, scanVehicleLicense, confirmVehicleLicenseOcr } =
+  const { ocrState, vehicleLicenseOcr, vehicleLicenseFileId, resetOcr, scanVehicleLicense, confirmVehicleLicenseOcr } =
     useVehicleLicenseOcr({ orderId: selectedOrder?.id, actor, setDraft });
   const visibleNavItems = useMemo(() => navItems.filter((item) => item.roles.includes(role)), [role]);
   const canEditForm = canCreateOrder(role);
@@ -104,7 +103,7 @@ export function useWorkbenchController() {
     try {
       const user = await workOrderApi.me();
       setCurrentUser(user);
-      setRole(user.role);
+      setRole(user.role === "manager" ? "manager" : "advisor");
       setSyncLabel(`已登录：${user.name}`);
       return;
     } catch {
@@ -116,7 +115,7 @@ export function useWorkbenchController() {
       if (!authCode) return;
       const result = await workOrderApi.loginWithDingTalk(authCode);
       setCurrentUser(result.user);
-      setRole(result.user.role);
+      setRole(result.user.role === "manager" ? "manager" : "advisor");
       setSyncLabel(`钉钉免登成功：${result.user.name}`);
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "钉钉免登失败");
@@ -127,14 +126,12 @@ export function useWorkbenchController() {
     setSelectedId(order.id);
     resetDraft(order);
     setFormErrors([]);
-    setSignatureLink(order.signatureToken ? buildSignatureLink(order.signatureToken) : "");
-    resetOcr();
+    resetOcr(order.ocrRecords);
   }
 
   function startNewOrder() {
     setSelectedId(null);
     resetDraft();
-    setSignatureLink("");
     setFormErrors([]);
     resetOcr();
   }
@@ -145,14 +142,23 @@ export function useWorkbenchController() {
       return;
     }
 
-    if (selectedOrder) {
-      const updated = await workOrderApi.update({ ...selectedOrder, ...draft }, actor, "保存委托单");
-      await loadOrders(role, updated.id);
-      return;
-    }
+    setActionLoading("save");
+    setFormErrors([]);
+    try {
+      if (selectedOrder) {
+        const updated = await workOrderApi.update({ ...selectedOrder, ...draft }, actor, "保存委托单");
+        await loadOrders(role, updated.id);
+        return;
+      }
 
-    const created = await workOrderApi.create(draft, actor);
-    await loadOrders(role, created.id);
+      const created = await workOrderApi.create(draft, actor);
+      if (vehicleLicenseFileId) await workOrderApi.attachFile(vehicleLicenseFileId, created.id);
+      await loadOrders(role, created.id);
+    } catch (error) {
+      setFormErrors([actionError(error, "保存草稿失败")]);
+    } finally {
+      setActionLoading("");
+    }
   }
 
   async function sendSignature() {
@@ -162,12 +168,21 @@ export function useWorkbenchController() {
       return;
     }
 
-    const order = selectedOrder ?? (await workOrderApi.create(draft, actor));
-    if (selectedOrder) await workOrderApi.update({ ...selectedOrder, ...draft }, actor, "保存签字前委托单");
-    const withToken = await workOrderApi.createSignatureToken(order.id, actor);
-    await signatureNotificationAdapter.sendSignatureTodo(withToken);
-    setSignatureLink(buildSignatureLink(withToken.signatureToken!));
-    await loadOrders(role, withToken.id);
+    setActionLoading("signature");
+    setFormErrors([]);
+    try {
+      const order = selectedOrder ?? (await workOrderApi.create(draft, actor));
+      if (!selectedOrder && vehicleLicenseFileId) await workOrderApi.attachFile(vehicleLicenseFileId, order.id);
+      if (selectedOrder) await workOrderApi.update({ ...selectedOrder, ...draft }, actor, "保存签字前委托单");
+      const withToken = await workOrderApi.createSignatureToken(order.id, actor);
+      await loadOrders(role, withToken.id);
+      return { token: withToken.signatureToken!, order: withToken };
+    } catch (error) {
+      setFormErrors([actionError(error, "发起签字失败")]);
+      return undefined;
+    } finally {
+      setActionLoading("");
+    }
   }
 
   async function submitDispatch() {
@@ -208,9 +223,30 @@ export function useWorkbenchController() {
 
   async function syncPlatform() {
     if (!selectedOrder) return;
-    const updated = await workOrderApi.syncPlatform(selectedOrder.id, actor);
-    await loadOrders(role, updated.id);
-    await loadDashboard(role);
+    setActionLoading("sync");
+    setFormErrors([]);
+    try {
+      const updated = await workOrderApi.syncPlatform(selectedOrder.id, actor);
+      await loadOrders(role, updated.id);
+      await loadDashboard(role);
+    } catch (error) {
+      setFormErrors([actionError(error, "同步维修平台失败")]);
+    } finally {
+      setActionLoading("");
+    }
+  }
+
+  async function completeSignature(order: WorkOrder, token: string, signatureImage: string) {
+    const signatureFile = await workOrderApi.uploadFile({
+      orderId: order.id,
+      kind: "signature_image",
+      fileName: `signature-${order.id}.png`,
+      mimeType: "image/png",
+      imageBase64: signatureImage
+    });
+    const signed = await workOrderApi.signByToken(token, order.customer.name || "客户签名", signatureFile.id);
+    await loadOrders(role, signed.id);
+    return signed;
   }
 
   async function updateRepairAction(itemId: number, action: string, patch: Record<string, unknown> = {}) {
@@ -229,8 +265,9 @@ export function useWorkbenchController() {
 
   function validateBeforeSignature() {
     const errors = validateWorkOrderDraft(draft);
-    const pending = Object.values(ocrState).filter((item) => item.status === "待确认");
-    if (pending.length) errors.push("OCR 识别结果仍有待确认字段");
+    if (ocrState.vehicleLicense.status === "未识别") errors.push("请拍照识别并确认行驶证");
+    if (ocrState.vehicleLicense.status === "识别中") errors.push("行驶证正在识别，请稍候");
+    if (ocrState.vehicleLicense.status === "待确认") errors.push("请确认行驶证 OCR 结果");
     return errors;
   }
 
@@ -246,7 +283,6 @@ export function useWorkbenchController() {
     ocrState,
     formErrors,
     apiError,
-    signatureLink,
     searchTerm,
     setSearchTerm,
     syncLabel,
@@ -254,6 +290,7 @@ export function useWorkbenchController() {
     dashboard,
     users,
     currentUser,
+    actionLoading,
     selectedOrder,
     actor,
     visibleNavItems,
@@ -267,6 +304,7 @@ export function useWorkbenchController() {
     startNewOrder,
     saveDraft,
     sendSignature,
+    completeSignature,
     submitDispatch,
     dispatchToTechnician,
     completeRepair,
@@ -286,6 +324,6 @@ export function useWorkbenchController() {
 
 export type WorkbenchController = ReturnType<typeof useWorkbenchController>;
 
-function buildSignatureLink(token: string) {
-  return `${window.location.origin}${window.location.pathname}#/sign/${token}`;
+function actionError(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }

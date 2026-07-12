@@ -1,4 +1,5 @@
 import { CheckCircle2, Gauge, ShieldCheck } from "lucide-react";
+import { Card, Tag } from "antd";
 import { roles, workflow } from "../domain/workOrderDomain";
 import { WorkbenchController } from "../../workbench/useWorkbenchController";
 import { ActionPanel, PlatformPanel, SettlementPanel } from "./WorkflowPanels";
@@ -10,7 +11,7 @@ export function WorkflowSidebar({ controller }: { controller: WorkbenchControlle
   } = controller;
 
   return (
-<aside className="panel side-panel">
+<Card className="panel side-panel">
             <div className="panel-header compact">
               <div>
                 <h2>流程状态</h2>
@@ -52,10 +53,10 @@ export function WorkflowSidebar({ controller }: { controller: WorkbenchControlle
               <p>{roles[role].scope}</p>
               <div className="permission-tags">
                 {roles[role].permissions.map((permission) => (
-                  <span key={permission}>{permission}</span>
+                  <Tag key={permission}>{permission}</Tag>
                 ))}
               </div>
             </div>
-          </aside>
+          </Card>
   );
 }

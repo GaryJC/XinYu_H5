@@ -1,49 +1,88 @@
-import { Copy, Link, LockKeyhole, Plus, Save, Send, Trash2 } from "lucide-react";
-import { WorkOrderDraft } from "../../../../../shared/types";
+import { FileSignature, LockKeyhole, Plus, RefreshCcw, Save, Send, Trash2 } from "lucide-react";
+import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Tooltip } from "antd";
+import { useState } from "react";
+import { WorkOrder, WorkOrderDraft } from "../../../../../shared/types";
 import { canCreateOrder, canDispatch, canSendSignature } from "../domain/permissions";
 import { Checklist, Field, TextArea } from "../../../shared/ui/FormControls";
 import { VehicleLicenseOcrControl } from "../../vehicle-license-ocr/VehicleLicenseOcrControl";
 import { WorkbenchController } from "../../workbench/useWorkbenchController";
 import { belongings, exteriorIssues } from "../../workbench/workbenchConfig";
+import { SignaturePad } from "../../signature/SignaturePad";
+import { Summary } from "../../../shared/ui/FormControls";
+import { sumLabor } from "../domain/workOrderDomain";
 
 export function WorkOrderEditor({ controller }: { controller: WorkbenchController }) {
+  const [signatureSession, setSignatureSession] = useState<{ token: string; order: WorkOrder }>();
+  const [signatureImage, setSignatureImage] = useState("");
+  const [signatureSubmitting, setSignatureSubmitting] = useState(false);
+  const [signatureResult, setSignatureResult] = useState("");
   const {
     selectedOrder, startNewOrder, canEditForm, saveDraft, role, sendSignature,
     formErrors, vehicleLicenseOcr, ocrState, scanVehicleLicense,
     confirmVehicleLicenseOcr, draft, updateDraft, updateVehicle, updateCustomer,
     toggleArrayField, setDraft, totalLabor, updateRepairItem, technicianOptions,
-    inspectorOptions, updateRepairAction, actor, signatureLink
+    inspectorOptions, updateRepairAction, actor, syncPlatform, actionLoading, completeSignature
   } = controller;
+  const canSyncPlatform = Boolean(selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) && (role === "advisor" || role === "manager"));
+  const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
+  const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "行驶证", "故障描述"].some((phrase) => error.includes(phrase)));
+  const canResumeSignature = Boolean(selectedOrder?.status === "待客户签字" && selectedOrder.signatureToken && !selectedOrder.signatureTokenUsed);
+  const signatureDisabled = !canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder) && !canResumeSignature);
+  const signatureDisabledReason = selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) ? `当前状态“${selectedOrder.status}”不能再次发起签字` : "";
+  const signatureCompleted = signatureResult.includes("已保存");
+
+  async function handleSendSignature() {
+    if (canResumeSignature && selectedOrder?.signatureToken) {
+      setSignatureImage("");
+      setSignatureResult("");
+      setSignatureSession({ token: selectedOrder.signatureToken, order: selectedOrder });
+      return;
+    }
+    const session = await sendSignature();
+    if (session) {
+      setSignatureImage("");
+      setSignatureResult("");
+      setSignatureSession(session);
+    }
+  }
+
+  async function handleCompleteSignature() {
+    if (!signatureSession || !signatureImage) return;
+    setSignatureSubmitting(true);
+    try {
+      await completeSignature(signatureSession.order, signatureSession.token, signatureImage);
+      setSignatureResult("客户签字已保存，委托单已进入“已委托”。");
+    } catch (error) {
+      setSignatureResult(error instanceof Error ? error.message : "签字保存失败");
+    } finally {
+      setSignatureSubmitting(false);
+    }
+  }
 
   return (
-<div className="panel form-panel">
+<Card className="panel form-panel">
+          <Form layout="vertical" requiredMark>
             <div className="panel-header">
               <div>
                 <h2>{selectedOrder ? `委托单 ${selectedOrder.id}` : "新建委托开单"}</h2>
-                <p>先保存草稿，再生成客户签字链接；OCR 结果必须人工确认。</p>
+                <p>先保存草稿，再由客户在弹窗内核对并签字；OCR 结果必须人工确认。</p>
               </div>
               <div className="button-row">
-                <button className="secondary-button" type="button" onClick={startNewOrder} disabled={!canEditForm}>
-                  <Plus size={16} />
-                  新建
-                </button>
-                <button className="secondary-button" type="button" onClick={saveDraft} disabled={!canCreateOrder(role)}>
-                  <Save size={16} />
-                  保存草稿
-                </button>
-                <button className="primary-button" type="button" onClick={sendSignature} disabled={!canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder))}>
-                  <Send size={16} />
-                  发起签字
-                </button>
+                <Button icon={<Plus size={16} />} onClick={startNewOrder} disabled={!canEditForm}>新建</Button>
+                <Button icon={<Save size={16} />} onClick={saveDraft} loading={actionLoading === "save"} disabled={!canCreateOrder(role)}>保存草稿</Button>
+                <Tooltip title={signatureDisabledReason}>
+                  <span><Button type="primary" icon={<Send size={16} />} onClick={handleSendSignature} loading={actionLoading === "signature"} disabled={signatureDisabled}>{canResumeSignature ? "继续签字" : "发起签字"}</Button></span>
+                </Tooltip>
+                <Button icon={<RefreshCcw size={16} />} onClick={syncPlatform} loading={actionLoading === "sync"} disabled={!canSyncPlatform}>同步维修平台</Button>
               </div>
             </div>
 
+            {selectedOrder?.platformOrderNo ? (
+              <Alert className="platform-sync-state" type="success" showIcon message={`已同步平台工单：${selectedOrder.platformOrderNo}`} />
+            ) : null}
+
             {formErrors.length ? (
-              <div className="error-box">
-                {formErrors.map((error) => (
-                  <span key={error}>{error}</span>
-                ))}
-              </div>
+              <Alert className="error-box" type="error" showIcon message={hasValidationError ? "请完善委托单信息" : "操作失败"} description={formErrors.join("；")} />
             ) : null}
 
             {!canEditForm ? (
@@ -53,61 +92,64 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               </div>
             ) : null}
 
-            <div className="ocr-grid">
-              <VehicleLicenseOcrControl
-                disabled={!canEditForm}
-                result={vehicleLicenseOcr}
-                state={ocrState.vehicleLicense}
-                onScan={scanVehicleLicense}
-                onConfirm={confirmVehicleLicenseOcr}
-              />
-            </div>
+            <Form.Item
+              className="ocr-form-item"
+              label="行驶证照片"
+              required
+              validateStatus={fieldError("行驶证") ? "error" : undefined}
+              help={fieldError("行驶证")}
+            >
+              <div className="ocr-grid">
+                <VehicleLicenseOcrControl
+                  disabled={!canEditForm}
+                  result={vehicleLicenseOcr}
+                  state={ocrState.vehicleLicense}
+                  onScan={scanVehicleLicense}
+                  onConfirm={confirmVehicleLicenseOcr}
+                />
+              </div>
+            </Form.Item>
 
             <div className="field-grid">
               <Field disabled={!canEditForm} label="派工号" value={draft.dispatchNo} onChange={(value) => updateDraft({ dispatchNo: value })} />
               <Field disabled={!canEditForm} label="进厂日期" value={draft.arrivalDate} onChange={(value) => updateDraft({ arrivalDate: value })} />
               <Field disabled label="门店地址" value={draft.shop.address} onChange={() => undefined} />
               <Field disabled label="门店联系电话" value={draft.shop.phone} onChange={() => undefined} />
-              <Field disabled={!canEditForm} label="车牌号码" value={draft.vehicle.plate} onChange={(value) => updateVehicle("plate", value)} />
-              <Field disabled={!canEditForm} label="VIN/底盘号" value={draft.vehicle.vin} onChange={(value) => updateVehicle("vin", value)} />
-              <Field disabled={!canEditForm} label="进厂里程" value={draft.vehicle.mileage} suffix="km" onChange={(value) => updateVehicle("mileage", value)} />
+              <Field required error={fieldError("车牌号码")} disabled={!canEditForm} label="车牌号码" value={draft.vehicle.plate} onChange={(value) => updateVehicle("plate", value)} />
+              <Field required error={fieldError("VIN")} disabled={!canEditForm} label="VIN/底盘号" value={draft.vehicle.vin} onChange={(value) => updateVehicle("vin", value)} />
+              <Field required error={fieldError("进厂里程")} disabled={!canEditForm} label="进厂里程" value={draft.vehicle.mileage} suffix="km" onChange={(value) => updateVehicle("mileage", value)} />
               <Field disabled={!canEditForm} label="车型" value={draft.vehicle.model} onChange={(value) => updateVehicle("model", value)} />
               <Field disabled={!canEditForm} label="购车日期" value={draft.vehicle.purchaseDate} onChange={(value) => updateVehicle("purchaseDate", value)} />
               <Field disabled={!canEditForm} label="预计交车时间" value={draft.estimatedDeliveryAt} onChange={(value) => updateDraft({ estimatedDeliveryAt: value })} />
-              <Field disabled={!canEditForm} label="车主名称" value={draft.customer.name} onChange={(value) => updateCustomer("name", value)} />
+              <Field required error={fieldError("车主名称")} disabled={!canEditForm} label="车主名称" value={draft.customer.name} onChange={(value) => updateCustomer("name", value)} />
               <Field disabled={!canEditForm} label="联系人" value={draft.customer.contact} onChange={(value) => updateCustomer("contact", value)} />
-              <Field disabled={!canEditForm} label="联系电话" value={draft.customer.phone} onChange={(value) => updateCustomer("phone", value)} />
+              <Field required error={fieldError("联系电话")} disabled={!canEditForm} label="联系电话" value={draft.customer.phone} onChange={(value) => updateCustomer("phone", value)} />
             </div>
 
             <Field disabled={!canEditForm} label="车辆地址" value={draft.customer.address} onChange={(value) => updateCustomer("address", value)} />
-            <TextArea disabled={!canEditForm} label="故障描述 / 客户诉求" value={draft.faultDescription} onChange={(value) => updateDraft({ faultDescription: value })} />
+            <TextArea required error={fieldError("故障描述")} disabled={!canEditForm} label="故障描述 / 客户诉求" value={draft.faultDescription} onChange={(value) => updateDraft({ faultDescription: value })} />
 
             <div className="check-section">
               <Checklist disabled={!canEditForm} title="随车物品" items={belongings} selected={draft.inspection.belongings} onToggle={(value) => toggleArrayField("belongings", value)} />
               <Checklist disabled={!canEditForm} title="车辆外观状况" items={exteriorIssues} selected={draft.inspection.exteriorIssues} onToggle={(value) => toggleArrayField("exteriorIssues", value)} />
-              <label className="field">
-                <span>燃油存量</span>
-                <select
-                  className="select-control"
+              <Form.Item className="field" label="燃油存量">
+                <Select
+                  aria-label="燃油存量"
                   disabled={!canEditForm}
                   value={draft.inspection.fuelLevel}
-                  onChange={(event) => setDraft((current) => ({ ...current, inspection: { ...current.inspection, fuelLevel: event.target.value as WorkOrderDraft["inspection"]["fuelLevel"] } }))}
-                >
-                  {["空", "1/4", "1/2", "3/4", "满"].map((item) => (
-                    <option key={item}>{item}</option>
-                  ))}
-                </select>
-              </label>
+                  onChange={(value) => setDraft((current) => ({ ...current, inspection: { ...current.inspection, fuelLevel: value as WorkOrderDraft["inspection"]["fuelLevel"] } }))}
+                  options={["空", "1/4", "1/2", "3/4", "满"].map((item) => ({ value: item }))}
+                />
+              </Form.Item>
             </div>
 
             <div className="section-title-row">
-              <div>
-                <h3>维修项目明细</h3>
+              <Form.Item className="section-title-form-item" label="维修项目明细" required validateStatus={fieldError("维修项目") ? "error" : undefined} help={fieldError("维修项目")}>
                 <span>工时预估合计：¥{totalLabor}</span>
-              </div>
-              <button
-                className="text-button"
-                type="button"
+              </Form.Item>
+              <Button
+                type="link"
+                icon={<Plus size={15} />}
                 disabled={!canEditForm}
                 onClick={() =>
                   setDraft((current) => ({
@@ -116,9 +158,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   }))
                 }
               >
-                <Plus size={15} />
                 新增项目
-              </button>
+              </Button>
             </div>
 
             <div className="repair-table" role="table" aria-label="维修项目明细">
@@ -134,26 +175,16 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               </div>
               {draft.repairItems.map((item) => (
                 <div className="repair-row" role="row" key={item.id}>
-                  <input disabled={!canEditForm} aria-label="项目名称" value={item.name} onChange={(event) => updateRepairItem(item.id, { name: event.target.value })} />
-                  <input disabled={!canEditForm} aria-label="工费" type="number" value={item.laborFee} onChange={(event) => updateRepairItem(item.id, { laborFee: Number(event.target.value) })} />
-                  <select disabled={!canEditForm} aria-label="主修人" value={item.owner} onChange={(event) => updateRepairItem(item.id, { owner: event.target.value })}>
-                    <option>待派工</option>
-                    {technicianOptions.map((name) => (
-                      <option key={name}>{name}</option>
-                    ))}
-                  </select>
-                  <input disabled={!canEditForm} aria-label="开工时间" value={item.startAt} onChange={(event) => updateRepairItem(item.id, { startAt: event.target.value })} />
-                  <input disabled={!canEditForm} aria-label="完工时间" value={item.finishAt} onChange={(event) => updateRepairItem(item.id, { finishAt: event.target.value })} />
-                  <select disabled={!canEditForm} aria-label="过程检查人" value={item.inspector} onChange={(event) => updateRepairItem(item.id, { inspector: event.target.value })}>
-                    <option>待检验</option>
-                    {inspectorOptions.map((name) => (
-                      <option key={name}>{name}</option>
-                    ))}
-                  </select>
-                  <span>{item.status}</span>
-                  <button
-                    className="icon-inline"
-                    type="button"
+                  <div data-label="项目"><Input required aria-required="true" status={fieldError("维修项目") && !item.name.trim() ? "error" : undefined} disabled={!canEditForm} aria-label="项目名称" value={item.name} onChange={(event) => updateRepairItem(item.id, { name: event.target.value })} /></div>
+                  <div data-label="工费"><InputNumber disabled={!canEditForm} aria-label="工费" min={0} value={item.laborFee} onChange={(value) => updateRepairItem(item.id, { laborFee: Number(value) })} /></div>
+                  <div data-label="主修人"><Select disabled={!canEditForm} aria-label="主修人" value={item.owner} onChange={(value) => updateRepairItem(item.id, { owner: value })} options={["待派工", ...technicianOptions].map((name) => ({ value: name }))} /></div>
+                  <div data-label="开工"><Input disabled={!canEditForm} aria-label="开工时间" value={item.startAt} onChange={(event) => updateRepairItem(item.id, { startAt: event.target.value })} /></div>
+                  <div data-label="完工"><Input disabled={!canEditForm} aria-label="完工时间" value={item.finishAt} onChange={(event) => updateRepairItem(item.id, { finishAt: event.target.value })} /></div>
+                  <div data-label="检查人"><Select disabled={!canEditForm} aria-label="过程检查人" value={item.inspector} onChange={(value) => updateRepairItem(item.id, { inspector: value })} options={["待检验", ...inspectorOptions].map((name) => ({ value: name }))} /></div>
+                  <div data-label="状态"><span>{item.status}</span></div>
+                  <div data-label="操作"><Button
+                    type="text"
+                    danger
                     disabled={!canEditForm}
                     aria-label="删除维修项目"
                     onClick={() =>
@@ -164,7 +195,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                     }
                   >
                     <Trash2 size={15} />
-                  </button>
+                  </Button></div>
                 </div>
               ))}
             </div>
@@ -176,11 +207,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                     <strong>{item.name || `项目 ${item.id}`}</strong>
                     <span>{item.owner} · {item.status}</span>
                     <div className="button-row">
-                      <button className="text-button" type="button" disabled={!canDispatch(role, selectedOrder) || technicianOptions.length === 0} onClick={() => updateRepairAction(item.id, "assign", { technician: draft.technician || technicianOptions[0] || item.owner })}>指派</button>
-                      <button className="text-button" type="button" disabled={!(role === "technician" || role === "manager")} onClick={() => updateRepairAction(item.id, "pick")}>领料</button>
-                      <button className="text-button" type="button" disabled={!(role === "technician" || role === "manager")} onClick={() => updateRepairAction(item.id, "start")}>开工</button>
-                      <button className="text-button" type="button" disabled={!(role === "technician" || role === "manager")} onClick={() => updateRepairAction(item.id, "finish")}>完工</button>
-                      <button className="text-button" type="button" disabled={!(role === "inspector" || role === "manager")} onClick={() => updateRepairAction(item.id, "inspect", { inspector: actor })}>检验</button>
+                      <Button type="link" size="small" disabled={!canDispatch(role, selectedOrder) || technicianOptions.length === 0} onClick={() => updateRepairAction(item.id, "assign", { technician: draft.technician || technicianOptions[0] || item.owner })}>指派</Button>
+                      {role === "manager" ? <><Button type="link" size="small" onClick={() => updateRepairAction(item.id, "pick")}>领料</Button><Button type="link" size="small" onClick={() => updateRepairAction(item.id, "start")}>开工</Button><Button type="link" size="small" onClick={() => updateRepairAction(item.id, "finish")}>完工</Button><Button type="link" size="small" onClick={() => updateRepairAction(item.id, "inspect", { inspector: actor })}>检验</Button></> : null}
                     </div>
                   </div>
                 ))}
@@ -189,28 +217,46 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
 
             <div className="field-grid settlement-grid">
               <Field disabled={!canEditForm} label="预计修理费" value={String(draft.estimatedFee)} suffix="元" onChange={(value) => updateDraft({ estimatedFee: Number(value) })} />
-              <label className="field">
-                <span>旧件处置方式</span>
-                <select disabled={!canEditForm} className="select-control" value={draft.oldPartsHandling} onChange={(event) => updateDraft({ oldPartsHandling: event.target.value as WorkOrderDraft["oldPartsHandling"] })}>
-                  <option>客户带走</option>
-                  <option>门店回收</option>
-                  <option>环保处理</option>
-                </select>
-              </label>
+              <Form.Item className="field" label="旧件处置方式"><Select aria-label="旧件处置方式" disabled={!canEditForm} value={draft.oldPartsHandling} onChange={(value) => updateDraft({ oldPartsHandling: value as WorkOrderDraft["oldPartsHandling"] })} options={["客户带走", "门店回收", "环保处理"].map((value) => ({ value }))} /></Form.Item>
               <Field disabled={!(role === "advisor" || role === "manager")} label="结算金额占位" value={String(draft.settlementAmount || draft.estimatedFee || totalLabor)} suffix="元" onChange={(value) => updateDraft({ settlementAmount: Number(value) })} />
             </div>
             <TextArea disabled={!(role === "advisor" || role === "manager")} label="费用备注" value={draft.feeNote} onChange={(value) => updateDraft({ feeNote: value })} />
 
-            {signatureLink ? (
-              <div className="signature-link">
-                <Link size={16} />
-                <span>{signatureLink}</span>
-                <button className="text-button" type="button" onClick={() => window.navigator.clipboard?.writeText(signatureLink)}>
-                  <Copy size={15} />
-                  复制
-                </button>
-              </div>
+          </Form>
+          <Modal
+            open={Boolean(signatureSession)}
+            title="机动车维修委托确认"
+            width={760}
+            closable={!signatureSubmitting}
+            maskClosable={false}
+            onCancel={() => setSignatureSession(undefined)}
+            footer={[
+              <Button key="close" disabled={signatureSubmitting} onClick={() => setSignatureSession(undefined)}>{signatureCompleted ? "完成" : "取消"}</Button>,
+              <Button key="sign" type="primary" icon={<FileSignature size={16} />} loading={signatureSubmitting} disabled={!signatureImage || signatureCompleted} onClick={handleCompleteSignature}>
+                {signatureCompleted ? "已签字" : "确认签字"}
+              </Button>
+            ]}
+          >
+            {signatureSession ? (
+              <Form layout="vertical" requiredMark>
+                {signatureResult ? <Alert className="signature-message" type={signatureCompleted ? "success" : "error"} showIcon message={signatureResult} /> : <Alert className="signature-message" type="info" showIcon message="请客户核对委托信息并在下方手写签名。" />}
+                <div className="summary-grid">
+                  <Summary label="委托单号" value={signatureSession.order.id} />
+                  <Summary label="车牌号码" value={signatureSession.order.vehicle.plate} />
+                  <Summary label="车主" value={signatureSession.order.customer.name} />
+                  <Summary label="车型" value={signatureSession.order.vehicle.model || "-"} />
+                  <Summary label="预计费用" value={`¥${signatureSession.order.estimatedFee || sumLabor(signatureSession.order.repairItems)}`} />
+                  <Summary label="旧件处置" value={signatureSession.order.oldPartsHandling} />
+                </div>
+                <div className="public-items">
+                  {signatureSession.order.repairItems.map((item) => <div key={item.id}><span>{item.name}</span><strong>¥{item.laborFee}</strong></div>)}
+                </div>
+                <Form.Item className="field" label="电子签名" required>
+                  <SignaturePad disabled={signatureSubmitting || signatureCompleted} onChange={setSignatureImage} />
+                </Form.Item>
+              </Form>
             ) : null}
-          </div>
+          </Modal>
+          </Card>
   );
 }

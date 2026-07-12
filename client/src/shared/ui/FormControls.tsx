@@ -1,33 +1,31 @@
 import { useId } from "react";
+import { Checkbox, Form, Input } from "antd";
 
 type FieldProps = {
   label: string;
   value: string;
   suffix?: string;
   disabled?: boolean;
+  required?: boolean;
+  error?: string;
   onChange: (value: string) => void;
 };
 
-export function Field({ label, value, suffix, disabled, onChange }: FieldProps) {
+export function Field({ label, value, suffix, disabled, required, error, onChange }: FieldProps) {
   const id = useId();
   return (
-    <div className="field">
-      <span><label htmlFor={id}>{label}</label></span>
-      <div className="input-shell">
-        <input id={id} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
-        {suffix ? <em>{suffix}</em> : null}
-      </div>
-    </div>
+    <Form.Item className="field" label={label} htmlFor={id} required={required} validateStatus={error ? "error" : undefined} help={error}>
+      <Input id={id} aria-required={required} status={error ? "error" : undefined} value={value} disabled={disabled} suffix={suffix} onChange={(event) => onChange(event.target.value)} />
+    </Form.Item>
   );
 }
 
-export function TextArea({ label, value, disabled, onChange }: Omit<FieldProps, "suffix">) {
+export function TextArea({ label, value, disabled, required, error, onChange }: Omit<FieldProps, "suffix">) {
   const id = useId();
   return (
-    <div className="field textarea-field">
-      <span><label htmlFor={id}>{label}</label></span>
-      <textarea id={id} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
-    </div>
+    <Form.Item className="field textarea-field" label={label} htmlFor={id} required={required} validateStatus={error ? "error" : undefined} help={error}>
+      <Input.TextArea id={id} aria-required={required} status={error ? "error" : undefined} value={value} disabled={disabled} autoSize={{ minRows: 3 }} onChange={(event) => onChange(event.target.value)} />
+    </Form.Item>
   );
 }
 
@@ -45,10 +43,7 @@ export function Checklist({ title, items, selected, disabled, onToggle }: Checkl
       <strong>{title}</strong>
       <div>
         {items.map((item) => (
-          <label key={item}>
-            <input type="checkbox" disabled={disabled} checked={selected.includes(item)} onChange={() => onToggle(item)} />
-            <span>{item}</span>
-          </label>
+          <Checkbox key={item} disabled={disabled} checked={selected.includes(item)} onChange={() => onToggle(item)}>{item}</Checkbox>
         ))}
       </div>
     </div>

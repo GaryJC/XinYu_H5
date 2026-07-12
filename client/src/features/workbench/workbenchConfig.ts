@@ -1,12 +1,9 @@
-import { BarChart3, ClipboardList, LayoutDashboard, ReceiptText, ShieldCheck, UsersRound, Wrench } from "lucide-react";
+import { BarChart3, ClipboardList, LayoutDashboard, ShieldCheck } from "lucide-react";
 import { RoleKey } from "../../../../shared/types";
 
 export const navItems: Array<{ label: string; icon: typeof LayoutDashboard; roles: RoleKey[] }> = [
-  { label: "工作台", icon: LayoutDashboard, roles: ["advisor", "dispatcher", "technician", "inspector", "manager"] },
+  { label: "工作台", icon: LayoutDashboard, roles: ["advisor", "manager"] },
   { label: "委托开单", icon: ClipboardList, roles: ["advisor", "manager"] },
-  { label: "派工管理", icon: UsersRound, roles: ["dispatcher", "manager"] },
-  { label: "维修进度", icon: Wrench, roles: ["technician", "inspector", "manager"] },
-  { label: "结算清单", icon: ReceiptText, roles: ["advisor", "manager"] },
   { label: "数据看板", icon: BarChart3, roles: ["manager"] },
   { label: "权限设置", icon: ShieldCheck, roles: ["manager"] }
 ];
@@ -18,8 +15,8 @@ export const roleFocus: Record<RoleKey, { title: string; dataScope: string; prim
   advisor: {
     title: "服务顾问工作区",
     dataScope: "只显示本人创建或负责签字的委托单",
-    primary: "开单、维护客户车辆信息、发起客户签字、提交派工池",
-    blocked: ["不能指派技师", "不能提交维修完成", "不能改权限"]
+    primary: "开单、维护客户车辆信息、确认行驶证、发起客户签字、同步维修平台",
+    blocked: ["不能配置门店权限", "不能查看其他顾问工单"]
   },
   dispatcher: {
     title: "派单员工作区",
@@ -42,7 +39,7 @@ export const roleFocus: Record<RoleKey, { title: string; dataScope: string; prim
   manager: {
     title: "管理员工作区",
     dataScope: "显示全量门店数据",
-    primary: "查看全量数据、处理异常、确认结算、配置权限",
+    primary: "查看全量数据、处理异常、协助签字与平台同步、配置权限",
     blocked: ["生产环境仍需后端强制审计"]
   }
 };

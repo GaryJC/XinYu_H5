@@ -21,10 +21,11 @@ export type WorkOrderApi = {
   update(order: WorkOrder, actor: string, action: string): Promise<WorkOrder>;
   transition(id: string, status: WorkOrderStatus, actor: string, action: string, patch?: Partial<WorkOrder>): Promise<WorkOrder>;
   createSignatureToken(id: string, actor: string): Promise<WorkOrder>;
-  signByToken(token: string, signature: string): Promise<WorkOrder>;
+  signByToken(token: string, signature: string, signatureFileId: string): Promise<WorkOrder>;
   findByToken(token: string): Promise<WorkOrder | undefined>;
   recognizeVehicleLicense(imageBase64: string): Promise<VehicleLicenseOcrResult>;
   uploadFile(file: { orderId?: string; kind: StoredFile["kind"]; fileName: string; mimeType: string; imageBase64: string }): Promise<StoredFile>;
+  attachFile(fileId: string, orderId: string): Promise<StoredFile>;
   createOcrRecord(orderId: string | undefined, field: OcrFieldKey, source: string, value: string, confidence: number, fileId?: string): Promise<OcrRecord>;
   confirmOcrRecord(id: string, value: string, actor: string): Promise<OcrRecord>;
   syncPlatform(id: string, actor: string): Promise<WorkOrder>;
@@ -58,8 +59,8 @@ export const workOrderApi: WorkOrderApi = {
   createSignatureToken(id, actor) {
     return request(`/api/work-orders/${id}/signature-token`, { method: "POST", body: { actor } });
   },
-  signByToken(token, signature) {
-    return request(`/api/signatures/${token}/sign`, { method: "POST", body: { signature } });
+  signByToken(token, signature, signatureFileId) {
+    return request(`/api/signatures/${token}/sign`, { method: "POST", body: { signature, signatureFileId } });
   },
   async findByToken(token) {
     try {
@@ -73,6 +74,9 @@ export const workOrderApi: WorkOrderApi = {
   },
   uploadFile(file) {
     return request("/api/files", { method: "POST", body: file });
+  },
+  attachFile(fileId, orderId) {
+    return request(`/api/files/${fileId}/attach`, { method: "POST", body: { orderId } });
   },
   createOcrRecord(orderId, field, source, value, confidence, fileId) {
     return request(`/api/work-orders/${orderId ?? "draft"}/ocr-records`, {

@@ -1,4 +1,5 @@
 import { DashboardSummary, UserProfile, WorkOrder } from "../../../../shared/types";
+import { Card } from "antd";
 import { roles } from "../work-orders/domain/workOrderDomain";
 
 export function ModulePanel({ activeNav, orders, dashboard, users }: { activeNav: string; orders: WorkOrder[]; dashboard?: DashboardSummary; users: UserProfile[] }) {
@@ -13,7 +14,7 @@ export function ModulePanel({ activeNav, orders, dashboard, users }: { activeNav
 function DashboardPanel({ dashboard }: { dashboard?: DashboardSummary }) {
   if (!dashboard) return null;
   return (
-    <section className="panel module-panel">
+    <Card className="panel module-panel">
       <div className="panel-header">
         <div>
           <h2>数据看板</h2>
@@ -26,7 +27,7 @@ function DashboardPanel({ dashboard }: { dashboard?: DashboardSummary }) {
         <ChartBlock title="进厂里程区间" data={dashboard.mileageBuckets} />
         <ChartBlock title="员工接单量" data={dashboard.employeeRanking} />
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -48,7 +49,7 @@ function ChartBlock({ title, data }: { title: string; data: Record<string, numbe
 
 function UsersPanel({ users }: { users: UserProfile[] }) {
   return (
-    <section className="panel module-panel">
+    <Card className="panel module-panel">
       <div className="panel-header">
         <div>
           <h2>权限设置</h2>
@@ -63,13 +64,13 @@ function UsersPanel({ users }: { users: UserProfile[] }) {
           </div>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }
 
 function SettlementList({ orders }: { orders: WorkOrder[] }) {
   return (
-    <section className="panel module-panel">
+    <Card className="panel module-panel">
       <div className="panel-header"><h2>结算清单匹配</h2></div>
       <div className="compact-grid">
         {orders.flatMap((order) => order.settlementStatements).map((item) => (
@@ -79,13 +80,13 @@ function SettlementList({ orders }: { orders: WorkOrder[] }) {
           </div>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }
 
 function OutboundList({ orders }: { orders: WorkOrder[] }) {
   return (
-    <section className="panel module-panel">
+    <Card className="panel module-panel">
       <div className="panel-header"><h2>出库单 / 领料</h2></div>
       <div className="compact-grid">
         {orders.flatMap((order) => order.outboundOrders).map((item) => (
@@ -95,14 +96,14 @@ function OutboundList({ orders }: { orders: WorkOrder[] }) {
           </div>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }
 
 function TechnicianTaskList({ orders }: { orders: WorkOrder[] }) {
   const tasks = orders.flatMap((order) => order.repairItems.map((item) => ({ order, item })));
   return (
-    <section className="panel module-panel">
+    <Card className="panel module-panel">
       <div className="panel-header"><h2>维修项目任务</h2></div>
       <div className="compact-grid">
         {tasks.map(({ order, item }) => (
@@ -112,6 +113,6 @@ function TechnicianTaskList({ orders }: { orders: WorkOrder[] }) {
           </div>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }

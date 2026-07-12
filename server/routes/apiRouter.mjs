@@ -1,6 +1,7 @@
 import { authenticateRequest, loginWithDingTalk } from "../auth.mjs";
 import {
   confirmOcrRecord,
+  attachFileToOrder,
   createOcrRecord,
   createSignatureTokenForOrder,
   createSettlementForOrder,
@@ -66,6 +67,13 @@ export async function handleApiRequest(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/files") {
     const body = await readJson(req);
     sendJson(res, 201, await saveUploadedFile({ ...body, uploadedBy: currentUser?.id || body.uploadedBy || null }));
+    return true;
+  }
+
+  const fileAttachMatch = url.pathname.match(/^\/api\/files\/([^/]+)\/attach$/);
+  if (fileAttachMatch && req.method === "POST") {
+    const { orderId } = await readJson(req);
+    sendJson(res, 200, await attachFileToOrder(fileAttachMatch[1], orderId));
     return true;
   }
 
@@ -144,8 +152,8 @@ export async function handleApiRequest(req, res, url) {
 
   const signMatch = url.pathname.match(/^\/api\/signatures\/([^/]+)\/sign$/);
   if (signMatch && req.method === "POST") {
-    const { signature } = await readJson(req);
-    sendJson(res, 200, await signWorkOrderByToken(signMatch[1], signature));
+    const { signature, signatureFileId } = await readJson(req);
+    sendJson(res, 200, await signWorkOrderByToken(signMatch[1], signature, signatureFileId));
     return true;
   }
 

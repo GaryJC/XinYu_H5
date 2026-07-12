@@ -1,4 +1,5 @@
 import { WorkOrderStatus } from "../../../../shared/types";
+import { Card, Statistic, Tag } from "antd";
 
 const statusTone: Record<WorkOrderStatus, "amber" | "blue" | "green" | "violet" | "gray"> = {
   草稿: "gray",
@@ -12,15 +13,12 @@ const statusTone: Record<WorkOrderStatus, "amber" | "blue" | "green" | "violet" 
 
 export function MetricCard({ label, value }: { label: string; value: number }) {
   return (
-    <article className="metric-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>较昨日 +{value}</small>
-    </article>
+    <Card className="metric-card" size="small">
+      <Statistic title={label} value={value} suffix={<small>较昨日 +{value}</small>} />
+    </Card>
   );
 }
 
 export function StatusChip({ status }: { status: WorkOrderStatus }) {
-  return <span className={`status-chip ${statusTone[status]}`}>{status}</span>;
+  return <Tag className={`status-chip ${statusTone[status]}`}>{status}</Tag>;
 }
-

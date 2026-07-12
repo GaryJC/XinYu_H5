@@ -1,5 +1,6 @@
 import { Camera, Sparkles } from "lucide-react";
-import { type ChangeEvent, useId } from "react";
+import { type ChangeEvent, useRef } from "react";
+import { Button, Flex } from "antd";
 import { OcrFieldState, VehicleLicenseOcrResult } from "../../../../shared/types";
 import { normalizeOcrDate } from "./ocrUtils";
 
@@ -8,11 +9,12 @@ type Props = {
   result?: VehicleLicenseOcrResult;
   disabled?: boolean;
   onScan: (file: File) => Promise<void>;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
 };
 
 export function VehicleLicenseOcrControl({ state, result, disabled, onScan, onConfirm }: Props) {
-  const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const scanDisabled = disabled || state.status === "识别中";
   const resultFields = result
     ? [
         ["车牌", result.plate],
@@ -47,16 +49,20 @@ export function VehicleLicenseOcrControl({ state, result, disabled, onScan, onCo
           </div>
         ) : null}
       </div>
-      <div className="button-row">
-        <label className={`secondary-button file-button${disabled || state.status === "识别中" ? " disabled" : ""}`} htmlFor={inputId}>
-          {state.status === "识别中" ? <Sparkles size={16} /> : <Camera size={16} />}
-          拍照识别
-          <input id={inputId} type="file" accept="image/*" capture="environment" disabled={disabled || state.status === "识别中"} onChange={handleFileChange} />
-        </label>
-        <button className="text-button" type="button" onClick={onConfirm} disabled={disabled || state.status !== "待确认"}>
-          确认
-        </button>
-      </div>
+      <Flex className="button-row" gap={8} wrap="wrap">
+        <div className="file-button">
+          <Button
+            icon={state.status === "识别中" ? <Sparkles size={16} /> : <Camera size={16} />}
+            loading={state.status === "识别中"}
+            disabled={scanDisabled}
+            onClick={() => inputRef.current?.click()}
+          >
+            拍照识别
+          </Button>
+          <input ref={inputRef} hidden type="file" accept="image/*" capture="environment" disabled={scanDisabled} onChange={handleFileChange} />
+        </div>
+        <Button type="link" onClick={onConfirm} disabled={disabled || state.status !== "待确认"}>确认</Button>
+      </Flex>
     </div>
   );
 }
