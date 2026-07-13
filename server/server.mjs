@@ -17,12 +17,12 @@ const server = createServer(async (req, res) => {
     if (await handleApiRequest(req, res, url)) return;
     await serveStatic(res, url.pathname, distDir);
   } catch (error) {
-    console.error(error);
+    const status = error instanceof HttpError ? error.status : 500;
+    if (status >= 500) console.error(error);
     if (res.headersSent) {
       res.destroy();
       return;
     }
-    const status = error instanceof HttpError ? error.status : 500;
     sendJson(res, status, { error: error instanceof Error ? error.message : "Server error" });
   }
 });

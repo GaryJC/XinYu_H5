@@ -4,7 +4,7 @@ import { RoleKey, WorkOrder } from "../../../../../shared/types";
 import { canCompleteRepair, canDispatch, canSettle, canSubmitDispatch } from "../domain/permissions";
 
 export function PlatformPanel({ order, role, onSync }: { order?: WorkOrder; role: RoleKey; onSync: () => void }) {
-  const canSync = Boolean(order && (role === "advisor" || role === "manager") && order.status !== "草稿");
+  const canSync = Boolean(order && !order.platformOrderNo && (role === "advisor" || role === "manager") && !["草稿", "待客户签字"].includes(order.status));
   return (
     <div className="permission-card">
       <div className="permission-head">
@@ -38,7 +38,7 @@ export function SettlementPanel({ order, role, onCreateSettlement }: { order?: W
       </div>
       {!order ? <p>选择委托单后查看结算匹配。</p> : (
         <>
-          <Button block disabled={!(role === "advisor" || role === "manager")} onClick={onCreateSettlement}>同步/生成结算清单</Button>
+          <Button block disabled={!(order?.status === "待结算" && (role === "advisor" || role === "manager"))} onClick={onCreateSettlement}>同步/生成结算清单</Button>
           <div className="mini-list">
             {order.settlementStatements.length ? order.settlementStatements.map((item) => (
               <span key={item.id}>{item.matchStatus} · {item.dispatchNo} · ¥{item.amount}</span>

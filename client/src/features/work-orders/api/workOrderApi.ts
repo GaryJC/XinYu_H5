@@ -1,6 +1,7 @@
 import {
   AuthResult,
   DashboardSummary,
+  DevelopmentPersonaKey,
   DingTalkDepartmentMapping,
   DingTalkIdentitySnapshot,
   DingTalkMappings,
@@ -19,6 +20,7 @@ import { request, setAuthToken } from "../../../shared/api/httpClient";
 
 export type WorkOrderApi = {
   loginWithDingTalk(authCode: string): Promise<AuthResult>;
+  loginForDevelopment(persona: DevelopmentPersonaKey): Promise<AuthResult>;
   me(): Promise<UserProfile>;
   list(role: RoleKey): Promise<WorkOrder[]>;
   create(draft: WorkOrderDraft, actor: string): Promise<WorkOrder>;
@@ -49,11 +51,16 @@ export const workOrderApi: WorkOrderApi = {
     setAuthToken(result.token);
     return result;
   },
+  async loginForDevelopment(persona) {
+    const result = await request<AuthResult>("/api/auth/dev-login", { method: "POST", body: { persona }, skipAuth: true });
+    setAuthToken(result.token);
+    return result;
+  },
   me() {
     return request("/api/auth/me");
   },
-  list(role) {
-    return request(`/api/work-orders?role=${role}`);
+  list(_role) {
+    return request("/api/work-orders");
   },
   create(draft, actor) {
     return request("/api/work-orders", { method: "POST", body: { draft, actor } });
@@ -104,8 +111,8 @@ export const workOrderApi: WorkOrderApi = {
   createSettlement(id, actor) {
     return request(`/api/work-orders/${id}/settlement-statements`, { method: "POST", body: { actor } });
   },
-  dashboard(role) {
-    return request(`/api/dashboard?role=${role}`);
+  dashboard(_role) {
+    return request("/api/dashboard");
   },
   users() {
     return request("/api/users");

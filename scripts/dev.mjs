@@ -11,6 +11,9 @@ const commands = [
 
 process.env.API_PORT = apiPort;
 process.env.API_PROXY_TARGET ||= `http://localhost:${apiPort}`;
+process.env.APP_ENV = "development";
+process.env.ENABLE_DEV_AUTH = "true";
+process.env.JWT_SECRET ||= "repair-h5-local-development-only-secret";
 
 const children = commands.map(([cmd, args]) => {
   const child = spawn(cmd, args, { stdio: "inherit", shell: true });

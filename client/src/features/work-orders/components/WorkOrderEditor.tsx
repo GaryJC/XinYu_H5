@@ -23,7 +23,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     toggleArrayField, setDraft, totalLabor, updateRepairItem,
     syncPlatform, actionLoading, completeSignature
   } = controller;
-  const canSyncPlatform = Boolean(selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) && (role === "advisor" || role === "manager"));
+  const canSyncPlatform = Boolean(selectedOrder && !selectedOrder.platformOrderNo && !["草稿", "待客户签字"].includes(selectedOrder.status) && (role === "advisor" || role === "manager"));
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
   const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "行驶证", "故障描述"].some((phrase) => error.includes(phrase)));
   const canResumeSignature = Boolean(selectedOrder?.status === "待客户签字" && selectedOrder.signatureToken && !selectedOrder.signatureTokenUsed);
@@ -74,11 +74,11 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             </div>
 
             {selectedOrder?.platformOrderNo ? (
-              <Alert className="platform-sync-state" type="success" showIcon message={`已同步平台工单：${selectedOrder.platformOrderNo}`} />
+              <Alert className="platform-sync-state" type="success" showIcon title={`已同步平台工单：${selectedOrder.platformOrderNo}`} />
             ) : null}
 
             {formErrors.length ? (
-              <Alert className="error-box" type="error" showIcon message={hasValidationError ? "请完善委托单信息" : "操作失败"} description={formErrors.join("；")} />
+              <Alert className="error-box" type="error" showIcon title={hasValidationError ? "请完善委托单信息" : "操作失败"} description={formErrors.join("；")} />
             ) : null}
 
             {!canEditForm ? (
@@ -210,7 +210,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             title="机动车维修委托确认"
             width={760}
             closable={!signatureSubmitting}
-            maskClosable={false}
+            mask={{ closable: false }}
             onCancel={() => setSignatureSession(undefined)}
             footer={[
               <Button key="close" disabled={signatureSubmitting} onClick={() => setSignatureSession(undefined)}>{signatureCompleted ? "完成" : "取消"}</Button>,
@@ -221,7 +221,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
           >
             {signatureSession ? (
               <Form layout="vertical" requiredMark>
-                {signatureResult ? <Alert className="signature-message" type={signatureCompleted ? "success" : "error"} showIcon message={signatureResult} /> : <Alert className="signature-message" type="info" showIcon message="请客户核对委托信息并在下方手写签名。" />}
+                {signatureResult ? <Alert className="signature-message" type={signatureCompleted ? "success" : "error"} showIcon title={signatureResult} /> : <Alert className="signature-message" type="info" showIcon title="请客户核对委托信息并在下方手写签名。" />}
                 <div className="summary-grid">
                   <Summary label="委托单号" value={signatureSession.order.id} />
                   <Summary label="车牌号码" value={signatureSession.order.vehicle.plate} />

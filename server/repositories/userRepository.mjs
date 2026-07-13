@@ -28,10 +28,27 @@ export async function markUserLogin(id) {
   await pool.query("update users set last_login_at = now() where id = $1", [id]);
 }
 
+export async function upsertDevelopmentUser({ id, name, role, active, shopId }) {
+  const { rows } = await pool.query(
+    `
+      insert into users (id, name, role, active, shop_id)
+      values ($1, $2, $3, $4, $5)
+      on conflict (id) do update set
+        name = excluded.name,
+        role = excluded.role,
+        active = excluded.active,
+        shop_id = excluded.shop_id
+      returning id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at
+    `,
+    [id, name, role, active, shopId]
+  );
+  return rowToUser(rows[0]);
+}
+
 export async function upsertUserFromDingTalk({ profile, mapping, existingUser }) {
   const id = existingUser?.id || `u_dingtalk_${profile.userId}`;
-  const role = mapping?.role || existingUser?.role;
-  const shopId = mapping?.shopId || existingUser?.shopId;
+  const role = mapping?.role;
+  const shopId = mapping?.shopId;
   if (!role || !shopId) return undefined;
 
   const { rows } = await pool.query(

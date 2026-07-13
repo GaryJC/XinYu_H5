@@ -1,4 +1,5 @@
 export type RoleKey = "advisor" | "dispatcher" | "technician" | "inspector" | "manager";
+export type DevelopmentPersonaKey = "advisor" | "manager" | "unassigned" | "disabled";
 
 export type WorkOrderStatus =
   | "草稿"

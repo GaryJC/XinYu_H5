@@ -8,6 +8,7 @@ import {
   listDingTalkMappings,
   markUserLogin,
   saveDingTalkUserSnapshot,
+  upsertDevelopmentUser,
   upsertUserFromDingTalk
 } from "./repositories/userRepository.mjs";
 import { getDingTalkUserProfile, resolveDingTalkOrganizationMapping } from "./integrations/dingtalk/organization.mjs";
@@ -29,10 +30,42 @@ export async function loginWithDingTalk(authCode, context = {}) {
   const user = await upsertUserFromDingTalk({ profile, mapping, existingUser });
   if (!user) {
     console.warn(`[auth] Unmapped DingTalk user: ${dingUserId}`);
-    throw new HttpError(403, "当前钉钉账号未配置角色或门店映射，请联系门店管理员");
+    throw new HttpError(403, "当前钉钉账号未分配“服务顾问”或“门店管理员”角色，请联系钉钉管理员");
   }
   if (!user.active) throw new HttpError(403, "当前员工账号已停用");
 
+  return createSessionForUser(user, context, mapping?.homeRoute || defaultHomeRoute(user.role));
+}
+
+export async function loginForDevelopment(persona, context = {}) {
+  assertDevelopmentAuthEnabled();
+  const definition = developmentPersona(persona);
+  if (definition.deniedReason) throw new HttpError(403, definition.deniedReason);
+
+  const user = await upsertDevelopmentUser(definition);
+  if (!user.active) throw new HttpError(403, "当前员工账号已停用");
+  return createSessionForUser(user, context, definition.homeRoute);
+}
+
+function assertDevelopmentAuthEnabled() {
+  if (process.env.APP_ENV !== "development" || process.env.ENABLE_DEV_AUTH !== "true") {
+    throw new HttpError(404, "Not found");
+  }
+}
+
+function developmentPersona(persona) {
+  const definitions = {
+    advisor: { id: "u_dev_advisor", name: "张三（测试）", role: "advisor", active: true, shopId: "shop-hq", homeRoute: "order-create" },
+    manager: { id: "u_dev_manager", name: "Gary（测试）", role: "manager", active: true, shopId: "shop-hq", homeRoute: "workbench" },
+    unassigned: { deniedReason: "当前钉钉账号未分配“服务顾问”或“门店管理员”角色，请联系钉钉管理员" },
+    disabled: { id: "u_dev_disabled", name: "停用员工（测试）", role: "advisor", active: false, shopId: "shop-hq", homeRoute: "order-create" }
+  };
+  const definition = definitions[persona];
+  if (!definition) throw new HttpError(400, "未知的测试身份");
+  return definition;
+}
+
+async function createSessionForUser(user, context, homeRoute) {
   const token = createTokenForUser(user.id);
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   await createAuthSession({
@@ -45,7 +78,7 @@ export async function loginWithDingTalk(authCode, context = {}) {
   await markUserLogin(user.id);
   return {
     token,
-    user: { ...user, lastLoginAt: new Date().toISOString(), homeRoute: mapping?.homeRoute || defaultHomeRoute(user.role) },
+    user: { ...user, lastLoginAt: new Date().toISOString(), homeRoute },
     expiresAt: expiresAt.toISOString()
   };
 }

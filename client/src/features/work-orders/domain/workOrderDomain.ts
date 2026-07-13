@@ -2,7 +2,7 @@ import { AuditLogEntry, RepairItem, RoleKey, WorkOrder, WorkOrderDraft, WorkOrde
 
 export const shopProfile = {
   id: "shop-hq",
-  name: "上海虹桥店",
+  name: "抚顺路店",
   address: "抚顺路店",
   phone: "021-6000-8618"
 };

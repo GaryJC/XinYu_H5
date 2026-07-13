@@ -15,6 +15,13 @@ import {
   rowToWorkOrder,
   workOrderValues
 } from "./domain/workOrderModel.mjs";
+import {
+  assertDraftEditable,
+  assertPlatformSyncAllowed,
+  assertRepairItemAction,
+  assertSettlementAllowed,
+  assertStatusTransition
+} from "./domain/workOrderPolicy.mjs";
 
 const validRoles = new Set(["advisor", "dispatcher", "technician", "inspector", "manager"]);
 
@@ -57,7 +64,8 @@ export async function updateWorkOrder(order, actor, action) {
   return transaction(async (client) => {
     const existing = await findWorkOrderById(client, order.id);
     if (!existing) throw new HttpError(404, "委托单不存在");
-    const next = { ...existing, ...order, updatedAt: nowString() };
+    assertDraftEditable(existing.status);
+    const next = { ...existing, ...order, status: existing.status, updatedAt: nowString() };
     await upsertWorkOrder(client, next);
     await addAudit(client, next.id, actor, action);
     return findWorkOrderById(client, next.id);
@@ -68,6 +76,7 @@ export async function transitionWorkOrder(id, status, actor, action, patch = {})
   return transaction(async (client) => {
     const order = await findWorkOrderById(client, id);
     if (!order) throw new HttpError(404, "委托单不存在");
+    assertStatusTransition(order.status, status);
     const next = { ...order, ...patch, status, updatedAt: nowString() };
     await upsertWorkOrder(client, next);
     await addAudit(client, id, actor, action);
@@ -196,7 +205,7 @@ export async function syncWorkOrderToPlatform(id, actor) {
   return transaction(async (client) => {
     const order = await findWorkOrderById(client, id);
     if (!order) throw new HttpError(404, "委托单不存在");
-    if (["草稿", "待客户签字"].includes(order.status)) throw new HttpError(409, "客户完成签字后才能同步维修平台");
+    assertPlatformSyncAllowed(order);
     const platformOrderNo = order.platformOrderNo || createId("PLAT");
     const dispatchNo = order.dispatchNo || createId("PG");
     const syncId = createId("sync");
@@ -240,6 +249,8 @@ export async function repairItemAction(orderId, itemId, action, actor, patch = {
   return transaction(async (client) => {
     const order = await findWorkOrderById(client, orderId);
     if (!order) throw new HttpError(404, "委托单不存在");
+    const targetItem = order.repairItems.find((item) => Number(item.id) === Number(itemId));
+    assertRepairItemAction(targetItem, action);
     const now = nowString();
     const nextItems = order.repairItems.map((item) => {
       if (Number(item.id) !== Number(itemId)) return item;
@@ -263,6 +274,7 @@ export async function createSettlementForOrder(orderId, actor) {
   return transaction(async (client) => {
     const order = await findWorkOrderById(client, orderId);
     if (!order) throw new HttpError(404, "委托单不存在");
+    assertSettlementAllowed(order.status);
     const amount = Number(order.settlementAmount || order.estimatedFee || order.repairItems.reduce((sum, item) => sum + Number(item.laborFee || 0), 0));
     const id = createId("settle");
     await client.query(
@@ -367,6 +379,50 @@ export async function attachFileToOrder(fileId, orderId) {
     uploadedBy: row.uploaded_by || undefined,
     createdAt: formatDate(row.created_at)
   };
+}
+
+export async function assertWorkOrderAccess(orderId, user) {
+  const { rows } = await pool.query("select advisor from work_orders where id = $1", [orderId]);
+  const order = rows[0];
+  if (!order) throw new HttpError(404, "委托单不存在");
+  if (user.role === "manager") return;
+  if (user.role === "advisor" && order.advisor === user.name) return;
+  throw new HttpError(403, "无权访问该委托单");
+}
+
+export async function assertFileAccess(fileId, user) {
+  const { rows } = await pool.query(
+    `
+      select f.uploaded_by, wo.advisor
+      from files f
+      left join work_orders wo on wo.id = f.order_id
+      where f.id = $1
+    `,
+    [fileId]
+  );
+  const file = rows[0];
+  if (!file) throw new HttpError(404, "文件不存在");
+  if (user.role === "manager") return;
+  if (user.role === "advisor" && (file.uploaded_by === user.id || file.advisor === user.name)) return;
+  throw new HttpError(403, "无权访问该文件");
+}
+
+export async function assertOcrRecordAccess(recordId, user) {
+  const { rows } = await pool.query(
+    `
+      select ocr.order_id, f.uploaded_by, wo.advisor
+      from ocr_records ocr
+      left join files f on f.id = ocr.file_id
+      left join work_orders wo on wo.id = ocr.order_id
+      where ocr.id = $1
+    `,
+    [recordId]
+  );
+  const record = rows[0];
+  if (!record) throw new HttpError(404, "OCR 记录不存在");
+  if (user.role === "manager") return;
+  if (user.role === "advisor" && (record.uploaded_by === user.id || record.advisor === user.name)) return;
+  throw new HttpError(403, "无权访问该 OCR 记录");
 }
 
 export async function dashboardSummary(role = "manager", user) {

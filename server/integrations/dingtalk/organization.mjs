@@ -43,16 +43,18 @@ export function normalizeDingTalkUserProfile(raw, userId) {
 export function resolveDingTalkOrganizationMapping(profile, { roleMappings = [], departmentMappings = [] }) {
   const enabledRoleMappings = roleMappings.filter((mapping) => mapping.enabled);
   const enabledDepartmentMappings = departmentMappings.filter((mapping) => mapping.enabled);
-  const roleMapping = profile.roles
-    .map((role) => enabledRoleMappings.find((mapping) => mapping.dingtalkRoleId === role.id))
-    .find(Boolean);
+  const profileRoleIds = new Set(profile.roles.map((role) => role.id));
+  const roleMapping = enabledRoleMappings
+    .filter((mapping) => profileRoleIds.has(mapping.dingtalkRoleId))
+    .sort((left, right) => rolePriority(right.appRole) - rolePriority(left.appRole))[0];
   const departmentMapping = profile.departmentIds
     .map((departmentId) => enabledDepartmentMappings.find((mapping) => mapping.dingtalkDepartmentId === departmentId))
     .find(Boolean);
 
   const builtInRole = profile.roles
     .map((role) => ({ role, mapping: BUILT_IN_ROLE_MAPPINGS.get(role.name.trim()) }))
-    .find((item) => item.mapping);
+    .filter((item) => item.mapping)
+    .sort((left, right) => rolePriority(right.mapping.appRole) - rolePriority(left.mapping.appRole))[0];
   const resolvedRole = roleMapping || (builtInRole ? {
     dingtalkRoleId: builtInRole.role.id,
     appRole: builtInRole.mapping.appRole,
@@ -70,6 +72,10 @@ export function resolveDingTalkOrganizationMapping(profile, { roleMappings = [],
       dingtalkDepartmentId: departmentMapping?.dingtalkDepartmentId
     }
   };
+}
+
+function rolePriority(role) {
+  return role === "manager" ? 100 : role === "advisor" ? 50 : 10;
 }
 
 export function validateRoleMapping(input) {

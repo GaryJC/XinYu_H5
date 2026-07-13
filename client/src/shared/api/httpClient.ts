@@ -14,6 +14,10 @@ export function getAuthToken() {
   return window.localStorage.getItem(authTokenKey) || "";
 }
 
+export function clearAuthToken() {
+  window.localStorage.removeItem(authTokenKey);
+}
+
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {};
   if (options.body !== undefined) headers["Content-Type"] = "application/json";

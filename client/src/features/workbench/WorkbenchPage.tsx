@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ClipboardCheck, LockKeyhole, Menu, RefreshCcw, UserRound } from "lucide-react";
 import { Alert, Button, Drawer, Grid, Layout, Select, Space } from "antd";
-import { RoleKey } from "../../../../shared/types";
+import { DevelopmentPersonaKey, RoleKey } from "../../../../shared/types";
 import { MetricCard } from "../../shared/ui/Status";
 import { roles } from "../work-orders/domain/workOrderDomain";
 import { WorkOrderEditor } from "../work-orders/components/WorkOrderEditor";
@@ -15,11 +15,14 @@ const mvpRoles: RoleKey[] = ["advisor", "manager"];
 export function WorkbenchPage() {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
+  const isDevelopmentAuth = import.meta.env.DEV && !/DingTalk/i.test(navigator.userAgent);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [devPersona, setDevPersona] = useState<DevelopmentPersonaKey>();
   const controller = useWorkbenchController();
   const {
     activeNav, setActiveNav, role, setRole, orders, selectedOrder, syncLabel,
-    currentUser, visibleNavItems, counters, apiError, dashboard, users
+    currentUser, visibleNavItems, counters, apiError, dashboard, users,
+    devLoginLoading, loginForDevelopment
   } = controller;
 
   const navigation = (
@@ -53,7 +56,7 @@ export function WorkbenchPage() {
   return (
     <Layout className="app-shell">
       {!isMobile ? <Layout.Sider className="sidebar" width={224}>{navigation}</Layout.Sider> : null}
-      <Drawer className="mobile-drawer" placement="left" width={280} open={menuOpen} onClose={() => setMenuOpen(false)} styles={{ body: { padding: 16 } }}>
+      <Drawer className="mobile-drawer" placement="left" size={280} open={menuOpen} onClose={() => setMenuOpen(false)} styles={{ body: { padding: 16 } }}>
         {navigation}
       </Drawer>
 
@@ -68,11 +71,30 @@ export function WorkbenchPage() {
           </div>
           <div className="topbar-actions">
             {!isMobile ? <div className="sync-state"><RefreshCcw size={15} /><span>{syncLabel}</span></div> : null}
+            {isDevelopmentAuth ? (
+              <Select
+                className="dev-persona-switcher"
+                aria-label="切换本地测试身份"
+                placeholder="选择测试身份"
+                loading={devLoginLoading}
+                value={devPersona}
+                onChange={(value: DevelopmentPersonaKey) => {
+                  setDevPersona(value);
+                  void loginForDevelopment(value).finally(() => setDevPersona(undefined));
+                }}
+                options={[
+                  { value: "advisor", label: "张三｜服务顾问" },
+                  { value: "manager", label: "Gary｜门店管理员" },
+                  { value: "unassigned", label: "未分配角色员工" },
+                  { value: "disabled", label: "已停用员工" }
+                ]}
+              />
+            ) : null}
             <Space className="role-switcher">
               <UserRound size={16} />
               <Select
                 value={role}
-                disabled={Boolean(currentUser)}
+                disabled={!currentUser || isDevelopmentAuth}
                 onChange={(value) => setRole(value as RoleKey)}
                 options={mvpRoles.map((key) => ({ value: key, label: roles[key].name }))}
               />
@@ -80,7 +102,7 @@ export function WorkbenchPage() {
           </div>
         </header>
 
-        {apiError ? <Alert className="error-box" type="warning" showIcon message={`后端连接异常：${apiError}`} description="请确认 npm run dev 已同时启动 API server 和 Vite。" /> : null}
+        {apiError ? <Alert className="error-box" type="warning" showIcon title="无法完成登录或加载数据" description={apiError} /> : null}
 
         {activeNav === "工作台" ? (
           <>

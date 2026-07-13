@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   DashboardSummary,
+  DevelopmentPersonaKey,
   RoleKey,
   UserProfile,
   WorkOrder
@@ -8,6 +9,7 @@ import {
 import { roles, sumLabor, validateWorkOrderDraft } from "../work-orders/domain/workOrderDomain";
 import { canCreateOrder } from "../work-orders/domain/permissions";
 import { getDingTalkAuthCode } from "../../integrations/dingtalk/auth";
+import { clearAuthToken } from "../../shared/api/httpClient";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
 import { useWorkOrderDraft } from "../work-orders/hooks/useWorkOrderDraft";
 import { useVehicleLicenseOcr } from "../vehicle-license-ocr/useVehicleLicenseOcr";
@@ -27,13 +29,14 @@ export function useWorkbenchController() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [currentUser, setCurrentUser] = useState<UserProfile>();
   const [actionLoading, setActionLoading] = useState<"save" | "signature" | "sync" | "">("");
+  const [devLoginLoading, setDevLoginLoading] = useState(false);
 
   const selectedOrder = orders.find((order) => order.id === selectedId);
   const actor = currentUser?.name || roles[role].name;
   const { ocrState, vehicleLicenseOcr, vehicleLicenseFileId, resetOcr, scanVehicleLicense, confirmVehicleLicenseOcr } =
     useVehicleLicenseOcr({ orderId: selectedOrder?.id, actor, setDraft });
   const visibleNavItems = useMemo(() => navItems.filter((item) => item.roles.includes(role)), [role]);
-  const canEditForm = canCreateOrder(role);
+  const canEditForm = canCreateOrder(role) && (!selectedOrder || selectedOrder.status === "草稿");
   const totalLabor = useMemo(() => sumLabor(draft.repairItems), [draft.repairItems]);
   const technicianOptions = useMemo(() => users.filter((user) => user.active && user.role === "technician").map((user) => user.name), [users]);
   const inspectorOptions = useMemo(() => users.filter((user) => user.active && user.role === "inspector").map((user) => user.name), [users]);
@@ -59,13 +62,19 @@ export function useWorkbenchController() {
 
   useEffect(() => {
     void bootstrapAuth();
-    void workOrderApi.users().then(setUsers).catch(() => setUsers([]));
   }, []);
 
   useEffect(() => {
-    void loadOrders(role);
-    void loadDashboard(role);
-  }, [role]);
+    if (!currentUser) {
+      setOrders([]);
+      setDashboard(undefined);
+      setUsers([]);
+      return;
+    }
+    void loadOrders(currentUser.role);
+    void loadDashboard(currentUser.role);
+    void workOrderApi.users().then(setUsers).catch(() => setUsers([]));
+  }, [currentUser?.id]);
 
   useEffect(() => {
     if (!visibleNavItems.some((item) => item.label === activeNav)) {
@@ -134,6 +143,27 @@ export function useWorkbenchController() {
     const nextRole = user.role === "manager" ? "manager" : "advisor";
     setRole(nextRole);
     setActiveNav(user.homeRoute === "order-create" ? "委托开单" : "工作台");
+  }
+
+  async function loginForDevelopment(persona: DevelopmentPersonaKey) {
+    clearAuthToken();
+    setCurrentUser(undefined);
+    setOrders([]);
+    setSelectedId(null);
+    setDashboard(undefined);
+    setApiError("");
+    setDevLoginLoading(true);
+    try {
+      const result = await workOrderApi.loginForDevelopment(persona);
+      setCurrentUser(result.user);
+      applyAuthenticatedUser(result.user);
+      setSyncLabel(`测试身份：${result.user.name}`);
+    } catch (error) {
+      setSyncLabel("测试身份未登录");
+      setApiError(error instanceof Error ? error.message : "测试身份登录失败");
+    } finally {
+      setDevLoginLoading(false);
+    }
   }
 
   function selectOrder(order: WorkOrder) {
@@ -305,6 +335,7 @@ export function useWorkbenchController() {
     users,
     currentUser,
     actionLoading,
+    devLoginLoading,
     selectedOrder,
     actor,
     visibleNavItems,
@@ -314,6 +345,7 @@ export function useWorkbenchController() {
     inspectorOptions,
     searchedOrders,
     counters,
+    loginForDevelopment,
     selectOrder,
     startNewOrder,
     saveDraft,

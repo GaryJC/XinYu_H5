@@ -64,6 +64,20 @@ test("does not resolve an employee when there is no enabled role mapping", () =>
   assert.equal(mapping, undefined);
 });
 
+test("does not grant access for a job title or an unknown DingTalk role name", () => {
+  const mapping = resolveDingTalkOrganizationMapping(
+    {
+      userId: "ding-user-unknown",
+      name: "未授权员工",
+      active: true,
+      departmentIds: ["1001"],
+      roles: [{ id: "role-other", name: "维修技师" }]
+    },
+    { roleMappings: [], departmentMappings: [] }
+  );
+  assert.equal(mapping, undefined);
+});
+
 test("maps the built-in DingTalk role names without administrator configuration", () => {
   const advisor = resolveDingTalkOrganizationMapping(
     {
@@ -98,4 +112,22 @@ test("maps the built-in DingTalk role names without administrator configuration"
     homeRoute: "workbench",
     source: { dingtalkRoleId: "role-manager", dingtalkDepartmentId: undefined }
   });
+});
+
+test("manager wins deterministically when an employee has both MVP roles", () => {
+  const mapping = resolveDingTalkOrganizationMapping(
+    {
+      userId: "ding-user-both",
+      name: "双角色员工",
+      active: true,
+      departmentIds: ["1001"],
+      roles: [
+        { id: "role-advisor", name: "服务顾问" },
+        { id: "role-manager", name: "门店管理员" }
+      ]
+    },
+    { roleMappings: [], departmentMappings: [] }
+  );
+  assert.equal(mapping?.role, "manager");
+  assert.equal(mapping?.homeRoute, "workbench");
 });
