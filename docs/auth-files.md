@@ -19,7 +19,10 @@ OSS_BUCKET=
 
 ```bash
 VITE_DINGTALK_CORP_ID=
+VITE_DINGTALK_CLIENT_ID=
 ```
+
+网页应用首页建议配置为 `https://你的域名/?corpid=$CORPID$`。前端优先读取钉钉工作台注入的 `corpid` 查询参数；`VITE_DINGTALK_CORP_ID` 作为固定企业的备用值。`VITE_DINGTALK_CLIENT_ID` 填应用 Client ID（原 AppKey），它不是 Client Secret。
 
 `DINGTALK_APP_SECRET`、`ALIYUN_ACCESS_KEY_SECRET`、`JWT_SECRET` 只能放后端运行环境。
 

@@ -23,6 +23,7 @@
     "@vitejs/plugin-react": "latest",
     "ali-oss": "^6.23.0",
     "antd": "^6.5.0",
+    "dingtalk-jsapi": "^3.2.9",
     "lucide-react": "latest",
     "pg": "^8.22.0",
     "react": "latest",

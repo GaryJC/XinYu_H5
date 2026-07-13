@@ -1,66 +1,29 @@
-export function getDingTalkAuthCode() {
-  const corpId = import.meta.env.VITE_DINGTALK_CORP_ID;
-  const dd = window.dd;
-  if (!corpId || !dd) return Promise.resolve("");
+import requestAuthCode from "dingtalk-jsapi/api/union/requestAuthCode";
 
-  return new Promise<string>((resolve, reject) => {
-    const request = () => {
-      if (dd.runtime?.permission?.requestAuthCode) {
-        dd.runtime.permission.requestAuthCode({
-          corpId,
-          onSuccess: (result) => resolve(result.code || ""),
-          onFail: (error) => reject(new Error(formatDingTalkError(error)))
-        });
-        return;
-      }
+export async function getDingTalkAuthCode() {
+  const clientId = import.meta.env.VITE_DINGTALK_CLIENT_ID;
+  const corpId = new URLSearchParams(window.location.search).get("corpid") || import.meta.env.VITE_DINGTALK_CORP_ID;
 
-      if (dd.getAuthCode) {
-        dd.getAuthCode({
-          corpId,
-          success: (result) => resolve(result.authCode || result.code || ""),
-          fail: (error) => reject(new Error(formatDingTalkError(error)))
-        });
-        return;
-      }
+  if (!/DingTalk/i.test(navigator.userAgent)) return "";
+  if (!clientId) throw new Error("未配置钉钉应用 Client ID");
+  if (!corpId) throw new Error("未获取到钉钉企业 CorpId");
 
-      resolve("");
-    };
-
-    if (dd.ready) dd.ready(request);
-    else request();
-    if (dd.error) dd.error((error) => reject(new Error(formatDingTalkError(error))));
-  });
+  try {
+    const result = await requestAuthCode({ clientId, corpId });
+    if (!result.code) throw new Error("钉钉未返回免登授权码");
+    return result.code;
+  } catch (error) {
+    throw new Error(`获取钉钉免登授权码失败：${formatDingTalkError(error)}`);
+  }
 }
 
 function formatDingTalkError(error: unknown) {
-  if (!error) return "钉钉 JSAPI 调用失败";
+  if (!error) return "未知错误";
+  if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
   try {
     return JSON.stringify(error);
   } catch {
     return "钉钉 JSAPI 调用失败";
-  }
-}
-
-declare global {
-  interface Window {
-    dd?: {
-      ready?: (callback: () => void) => void;
-      error?: (callback: (error: unknown) => void) => void;
-      runtime?: {
-        permission?: {
-          requestAuthCode?: (options: {
-            corpId: string;
-            onSuccess: (result: { code?: string }) => void;
-            onFail: (error: unknown) => void;
-          }) => void;
-        };
-      };
-      getAuthCode?: (options: {
-        corpId: string;
-        success: (result: { authCode?: string; code?: string }) => void;
-        fail: (error: unknown) => void;
-      }) => void;
-    };
   }
 }
