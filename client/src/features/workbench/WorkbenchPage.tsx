@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ClipboardCheck, LockKeyhole, Menu, RefreshCcw, UserRound } from "lucide-react";
 import { Alert, Button, Drawer, Grid, Layout, Select, Space } from "antd";
-import { DevelopmentPersonaKey, RoleKey } from "../../../../shared/types";
+import { DevelopmentPersonaKey } from "../../../../shared/types";
 import { MetricCard } from "../../shared/ui/Status";
 import { roles } from "../work-orders/domain/workOrderDomain";
 import { WorkOrderEditor } from "../work-orders/components/WorkOrderEditor";
@@ -9,8 +9,6 @@ import { ModulePanel } from "./ModulePanel";
 import { OrdersArchive } from "./OrdersArchive";
 import { roleFocus } from "./workbenchConfig";
 import { useWorkbenchController } from "./useWorkbenchController";
-
-const mvpRoles: RoleKey[] = ["advisor", "manager"];
 
 export function WorkbenchPage() {
   const screens = Grid.useBreakpoint();
@@ -20,7 +18,7 @@ export function WorkbenchPage() {
   const [devPersona, setDevPersona] = useState<DevelopmentPersonaKey>();
   const controller = useWorkbenchController();
   const {
-    activeNav, setActiveNav, role, setRole, orders, selectedOrder, syncLabel,
+    activeNav, setActiveNav, role, orders, selectedOrder, syncLabel,
     currentUser, visibleNavItems, counters, apiError, dashboard, users,
     devLoginLoading, loginForDevelopment
   } = controller;
@@ -92,12 +90,7 @@ export function WorkbenchPage() {
             ) : null}
             <Space className="role-switcher">
               <UserRound size={16} />
-              <Select
-                value={role}
-                disabled={!currentUser || isDevelopmentAuth}
-                onChange={(value) => setRole(value as RoleKey)}
-                options={mvpRoles.map((key) => ({ value: key, label: roles[key].name }))}
-              />
+              <span>{currentUser ? roles[role].name : "未登录"}</span>
             </Space>
           </div>
         </header>
