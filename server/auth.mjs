@@ -18,7 +18,10 @@ export async function loginWithDingTalk(authCode, context = {}) {
   if (!authCode || typeof authCode !== "string") throw new HttpError(400, "缺少钉钉 authCode");
   const dingUserId = await getDingTalkUserId(authCode);
   const user = await findUserByDingTalkUserId(dingUserId);
-  if (!user) throw new HttpError(403, "当前钉钉账号未绑定员工，请联系管理员");
+  if (!user) {
+    console.warn(`[auth] Unbound DingTalk user: ${dingUserId}`);
+    throw new HttpError(403, "当前钉钉账号未绑定员工，请联系管理员");
+  }
   if (!user.active) throw new HttpError(403, "当前员工账号已停用");
 
   const token = createTokenForUser(user.id);
