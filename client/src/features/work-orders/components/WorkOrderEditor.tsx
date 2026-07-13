@@ -1,5 +1,5 @@
 import { FileSignature, LockKeyhole, Plus, RefreshCcw, Save, Send, Trash2 } from "lucide-react";
-import { Alert, Button, Card, Form, Input, Modal, Select, Tooltip } from "antd";
+import { Alert, Button, Card, Form, Grid, Input, Modal, Select, Tooltip } from "antd";
 import { useState } from "react";
 import { WorkOrder, WorkOrderDraft } from "../../../../../shared/types";
 import { canCreateOrder, canSendSignature } from "../domain/permissions";
@@ -16,6 +16,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const [signatureImage, setSignatureImage] = useState("");
   const [signatureSubmitting, setSignatureSubmitting] = useState(false);
   const [signatureResult, setSignatureResult] = useState("");
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
   const {
     selectedOrder, startNewOrder, canEditForm, saveDraft, role, sendSignature,
     formErrors, vehicleLicenseOcr, ocrState, scanVehicleLicense,
@@ -27,7 +29,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
   const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "行驶证", "故障描述"].some((phrase) => error.includes(phrase)));
   const canResumeSignature = Boolean(selectedOrder?.status === "待客户签字" && selectedOrder.signatureToken && !selectedOrder.signatureTokenUsed);
-  const signatureDisabled = !canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder) && !canResumeSignature);
+  const signatureDisabled = !canResumeSignature && (!canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder)));
   const signatureDisabledReason = selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) ? `当前状态“${selectedOrder.status}”不能再次发起签字` : "";
   const signatureCompleted = signatureResult.includes("已保存");
 
@@ -59,6 +61,13 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     }
   }
 
+  function closeSignatureModal() {
+    if (signatureSubmitting) return;
+    setSignatureSession(undefined);
+    setSignatureImage("");
+    setSignatureResult("");
+  }
+
   return (
 <Card className="panel form-panel">
           <Form layout="vertical" requiredMark>
@@ -84,7 +93,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             {!canEditForm ? (
               <div className="readonly-banner">
                 <LockKeyhole size={16} />
-                当前角色只能查看此委托单，字段编辑、OCR 和签字发起已锁定。
+                {canResumeSignature ? "当前委托单内容已锁定，但可以继续完成已发起的客户签字。" : "当前角色只能查看此委托单，字段编辑、OCR 和签字发起已锁定。"}
               </div>
             ) : null}
 
@@ -206,18 +215,21 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
 
           </Form>
           <Modal
+            rootClassName="signature-confirm-modal"
             open={Boolean(signatureSession)}
             title="机动车维修委托确认"
-            width={760}
+            width={isMobile ? "calc(100vw - 16px)" : 760}
+            style={isMobile ? { top: 8, paddingBottom: 8 } : undefined}
             closable={!signatureSubmitting}
             mask={{ closable: false }}
-            onCancel={() => setSignatureSession(undefined)}
+            onCancel={closeSignatureModal}
             footer={[
-              <Button key="close" disabled={signatureSubmitting} onClick={() => setSignatureSession(undefined)}>{signatureCompleted ? "完成" : "取消"}</Button>,
+              <Button key="close" disabled={signatureSubmitting} onClick={closeSignatureModal}>{signatureCompleted ? "完成" : "取消"}</Button>,
               <Button key="sign" type="primary" icon={<FileSignature size={16} />} loading={signatureSubmitting} disabled={!signatureImage || signatureCompleted} onClick={handleCompleteSignature}>
                 {signatureCompleted ? "已签字" : "确认签字"}
               </Button>
             ]}
+            styles={{ body: { maxHeight: isMobile ? "calc(100vh - 148px)" : "72vh", overflowY: "auto" } }}
           >
             {signatureSession ? (
               <Form layout="vertical" requiredMark>

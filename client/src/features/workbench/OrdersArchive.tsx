@@ -3,6 +3,7 @@ import { Button, Card, Collapse, Descriptions, Empty, Grid, Image, Input, Modal,
 import { ChevronRight } from "lucide-react";
 import { WorkOrder } from "../../../../shared/types";
 import { StatusChip } from "../../shared/ui/Status";
+import { AuthenticatedImage } from "../../shared/ui/AuthenticatedImage";
 import { WorkbenchController } from "./useWorkbenchController";
 
 export function OrdersArchive({ controller }: { controller: WorkbenchController }) {
@@ -185,7 +186,7 @@ function FileGallery({ title, files, mobile }: { title: string; files: NonNullab
     <h3>{title}</h3>
     {files.length ? <Image.PreviewGroup><div className="archive-file-gallery">{files.map((file) => (
       <div className="archive-file-card" key={file.id}>
-        <Image width={mobile ? "100%" : 180} height={mobile ? 160 : 120} src={`/api/files/${encodeURIComponent(file.id)}/content`} alt={file.kind === "signature_image" ? "客户签名" : "行驶证照片"} />
+        <AuthenticatedImage fileId={file.id} width={mobile ? "100%" : 180} height={mobile ? 160 : 120} alt={file.kind === "signature_image" ? "客户签名" : "行驶证照片"} />
         <span>{file.originalName || file.createdAt}</span>
       </div>
     ))}</div></Image.PreviewGroup> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无图片" />}

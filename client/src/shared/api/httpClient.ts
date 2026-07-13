@@ -37,3 +37,16 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
   return payload as T;
 }
+
+export async function requestBlob(path: string): Promise<Blob> {
+  const token = getAuthToken();
+  const response = await fetch(path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error ?? `API request failed: ${response.status}`);
+  }
+  return response.blob();
+}
