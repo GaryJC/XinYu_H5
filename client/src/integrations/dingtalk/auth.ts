@@ -1,3 +1,4 @@
+import "dingtalk-jsapi/platform";
 import requestAuthCode from "dingtalk-jsapi/api/union/requestAuthCode";
 
 export async function getDingTalkAuthCode() {
