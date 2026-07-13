@@ -18,7 +18,15 @@ import {
 } from "../db.mjs";
 import { readJson, requestContext, sendJson } from "../http/response.mjs";
 import { recognizeVehicleLicense } from "../ocr.mjs";
-import { listUsers } from "../repositories/userRepository.mjs";
+import {
+  getDingTalkIdentitySnapshot,
+  listDingTalkMappings,
+  listUsers,
+  upsertDingTalkDepartmentMapping,
+  upsertDingTalkRoleMapping
+} from "../repositories/userRepository.mjs";
+import { validateDepartmentMapping, validateRoleMapping } from "../integrations/dingtalk/organization.mjs";
+import { HttpError } from "../http/HttpError.mjs";
 import { readStoredFile, saveUploadedFile } from "../storage.mjs";
 
 export async function handleApiRequest(req, res, url) {
@@ -49,6 +57,30 @@ export async function handleApiRequest(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/users") {
     sendJson(res, 200, await listUsers());
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/dingtalk-mappings") {
+    requireManager(currentUser);
+    sendJson(res, 200, await listDingTalkMappings());
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/dingtalk-identity") {
+    requireManager(currentUser);
+    sendJson(res, 200, await getDingTalkIdentitySnapshot(currentUser.dingtalkUserId));
+    return true;
+  }
+
+  if (req.method === "PUT" && url.pathname === "/api/admin/dingtalk-role-mappings") {
+    requireManager(currentUser);
+    sendJson(res, 200, await upsertDingTalkRoleMapping(validateRoleMapping(await readJson(req))));
+    return true;
+  }
+
+  if (req.method === "PUT" && url.pathname === "/api/admin/dingtalk-department-mappings") {
+    requireManager(currentUser);
+    sendJson(res, 200, await upsertDingTalkDepartmentMapping(validateDepartmentMapping(await readJson(req))));
     return true;
   }
 
@@ -171,4 +203,10 @@ export async function handleApiRequest(req, res, url) {
 
   sendJson(res, 404, { error: "Not found" });
   return true;
+}
+
+function requireManager(user) {
+  if (!user || user.role !== "manager") {
+    throw new HttpError(403, "仅门店管理员可以配置钉钉组织映射");
+  }
 }

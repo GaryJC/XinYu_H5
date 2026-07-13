@@ -37,6 +37,10 @@ body { margin: 0; background: #f5f5f5; }
 .role-focus-strip p { margin: 0; }
 .role-focus-strip > div:last-child, .permission-tags, .locked-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .role-focus-strip > div:last-child span, .permission-tags span, .locked-actions span { padding: 2px 8px; border-radius: 4px; background: #fff; color: rgba(0, 0, 0, .65); font-size: 12px; }
+.dingtalk-mapping-panel { margin: 0 0 16px; padding: 14px; border: 1px solid #d6e4ff; border-radius: 8px; background: #f7fbff; }
+.mapping-intro { display: grid; gap: 4px; margin-bottom: 12px; color: rgba(0, 0, 0, .65); font-size: 13px; }
+.mapping-intro strong { color: rgba(0, 0, 0, .88); }
+.mapping-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; align-items: start; }
 .panel { min-width: 0; }
 .form-panel, .side-panel, .lower-panel, .module-panel { padding: 0; }

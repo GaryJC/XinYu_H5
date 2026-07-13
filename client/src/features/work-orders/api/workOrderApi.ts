@@ -1,6 +1,10 @@
 import {
   AuthResult,
   DashboardSummary,
+  DingTalkDepartmentMapping,
+  DingTalkIdentitySnapshot,
+  DingTalkMappings,
+  DingTalkRoleMapping,
   OcrFieldKey,
   OcrRecord,
   RoleKey,
@@ -33,6 +37,10 @@ export type WorkOrderApi = {
   createSettlement(id: string, actor: string): Promise<WorkOrder>;
   dashboard(role: RoleKey): Promise<DashboardSummary>;
   users(): Promise<UserProfile[]>;
+  dingTalkMappings(): Promise<DingTalkMappings>;
+  dingTalkIdentity(): Promise<DingTalkIdentitySnapshot | undefined>;
+  saveDingTalkRoleMapping(mapping: DingTalkRoleMapping): Promise<DingTalkRoleMapping>;
+  saveDingTalkDepartmentMapping(mapping: DingTalkDepartmentMapping): Promise<DingTalkDepartmentMapping>;
 };
 
 export const workOrderApi: WorkOrderApi = {
@@ -101,5 +109,17 @@ export const workOrderApi: WorkOrderApi = {
   },
   users() {
     return request("/api/users");
+  },
+  dingTalkMappings() {
+    return request("/api/admin/dingtalk-mappings");
+  },
+  dingTalkIdentity() {
+    return request("/api/admin/dingtalk-identity");
+  },
+  saveDingTalkRoleMapping(mapping) {
+    return request("/api/admin/dingtalk-role-mappings", { method: "PUT", body: mapping });
+  },
+  saveDingTalkDepartmentMapping(mapping) {
+    return request("/api/admin/dingtalk-department-mappings", { method: "PUT", body: mapping });
   }
 };

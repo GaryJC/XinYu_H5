@@ -1,8 +1,18 @@
 import { DashboardSummary, UserProfile, WorkOrder } from "../../../../shared/types";
-import { Card } from "antd";
+import { Card, Tag } from "antd";
 import { roles } from "../work-orders/domain/workOrderDomain";
 
-export function ModulePanel({ activeNav, orders, dashboard, users }: { activeNav: string; orders: WorkOrder[]; dashboard?: DashboardSummary; users: UserProfile[] }) {
+export function ModulePanel({
+  activeNav,
+  orders,
+  dashboard,
+  users
+}: {
+  activeNav: string;
+  orders: WorkOrder[];
+  dashboard?: DashboardSummary;
+  users: UserProfile[];
+}) {
   if (activeNav === "数据看板") return <DashboardPanel dashboard={dashboard} />;
   if (activeNav === "权限设置") return <UsersPanel users={users} />;
   if (activeNav === "结算清单") return <SettlementList orders={orders} />;
@@ -53,7 +63,17 @@ function UsersPanel({ users }: { users: UserProfile[] }) {
       <div className="panel-header">
         <div>
           <h2>权限设置</h2>
-          <p>当前为钉钉组织同步占位，后续以钉钉 userId 绑定业务角色。</p>
+          <p>员工权限按照钉钉角色名称自动同步，无需在 H5 中逐个配置。</p>
+        </div>
+      </div>
+      <div className="dingtalk-mapping-panel" aria-label="钉钉自动映射规则">
+        <div className="mapping-intro">
+          <strong>自动映射规则</strong>
+          <span>钉钉角色名称必须完全一致；当前 MVP1 的员工默认归属抚顺路店。</span>
+        </div>
+        <div className="mapping-list">
+          <Tag color="blue">服务顾问 → 服务顾问权限 → 委托开单</Tag>
+          <Tag color="purple">门店管理员 → 管理员权限 → 工作台</Tag>
         </div>
       </div>
       <div className="compact-grid">

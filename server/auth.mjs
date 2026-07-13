@@ -5,8 +5,12 @@ import {
   findUserByDingTalkUserId,
   findUserById,
   isAuthSessionActive,
-  markUserLogin
+  listDingTalkMappings,
+  markUserLogin,
+  saveDingTalkUserSnapshot,
+  upsertUserFromDingTalk
 } from "./repositories/userRepository.mjs";
+import { getDingTalkUserProfile, resolveDingTalkOrganizationMapping } from "./integrations/dingtalk/organization.mjs";
 
 const DINGTALK_ACCESS_TOKEN_TTL_MS = 90 * 60 * 1000;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -17,10 +21,15 @@ let dingTalkAccessTokenExpiresAt = 0;
 export async function loginWithDingTalk(authCode, context = {}) {
   if (!authCode || typeof authCode !== "string") throw new HttpError(400, "缺少钉钉 authCode");
   const dingUserId = await getDingTalkUserId(authCode);
-  const user = await findUserByDingTalkUserId(dingUserId);
+  const existingUser = await findUserByDingTalkUserId(dingUserId);
+  const profile = await getDingTalkUserProfile({ userId: dingUserId, accessToken: await getDingTalkAccessToken() });
+  await saveDingTalkUserSnapshot(profile);
+  const mappings = await listDingTalkMappings();
+  const mapping = resolveDingTalkOrganizationMapping(profile, mappings);
+  const user = await upsertUserFromDingTalk({ profile, mapping, existingUser });
   if (!user) {
-    console.warn(`[auth] Unbound DingTalk user: ${dingUserId}`);
-    throw new HttpError(403, "当前钉钉账号未绑定员工，请联系管理员");
+    console.warn(`[auth] Unmapped DingTalk user: ${dingUserId}`);
+    throw new HttpError(403, "当前钉钉账号未配置角色或门店映射，请联系门店管理员");
   }
   if (!user.active) throw new HttpError(403, "当前员工账号已停用");
 
@@ -34,7 +43,15 @@ export async function loginWithDingTalk(authCode, context = {}) {
     expiresAt
   });
   await markUserLogin(user.id);
-  return { token, user: { ...user, lastLoginAt: new Date().toISOString() }, expiresAt: expiresAt.toISOString() };
+  return {
+    token,
+    user: { ...user, lastLoginAt: new Date().toISOString(), homeRoute: mapping?.homeRoute || defaultHomeRoute(user.role) },
+    expiresAt: expiresAt.toISOString()
+  };
+}
+
+function defaultHomeRoute(role) {
+  return role === "advisor" ? "order-create" : "workbench";
 }
 
 export async function authenticateRequest(req) {

@@ -60,6 +60,38 @@ export type UserProfile = {
   shopId?: string;
   phone?: string;
   lastLoginAt?: string;
+  homeRoute?: "workbench" | "order-create";
+};
+
+export type DingTalkRoleMapping = {
+  dingtalkRoleId: string;
+  dingtalkRoleName: string;
+  appRole: RoleKey;
+  shopId?: string;
+  homeRoute: "workbench" | "order-create";
+  enabled: boolean;
+};
+
+export type DingTalkDepartmentMapping = {
+  dingtalkDepartmentId: string;
+  dingtalkDepartmentName: string;
+  shopId: string;
+  enabled: boolean;
+};
+
+export type DingTalkMappings = {
+  roleMappings: DingTalkRoleMapping[];
+  departmentMappings: DingTalkDepartmentMapping[];
+};
+
+export type DingTalkIdentitySnapshot = {
+  dingtalkUserId: string;
+  name: string;
+  phone?: string;
+  departmentIds: string[];
+  roles: Array<{ id: string; name: string }>;
+  active: boolean;
+  syncedAt?: string;
 };
 
 export type AuthResult = {

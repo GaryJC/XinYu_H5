@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { DashboardSummary, RoleKey, UserProfile, WorkOrder } from "../../../../shared/types";
+import {
+  DashboardSummary,
+  RoleKey,
+  UserProfile,
+  WorkOrder
+} from "../../../../shared/types";
 import { roles, sumLabor, validateWorkOrderDraft } from "../work-orders/domain/workOrderDomain";
 import { canCreateOrder } from "../work-orders/domain/permissions";
 import { getDingTalkAuthCode } from "../../integrations/dingtalk/auth";
-import { dingTalkOrganizationAdapter } from "../../integrations/dingtalk/organizationAdapter";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
 import { useWorkOrderDraft } from "../work-orders/hooks/useWorkOrderDraft";
 import { useVehicleLicenseOcr } from "../vehicle-license-ocr/useVehicleLicenseOcr";
@@ -55,7 +59,6 @@ export function useWorkbenchController() {
 
   useEffect(() => {
     void bootstrapAuth();
-    void dingTalkOrganizationAdapter.syncOrganization().then((result) => setSyncLabel(`钉钉组织已同步 ${result.users} 人`));
     void workOrderApi.users().then(setUsers).catch(() => setUsers([]));
   }, []);
 
@@ -100,26 +103,37 @@ export function useWorkbenchController() {
   }
 
   async function bootstrapAuth() {
+    if (/DingTalk/i.test(navigator.userAgent)) {
+      try {
+        const authCode = await getDingTalkAuthCode();
+        const result = await workOrderApi.loginWithDingTalk(authCode);
+        setCurrentUser(result.user);
+        applyAuthenticatedUser(result.user);
+        setSyncLabel(`钉钉组织已同步：${result.user.name}`);
+        return;
+      } catch (error) {
+        setApiError(error instanceof Error ? error.message : "钉钉免登失败");
+        return;
+      }
+    }
+
     try {
       const user = await workOrderApi.me();
       setCurrentUser(user);
-      setRole(user.role === "manager" ? "manager" : "advisor");
+      applyAuthenticatedUser(user);
       setSyncLabel(`已登录：${user.name}`);
       return;
     } catch {
       // No local session yet. In plain browser development we keep the role switcher.
     }
 
-    try {
-      const authCode = await getDingTalkAuthCode();
-      if (!authCode) return;
-      const result = await workOrderApi.loginWithDingTalk(authCode);
-      setCurrentUser(result.user);
-      setRole(result.user.role === "manager" ? "manager" : "advisor");
-      setSyncLabel(`钉钉免登成功：${result.user.name}`);
-    } catch (error) {
-      setApiError(error instanceof Error ? error.message : "钉钉免登失败");
-    }
+    // 普通浏览器没有钉钉 JSAPI，保留未登录的本地开发体验。
+  }
+
+  function applyAuthenticatedUser(user: UserProfile) {
+    const nextRole = user.role === "manager" ? "manager" : "advisor";
+    setRole(nextRole);
+    setActiveNav(user.homeRoute === "order-create" ? "委托开单" : "工作台");
   }
 
   function selectOrder(order: WorkOrder) {

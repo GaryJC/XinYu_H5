@@ -63,7 +63,7 @@ export function WorkbenchPage() {
             {isMobile ? <Button aria-label="打开菜单" icon={<Menu size={19} />} onClick={() => setMenuOpen(true)} /> : null}
             <div>
               <h1>{isMobile ? "修理委托工作台" : "机动车修理委托书数字化工作台"}</h1>
-              <p>{orders.length} 张委托单 · 上海虹桥店 · {selectedOrder?.status ?? "新建草稿"}</p>
+              <p>{orders.length} 张委托单 · 抚顺路店 · {selectedOrder?.status ?? "新建草稿"}</p>
             </div>
           </div>
           <div className="topbar-actions">
