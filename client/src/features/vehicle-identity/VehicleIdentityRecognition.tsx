@@ -1,5 +1,5 @@
 import { Camera, Sparkles } from "lucide-react";
-import { type ChangeEvent, useRef } from "react";
+import { type ChangeEvent } from "react";
 import { Alert, Button, Spin } from "antd";
 import { VehicleHistoryLookupResult } from "../../../../shared/types";
 import { IdentifierKind, IdentifierRecognitionState } from "./useVehicleIdentityRecognition";
@@ -46,7 +46,6 @@ function IdentifierScanner({ kind, title, hint, disabled, state, onScan }: {
   state: IdentifierRecognitionState;
   onScan: (kind: IdentifierKind, file: File) => Promise<void>;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const scanning = state.status === "识别中";
 
   async function handleChange(event: ChangeEvent<HTMLInputElement>) {
@@ -62,15 +61,24 @@ function IdentifierScanner({ kind, title, hint, disabled, state, onScan }: {
         <span>{state.value ? `${state.status}：${state.value}` : `${state.status} · ${hint}`}</span>
         {state.error ? <em>{state.error}</em> : null}
       </div>
-      <Button
-        icon={scanning ? <Sparkles size={16} /> : <Camera size={16} />}
-        loading={scanning}
-        disabled={disabled || scanning}
-        onClick={() => inputRef.current?.click()}
-      >
-        拍照识别
-      </Button>
-      <input ref={inputRef} hidden type="file" accept="image/*" capture="environment" disabled={disabled || scanning} aria-label={title} onChange={handleChange} />
+      <div className="file-button identifier-file-button">
+        <Button
+          icon={scanning ? <Sparkles size={16} /> : <Camera size={16} />}
+          loading={scanning}
+          disabled={disabled || scanning}
+          tabIndex={-1}
+        >
+          拍照 / 相册
+        </Button>
+        <input
+          type="file"
+          accept="image/*"
+          disabled={disabled || scanning}
+          aria-label={title}
+          onClick={(event) => { event.currentTarget.value = ""; }}
+          onChange={handleChange}
+        />
+      </div>
     </div>
   );
 }

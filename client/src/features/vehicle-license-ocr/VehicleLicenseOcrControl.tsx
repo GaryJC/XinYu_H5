@@ -1,5 +1,5 @@
 import { Camera, Sparkles } from "lucide-react";
-import { type ChangeEvent, useRef } from "react";
+import { type ChangeEvent } from "react";
 import { Button, Flex } from "antd";
 import { OcrFieldState, VehicleLicenseOcrResult } from "../../../../shared/types";
 import { normalizeOcrDate } from "./ocrUtils";
@@ -13,7 +13,6 @@ type Props = {
 };
 
 export function VehicleLicenseOcrControl({ state, result, disabled, onScan, onConfirm }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const scanDisabled = disabled || state.status === "识别中";
   const resultFields = result
     ? [
@@ -55,11 +54,18 @@ export function VehicleLicenseOcrControl({ state, result, disabled, onScan, onCo
             icon={state.status === "识别中" ? <Sparkles size={16} /> : <Camera size={16} />}
             loading={state.status === "识别中"}
             disabled={scanDisabled}
-            onClick={() => inputRef.current?.click()}
+            tabIndex={-1}
           >
-            拍照识别
+            拍照 / 相册
           </Button>
-          <input ref={inputRef} hidden type="file" accept="image/*" capture="environment" disabled={scanDisabled} onChange={handleFileChange} />
+          <input
+            type="file"
+            accept="image/*"
+            disabled={scanDisabled}
+            aria-label="识别行驶证照片"
+            onClick={(event) => { event.currentTarget.value = ""; }}
+            onChange={handleFileChange}
+          />
         </div>
         <Button type="link" onClick={onConfirm} disabled={disabled || state.status !== "待确认"}>确认</Button>
       </Flex>

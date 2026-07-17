@@ -5,8 +5,8 @@ import { RuntimeOptions } from "@darabonba/typescript";
 import { HttpError } from "./http/HttpError.mjs";
 
 const DEFAULT_ALIYUN_OCR_ENDPOINT = "ocr-api.cn-hangzhou.aliyuncs.com";
-const LICENSE_PLATE_KEYS = ["plateNumber", "licensePlateNumber", "plateNo", "carNumber", "number", "data", "rawText", "车牌号"];
-const VIN_KEYS = ["vinCode", "vin", "vehicleIdentificationCode", "content", "data", "rawText", "车架号", "车辆识别代号"];
+const LICENSE_PLATE_KEYS = ["plateNumber", "licensePlateNumber", "plateNo", "carNumber", "number", "车牌", "车牌号", "data", "rawText"];
+const VIN_KEYS = ["vinCode", "vin", "vehicleIdentificationCode", "vin码", "vin 码", "车辆vin码", "车辆 vin 码", "content", "data", "rawText", "车架号", "车辆识别代号"];
 
 let aliyunClient;
 
@@ -211,8 +211,14 @@ function pickValue(flat, keys) {
 
 function confidence(flat) {
   const values = Object.entries(flat)
-    .filter(([key]) => key.endsWith(".__confidence"))
-    .map(([, value]) => Number(value))
+    .filter(([key]) => {
+      const normalizedKey = key.toLowerCase();
+      return normalizedKey.endsWith(".__confidence") || normalizedKey.endsWith("valueprob") || normalizedKey.endsWith("value_prob");
+    })
+    .map(([, value]) => {
+      const number = Number(value);
+      return number > 1 ? number / 100 : number;
+    })
     .filter((value) => Number.isFinite(value));
   if (!values.length) return 0;
   return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(4));
