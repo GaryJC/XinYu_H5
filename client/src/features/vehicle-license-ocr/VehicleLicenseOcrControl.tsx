@@ -1,7 +1,6 @@
-import { Camera, Sparkles } from "lucide-react";
-import { type ChangeEvent } from "react";
 import { Button, Flex } from "antd";
 import { OcrFieldState, VehicleLicenseOcrResult } from "../../../../shared/types";
+import { ImageSourcePicker } from "../../shared/ui/ImageSourcePicker";
 import { normalizeOcrDate } from "./ocrUtils";
 
 type Props = {
@@ -13,7 +12,6 @@ type Props = {
 };
 
 export function VehicleLicenseOcrControl({ state, result, disabled, onScan, onConfirm }: Props) {
-  const scanDisabled = disabled || state.status === "识别中";
   const resultFields = result
     ? [
         ["车牌", result.plate],
@@ -24,12 +22,6 @@ export function VehicleLicenseOcrControl({ state, result, disabled, onScan, onCo
         ["注册日期", normalizeOcrDate(result.registerDate) || result.registerDate]
       ].filter(([, value]) => Boolean(value))
     : [];
-
-  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = "";
-    if (file) await onScan(file);
-  }
 
   return (
     <div className="ocr-strip compact-ocr vehicle-license-ocr">
@@ -49,24 +41,7 @@ export function VehicleLicenseOcrControl({ state, result, disabled, onScan, onCo
         ) : null}
       </div>
       <Flex className="button-row" gap={8} wrap="wrap">
-        <div className="file-button">
-          <Button
-            icon={state.status === "识别中" ? <Sparkles size={16} /> : <Camera size={16} />}
-            loading={state.status === "识别中"}
-            disabled={scanDisabled}
-            tabIndex={-1}
-          >
-            拍照 / 相册
-          </Button>
-          <input
-            type="file"
-            accept="image/*"
-            disabled={scanDisabled}
-            aria-label="识别行驶证照片"
-            onClick={(event) => { event.currentTarget.value = ""; }}
-            onChange={handleFileChange}
-          />
-        </div>
+        <ImageSourcePicker disabled={disabled} loading={state.status === "识别中"} label="识别行驶证照片" onSelect={onScan} />
         <Button type="link" onClick={onConfirm} disabled={disabled || state.status !== "待确认"}>确认</Button>
       </Flex>
     </div>

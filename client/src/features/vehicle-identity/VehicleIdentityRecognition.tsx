@@ -1,7 +1,6 @@
-import { Camera, Sparkles } from "lucide-react";
-import { type ChangeEvent } from "react";
-import { Alert, Button, Spin } from "antd";
+import { Alert, Spin } from "antd";
 import { VehicleHistoryLookupResult } from "../../../../shared/types";
+import { ImageSourcePicker } from "../../shared/ui/ImageSourcePicker";
 import { IdentifierKind, IdentifierRecognitionState } from "./useVehicleIdentityRecognition";
 
 type Props = {
@@ -48,12 +47,6 @@ function IdentifierScanner({ kind, title, hint, disabled, state, onScan }: {
 }) {
   const scanning = state.status === "识别中";
 
-  async function handleChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = "";
-    if (file) await onScan(kind, file);
-  }
-
   return (
     <div className="identifier-scanner">
       <div>
@@ -61,24 +54,7 @@ function IdentifierScanner({ kind, title, hint, disabled, state, onScan }: {
         <span>{state.value ? `${state.status}：${state.value}` : `${state.status} · ${hint}`}</span>
         {state.error ? <em>{state.error}</em> : null}
       </div>
-      <div className="file-button identifier-file-button">
-        <Button
-          icon={scanning ? <Sparkles size={16} /> : <Camera size={16} />}
-          loading={scanning}
-          disabled={disabled || scanning}
-          tabIndex={-1}
-        >
-          拍照 / 相册
-        </Button>
-        <input
-          type="file"
-          accept="image/*"
-          disabled={disabled || scanning}
-          aria-label={title}
-          onClick={(event) => { event.currentTarget.value = ""; }}
-          onChange={handleChange}
-        />
-      </div>
+      <ImageSourcePicker disabled={disabled} loading={scanning} label={title} onSelect={(file) => onScan(kind, file)} />
     </div>
   );
 }
