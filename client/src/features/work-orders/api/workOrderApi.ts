@@ -11,6 +11,8 @@ import {
   RoleKey,
   StoredFile,
   UserProfile,
+  VehicleHistoryLookupResult,
+  VehicleIdentifierOcrResult,
   VehicleLicenseOcrResult,
   WorkOrder,
   WorkOrderDraft,
@@ -30,6 +32,9 @@ export type WorkOrderApi = {
   signByToken(token: string, signature: string, signatureFileId: string): Promise<WorkOrder>;
   findByToken(token: string): Promise<WorkOrder | undefined>;
   recognizeVehicleLicense(imageBase64: string): Promise<VehicleLicenseOcrResult>;
+  recognizeLicensePlate(imageBase64: string): Promise<VehicleIdentifierOcrResult>;
+  recognizeVin(imageBase64: string): Promise<VehicleIdentifierOcrResult>;
+  lookupVehicle(identifier: { plate?: string; vin?: string }): Promise<VehicleHistoryLookupResult>;
   uploadFile(file: { orderId?: string; kind: StoredFile["kind"]; fileName: string; mimeType: string; imageBase64: string }): Promise<StoredFile>;
   attachFile(fileId: string, orderId: string): Promise<StoredFile>;
   createOcrRecord(orderId: string | undefined, field: OcrFieldKey, source: string, value: string, confidence: number, fileId?: string): Promise<OcrRecord>;
@@ -86,6 +91,15 @@ export const workOrderApi: WorkOrderApi = {
   },
   recognizeVehicleLicense(imageBase64) {
     return request("/api/ocr/vehicle-license", { method: "POST", body: { imageBase64 } });
+  },
+  recognizeLicensePlate(imageBase64) {
+    return request("/api/ocr/license-plate", { method: "POST", body: { imageBase64 } });
+  },
+  recognizeVin(imageBase64) {
+    return request("/api/ocr/vin", { method: "POST", body: { imageBase64 } });
+  },
+  lookupVehicle(identifier) {
+    return request("/api/company-system/vehicles/lookup", { method: "POST", body: identifier });
   },
   uploadFile(file) {
     return request("/api/files", { method: "POST", body: file });

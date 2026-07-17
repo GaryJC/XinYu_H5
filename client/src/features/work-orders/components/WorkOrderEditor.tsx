@@ -5,6 +5,7 @@ import { WorkOrder, WorkOrderDraft } from "../../../../../shared/types";
 import { canCreateOrder, canSendSignature } from "../domain/permissions";
 import { Checklist, Field, TextArea } from "../../../shared/ui/FormControls";
 import { VehicleLicenseOcrControl } from "../../vehicle-license-ocr/VehicleLicenseOcrControl";
+import { VehicleIdentityRecognition } from "../../vehicle-identity/VehicleIdentityRecognition";
 import { WorkbenchController } from "../../workbench/useWorkbenchController";
 import { belongings, exteriorIssues } from "../../workbench/workbenchConfig";
 import { SignaturePad } from "../../signature/SignaturePad";
@@ -23,7 +24,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     formErrors, vehicleLicenseOcr, ocrState, scanVehicleLicense,
     confirmVehicleLicenseOcr, draft, updateDraft, updateVehicle, updateCustomer,
     toggleArrayField, setDraft, totalLabor, updateRepairItem,
-    syncPlatform, actionLoading, completeSignature
+    syncPlatform, actionLoading, completeSignature, identifierRecognition,
+    vehicleHistory, vehicleHistoryLoading, vehicleHistoryError, scanVehicleIdentifier
   } = controller;
   const canSyncPlatform = Boolean(selectedOrder && !selectedOrder.platformOrderNo && !["草稿", "待客户签字"].includes(selectedOrder.status) && (role === "advisor" || role === "manager"));
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
@@ -77,8 +79,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 <p>先保存草稿，再由客户在弹窗内核对并签字；OCR 结果必须人工确认。</p>
               </div>
               <div className="button-row">
-                <Button icon={<Plus size={16} />} onClick={startNewOrder} disabled={!canEditForm}>新建</Button>
-                <Button icon={<Save size={16} />} onClick={saveDraft} loading={actionLoading === "save"} disabled={!canCreateOrder(role)}>保存草稿</Button>
+                <Button icon={<Plus size={16} />} onClick={startNewOrder} disabled={!canCreateOrder(role)}>新建</Button>
+                <Button icon={<Save size={16} />} onClick={saveDraft} loading={actionLoading === "save"} disabled={!canEditForm}>保存草稿</Button>
               </div>
             </div>
 
@@ -114,6 +116,15 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 />
               </div>
             </Form.Item>
+
+            <VehicleIdentityRecognition
+              disabled={!canEditForm}
+              recognition={identifierRecognition}
+              history={vehicleHistory}
+              historyLoading={vehicleHistoryLoading}
+              historyError={vehicleHistoryError}
+              onScan={scanVehicleIdentifier}
+            />
 
             <div className="field-grid">
               <Field disabled={!canEditForm} label="派工号" value={draft.dispatchNo} onChange={(value) => updateDraft({ dispatchNo: value })} />

@@ -34,6 +34,21 @@ export type VehicleLicenseOcrResult = {
   confidence: number;
 };
 
+export type VehicleIdentifierOcrResult = {
+  value: string;
+  confidence: number;
+};
+
+export type VehicleHistoryLookupResult = {
+  found: boolean;
+  vehicle?: {
+    plate: string;
+    vin: string;
+    model: string;
+  };
+  message: string;
+};
+
 export type RepairItem = {
   id: number;
   name: string;

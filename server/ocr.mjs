@@ -5,20 +5,45 @@ import { RuntimeOptions } from "@darabonba/typescript";
 import { HttpError } from "./http/HttpError.mjs";
 
 const DEFAULT_ALIYUN_OCR_ENDPOINT = "ocr-api.cn-hangzhou.aliyuncs.com";
+const LICENSE_PLATE_KEYS = ["plateNumber", "licensePlateNumber", "plateNo", "carNumber", "number", "data", "rawText", "车牌号"];
+const VIN_KEYS = ["vinCode", "vin", "vehicleIdentificationCode", "content", "data", "rawText", "车架号", "车辆识别代号"];
 
 let aliyunClient;
 
 export async function recognizeVehicleLicense(imageBase64) {
-  if (!imageBase64 || typeof imageBase64 !== "string") {
-    throw new HttpError(400, "请上传行驶证照片");
-  }
-
-  const provider = process.env.OCR_PROVIDER || "aliyun";
-  if (provider !== "aliyun") {
-    throw new HttpError(400, `当前只支持阿里云 OCR，请将 OCR_PROVIDER 配置为 aliyun`);
-  }
+  assertOcrInput(imageBase64, "行驶证");
 
   return recognizeVehicleLicenseWithAliyun(stripDataUrlPrefix(imageBase64));
+}
+
+export async function recognizeLicensePlate(imageBase64) {
+  assertOcrInput(imageBase64, "车牌");
+  const body = await callAliyunImageOcr({
+    imageBase64,
+    request: (image) => new OcrApi.RecognizeCarNumberRequest({ body: Readable.from(image) }),
+    invoke: (client, request, runtime) => client.recognizeCarNumberWithOptions(request, runtime),
+    label: "车牌"
+  });
+  return normalizeLicensePlateOcr(body.data);
+}
+
+export async function recognizeVin(imageBase64) {
+  assertOcrInput(imageBase64, "VIN 码");
+  const body = await callAliyunImageOcr({
+    imageBase64,
+    request: (image) => new OcrApi.RecognizeCarVinCodeRequest({ body: Readable.from(image) }),
+    invoke: (client, request, runtime) => client.recognizeCarVinCodeWithOptions(request, runtime),
+    label: "VIN 码"
+  });
+  return normalizeVinOcr(body.data);
+}
+
+export function normalizeLicensePlateOcr(data) {
+  return normalizeIdentifierResult(data, LICENSE_PLATE_KEYS);
+}
+
+export function normalizeVinOcr(data) {
+  return normalizeIdentifierResult(data, VIN_KEYS);
 }
 
 async function recognizeVehicleLicenseWithAliyun(imageBase64) {
@@ -46,6 +71,50 @@ async function recognizeVehicleLicenseWithAliyun(imageBase64) {
   }
 
   return normalizeAliyunVehicleLicense(body.data);
+}
+
+async function callAliyunImageOcr({ imageBase64, request, invoke, label }) {
+  const image = Buffer.from(stripDataUrlPrefix(imageBase64), "base64");
+  if (!image.length) throw new HttpError(400, `${label}照片内容为空`);
+
+  let response;
+  try {
+    response = await invoke(getAliyunClient(), request(image), runtimeOptions());
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(502, `阿里云${label}识别失败：${formatSdkError(error)}`);
+  }
+
+  const body = response?.body;
+  if (!body || (body.code && body.code !== "200")) {
+    throw new HttpError(502, `阿里云${label}识别失败：${body?.message || body?.code || "无返回内容"}`);
+  }
+  return body;
+}
+
+function runtimeOptions() {
+  return new RuntimeOptions({
+    connectTimeout: Number(process.env.ALIYUN_OCR_CONNECT_TIMEOUT_MS || 10000),
+    readTimeout: Number(process.env.ALIYUN_OCR_READ_TIMEOUT_MS || 30000)
+  });
+}
+
+function assertOcrInput(imageBase64, label) {
+  if (!imageBase64 || typeof imageBase64 !== "string") {
+    throw new HttpError(400, `请上传${label}照片`);
+  }
+  const provider = process.env.OCR_PROVIDER || "aliyun";
+  if (provider !== "aliyun") {
+    throw new HttpError(400, "当前只支持阿里云 OCR，请将 OCR_PROVIDER 配置为 aliyun");
+  }
+}
+
+function normalizeIdentifierResult(data, keys) {
+  const parsed = parseAliyunData(data);
+  const flat = flattenValues(parsed);
+  const value = pickValue(flat, keys).replace(/\s/g, "").toUpperCase();
+  if (!value) throw new HttpError(422, "未识别到有效内容，请调整拍摄角度后重试");
+  return { value, confidence: confidence(flat) };
 }
 
 function getAliyunClient() {

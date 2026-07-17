@@ -13,6 +13,7 @@ import { clearAuthToken } from "../../shared/api/httpClient";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
 import { useWorkOrderDraft } from "../work-orders/hooks/useWorkOrderDraft";
 import { useVehicleLicenseOcr } from "../vehicle-license-ocr/useVehicleLicenseOcr";
+import { useVehicleIdentityRecognition } from "../vehicle-identity/useVehicleIdentityRecognition";
 import { navItems } from "./workbenchConfig";
 
 export function useWorkbenchController() {
@@ -35,6 +36,14 @@ export function useWorkbenchController() {
   const actor = currentUser?.name || roles[role].name;
   const { ocrState, vehicleLicenseOcr, vehicleLicenseFileId, resetOcr, scanVehicleLicense, confirmVehicleLicenseOcr } =
     useVehicleLicenseOcr({ orderId: selectedOrder?.id, actor, setDraft });
+  const {
+    identifierRecognition,
+    vehicleHistory,
+    vehicleHistoryLoading,
+    vehicleHistoryError,
+    resetVehicleIdentityRecognition,
+    scanVehicleIdentifier
+  } = useVehicleIdentityRecognition({ setDraft });
   const visibleNavItems = useMemo(() => navItems.filter((item) => item.roles.includes(role)), [role]);
   const canEditForm = canCreateOrder(role) && (!selectedOrder || selectedOrder.status === "草稿");
   const totalLabor = useMemo(() => sumLabor(draft.repairItems), [draft.repairItems]);
@@ -171,6 +180,7 @@ export function useWorkbenchController() {
     resetDraft(order);
     setFormErrors([]);
     resetOcr(order.ocrRecords);
+    resetVehicleIdentityRecognition();
   }
 
   function startNewOrder() {
@@ -178,6 +188,7 @@ export function useWorkbenchController() {
     resetDraft();
     setFormErrors([]);
     resetOcr();
+    resetVehicleIdentityRecognition();
   }
 
   async function saveDraft() {
@@ -331,6 +342,10 @@ export function useWorkbenchController() {
     setSearchTerm,
     syncLabel,
     vehicleLicenseOcr,
+    identifierRecognition,
+    vehicleHistory,
+    vehicleHistoryLoading,
+    vehicleHistoryError,
     dashboard,
     users,
     currentUser,
@@ -357,6 +372,7 @@ export function useWorkbenchController() {
     settleOrder,
     scanVehicleLicense,
     confirmVehicleLicenseOcr,
+    scanVehicleIdentifier,
     syncPlatform,
     updateRepairAction,
     createSettlement,

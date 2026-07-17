@@ -20,7 +20,8 @@ import {
   updateWorkOrder
 } from "../db.mjs";
 import { readJson, requestContext, sendJson } from "../http/response.mjs";
-import { recognizeVehicleLicense } from "../ocr.mjs";
+import { recognizeLicensePlate, recognizeVehicleLicense, recognizeVin } from "../ocr.mjs";
+import { lookupVehicleInCompanySystem } from "../integrations/company/vehicleLookup.mjs";
 import {
   getDingTalkIdentitySnapshot,
   listDingTalkMappings,
@@ -102,6 +103,26 @@ export async function handleApiRequest(req, res, url) {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     const { imageBase64 } = await readJson(req);
     sendJson(res, 200, await recognizeVehicleLicense(imageBase64));
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/ocr/license-plate") {
+    requireAnyRole(currentUser, ["advisor", "manager"]);
+    const { imageBase64 } = await readJson(req);
+    sendJson(res, 200, await recognizeLicensePlate(imageBase64));
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/ocr/vin") {
+    requireAnyRole(currentUser, ["advisor", "manager"]);
+    const { imageBase64 } = await readJson(req);
+    sendJson(res, 200, await recognizeVin(imageBase64));
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/company-system/vehicles/lookup") {
+    requireAnyRole(currentUser, ["advisor", "manager"]);
+    sendJson(res, 200, await lookupVehicleInCompanySystem(await readJson(req)));
     return true;
   }
 
