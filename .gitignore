@@ -11,3 +11,4 @@ work/*.png
 vite.config.js
 vite.config.d.ts
 *.tgz
+.pm2/

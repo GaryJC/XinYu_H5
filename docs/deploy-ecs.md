@@ -130,13 +130,15 @@ pm2 save
 ```
 
 `ecosystem.config.cjs` 会以项目目录为工作目录，并让 Node 每次启动时读取 `.env.production`。
-云效的 Windows PowerShell 部署步骤应在保护并恢复 `.env.production`、解压部署包后调用：
+云效的 Windows PowerShell 部署步骤应在解压部署包后调用：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\apps\XinYu_H5\scripts\deploy-windows.ps1
 ```
 
 `START_LOCAL_API` 仅供 `npm run dev` 使用，生产环境不需要设置。
+Windows 部署脚本使用项目依赖中的 PM2，并把进程空间固定在
+`C:\apps\XinYu_H5\.pm2`，不依赖某个 Windows 用户的全局 npm 目录。
 
 ### 云效构建制品
 
