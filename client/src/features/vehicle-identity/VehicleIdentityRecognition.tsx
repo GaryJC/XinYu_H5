@@ -1,4 +1,5 @@
-import { Alert, Spin } from "antd";
+import { useState } from "react";
+import { Alert, Button, Input, Spin } from "antd";
 import { VehicleHistoryLookupResult } from "../../../../shared/types";
 import { ImageSourcePicker } from "../../shared/ui/ImageSourcePicker";
 import { IdentifierKind, IdentifierRecognitionState } from "./useVehicleIdentityRecognition";
@@ -10,9 +11,16 @@ type Props = {
   historyLoading: boolean;
   historyError: string;
   onScan: (kind: IdentifierKind, file: File) => Promise<void>;
+  onManualLookup: (kind: IdentifierKind, value: string) => Promise<void>;
 };
 
-export function VehicleIdentityRecognition({ disabled, recognition, history, historyLoading, historyError, onScan }: Props) {
+export function VehicleIdentityRecognition({ disabled, recognition, history, historyLoading, historyError, onScan, onManualLookup }: Props) {
+  const [testPlate, setTestPlate] = useState("");
+
+  async function submitTestPlate() {
+    await onManualLookup("plate", testPlate);
+  }
+
   return (
     <div className="vehicle-identity-section">
       <div className="vehicle-identity-heading">
@@ -23,6 +31,25 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
         <IdentifierScanner kind="plate" title="识别车牌号" hint="请将完整车牌置于画面中央" disabled={disabled} state={recognition.plate} onScan={onScan} />
         <IdentifierScanner kind="vin" title="识别 VIN 码" hint="请对准车架上的 17 位识别码" disabled={disabled} state={recognition.vin} onScan={onScan} />
       </div>
+      {import.meta.env.DEV ? (
+        <div className="vehicle-test-lookup">
+          <Input
+            aria-label="测试车牌号码"
+            disabled={disabled || historyLoading}
+            placeholder="输入数据库中已有的车牌号码"
+            value={testPlate}
+            onChange={(event) => setTestPlate(event.target.value)}
+            onPressEnter={() => void submitTestPlate()}
+          />
+          <Button
+            disabled={disabled || historyLoading || !testPlate.trim()}
+            loading={historyLoading}
+            onClick={() => void submitTestPlate()}
+          >
+            查询并回填
+          </Button>
+        </div>
+      ) : null}
       {historyLoading ? <div className="vehicle-history-loading"><Spin size="small" />正在查询公司系统车辆档案…</div> : null}
       {history ? (
         <Alert

@@ -22,6 +22,10 @@ import {
   assertSettlementAllowed,
   assertStatusTransition
 } from "./domain/workOrderPolicy.mjs";
+import {
+  claimDispatchNumberForOrder,
+  consumeDispatchNumber
+} from "./repositories/dispatchNumberRepository.mjs";
 
 const validRoles = new Set(["advisor", "dispatcher", "technician", "inspector", "manager"]);
 
@@ -53,8 +57,10 @@ export async function listWorkOrders(role = "manager", user) {
 
 export async function createWorkOrder(draft, actor) {
   return transaction(async (client) => {
-    const order = createOrderFromDraft(draft);
+    const dispatchNo = await claimDispatchNumberForOrder(client, draft.dispatchNo, actor);
+    const order = { ...createOrderFromDraft(draft), dispatchNo };
     await upsertWorkOrder(client, order);
+    await consumeDispatchNumber(client, dispatchNo, order.id);
     await addAudit(client, order.id, actor, "创建委托单草稿");
     return findWorkOrderById(client, order.id);
   });
@@ -65,7 +71,13 @@ export async function updateWorkOrder(order, actor, action) {
     const existing = await findWorkOrderById(client, order.id);
     if (!existing) throw new HttpError(404, "委托单不存在");
     assertDraftEditable(existing.status);
-    const next = { ...existing, ...order, status: existing.status, updatedAt: nowString() };
+    const next = {
+      ...existing,
+      ...order,
+      dispatchNo: existing.dispatchNo,
+      status: existing.status,
+      updatedAt: nowString()
+    };
     await upsertWorkOrder(client, next);
     await addAudit(client, next.id, actor, action);
     return findWorkOrderById(client, next.id);
@@ -168,6 +180,10 @@ export async function signWorkOrderByToken(token, signature, signatureFileId) {
       }
     };
     await upsertWorkOrder(client, next);
+    await client.query(
+      "update signatures set file_id = $3 where order_id = $1 and signer_type = $2",
+      [order.id, "customer", signatureFileId]
+    );
     await client.query("update signature_tokens set used = true, used_at = now() where token = $1", [token]);
     await addAudit(client, order.id, order.customer.name || "车主", "客户完成电子签名");
     return findWorkOrderById(client, order.id);
@@ -207,7 +223,10 @@ export async function syncWorkOrderToPlatform(id, actor) {
     if (!order) throw new HttpError(404, "委托单不存在");
     assertPlatformSyncAllowed(order);
     const platformOrderNo = order.platformOrderNo || createId("PLAT");
-    const dispatchNo = order.dispatchNo || createId("PG");
+    if (!order.dispatchNo) {
+      throw new HttpError(400, "未从公司系统取得派工号，请先确认车辆在 SQL Server 中已有维修派工记录");
+    }
+    const dispatchNo = order.dispatchNo;
     const syncId = createId("sync");
     const nextItems = (order.repairItems || []).map((item) => ({
       ...item,
@@ -659,9 +678,17 @@ async function replaceRepairItems(client, orderId, items) {
 }
 
 async function replaceSignatures(client, orderId, signatures) {
-  await client.query("delete from signatures where order_id = $1", [orderId]);
-  for (const [signerType, signerName] of Object.entries(signatures)) {
-    if (!signerName) continue;
+  const entries = Object.entries(signatures).filter(([, signerName]) => Boolean(signerName));
+  const signerTypes = entries.map(([signerType]) => signerType);
+  if (signerTypes.length) {
+    await client.query(
+      "delete from signatures where order_id = $1 and not (signer_type = any($2::text[]))",
+      [orderId, signerTypes]
+    );
+  } else {
+    await client.query("delete from signatures where order_id = $1", [orderId]);
+  }
+  for (const [signerType, signerName] of entries) {
     await client.query(
       `
         insert into signatures (order_id, signer_type, signer_name)

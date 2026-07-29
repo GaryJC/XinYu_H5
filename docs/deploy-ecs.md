@@ -71,6 +71,16 @@ sudo nano .env.production
 ```bash
 DATABASE_URL=postgresql://用户名:密码@RDS地址:5432/数据库名
 API_PORT=8787
+APP_ENV=production
+ENABLE_DEV_AUTH=false
+
+SQLSERVER_HOST=
+SQLSERVER_PORT=1433
+SQLSERVER_DATABASE=kxqpjxc2
+SQLSERVER_USER=
+SQLSERVER_PASSWORD=
+SQLSERVER_ENCRYPT=false
+SQLSERVER_TDS_VERSION=7_1
 
 OCR_PROVIDER=aliyun
 ALIYUN_ACCESS_KEY_ID=
@@ -94,8 +104,9 @@ OSS_BUCKET=
 ```bash
 cd /opt/repair-h5-dingtalk
 npm ci
-npm run build
+npm run check
 npm run migrate
+npm run sqlserver:check
 ```
 
 ## 5. 用 PM2 启动 Node 服务
@@ -103,12 +114,29 @@ npm run migrate
 ```bash
 sudo npm install -g pm2
 cd /opt/repair-h5-dingtalk
-pm2 start npm --name xinyu-h5 -- start
+pm2 start npm --name xinyu-h5 --cwd /opt/repair-h5-dingtalk -- start
 pm2 save
 pm2 startup
 ```
 
 执行 `pm2 startup` 输出的 sudo 命令，使服务随 ECS 启动。
+
+Windows Server 部署到 `C:\apps\XinYu_H5` 时，在 PowerShell 中使用：
+
+```powershell
+Set-Location C:\apps\XinYu_H5
+pm2 startOrReload ecosystem.config.cjs --only xinyu-h5
+pm2 save
+```
+
+`ecosystem.config.cjs` 会以项目目录为工作目录，并让 Node 每次启动时读取 `.env.production`。
+云效的 Windows PowerShell 部署步骤应在保护并恢复 `.env.production`、解压部署包后调用：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\apps\XinYu_H5\scripts\deploy-windows.ps1
+```
+
+`START_LOCAL_API` 仅供 `npm run dev` 使用，生产环境不需要设置。
 
 本机检查：
 

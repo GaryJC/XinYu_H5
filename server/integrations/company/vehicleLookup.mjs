@@ -1,7 +1,7 @@
 import { HttpError } from "../../http/HttpError.mjs";
+import { hasSqlServerConfig } from "../../config/sqlServerConfig.mjs";
+import { findLegacyVehicle } from "../../repositories/legacyVehicleRepository.mjs";
 
-// TODO: Replace this adapter body with the company's production vehicle API.
-// Keeping the contract here means the route and client do not need to change later.
 const mockVehicles = [
   { plate: "辽A12345", vin: "LSVNV2182E2123456", model: "大众 帕萨特 2023款" },
   { plate: "沪AG12345", vin: "LSVCY6C49MN027789", model: "大众汽车 SVW7142BPV" }
@@ -14,14 +14,23 @@ export async function lookupVehicleInCompanySystem({ plate, vin } = {}) {
     throw new HttpError(400, "请提供车牌号或 VIN 码");
   }
 
-  const vehicle = mockVehicles.find((item) =>
-    (normalizedPlate && normalizeIdentifier(item.plate) === normalizedPlate) ||
-    (normalizedVin && normalizeIdentifier(item.vin) === normalizedVin)
-  );
+  const vehicle = hasSqlServerConfig()
+    ? await findLegacyVehicle({ plate: normalizedPlate, vin: normalizedVin })
+    : findMockVehicle(normalizedPlate, normalizedVin);
 
   return vehicle
     ? { found: true, vehicle, message: "已从公司系统匹配到车辆历史信息" }
     : { found: false, message: "公司系统中未查询到这辆车，可继续新建车辆档案" };
+}
+
+function findMockVehicle(normalizedPlate, normalizedVin) {
+  if (process.env.APP_ENV === "production") {
+    throw new HttpError(503, "公司车辆数据库未配置");
+  }
+  return mockVehicles.find((item) =>
+    (normalizedPlate && normalizeIdentifier(item.plate) === normalizedPlate) ||
+    (normalizedVin && normalizeIdentifier(item.vin) === normalizedVin)
+  );
 }
 
 function normalizeIdentifier(value) {

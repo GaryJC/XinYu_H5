@@ -24,3 +24,23 @@ ENABLE_DEV_AUTH=true
 APP_ENV=production
 ENABLE_DEV_AUTH=false
 ```
+
+## 本地前端连接远程 API
+
+如果 Node API 和数据库运行在远程测试服务器，本地只需要运行 Vite。在 `.env.local` 中设置：
+
+```text
+START_LOCAL_API=false
+API_PROXY_TARGET=https://测试服务器地址
+```
+
+然后照常执行 `npm run dev`。浏览器仍访问 `http://localhost:5173`，Vite 会把 `/api` 请求代理到 `API_PROXY_TARGET`，本地不会启动 Node API，也不需要连接远程数据库。
+
+远程生产服务默认关闭开发身份接口。如果需要使用页面中的测试身份，应该部署隔离的测试 API，并仅在该测试服务设置：
+
+```text
+APP_ENV=development
+ENABLE_DEV_AUTH=true
+```
+
+不要在正式生产服务启用开发身份接口。

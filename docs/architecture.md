@@ -11,6 +11,7 @@ Nginx (HTTPS + static dist)
         +---- /api/* ----> Node HTTP server
                               |
                               +---- RDS PostgreSQL
+                              +---- Legacy SQL Server 2000 (read-only)
                               +---- Aliyun OCR
                               +---- Aliyun OSS
                               +---- DingTalk OpenAPI

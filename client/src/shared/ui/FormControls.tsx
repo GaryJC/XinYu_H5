@@ -5,17 +5,18 @@ type FieldProps = {
   label: string;
   value: string;
   suffix?: string;
+  placeholder?: string;
   disabled?: boolean;
   required?: boolean;
   error?: string;
   onChange: (value: string) => void;
 };
 
-export function Field({ label, value, suffix, disabled, required, error, onChange }: FieldProps) {
+export function Field({ label, value, suffix, placeholder, disabled, required, error, onChange }: FieldProps) {
   const id = useId();
   return (
     <Form.Item className="field" label={label} htmlFor={id} required={required} validateStatus={error ? "error" : undefined} help={error}>
-      <Input id={id} aria-required={required} status={error ? "error" : undefined} value={value} disabled={disabled} suffix={suffix} onChange={(event) => onChange(event.target.value)} />
+      <Input id={id} aria-required={required} status={error ? "error" : undefined} value={value} placeholder={placeholder} disabled={disabled} suffix={suffix} onChange={(event) => onChange(event.target.value)} />
     </Form.Item>
   );
 }

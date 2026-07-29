@@ -1,5 +1,6 @@
 import { FileSignature, LockKeyhole, Plus, RefreshCcw, Save, Send, Trash2 } from "lucide-react";
-import { Alert, Button, Card, Form, Grid, Input, Modal, Select, Tooltip } from "antd";
+import { Alert, Button, Card, DatePicker, Form, Grid, Input, Modal, Select, Tooltip } from "antd";
+import dayjs from "dayjs";
 import { useState } from "react";
 import { WorkOrder, WorkOrderDraft } from "../../../../../shared/types";
 import { canCreateOrder, canSendSignature } from "../domain/permissions";
@@ -25,7 +26,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     confirmVehicleLicenseOcr, draft, updateDraft, updateVehicle, updateCustomer,
     toggleArrayField, setDraft, totalLabor, updateRepairItem,
     syncPlatform, actionLoading, completeSignature, identifierRecognition,
-    vehicleHistory, vehicleHistoryLoading, vehicleHistoryError, scanVehicleIdentifier
+    vehicleHistory, vehicleHistoryLoading, vehicleHistoryError, scanVehicleIdentifier,
+    lookupVehicleIdentifier, dispatchNumberLoading
   } = controller;
   const canSyncPlatform = Boolean(selectedOrder && !selectedOrder.platformOrderNo && !["草稿", "待客户签字"].includes(selectedOrder.status) && (role === "advisor" || role === "manager"));
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
@@ -124,11 +126,28 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               historyLoading={vehicleHistoryLoading}
               historyError={vehicleHistoryError}
               onScan={scanVehicleIdentifier}
+              onManualLookup={lookupVehicleIdentifier}
             />
 
             <div className="field-grid">
-              <Field disabled={!canEditForm} label="派工号" value={draft.dispatchNo} onChange={(value) => updateDraft({ dispatchNo: value })} />
-              <Field disabled={!canEditForm} label="进厂日期" value={draft.arrivalDate} onChange={(value) => updateDraft({ arrivalDate: value })} />
+              <Field
+                disabled
+                label="派工号"
+                placeholder={dispatchNumberLoading ? "正在从 SQL Server 生成…" : "新建委托单时自动生成"}
+                value={draft.dispatchNo}
+                onChange={() => undefined}
+              />
+              <Form.Item className="field" label="进厂日期">
+                <DatePicker
+                  aria-label="进厂日期"
+                  allowClear={false}
+                  disabled={!canEditForm}
+                  format="YYYY-MM-DD"
+                  inputReadOnly={isMobile}
+                  value={draft.arrivalDate ? dayjs(draft.arrivalDate) : null}
+                  onChange={(date) => updateDraft({ arrivalDate: date?.format("YYYY-MM-DD") || "" })}
+                />
+              </Form.Item>
               <Field disabled label="门店地址" value={draft.shop.address} onChange={() => undefined} />
               <Field disabled label="门店联系电话" value={draft.shop.phone} onChange={() => undefined} />
               <Field required error={fieldError("车牌号码")} disabled={!canEditForm} label="车牌号码" value={draft.vehicle.plate} onChange={(value) => updateVehicle("plate", value)} />

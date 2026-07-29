@@ -67,6 +67,27 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
       return;
     }
 
+    await lookupVehicleIdentifier(kind, value);
+  }
+
+  async function lookupVehicleIdentifier(kind: IdentifierKind, rawValue: string) {
+    const value = rawValue.trim().toUpperCase();
+    if (!value) {
+      setVehicleHistory(undefined);
+      setVehicleHistoryError(`请输入${kind === "plate" ? "车牌号码" : "VIN 码"}`);
+      return;
+    }
+
+    setIdentifierRecognition((current) => ({
+      ...current,
+      [kind]: { status: "已识别", value }
+    }));
+    setDraft((current) => ({
+      ...current,
+      vehicle: { ...current.vehicle, [kind]: value }
+    }));
+    setVehicleHistory(undefined);
+    setVehicleHistoryError("");
     setVehicleHistoryLoading(true);
     try {
       const history = await workOrderApi.lookupVehicle({ [kind]: value });
@@ -95,6 +116,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
     vehicleHistoryLoading,
     vehicleHistoryError,
     resetVehicleIdentityRecognition,
-    scanVehicleIdentifier
+    scanVehicleIdentifier,
+    lookupVehicleIdentifier
   };
 }

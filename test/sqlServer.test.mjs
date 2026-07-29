@@ -1,0 +1,144 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { hasSqlServerConfig, sqlServerConfig } from "../server/config/sqlServerConfig.mjs";
+import {
+  inspectSqlServer,
+  listSqlServerUserTables,
+  SQL_SERVER_2000_HEALTH_QUERY,
+  SQL_SERVER_2000_TABLES_QUERY
+} from "../server/repositories/sqlServerRepository.mjs";
+import {
+  findLegacyVehicle,
+  FIND_LEGACY_VEHICLE_QUERY
+} from "../server/repositories/legacyVehicleRepository.mjs";
+import {
+  getLatestLegacyDispatchNumber,
+  MAX_LEGACY_DISPATCH_NUMBER_QUERY
+} from "../server/repositories/legacyDispatchNumberRepository.mjs";
+
+const validEnv = {
+  SQLSERVER_HOST: "192.168.0.244",
+  SQLSERVER_PORT: "1433",
+  SQLSERVER_DATABASE: "kxqpjxc2",
+  SQLSERVER_USER: "app_reader",
+  SQLSERVER_PASSWORD: "secret"
+};
+
+test("SQL Server config defaults to SQL Server 2000 compatible transport", () => {
+  const config = sqlServerConfig(validEnv);
+  assert.equal(config.options.encrypt, false);
+  assert.equal(config.options.tdsVersion, "7_1");
+  assert.equal(config.options.trustServerCertificate, true);
+  assert.equal(config.port, 1433);
+});
+
+test("SQL Server config requires a complete connection and TDS 7.1", () => {
+  assert.equal(hasSqlServerConfig(validEnv), true);
+  assert.equal(hasSqlServerConfig({ ...validEnv, SQLSERVER_PASSWORD: "" }), false);
+  assert.throws(() => sqlServerConfig({ ...validEnv, SQLSERVER_PORT: "invalid" }), /valid TCP port/);
+  assert.throws(() => sqlServerConfig({ ...validEnv, SQLSERVER_TDS_VERSION: "7_4" }), /must be 7_1/);
+});
+
+test("SQL Server health query and mapping are compatible with SQL Server 2000", async () => {
+  assert.match(SQL_SERVER_2000_HEALTH_QUERY, /dbo\.sysobjects/i);
+  assert.doesNotMatch(SQL_SERVER_2000_HEALTH_QUERY, /sys\.tables/i);
+
+  const result = await inspectSqlServer(async (query) => {
+    assert.equal(query, SQL_SERVER_2000_HEALTH_QUERY);
+    return {
+      recordset: [{
+        server_name: "USER-20230526MU",
+        database_name: "kxqpjxc2",
+        login_name: "app_reader",
+        version: "Microsoft SQL Server 2000",
+        table_count: 42
+      }]
+    };
+  });
+
+  assert.deepEqual(result, {
+    ok: true,
+    serverName: "USER-20230526MU",
+    databaseName: "kxqpjxc2",
+    loginName: "app_reader",
+    version: "Microsoft SQL Server 2000",
+    tableCount: 42
+  });
+});
+
+test("SQL Server table inventory uses SQL Server 2000 catalogs", async () => {
+  assert.match(SQL_SERVER_2000_TABLES_QUERY, /dbo\.sysobjects/i);
+  assert.match(SQL_SERVER_2000_TABLES_QUERY, /dbo\.sysusers/i);
+
+  const tables = await listSqlServerUserTables(async () => ({
+    recordset: [
+      { owner_name: "dbo", table_name: "vehicle" },
+      { owner_name: "dbo", table_name: "repair_order" }
+    ]
+  }));
+
+  assert.deepEqual(tables, [
+    { owner: "dbo", name: "vehicle" },
+    { owner: "dbo", name: "repair_order" }
+  ]);
+});
+
+test("legacy vehicle lookup uses SQL Server 2000 parameters and maps the public contract", async () => {
+  const inputs = [];
+  const sqlTypes = {
+    VarChar(length) {
+      return { type: "VarChar", length };
+    }
+  };
+
+  const vehicle = await findLegacyVehicle(
+    { plate: "辽A12345", vin: "" },
+    async (query, configureRequest) => {
+      assert.equal(query, FIND_LEGACY_VEHICLE_QUERY);
+      assert.match(query, /dbo\.qxclxxb/i);
+      assert.match(query, /select top 1/i);
+      configureRequest({
+        input(name, type, value) {
+          inputs.push({ name, type, value });
+        }
+      }, sqlTypes);
+      return {
+        recordset: [{ plate: "辽A12345", vin: "LSV123", model: "测试车型" }]
+      };
+    }
+  );
+
+  assert.deepEqual(inputs, [
+    { name: "plate", type: { type: "VarChar", length: 50 }, value: "辽A12345" },
+    { name: "vin", type: { type: "VarChar", length: 50 }, value: "" }
+  ]);
+  assert.deepEqual(vehicle, { plate: "辽A12345", vin: "LSV123", model: "测试车型" });
+});
+
+test("legacy dispatch allocation reads the highest A-prefixed number from SQL Server 2000", async () => {
+  const inputs = [];
+  const latest = await getLatestLegacyDispatchNumber("a", async (query, configureRequest) => {
+    assert.equal(query, MAX_LEGACY_DISPATCH_NUMBER_QUERY);
+    assert.match(query, /dbo\.qxwxb/i);
+    assert.match(query, /ISNUMERIC/i);
+    configureRequest({
+      input(name, type, value) {
+        inputs.push({ name, type, value });
+      }
+    }, {
+      Char(length) {
+        return { type: "Char", length };
+      }
+    });
+    return { recordset: [{ max_number: 66289 }] };
+  });
+
+  assert.deepEqual(inputs, [
+    { name: "prefix", type: { type: "Char", length: 1 }, value: "A" }
+  ]);
+  assert.deepEqual(latest, {
+    prefix: "A",
+    maxNumber: 66289,
+    dispatchNo: "A66289"
+  });
+});
