@@ -138,6 +138,20 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\apps\XinYu_H5\scripts
 
 `START_LOCAL_API` 仅供 `npm run dev` 使用，生产环境不需要设置。
 
+### 云效构建制品
+
+构建步骤使用项目自带的白名单打包脚本：
+
+```bash
+npm run package:deploy
+```
+
+把生成的 `package.tgz` 配置为部署制品。该制品只包含客户端、服务端、迁移、
+测试和构建配置，不包含 `node_modules`、`.git`、`dist`、本地缓存或任何
+`.env` 文件，也不会打包 `server/data` 中的运行时上传数据。Windows 部署
+阶段会通过 `npm ci` 安装与锁文件一致的依赖，并通过 `npm run check` 重新
+生成 `dist`。
+
 本机检查：
 
 ```bash
