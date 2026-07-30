@@ -27,7 +27,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     toggleArrayField, setDraft, totalLabor, updateRepairItem,
     syncPlatform, actionLoading, completeSignature, identifierRecognition,
     vehicleHistory, vehicleHistoryLoading, vehicleHistoryError, scanVehicleIdentifier,
-    lookupVehicleIdentifier, dispatchNumberLoading
+    lookupVehicleIdentifier
   } = controller;
   const canSyncPlatform = Boolean(selectedOrder && !selectedOrder.platformOrderNo && !["草稿", "待客户签字"].includes(selectedOrder.status) && (role === "advisor" || role === "manager"));
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
@@ -90,6 +90,22 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               <Alert className="platform-sync-state" type="success" showIcon title={`已同步平台工单：${selectedOrder.platformOrderNo}`} />
             ) : null}
 
+            {selectedOrder?.legacySyncStatus === "pending" ? (
+              <Alert className="platform-sync-state" type="info" showIcon title="委托单已保存，等待润丰系统拉取" />
+            ) : null}
+
+            {selectedOrder?.legacySyncStatus === "processing" ? (
+              <Alert className="platform-sync-state" type="info" showIcon title="润丰系统正在处理当前委托单" />
+            ) : null}
+
+            {selectedOrder?.legacySyncStatus === "synced" ? (
+              <Alert className="platform-sync-state" type="success" showIcon title={`润丰同步成功${selectedOrder.dispatchNo ? `：${selectedOrder.dispatchNo}` : ""}`} />
+            ) : null}
+
+            {selectedOrder?.legacySyncStatus === "failed" ? (
+              <Alert className="platform-sync-state" type="error" showIcon title="润丰同步失败" description={selectedOrder.legacySyncError || "请联系管理员重试同步"} />
+            ) : null}
+
             {formErrors.length ? (
               <Alert className="error-box" type="error" showIcon title={hasValidationError ? "请完善委托单信息" : "操作失败"} description={formErrors.join("；")} />
             ) : null}
@@ -133,7 +149,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               <Field
                 disabled
                 label="派工号"
-                placeholder={dispatchNumberLoading ? "正在从 SQL Server 生成…" : "新建委托单时自动生成"}
+                placeholder="润丰同步成功后自动回填"
                 value={draft.dispatchNo}
                 onChange={() => undefined}
               />

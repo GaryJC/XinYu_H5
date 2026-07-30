@@ -239,6 +239,10 @@ export type WorkOrder = {
   signatureToken?: string;
   signatureTokenUsed?: boolean;
   platformOrderNo?: string;
+  legacySyncStatus?: "not_applicable" | "pending" | "processing" | "synced" | "failed";
+  legacySyncRevision?: number;
+  legacySyncedAt?: string;
+  legacySyncError?: string;
   ocrRecords: OcrRecord[];
   platformSyncRecords: PlatformSyncRecord[];
   outboundOrders: OutboundOrder[];

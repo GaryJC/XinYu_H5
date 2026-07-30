@@ -17,8 +17,27 @@ export async function getSqlServerPool() {
   return poolPromise;
 }
 
+export async function getSqlServerPoolWithRetry(
+  attempts = 2,
+  retryDelayMs = 250,
+  connect = getSqlServerPool
+) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await connect();
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts && retryDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      }
+    }
+  }
+  throw lastError;
+}
+
 export async function executeSqlServerQuery(query, configureRequest) {
-  const connectedPool = await getSqlServerPool();
+  const connectedPool = await getSqlServerPoolWithRetry();
   const request = connectedPool.request();
   if (configureRequest) configureRequest(request, sql);
   return request.query(query);

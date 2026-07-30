@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { hasSqlServerConfig, sqlServerConfig } from "../server/config/sqlServerConfig.mjs";
+import { getSqlServerPoolWithRetry } from "../server/database/sqlServerPool.mjs";
 import {
   inspectSqlServer,
   listSqlServerUserTables,
@@ -37,6 +38,18 @@ test("SQL Server config requires a complete connection and TDS 7.1", () => {
   assert.equal(hasSqlServerConfig({ ...validEnv, SQLSERVER_PASSWORD: "" }), false);
   assert.throws(() => sqlServerConfig({ ...validEnv, SQLSERVER_PORT: "invalid" }), /valid TCP port/);
   assert.throws(() => sqlServerConfig({ ...validEnv, SQLSERVER_TDS_VERSION: "7_4" }), /must be 7_1/);
+});
+
+test("SQL Server connection retries once before any query or transaction starts", async () => {
+  let attempts = 0;
+  const connected = await getSqlServerPoolWithRetry(2, 0, async () => {
+    attempts += 1;
+    if (attempts === 1) throw new Error("temporary tunnel failure");
+    return { connected: true };
+  });
+
+  assert.equal(attempts, 2);
+  assert.deepEqual(connected, { connected: true });
 });
 
 test("SQL Server health query and mapping are compatible with SQL Server 2000", async () => {

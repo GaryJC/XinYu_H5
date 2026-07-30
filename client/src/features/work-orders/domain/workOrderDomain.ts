@@ -76,9 +76,7 @@ export function createEmptyDraft(): WorkOrderDraft {
     estimatedDeliveryAt: "",
     settlementAmount: 0,
     feeNote: "",
-    signatures: {
-      advisor: "林佳"
-    },
+    signatures: {},
     signatureTokenUsed: false,
     ocrRecords: [],
     platformSyncRecords: [],

@@ -33,7 +33,6 @@ import { validateDepartmentMapping, validateRoleMapping } from "../integrations/
 import { HttpError } from "../http/HttpError.mjs";
 import { readStoredFile, saveUploadedFile } from "../storage.mjs";
 import { requireAnyRole, requireAuthenticatedUser, requireTransitionRole } from "../domain/accessPolicy.mjs";
-import { reserveNextDispatchNumber } from "../repositories/dispatchNumberRepository.mjs";
 
 export async function handleApiRequest(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/health") {
@@ -124,12 +123,6 @@ export async function handleApiRequest(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/company-system/vehicles/lookup") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     sendJson(res, 200, await lookupVehicleInCompanySystem(await readJson(req)));
-    return true;
-  }
-
-  if (req.method === "POST" && url.pathname === "/api/work-orders/dispatch-number") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
-    sendJson(res, 201, { dispatchNo: await reserveNextDispatchNumber(currentUser.id) });
     return true;
   }
 

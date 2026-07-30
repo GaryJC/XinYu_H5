@@ -85,6 +85,10 @@ export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecord
     signatureToken: row.signature_token || undefined,
     signatureTokenUsed: row.signature_token_used ?? undefined,
     platformOrderNo: row.platform_order_no || undefined,
+    legacySyncStatus: row.legacy_sync_status || "not_applicable",
+    legacySyncRevision: Number(row.legacy_sync_revision || 0),
+    legacySyncedAt: row.legacy_synced_at ? formatDate(row.legacy_synced_at) : undefined,
+    legacySyncError: row.legacy_sync_error || undefined,
     ocrRecords: ocrRecords.map(rowToOcrRecord),
     platformSyncRecords: syncRecords.map((item) => ({
       id: item.id,

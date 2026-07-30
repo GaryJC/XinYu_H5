@@ -35,7 +35,6 @@ export type WorkOrderApi = {
   recognizeLicensePlate(imageBase64: string): Promise<VehicleIdentifierOcrResult>;
   recognizeVin(imageBase64: string): Promise<VehicleIdentifierOcrResult>;
   lookupVehicle(identifier: { plate?: string; vin?: string }): Promise<VehicleHistoryLookupResult>;
-  reserveDispatchNumber(): Promise<string>;
   uploadFile(file: { orderId?: string; kind: StoredFile["kind"]; fileName: string; mimeType: string; imageBase64: string }): Promise<StoredFile>;
   attachFile(fileId: string, orderId: string): Promise<StoredFile>;
   createOcrRecord(orderId: string | undefined, field: OcrFieldKey, source: string, value: string, confidence: number, fileId?: string): Promise<OcrRecord>;
@@ -101,10 +100,6 @@ export const workOrderApi: WorkOrderApi = {
   },
   lookupVehicle(identifier) {
     return request("/api/company-system/vehicles/lookup", { method: "POST", body: identifier });
-  },
-  async reserveDispatchNumber() {
-    const result = await request<{ dispatchNo: string }>("/api/work-orders/dispatch-number", { method: "POST" });
-    return result.dispatchNo;
   },
   uploadFile(file) {
     return request("/api/files", { method: "POST", body: file });

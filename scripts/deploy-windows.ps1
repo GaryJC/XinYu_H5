@@ -51,7 +51,7 @@ if ($configuredPort -ne [string]$Port) {
 }
 
 Invoke-Native {
-    & $pm2Command startOrReload ecosystem.config.cjs --only $ProcessName
+    & $pm2Command startOrReload ecosystem.config.cjs --only $ProcessName --silent --no-color
 } "PM2 start or reload failed"
 
 $healthy = $false
@@ -72,9 +72,9 @@ for ($attempt = 1; $attempt -le 30; $attempt++) {
 }
 
 if (-not $healthy) {
-    & $pm2Command logs $ProcessName --lines 50 --nostream
+    & $pm2Command logs $ProcessName --lines 50 --nostream --no-color
     throw "API health check failed"
 }
 
-Invoke-Native { & $pm2Command save } "PM2 state save failed"
+Invoke-Native { & $pm2Command save --silent --no-color } "PM2 state save failed"
 Write-Host "Deployment succeeded: $AppPath, port $Port"

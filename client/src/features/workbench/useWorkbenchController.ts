@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DashboardSummary,
   DevelopmentPersonaKey,
@@ -31,8 +31,6 @@ export function useWorkbenchController() {
   const [currentUser, setCurrentUser] = useState<UserProfile>();
   const [actionLoading, setActionLoading] = useState<"save" | "signature" | "sync" | "">("");
   const [devLoginLoading, setDevLoginLoading] = useState(false);
-  const [dispatchNumberLoading, setDispatchNumberLoading] = useState(false);
-  const dispatchReservationInFlight = useRef(false);
 
   const selectedOrder = orders.find((order) => order.id === selectedId);
   const actor = currentUser?.name || roles[role].name;
@@ -93,34 +91,6 @@ export function useWorkbenchController() {
       setActiveNav("工作台");
     }
   }, [activeNav, visibleNavItems]);
-
-  useEffect(() => {
-    if (
-      !currentUser ||
-      !canCreateOrder(role) ||
-      activeNav !== "委托开单" ||
-      selectedId ||
-      draft.dispatchNo
-    ) {
-      return;
-    }
-    void ensureDispatchNumber();
-  }, [currentUser?.id, role, activeNav, selectedId, draft.dispatchNo]);
-
-  async function ensureDispatchNumber() {
-    if (dispatchReservationInFlight.current) return;
-    dispatchReservationInFlight.current = true;
-    setDispatchNumberLoading(true);
-    try {
-      const dispatchNo = await workOrderApi.reserveDispatchNumber();
-      setDraft((current) => current.dispatchNo ? current : { ...current, dispatchNo });
-    } catch (error) {
-      setApiError(error instanceof Error ? error.message : "派工号生成失败");
-    } finally {
-      dispatchReservationInFlight.current = false;
-      setDispatchNumberLoading(false);
-    }
-  }
 
   async function loadOrders(nextRole = role, keepId = selectedId) {
     try {
@@ -382,7 +352,6 @@ export function useWorkbenchController() {
     currentUser,
     actionLoading,
     devLoginLoading,
-    dispatchNumberLoading,
     selectedOrder,
     actor,
     visibleNavItems,

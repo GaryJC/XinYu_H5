@@ -1,6 +1,6 @@
 # Database Setup
 
-This project uses a Node API in front of Postgres and a read-only legacy SQL Server integration. The frontend should keep using `/api/*` and must not connect to either database directly.
+This project uses a Node API in front of Postgres and a legacy SQL Server integration. The frontend should keep using `/api/*` and must not connect to either database directly.
 
 ## Local Supabase
 
@@ -36,27 +36,33 @@ Local-only settings belong in `.env.local`:
 SQLSERVER_HOST=reachable-host-or-forwarder
 SQLSERVER_PORT=1433
 SQLSERVER_DATABASE=kxqpjxc2
-SQLSERVER_USER=read-only-application-user
+SQLSERVER_USER=work-order-application-user
 SQLSERVER_PASSWORD=
 SQLSERVER_ENCRYPT=false
 SQLSERVER_TDS_VERSION=7_1
 ```
 
-Run the read-only connection and table inventory check with:
+Run the connection and table inventory check with:
 
 ```bash
 npm run sqlserver:check
 ```
 
-SQL Server 2000 requires TDS 7.1 and the current instance does not support encrypted connections. Keep port 1433 private, use a least-privilege account instead of `sa`, and keep all legacy SQL inside dedicated repositories. Catalog queries must use SQL Server 2000 objects such as `dbo.sysobjects`; newer views such as `sys.tables` are unavailable.
+SQL Server 2000 requires TDS 7.1 and the current instance does not support encrypted connections. Keep port 1433 private, use a least-privilege account instead of `sa`, and grant only the reads and `dbo.qxwxb` writes required by the application. Keep all legacy SQL inside dedicated repositories. Catalog queries must use SQL Server 2000 objects such as `dbo.sysobjects`; newer views such as `sys.tables` are unavailable.
 
-Vehicle recognition reads the vehicle master from `dbo.qxclxxb` (`ch` = plate, `sbdm` = VIN/chassis number, `cx` = model). New dispatch numbers use the highest valid `A<number>` value in `dbo.qxwxb.pgd` as their baseline; Postgres only coordinates reservations so concurrent H5 users do not receive the same next number.
+Vehicle recognition still reads the vehicle master from `dbo.qxclxxb` (`ch` = plate,
+`sbdm` = VIN/chassis number, `cx` = model). H5 work-order creation and updates do not
+write SQL Server. They commit the PostgreSQL business data and a versioned
+`legacy_sync_outbox` event in one transaction. The Runfeng integration polls those
+events, writes its own SQL Server, then acknowledges the event with `reid`, `dh`, and
+`pgd`. See [legacy-sync-polling.md](./legacy-sync-polling.md).
 
 ## Database responsibilities
 
-Postgres is the system of record for the H5 workflow. It stores the work order and dispatch number, arrival date, vehicle/customer snapshot, repair-item assignments and status, signature records, OCR records, outbound-order data, settlement data, audit history, and authenticated file metadata.
+Postgres is the system of record for the complete H5 workflow. It stores the work order and dispatch number, SQL Server record link, arrival date, vehicle/customer snapshot, repair-item assignments and status, signature records, OCR records, outbound-order data, settlement data, audit history, and authenticated file metadata.
 
-SQL Server remains the legacy read source for vehicle master data and the current maximum dispatch number. It does not store H5 uploads, signatures, or workflow state.
+SQL Server remains a read-only vehicle source for H5 and a downstream interoperability
+store populated by the Runfeng poller. PostgreSQL is authoritative for new H5 orders.
 
 Image bytes are intentionally kept outside Postgres:
 
