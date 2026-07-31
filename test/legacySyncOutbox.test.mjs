@@ -13,6 +13,7 @@ const order = {
   dispatchNo: "",
   arrivalDate: "2026-07-30",
   advisor: "张三",
+  department: { code: "A", name: "机电一部" },
   technician: "待派工",
   inspector: "待检验",
   shop: { id: "shop-hq", name: "抚顺路店", address: "抚顺路店", phone: "021-1" },
@@ -53,6 +54,7 @@ test("legacy sync payload is versioned and preserves structured work-order data"
   assert.equal(payload.eventId, "event-1");
   assert.equal(payload.revision, 3);
   assert.equal(payload.order.dispatchNo, "");
+  assert.deepEqual(payload.order.department, { code: "A", name: "机电一部" });
   assert.deepEqual(payload.order.repairItems[0], {
     id: 7,
     itemNo: 1,

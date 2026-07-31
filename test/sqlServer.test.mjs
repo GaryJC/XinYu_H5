@@ -16,6 +16,10 @@ import {
   getLatestLegacyDispatchNumber,
   MAX_LEGACY_DISPATCH_NUMBER_QUERY
 } from "../server/repositories/legacyDispatchNumberRepository.mjs";
+import {
+  listLegacyDepartments,
+  LIST_LEGACY_DEPARTMENTS_QUERY
+} from "../server/repositories/legacyDepartmentRepository.mjs";
 
 const validEnv = {
   SQLSERVER_HOST: "192.168.0.244",
@@ -126,6 +130,25 @@ test("legacy vehicle lookup uses SQL Server 2000 parameters and maps the public 
     { name: "vin", type: { type: "VarChar", length: 50 }, value: "" }
   ]);
   assert.deepEqual(vehicle, { plate: "辽A12345", vin: "LSV123", model: "测试车型" });
+});
+
+test("legacy departments come from SQL Server repair-order departments", async () => {
+  const departments = await listLegacyDepartments(async (query) => {
+    assert.equal(query, LIST_LEGACY_DEPARTMENTS_QUERY);
+    assert.match(query, /dbo\.bmxxb/i);
+    assert.match(query, /dbo\.qxwxb/i);
+    return {
+      recordset: [
+        { code: "A", name: "机电一部", is_default: true },
+        { code: "M", name: "机电二部", is_default: false }
+      ]
+    };
+  });
+
+  assert.deepEqual(departments, [
+    { code: "A", name: "机电一部", isDefault: true },
+    { code: "M", name: "机电二部", isDefault: false }
+  ]);
 });
 
 test("legacy dispatch allocation reads the highest A-prefixed number from SQL Server 2000", async () => {

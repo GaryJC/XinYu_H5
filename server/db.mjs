@@ -72,6 +72,7 @@ export async function updateWorkOrder(order, actor, action) {
     const next = {
       ...existing,
       ...order,
+      advisor: existing.advisor,
       dispatchNo: existing.dispatchNo,
       status: existing.status,
       updatedAt: nowString()
@@ -87,7 +88,7 @@ export async function transitionWorkOrder(id, status, actor, action, patch = {})
     const order = await findWorkOrderById(client, id);
     if (!order) throw new HttpError(404, "委托单不存在");
     assertStatusTransition(order.status, status);
-    const next = { ...order, ...patch, status, updatedAt: nowString() };
+    const next = { ...order, ...patch, advisor: order.advisor, status, updatedAt: nowString() };
     await upsertWorkOrder(client, next);
     await addAudit(client, id, actor, action);
     return findWorkOrderById(client, id);
@@ -598,7 +599,7 @@ async function upsertWorkOrder(client, order, { legacyEventType = "updated" } = 
   await client.query(
     `
       insert into work_orders (
-        id, status, advisor, technician, inspector,
+        id, status, advisor, department_code, department_name, technician, inspector,
         dispatch_no, arrival_date, shop_id, shop_name, shop_address, shop_phone,
         vehicle_plate, vehicle_vin, vehicle_mileage, vehicle_model, vehicle_purchase_date,
         customer_name, customer_phone, customer_contact, customer_address,
@@ -606,17 +607,19 @@ async function upsertWorkOrder(client, order, { legacyEventType = "updated" } = 
         estimated_delivery_at, settlement_amount, fee_note, platform_order_no,
         created_at, updated_at
       ) values (
-        $1, $2, $3, $4, $5,
-        $6, $7, $8, $9, $10, $11,
-        $12, $13, $14, $15, $16,
-        $17, $18, $19, $20,
-        $21::jsonb, $22, $23, $24,
-        $25, $26, $27, $28,
-        $29, $30
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12, $13,
+        $14, $15, $16, $17, $18,
+        $19, $20, $21, $22,
+        $23::jsonb, $24, $25, $26,
+        $27, $28, $29, $30,
+        $31, $32
       )
       on conflict (id) do update set
         status = excluded.status,
         advisor = excluded.advisor,
+        department_code = excluded.department_code,
+        department_name = excluded.department_name,
         technician = excluded.technician,
         inspector = excluded.inspector,
         dispatch_no = excluded.dispatch_no,

@@ -27,7 +27,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     toggleArrayField, setDraft, totalLabor, updateRepairItem,
     syncPlatform, actionLoading, completeSignature, identifierRecognition,
     vehicleHistory, vehicleHistoryLoading, vehicleHistoryError, scanVehicleIdentifier,
-    lookupVehicleIdentifier
+    lookupVehicleIdentifier, departments, departmentError
   } = controller;
   const canSyncPlatform = Boolean(selectedOrder && !selectedOrder.platformOrderNo && !["草稿", "待客户签字"].includes(selectedOrder.status) && (role === "advisor" || role === "manager"));
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
@@ -164,14 +164,44 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   onChange={(date) => updateDraft({ arrivalDate: date?.format("YYYY-MM-DD") || "" })}
                 />
               </Form.Item>
-              <Field disabled label="门店地址" value={draft.shop.address} onChange={() => undefined} />
-              <Field disabled label="门店联系电话" value={draft.shop.phone} onChange={() => undefined} />
+              <Field
+                disabled
+                label="服务顾问"
+                placeholder="根据当前钉钉账号自动填写"
+                value={draft.advisor}
+                onChange={() => undefined}
+              />
+              <Form.Item
+                className="field"
+                label="部门"
+                required
+                validateStatus={fieldError("部门") || departmentError ? "error" : undefined}
+                help={fieldError("部门") || departmentError}
+              >
+                <Select
+                  aria-label="部门"
+                  disabled={!canEditForm}
+                  placeholder="请选择部门"
+                  value={draft.department.code || undefined}
+                  options={departments.map((item) => ({
+                    value: item.code,
+                    label: `${item.code} ${item.name}`
+                  }))}
+                  onChange={(code) => {
+                    const department = departments.find((item) => item.code === code);
+                    updateDraft({
+                      department: {
+                        code,
+                        name: department?.name || ""
+                      }
+                    });
+                  }}
+                />
+              </Form.Item>
               <Field required error={fieldError("车牌号码")} disabled={!canEditForm} label="车牌号码" value={draft.vehicle.plate} onChange={(value) => updateVehicle("plate", value)} />
               <Field required error={fieldError("VIN")} disabled={!canEditForm} label="VIN/底盘号" value={draft.vehicle.vin} onChange={(value) => updateVehicle("vin", value)} />
               <Field required error={fieldError("进厂里程")} disabled={!canEditForm} label="进厂里程" value={draft.vehicle.mileage} suffix="km" onChange={(value) => updateVehicle("mileage", value)} />
               <Field disabled={!canEditForm} label="车型" value={draft.vehicle.model} onChange={(value) => updateVehicle("model", value)} />
-              <Field disabled={!canEditForm} label="购车日期" value={draft.vehicle.purchaseDate} onChange={(value) => updateVehicle("purchaseDate", value)} />
-              <Field disabled={!canEditForm} label="预计交车时间" value={draft.estimatedDeliveryAt} onChange={(value) => updateDraft({ estimatedDeliveryAt: value })} />
               <Field required error={fieldError("车主名称")} disabled={!canEditForm} label="车主名称" value={draft.customer.name} onChange={(value) => updateCustomer("name", value)} />
               <Field disabled={!canEditForm} label="联系人" value={draft.customer.contact} onChange={(value) => updateCustomer("contact", value)} />
               <Field required error={fieldError("联系电话")} disabled={!canEditForm} label="联系电话" value={draft.customer.phone} onChange={(value) => updateCustomer("phone", value)} />

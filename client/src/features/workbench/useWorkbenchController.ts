@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   DashboardSummary,
   DevelopmentPersonaKey,
+  LegacyDepartment,
   RoleKey,
   UserProfile,
   WorkOrder
@@ -29,6 +30,8 @@ export function useWorkbenchController() {
   const [dashboard, setDashboard] = useState<DashboardSummary>();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [currentUser, setCurrentUser] = useState<UserProfile>();
+  const [departments, setDepartments] = useState<LegacyDepartment[]>([]);
+  const [departmentError, setDepartmentError] = useState("");
   const [actionLoading, setActionLoading] = useState<"save" | "signature" | "sync" | "">("");
   const [devLoginLoading, setDevLoginLoading] = useState(false);
 
@@ -79,11 +82,14 @@ export function useWorkbenchController() {
       setOrders([]);
       setDashboard(undefined);
       setUsers([]);
+      setDepartments([]);
+      setDepartmentError("");
       return;
     }
     void loadOrders(currentUser.role);
     void loadDashboard(currentUser.role);
     void workOrderApi.users().then(setUsers).catch(() => setUsers([]));
+    void loadDepartments();
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -103,12 +109,12 @@ export function useWorkbenchController() {
         selectOrder(nextSelected);
       } else {
         setSelectedId(null);
-        resetDraft();
+        resetDraft(undefined, currentUser?.name || "");
       }
     } catch (error) {
       setOrders([]);
       setSelectedId(null);
-      resetDraft();
+      resetDraft(undefined, currentUser?.name || "");
       setApiError(error instanceof Error ? error.message : "后端 API 暂时不可用");
     }
   }
@@ -118,6 +124,31 @@ export function useWorkbenchController() {
       setDashboard(await workOrderApi.dashboard(nextRole));
     } catch {
       setDashboard(undefined);
+    }
+  }
+
+  async function loadDepartments() {
+    try {
+      setDepartmentError("");
+      const next = await workOrderApi.departments();
+      setDepartments(next);
+      const defaultDepartment = next.find((item) => item.isDefault) || next[0];
+      if (defaultDepartment) {
+        setDraft((current) =>
+          current.department?.code
+            ? current
+            : {
+                ...current,
+                department: {
+                  code: defaultDepartment.code,
+                  name: defaultDepartment.name
+                }
+              }
+        );
+      }
+    } catch (error) {
+      setDepartments([]);
+      setDepartmentError(actionError(error, "部门加载失败"));
     }
   }
 
@@ -153,6 +184,7 @@ export function useWorkbenchController() {
     const nextRole = user.role === "manager" ? "manager" : "advisor";
     setRole(nextRole);
     setActiveNav(user.homeRoute === "order-create" ? "委托开单" : "工作台");
+    setDraft((current) => ({ ...current, advisor: user.name }));
   }
 
   async function loginForDevelopment(persona: DevelopmentPersonaKey) {
@@ -186,7 +218,7 @@ export function useWorkbenchController() {
 
   function startNewOrder() {
     setSelectedId(null);
-    resetDraft();
+    resetDraft(undefined, currentUser?.name || "");
     setFormErrors([]);
     resetOcr();
     resetVehicleIdentityRecognition();
@@ -350,6 +382,8 @@ export function useWorkbenchController() {
     dashboard,
     users,
     currentUser,
+    departments,
+    departmentError,
     actionLoading,
     devLoginLoading,
     selectedOrder,

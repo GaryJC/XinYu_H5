@@ -6,6 +6,7 @@ import {
   DingTalkIdentitySnapshot,
   DingTalkMappings,
   DingTalkRoleMapping,
+  LegacyDepartment,
   OcrFieldKey,
   OcrRecord,
   RoleKey,
@@ -44,6 +45,7 @@ export type WorkOrderApi = {
   createSettlement(id: string, actor: string): Promise<WorkOrder>;
   dashboard(role: RoleKey): Promise<DashboardSummary>;
   users(): Promise<UserProfile[]>;
+  departments(): Promise<LegacyDepartment[]>;
   dingTalkMappings(): Promise<DingTalkMappings>;
   dingTalkIdentity(): Promise<DingTalkIdentitySnapshot | undefined>;
   saveDingTalkRoleMapping(mapping: DingTalkRoleMapping): Promise<DingTalkRoleMapping>;
@@ -130,6 +132,9 @@ export const workOrderApi: WorkOrderApi = {
   },
   users() {
     return request("/api/users");
+  },
+  departments() {
+    return request("/api/company-system/departments");
   },
   dingTalkMappings() {
     return request("/api/admin/dingtalk-mappings");

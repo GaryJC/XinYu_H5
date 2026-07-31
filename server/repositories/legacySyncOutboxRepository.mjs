@@ -72,6 +72,10 @@ export function buildLegacySyncPayload({ eventId, revision, eventType, order }) 
         phone: order.shop?.phone || ""
       },
       advisor: order.advisor || "",
+      department: {
+        code: order.department?.code || "",
+        name: order.department?.name || ""
+      },
       technician: order.technician || "",
       inspector: order.inspector || "",
       vehicle: {

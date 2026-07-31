@@ -3,7 +3,9 @@ export function workOrderValues(order) {
   return [
     order.id,
     order.status,
-    order.advisor || "林佳",
+    order.advisor || "",
+    order.department?.code || "",
+    order.department?.name || "",
     order.technician || "待派工",
     order.inspector || "待检验",
     order.dispatchNo || "",
@@ -47,6 +49,10 @@ export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecord
       name: row.shop_name || "上海虹桥店",
       address: row.shop_id === "shop-hq" ? "抚顺路店" : row.shop_address || "抚顺路店",
       phone: row.shop_phone || "021-6000-8618"
+    },
+    department: {
+      code: row.department_code || "",
+      name: row.department_name || ""
     },
     advisor: row.advisor,
     technician: row.technician,
@@ -167,6 +173,7 @@ export function createOrderFromDraft(draft) {
       address: "抚顺路店",
       phone: "021-6000-8618"
     },
+    department: draft.department || { code: "", name: "" },
     id: createOrderId(),
     createdAt: at,
     updatedAt: at,

@@ -5,8 +5,8 @@ import { createEmptyDraft } from "../domain/workOrderDomain";
 export function useWorkOrderDraft() {
   const [draft, setDraft] = useState<WorkOrderDraft>(() => createEmptyDraft());
 
-  function resetDraft(order?: WorkOrder) {
-    setDraft(order ? orderToDraft(order) : createEmptyDraft());
+  function resetDraft(order?: WorkOrder, advisor = "") {
+    setDraft(order ? orderToDraft(order) : createEmptyDraft(advisor));
   }
 
   function updateDraft(patch: Partial<WorkOrderDraft>) {

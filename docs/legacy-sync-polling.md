@@ -29,6 +29,11 @@ from claim_legacy_sync_events('runfeng-production', 20);
 - `legacy_reid`、`legacy_document_no`、`legacy_dispatch_no`：已有旧系统关联，
   更新事件应优先使用这些字段定位旧记录。
 
+字段映射：
+
+- `payload.order.department.code` → `qxwxb.bm`
+- `payload.order.advisor` → `qxwxb.jcr`
+
 领取使用 `FOR UPDATE SKIP LOCKED`，支持多个消费者并行工作。消费者崩溃后，
 管理员可以将长时间处于 `processing` 的事件标记为失败或重新入队。
 

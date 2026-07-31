@@ -67,6 +67,12 @@ export type ShopProfile = {
   phone: string;
 };
 
+export type LegacyDepartment = {
+  code: string;
+  name: string;
+  isDefault: boolean;
+};
+
 export type UserProfile = {
   id: string;
   name: string;
@@ -201,6 +207,10 @@ export type WorkOrder = {
   createdAt: string;
   updatedAt: string;
   shop: ShopProfile;
+  department: {
+    code: string;
+    name: string;
+  };
   advisor: string;
   technician: string;
   inspector: string;

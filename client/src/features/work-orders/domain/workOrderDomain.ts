@@ -41,14 +41,15 @@ export function makeAudit(actor: string, action: string): AuditLogEntry {
   return { at: new Date().toLocaleString("zh-CN", { hour12: false }), actor, action };
 }
 
-export function createEmptyDraft(): WorkOrderDraft {
+export function createEmptyDraft(advisor = ""): WorkOrderDraft {
   const today = new Date().toISOString().slice(0, 10);
   return {
     dispatchNo: "",
     arrivalDate: today,
     status: "草稿",
     shop: shopProfile,
-    advisor: "林佳",
+    department: { code: "", name: "" },
+    advisor,
     technician: "待派工",
     inspector: "待检验",
     vehicle: {
@@ -217,6 +218,7 @@ export function sumLabor(items: RepairItem[]) {
 
 export function validateWorkOrderDraft(draft: WorkOrderDraft) {
   const errors: string[] = [];
+  if (!draft.department.code.trim() || !draft.department.name.trim()) errors.push("部门必填");
   if (!draft.vehicle.plate.trim()) errors.push("车牌号码必填");
   if (!/^[A-Z0-9]{17}$/i.test(draft.vehicle.vin.trim())) errors.push("VIN 必须为 17 位字母数字");
   if (!/^\d+(\.\d+)?$/.test(draft.vehicle.mileage.trim())) errors.push("进厂里程必须为数字");

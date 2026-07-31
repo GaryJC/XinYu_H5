@@ -33,6 +33,7 @@ import { validateDepartmentMapping, validateRoleMapping } from "../integrations/
 import { HttpError } from "../http/HttpError.mjs";
 import { readStoredFile, saveUploadedFile } from "../storage.mjs";
 import { requireAnyRole, requireAuthenticatedUser, requireTransitionRole } from "../domain/accessPolicy.mjs";
+import { listLegacyDepartments } from "../repositories/legacyDepartmentRepository.mjs";
 
 export async function handleApiRequest(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/health") {
@@ -67,6 +68,12 @@ export async function handleApiRequest(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/users") {
     sendJson(res, 200, await listUsers());
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/company-system/departments") {
+    requireAnyRole(currentUser, ["advisor", "manager"]);
+    sendJson(res, 200, await listLegacyDepartments());
     return true;
   }
 
