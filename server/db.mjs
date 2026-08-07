@@ -67,7 +67,7 @@ export async function createWorkOrder(draft, actor) {
 
 export async function updateWorkOrder(order, actor, action) {
   return transaction(async (client) => {
-    const existing = await findWorkOrderById(client, order.id);
+    const existing = await findWorkOrderById(client, order.id, true);
     if (!existing) throw new HttpError(404, "委托单不存在");
     assertDraftEditable(existing.status);
     const next = {
@@ -86,7 +86,7 @@ export async function updateWorkOrder(order, actor, action) {
 
 export async function transitionWorkOrder(id, status, actor, action, patch = {}) {
   return transaction(async (client) => {
-    const order = await findWorkOrderById(client, id);
+    const order = await findWorkOrderById(client, id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
     assertStatusTransition(order.status, status);
     const next = { ...order, ...patch, advisor: order.advisor, status, updatedAt: nowString() };
@@ -98,7 +98,7 @@ export async function transitionWorkOrder(id, status, actor, action, patch = {})
 
 export async function createSignatureTokenForOrder(id, actor) {
   return transaction(async (client) => {
-    const order = await findWorkOrderById(client, id);
+    const order = await findWorkOrderById(client, id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
     if (order.status !== "草稿") throw new HttpError(409, `当前状态“${order.status}”不能发起签字`);
     validateOrderForSignature(order);
@@ -161,7 +161,7 @@ export async function signWorkOrderByToken(token, signature, signatureFileId) {
     if (!tokenRow) throw new HttpError(404, "签字链接不存在或已失效");
     if (tokenRow.used) throw new HttpError(409, "签字链接已使用");
 
-    const order = await findWorkOrderById(client, tokenRow.order_id);
+    const order = await findWorkOrderById(client, tokenRow.order_id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
     if (!signatureFileId) throw new HttpError(400, "请完成手写签名");
     const signatureFile = await client.query(
@@ -219,7 +219,7 @@ export async function confirmOcrRecord(id, value, actor) {
 
 export async function syncWorkOrderToPlatform(id, actor) {
   return transaction(async (client) => {
-    const order = await findWorkOrderById(client, id);
+    const order = await findWorkOrderById(client, id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
     assertPlatformSyncAllowed(order);
     const platformOrderNo = order.platformOrderNo || createId("PLAT");
@@ -266,7 +266,7 @@ function validateOrderForSignature(order) {
 
 export async function repairItemAction(orderId, itemId, action, actor, patch = {}) {
   return transaction(async (client) => {
-    const order = await findWorkOrderById(client, orderId);
+    const order = await findWorkOrderById(client, orderId, true);
     if (!order) throw new HttpError(404, "委托单不存在");
     const targetItem = order.repairItems.find((item) => Number(item.id) === Number(itemId));
     assertRepairItemAction(targetItem, action);
@@ -291,7 +291,7 @@ export async function repairItemAction(orderId, itemId, action, actor, patch = {
 
 export async function createSettlementForOrder(orderId, actor) {
   return transaction(async (client) => {
-    const order = await findWorkOrderById(client, orderId);
+    const order = await findWorkOrderById(client, orderId, true);
     if (!order) throw new HttpError(404, "委托单不存在");
     assertSettlementAllowed(order.status);
     const amount = Number(order.settlementAmount || order.estimatedFee || order.repairItems.reduce((sum, item) => sum + Number(item.laborFee || 0), 0));
@@ -469,7 +469,7 @@ export async function dashboardSummary(role = "manager", user) {
   };
 }
 
-async function findWorkOrderById(client, id) {
+async function findWorkOrderById(client, id, forUpdate = false) {
   const { rows } = await client.query(
     `
       select wo.*, st.token as signature_token, st.used as signature_token_used
@@ -482,6 +482,7 @@ async function findWorkOrderById(client, id) {
         limit 1
       ) st on true
       where wo.id = $1
+      ${forUpdate ? "for update of wo" : ""}
     `,
     [id]
   );

@@ -10,24 +10,8 @@ try {
   await client.connect();
   await client.query("begin");
   transactionStarted = true;
-
-  const roleResult = await client.query(
-    "select exists (select 1 from pg_roles where rolname = 'runfeng_sync') as exists"
-  );
-  const createdTemporaryRole = !roleResult.rows[0].exists;
-  if (createdTemporaryRole) {
-    const currentUserResult = await client.query("select current_user as name");
-    const quotedCurrentUser = `"${currentUserResult.rows[0].name.replaceAll('"', '""')}"`;
-    await client.query("create role runfeng_sync");
-    await client.query(`grant runfeng_sync to ${quotedCurrentUser}`);
-    await client.query("grant usage on schema public to runfeng_sync");
-    await client.query(
-      "grant execute on function acknowledge_legacy_sync_events(text, jsonb) to runfeng_sync"
-    );
-    await client.query(
-      "grant execute on function fail_legacy_sync_events(text, jsonb) to runfeng_sync"
-    );
-  }
+  const currentUserResult = await client.query("select current_user as name");
+  const currentUser = currentUserResult.rows[0].name;
 
   const ordersResult = await client.query(`
     select id
@@ -79,21 +63,14 @@ try {
     retry_after_seconds: 60 + index * 60
   }));
 
-  await client.query("set local role runfeng_sync");
-  let acknowledgedResult;
-  let failedResult;
-  try {
-    acknowledgedResult = await client.query(
-      "select * from acknowledge_legacy_sync_events($1, $2::jsonb)",
-      [consumerId, JSON.stringify(acknowledgements)]
-    );
-    failedResult = await client.query(
-      "select * from fail_legacy_sync_events($1, $2::jsonb)",
-      [consumerId, JSON.stringify(failures)]
-    );
-  } finally {
-    await client.query("reset role");
-  }
+  const acknowledgedResult = await client.query(
+    "select * from acknowledge_legacy_sync_events($1, $2::jsonb)",
+    [consumerId, JSON.stringify(acknowledgements)]
+  );
+  const failedResult = await client.query(
+    "select * from fail_legacy_sync_events($1, $2::jsonb)",
+    [consumerId, JSON.stringify(failures)]
+  );
 
   assert.deepEqual(
     acknowledgedResult.rows,
@@ -136,8 +113,7 @@ try {
     acknowledged: acknowledgedResult.rows,
     failed: failedResult.rows,
     databaseState: persistedResult.rows,
-    executedAs: "runfeng_sync",
-    roleSetup: createdTemporaryRole ? "created inside test transaction" : "existing database role",
+    executedAs: currentUser,
     cleanup: "transaction rolled back"
   }, null, 2));
 } finally {

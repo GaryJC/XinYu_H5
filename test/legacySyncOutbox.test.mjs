@@ -120,42 +120,6 @@ test("outbox migration provides ordered claiming and ACK backfill", async () => 
   assert.match(migration, /dispatch_no = coalesce\(nullif\(new\.legacy_dispatch_no/i);
 });
 
-test("Runfeng role receives read access only to polling-safe outbox columns", async () => {
-  const migration = await readFile(
-    new URL("../supabase/migrations/202608070001_runfeng_outbox_read_access.sql", import.meta.url),
-    "utf8"
-  );
-
-  assert.match(migration, /rolname = 'runfeng_sync'/i);
-  assert.match(migration, /grant select \([\s\S]*event_id[\s\S]*payload[\s\S]*status[\s\S]*\) on table public\.legacy_sync_outbox to runfeng_sync/i);
-  assert.doesNotMatch(migration, /grant (all|update|insert|delete)/i);
-});
-
-test("Runfeng role receives full-table read access without write access", async () => {
-  const migration = await readFile(
-    new URL("../supabase/migrations/202608070003_runfeng_outbox_full_read_access.sql", import.meta.url),
-    "utf8"
-  );
-
-  assert.match(migration, /rolname = 'runfeng_sync'/i);
-  assert.match(migration, /grant select on table public\.legacy_sync_outbox to runfeng_sync/i);
-  assert.doesNotMatch(migration, /grant (all|update|insert|delete)/i);
-});
-
-test("Runfeng role receives temporary full DML access to the outbox", async () => {
-  const migration = await readFile(
-    new URL("../supabase/migrations/202608070004_runfeng_outbox_write_access.sql", import.meta.url),
-    "utf8"
-  );
-
-  assert.match(migration, /rolname = 'runfeng_sync'/i);
-  assert.match(
-    migration,
-    /grant select, insert, update, delete[\s\S]*on table public\.legacy_sync_outbox[\s\S]*to runfeng_sync/i
-  );
-  assert.doesNotMatch(migration, /grant all/i);
-});
-
 test("batch result migration ACKs and fails up to 100 claimed events", async () => {
   const migration = await readFile(
     new URL("../supabase/migrations/202608070002_batch_legacy_sync_results.sql", import.meta.url),
@@ -170,6 +134,4 @@ test("batch result migration ACKs and fails up to 100 claimed events", async () 
   assert.match(migration, /event\.locked_by = btrim\(consumer_id\)/i);
   assert.match(migration, /returns table\(event_id text, acknowledged boolean\)/i);
   assert.match(migration, /returns table\(event_id text, failed boolean\)/i);
-  assert.match(migration, /grant execute on function acknowledge_legacy_sync_events\(text, jsonb\) to runfeng_sync/i);
-  assert.match(migration, /grant execute on function fail_legacy_sync_events\(text, jsonb\) to runfeng_sync/i);
 });

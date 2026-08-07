@@ -56,6 +56,10 @@ async function putObject(objectKey, buffer, mimeType) {
     return { provider: "oss", bucket, objectKey };
   }
 
+  if (process.env.APP_ENV === "production") {
+    throw new HttpError(500, "生产环境未配置 OSS_BUCKET，已拒绝写入本地文件系统");
+  }
+
   const uploadRoot = path.resolve("server/data/uploads");
   const target = path.join(uploadRoot, objectKey);
   await fs.mkdir(path.dirname(target), { recursive: true });

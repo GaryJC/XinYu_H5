@@ -131,23 +131,24 @@ order by created_at;
 原有的 `acknowledge_legacy_sync_event(...)` 和 `fail_legacy_sync_event(...)` 保留，
 适用于单笔调试。生产轮询建议使用批量接口，避免每条接车信息单独往返 PostgreSQL。
 
-## 最小权限
+## 数据库权限
 
-不要向润丰开放 `work_orders`、用户、签名或文件表，也不要提供 PostgreSQL 管理员账号。
-创建专用登录账号后，联调期间授权同步队列整表读写权限和批量同步函数：
+数据库登录账号由部署环境单独管理，应用不依赖固定的 PostgreSQL 角色名。联调期间，
+可由管理员向实际使用的同步登录账号授权同步队列读写权限和批量同步函数。下面用
+`your_sync_login` 代表该账号：
 
 ```sql
-grant connect on database your_database to runfeng_sync;
-grant usage on schema public to runfeng_sync;
+grant connect on database your_database to your_sync_login;
+grant usage on schema public to your_sync_login;
 
-grant select, insert, update, delete on table legacy_sync_outbox to runfeng_sync;
+grant select, insert, update, delete on table legacy_sync_outbox to your_sync_login;
 
 grant execute on function claim_legacy_sync_events(text, integer)
-  to runfeng_sync;
+  to your_sync_login;
 grant execute on function acknowledge_legacy_sync_events(text, jsonb)
-  to runfeng_sync;
+  to your_sync_login;
 grant execute on function fail_legacy_sync_events(text, jsonb)
-  to runfeng_sync;
+  to your_sync_login;
 ```
 
 `retry_legacy_sync_event` 建议只授权给新系统管理员。

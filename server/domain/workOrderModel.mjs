@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 export function workOrderValues(order) {
   const inspection = order.inspection || { belongings: [], fuelLevel: "1/2", exteriorIssues: [] };
   return [
@@ -181,9 +183,9 @@ export function createOrderFromDraft(draft) {
   };
 }
 
-function createOrderId() {
+export function createOrderId() {
   const stamp = new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  return `WT-${stamp}-${Math.floor(100 + Math.random() * 900)}`;
+  return `WT-${stamp}-${randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
 }
 
 export function createSignatureToken(orderId) {

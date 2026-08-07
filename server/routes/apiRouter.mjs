@@ -136,6 +136,7 @@ export async function handleApiRequest(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/files") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     const body = await readJson(req);
+    if (body.orderId) await assertWorkOrderAccess(body.orderId, currentUser);
     sendJson(res, 201, await saveUploadedFile({ ...body, uploadedBy: currentUser.id }));
     return true;
   }

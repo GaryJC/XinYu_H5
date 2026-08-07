@@ -3,7 +3,7 @@ import { pool } from "../database/pool.mjs";
 
 export async function listUsers() {
   const { rows } = await pool.query(
-    "select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at from users order by role, name"
+    "select id, name, role, active, shop_id from users order by role, name"
   );
   return rows.map(rowToUser);
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildTrend, countBy, repairActionText } from "../server/domain/workOrderModel.mjs";
+import { buildTrend, countBy, createOrderId, repairActionText } from "../server/domain/workOrderModel.mjs";
 
 test("countBy aggregates values without database state", () => {
   const result = countBy(
@@ -25,4 +25,10 @@ test("buildTrend sorts daily work-order counts", () => {
 test("repair actions have stable audit labels", () => {
   assert.equal(repairActionText("inspect"), "维修项目检验通过");
   assert.equal(repairActionText("unknown"), "更新维修项目");
+});
+
+test("work order IDs remain unique beyond the former daily 900-value range", () => {
+  const ids = Array.from({ length: 1_000 }, () => createOrderId());
+  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(ids.every((id) => /^WT-\d{8}-[0-9A-F]{12}$/.test(id)));
 });

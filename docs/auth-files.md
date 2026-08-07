@@ -43,7 +43,7 @@ VITE_DINGTALK_CLIENT_ID=
 
 1. 前端拍照或选择图片。
 2. 前端调用 `POST /api/files` 上传图片。
-3. 后端配置了 `OSS_BUCKET` 时上传 OSS；未配置时写入 `server/data/uploads` 作为本地开发模式。
+3. 后端配置了 `OSS_BUCKET` 时上传 OSS；仅非生产环境未配置时写入 `server/data/uploads` 作为本地开发模式。生产环境缺少 `OSS_BUCKET` 会直接拒绝上传。
 4. 数据库 `files` 表只保存文件元数据，不保存图片二进制。
 5. 行驶证 OCR 会把 OCR 记录关联到上传后的 `fileId`。
 
