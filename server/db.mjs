@@ -58,7 +58,8 @@ export async function createWorkOrder(draft, actor) {
       ...createOrderFromDraft(draft),
       dispatchNo: ""
     };
-    await upsertWorkOrder(client, order, { legacyEventType: "created" });
+    await upsertWorkOrder(client, order);
+    await enqueueLegacySyncEvent(client, order, "created");
     await addAudit(client, order.id, actor, "创建委托单草稿并进入润丰同步队列");
     return findWorkOrderById(client, order.id);
   });
@@ -595,7 +596,7 @@ async function hydrateOrders(rows, client = pool) {
   );
 }
 
-async function upsertWorkOrder(client, order, { legacyEventType = "updated" } = {}) {
+async function upsertWorkOrder(client, order) {
   await client.query(
     `
       insert into work_orders (
@@ -652,7 +653,6 @@ async function upsertWorkOrder(client, order, { legacyEventType = "updated" } = 
 
   await replaceRepairItems(client, order.id, order.repairItems || []);
   await replaceSignatures(client, order.id, order.signatures || {});
-  await enqueueLegacySyncEvent(client, order, legacyEventType);
 }
 
 async function replaceRepairItems(client, orderId, items) {
