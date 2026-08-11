@@ -100,7 +100,15 @@ function IdentifierScanner({ kind, title, hint, disabled, state, onScan }: {
         <span>{state.value ? `${state.status}：${state.value}` : `${state.status} · ${hint}`}</span>
         {state.error ? <em>{state.error}</em> : null}
       </div>
-      <ImageSourcePicker disabled={disabled} loading={scanning} label={title} onSelect={(file) => onScan(kind, file)} />
+      <ImageSourcePicker
+        emphasized
+        disabled={disabled}
+        loading={scanning}
+        label={title}
+        primaryActionLabel={`拍照${title}`}
+        galleryActionLabel="从相册选择"
+        onSelect={(file) => onScan(kind, file)}
+      />
     </div>
   );
 }

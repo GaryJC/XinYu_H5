@@ -2,7 +2,7 @@ import { type PointerEvent, useEffect, useRef } from "react";
 import { Button } from "antd";
 import { Eraser } from "lucide-react";
 
-export function SignaturePad({ disabled, onChange }: { disabled?: boolean; onChange: (imageDataUrl: string) => void }) {
+export function SignaturePad({ disabled, value, onChange }: { disabled?: boolean; value?: string; onChange: (imageDataUrl: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
 
@@ -21,8 +21,13 @@ export function SignaturePad({ disabled, onChange }: { disabled?: boolean; onCha
       context.lineCap = "round";
       context.lineJoin = "round";
       context.strokeStyle = "#141414";
+      if (value) {
+        const image = new Image();
+        image.onload = () => context.drawImage(image, 0, 0, width, height);
+        image.src = value;
+      }
     }
-  }, []);
+  }, [value]);
 
   function point(event: PointerEvent<HTMLCanvasElement>) {
     const rect = event.currentTarget.getBoundingClientRect();

@@ -62,6 +62,8 @@ body { margin: 0; background: #f5f5f5; }
 .file-button input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .file-button input[type="file"]:disabled { cursor: not-allowed; }
 .image-source-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.image-source-buttons.emphasized .file-button:first-child .ant-btn { min-width: 176px; font-weight: 600; box-shadow: 0 4px 12px rgba(22, 119, 255, .22); }
+.ocr-confirm-button { min-width: 156px; font-weight: 600; }
 .vehicle-identity-section { display: grid; gap: 12px; padding: 16px; margin-bottom: 18px; border: 1px solid #d9d9d9; border-radius: 8px; background: #fafafa; }
 .vehicle-identity-heading { display: grid; gap: 3px; }
 .vehicle-identity-heading > span, .identifier-scanner > div > span { color: rgba(0, 0, 0, .45); font-size: 13px; }
@@ -153,6 +155,7 @@ body { margin: 0; background: #f5f5f5; }
 .workflow-actions { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px; margin-top: 8px; border: 1px solid #d9d9d9; border-radius: 8px; background: #fafafa; }
 .workflow-actions > div:first-child > strong, .workflow-actions > div:first-child > span { display: block; }
 .workflow-actions > div:first-child > span { margin-top: 4px; color: rgba(0, 0, 0, .45); font-size: 13px; }
+.signature-validation-summary { margin-top: 12px; max-width: 640px; }
 .workflow-action-buttons { display: flex; align-items: center; gap: 10px; }
 .signature-page { min-height: 100vh; display: grid; place-items: start center; padding: 32px 16px; }
 .signature-panel { width: min(760px, 100%); }
@@ -167,6 +170,13 @@ body { margin: 0; background: #f5f5f5; }
 .signature-pad-wrap { padding: 10px; border: 1px dashed #91caff; border-radius: 6px; background: #fff; }
 .signature-canvas { display: block; width: 100%; height: 180px; border-radius: 4px; background: #fafafa; cursor: crosshair; touch-action: none; }
 .signature-pad-wrap .ant-btn { display: flex; margin: 6px 0 0 auto; }
+.signature-field-label { display: inline-flex; align-items: center; gap: 8px; }
+.signature-landscape-overlay { position: fixed; inset: 0; z-index: 3000; display: flex; flex-direction: column; gap: 12px; padding: 14px; background: #f5f5f5; }
+.signature-landscape-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.signature-landscape-header strong, .signature-landscape-header span { display: block; }
+.signature-landscape-header span { margin-top: 2px; color: rgba(0, 0, 0, .55); font-size: 13px; }
+.signature-landscape-overlay .signature-pad-wrap { min-height: 0; display: flex; flex: 1; flex-direction: column; }
+.signature-landscape-overlay .signature-canvas { min-height: 0; flex: 1; height: auto; }
 .full-width { width: 100%; }
 
 @media (max-width: 1100px) {
@@ -175,6 +185,12 @@ body { margin: 0; background: #f5f5f5; }
 }
 
 @media (max-width: 760px) {
+  .ant-input,
+  .ant-input-affix-wrapper input.ant-input,
+  .ant-select-selection-search-input,
+  .ant-picker-input > input,
+  textarea.ant-input,
+  input[type="search"] { font-size: 16px !important; }
   .main { width: 100%; padding: 12px; }
   .topbar { align-items: flex-start; margin-bottom: 12px; }
   .topbar h1 { font-size: 19px; line-height: 1.25; }
@@ -197,6 +213,8 @@ body { margin: 0; background: #f5f5f5; }
   .panel-header .button-row { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
   .panel-header .button-row > .ant-btn, .panel-header .button-row > span, .panel-header .button-row > span .ant-btn { width: 100%; }
   .ocr-strip .button-row { justify-content: flex-start; }
+  .vehicle-license-ocr .button-row, .vehicle-license-ocr .image-source-buttons { display: grid; grid-template-columns: 1fr; width: 100%; }
+  .vehicle-license-ocr .file-button, .vehicle-license-ocr .file-button .ant-btn { width: 100%; }
   .field-grid, .check-section, .dashboard-grid, .summary-grid, .item-action-grid, .side-panel { grid-template-columns: 1fr; }
   .vehicle-identity-grid { grid-template-columns: 1fr; }
   .vehicle-test-lookup { grid-template-columns: 1fr; }
@@ -249,4 +267,13 @@ body { margin: 0; background: #f5f5f5; }
   .workflow-actions { align-items: stretch; flex-direction: column; padding: 14px; }
   .workflow-action-buttons { display: grid; grid-template-columns: 1fr 1fr; }
   .workflow-action-buttons > .ant-btn, .workflow-action-buttons > span, .workflow-action-buttons > span .ant-btn { width: 100%; }
+}
+
+@media (max-width: 760px) and (orientation: portrait) {
+  .signature-landscape-overlay {
+    width: 100vh;
+    height: 100vw;
+    transform: rotate(90deg) translateY(-100%);
+    transform-origin: top left;
+  }
 }

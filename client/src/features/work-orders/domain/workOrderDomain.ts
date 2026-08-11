@@ -95,7 +95,6 @@ export function validateWorkOrderDraft(draft: WorkOrderDraft) {
   if (!/^\d+(\.\d+)?$/.test(draft.vehicle.mileage.trim())) errors.push("进厂里程必须为数字");
   if (!draft.customer.name.trim()) errors.push("车主名称必填");
   if (!draft.customer.phone.trim()) errors.push("联系电话必填");
-  if (!draft.faultDescription.trim()) errors.push("故障描述必填");
   if (!draft.repairItems.length || draft.repairItems.some((item) => !item.name.trim())) errors.push("维修项目不能为空");
   return errors;
 }

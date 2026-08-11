@@ -1,4 +1,5 @@
 import { Button, Flex } from "antd";
+import { CircleCheckBig } from "lucide-react";
 import { OcrFieldState, VehicleLicenseOcrResult } from "../../../../shared/types";
 import { ImageSourcePicker } from "../../shared/ui/ImageSourcePicker";
 import { normalizeOcrDate } from "./ocrUtils";
@@ -41,8 +42,25 @@ export function VehicleLicenseOcrControl({ state, result, disabled, onScan, onCo
         ) : null}
       </div>
       <Flex className="button-row" gap={8} wrap="wrap">
-        <ImageSourcePicker disabled={disabled} loading={state.status === "识别中"} label="识别行驶证照片" onSelect={onScan} />
-        <Button type="link" onClick={onConfirm} disabled={disabled || state.status !== "待确认"}>确认</Button>
+        <ImageSourcePicker
+          emphasized
+          disabled={disabled}
+          loading={state.status === "识别中"}
+          label="识别行驶证照片"
+          primaryActionLabel="拍照扫描行驶证"
+          galleryActionLabel="从相册选择"
+          onSelect={onScan}
+        />
+        <Button
+          className="ocr-confirm-button"
+          type="primary"
+          size="large"
+          icon={<CircleCheckBig size={17} />}
+          onClick={onConfirm}
+          disabled={disabled || state.status !== "待确认"}
+        >
+          {state.status === "已确认" ? "识别结果已确认" : "确认识别结果"}
+        </Button>
       </Flex>
     </div>
   );

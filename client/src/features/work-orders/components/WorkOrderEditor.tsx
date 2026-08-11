@@ -1,7 +1,7 @@
-import { FileSignature, LockKeyhole, Plus, RefreshCcw, Save, Send, Trash2 } from "lucide-react";
+import { FileSignature, LockKeyhole, Maximize2, Minimize2, Plus, RefreshCcw, Save, Send, Trash2 } from "lucide-react";
 import { Alert, Button, Card, DatePicker, Form, Grid, Input, Modal, Select, Tooltip } from "antd";
 import dayjs from "dayjs";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { WorkOrder, WorkOrderDraft } from "../../../../../shared/types";
 import { canCreateOrder, canSendSignature } from "../domain/permissions";
 import { Checklist, Field, TextArea } from "../../../shared/ui/FormControls";
@@ -20,6 +20,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const [signatureImage, setSignatureImage] = useState("");
   const [signatureSubmitting, setSignatureSubmitting] = useState(false);
   const [signatureResult, setSignatureResult] = useState("");
+  const [landscapeSignature, setLandscapeSignature] = useState(false);
+  const [showSignatureValidation, setShowSignatureValidation] = useState(false);
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
   const {
@@ -33,11 +35,20 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   } = controller;
   const canSyncPlatform = Boolean(selectedOrder && !selectedOrder.platformOrderNo && !["草稿", "待客户签字"].includes(selectedOrder.status) && (role === "advisor" || role === "manager"));
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
-  const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "行驶证", "故障描述"].some((phrase) => error.includes(phrase)));
+  const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "行驶证"].some((phrase) => error.includes(phrase)));
   const canResumeSignature = Boolean(selectedOrder?.status === "待客户签字" && selectedOrder.signatureToken && !selectedOrder.signatureTokenUsed);
   const signatureDisabled = !canResumeSignature && (!canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder)));
   const signatureDisabledReason = selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) ? `当前状态“${selectedOrder.status}”不能再次发起签字` : "";
   const signatureCompleted = signatureResult.includes("已保存");
+
+  useEffect(() => {
+    if (!landscapeSignature) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [landscapeSignature]);
 
   async function handleSendSignature() {
     if (canResumeSignature && selectedOrder?.signatureToken) {
@@ -48,10 +59,14 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     }
     const session = await sendSignature();
     if (session) {
+      setShowSignatureValidation(false);
       setSignatureImage("");
       setSignatureResult("");
       setSignatureSession(session);
+      return;
     }
+    setShowSignatureValidation(true);
+    scrollToFirstFormError();
   }
 
   async function handleCompleteSignature() {
@@ -70,6 +85,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   function closeSignatureModal() {
     if (signatureSubmitting) return;
     setSignatureSession(undefined);
+    setLandscapeSignature(false);
     setSignatureImage("");
     setSignatureResult("");
   }
@@ -83,8 +99,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 <p>先保存草稿，再由客户在弹窗内核对并签字；OCR 结果必须人工确认。</p>
               </div>
               <div className="button-row">
-                <Button icon={<Plus size={16} />} onClick={startNewOrder} disabled={!canCreateOrder(role)}>新建</Button>
-                <Button icon={<Save size={16} />} onClick={saveDraft} loading={actionLoading === "save"} disabled={!canEditForm}>保存草稿</Button>
+                <Button type="primary" size="large" icon={<Plus size={16} />} onClick={startNewOrder} disabled={!canCreateOrder(role)}>新建委托</Button>
+                <Button size="large" icon={<Save size={16} />} onClick={saveDraft} loading={actionLoading === "save"} disabled={!canEditForm}>保存草稿</Button>
               </div>
             </div>
 
@@ -250,7 +266,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             </div>
 
             <Field disabled={!canEditForm} label="车辆地址" value={draft.customer.address} onChange={(value) => updateCustomer("address", value)} />
-            <TextArea required error={fieldError("故障描述")} disabled={!canEditForm} label="故障描述 / 客户诉求" value={draft.faultDescription} onChange={(value) => updateDraft({ faultDescription: value })} />
+            <TextArea disabled={!canEditForm} label="故障描述 / 客户诉求" value={draft.faultDescription} onChange={(value) => updateDraft({ faultDescription: value })} />
 
             <div className="check-section">
               <Checklist disabled={!canEditForm} title="随车物品" items={belongings} selected={draft.inspection.belongings} onToggle={(value) => toggleArrayField("belongings", value)} />
@@ -322,6 +338,15 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               <div>
                 <strong>完成开单流程</strong>
                 <span>{canSyncPlatform ? "客户已签字，可以同步维修平台。" : "请先完成客户签字，再同步维修平台。"}</span>
+                {showSignatureValidation && formErrors.length ? (
+                  <Alert
+                    className="signature-validation-summary"
+                    type="error"
+                    showIcon
+                    title="暂时无法发起签字"
+                    description={formErrors.join("；")}
+                  />
+                ) : null}
               </div>
               <div className="workflow-action-buttons">
                 <Tooltip title={signatureDisabledReason}>
@@ -363,12 +388,44 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 <div className="public-items">
                   {signatureSession.order.repairItems.map((item) => <div key={item.id}><span>{item.name}</span><strong>¥{item.laborFee}</strong></div>)}
                 </div>
-                <Form.Item className="field" label="电子签名" required>
-                  <SignaturePad disabled={signatureSubmitting || signatureCompleted} onChange={setSignatureImage} />
+                <Form.Item
+                  className="field"
+                  label={(
+                    <span className="signature-field-label">
+                      电子签名
+                      <Button type="link" size="small" icon={<Maximize2 size={15} />} disabled={signatureSubmitting || signatureCompleted} onClick={() => setLandscapeSignature(true)}>横屏签字</Button>
+                    </span>
+                  )}
+                  required
+                >
+                  <SignaturePad value={signatureImage} disabled={signatureSubmitting || signatureCompleted} onChange={setSignatureImage} />
                 </Form.Item>
               </Form>
             ) : null}
           </Modal>
+          {landscapeSignature && signatureSession ? (
+            <div className="signature-landscape-overlay" role="dialog" aria-modal="true" aria-label="横屏签字">
+              <div className="signature-landscape-header">
+                <div>
+                  <strong>请客户横向签名</strong>
+                  <span>{signatureSession.order.vehicle.plate} · {signatureSession.order.customer.name}</span>
+                </div>
+                <Button icon={<Minimize2 size={16} />} onClick={() => setLandscapeSignature(false)}>完成横屏签字</Button>
+              </div>
+              <SignaturePad value={signatureImage} disabled={signatureSubmitting || signatureCompleted} onChange={setSignatureImage} />
+            </div>
+          ) : null}
           </Card>
   );
+}
+
+function scrollToFirstFormError() {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const firstError = document.querySelector<HTMLElement>(
+      ".form-panel .ant-form-item-has-error, .form-panel .ant-input-status-error"
+    );
+    if (!firstError) return;
+    firstError.scrollIntoView({ behavior: "smooth", block: "center" });
+    firstError.querySelector<HTMLElement>("input, textarea, [role='combobox']")?.focus({ preventScroll: true });
+  }));
 }
