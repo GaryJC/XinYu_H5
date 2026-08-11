@@ -13,12 +13,15 @@ const mockVehicles = [
 
 const mockModels = [
   { value: "大众 帕萨特 2023款", usageCount: 12 },
+  { value: "大众汽车 SVW7142BPV", usageCount: 6 },
   { value: "奥迪 A6", usageCount: 8 }
 ];
 
 const mockOrganizations = [
   { value: "个人", code: "GR", usageCount: 20 },
-  { value: "青岛地铁运营有限公司", code: "QDDTGSYXYYFGS", usageCount: 10 }
+  { value: "青岛地铁运营有限公司", code: "QDDTGSYXYYFGS", usageCount: 10 },
+  { value: "青岛水务集团有限公司", code: "QDSWJT", usageCount: 8 },
+  { value: "青岛水务发展有限公司", code: "QDSWFZ", usageCount: 5 }
 ];
 
 export async function lookupVehicleInCompanySystem({ plate, vin, model, owner } = {}) {
@@ -70,14 +73,38 @@ export async function lookupVehicleInCompanySystem({ plate, vin, model, owner } 
     references.model?.status === "matched" ? "已有车型" : "",
     references.organization?.status === "matched" ? "已有所属单位" : ""
   ].filter(Boolean);
+  const candidateParts = [
+    references.model?.status === "ambiguous" ? "车型" : "",
+    references.organization?.status === "ambiguous" ? "所属单位" : ""
+  ].filter(Boolean);
   return {
     found: false,
     status: "new",
     ...(Object.keys(references).length ? { references } : {}),
-    message: matchedParts.length
+    message: candidateParts.length
+      ? `公司系统中没有这辆车，请选择相关${candidateParts.join("和")}`
+      : matchedParts.length
       ? `公司系统中没有这辆车，已匹配并复用${matchedParts.join("和")}`
       : "公司系统中未查询到这辆车，可继续新建车辆档案"
   };
+}
+
+export async function searchCompanyVehicleReferences({ kind, query } = {}) {
+  if (kind !== "model" && kind !== "organization") {
+    throw new HttpError(400, "请选择车型或所属单位查询类型");
+  }
+  const normalizedQuery = normalizeReference(query);
+  if (normalizedQuery.length < 2) return { kind, query: typeof query === "string" ? query : "", candidates: [] };
+
+  const configured = hasSqlServerConfig();
+  const candidates = kind === "model"
+    ? configured
+      ? await findLegacyModelCandidates(normalizedQuery)
+      : findMockReferences(mockModels, normalizedQuery)
+    : configured
+      ? await findLegacyOrganizationCandidates(normalizedQuery)
+      : findMockReferences(mockOrganizations, normalizedQuery);
+  return { kind, query, candidates };
 }
 
 export function resolveVehicleCandidates(candidates, normalizedPlate, normalizedVin) {
@@ -97,9 +124,12 @@ export function resolveVehicleCandidates(candidates, normalizedPlate, normalized
 
 export function resolveReference(input, candidates, requireUniqueCode) {
   if (!candidates.length) return { input, status: "not_found", candidates: [] };
-  const uniqueCodes = new Set(candidates.map((item) => requireUniqueCode ? item.code : normalizeReference(item.value)));
-  if (uniqueCodes.size > 1) return { input, status: "ambiguous", candidates };
-  return { input, status: "matched", selected: candidates[0], candidates };
+  const normalizedInput = normalizeReference(input);
+  const exactCandidates = candidates.filter((item) => normalizeReference(item.value) === normalizedInput);
+  if (!exactCandidates.length) return { input, status: "ambiguous", candidates };
+  const uniqueCodes = new Set(exactCandidates.map((item) => requireUniqueCode ? item.code : normalizeReference(item.value)));
+  if (uniqueCodes.size > 1) return { input, status: "ambiguous", candidates: exactCandidates };
+  return { input, status: "matched", selected: exactCandidates[0], candidates: exactCandidates };
 }
 
 function findMockVehicles(normalizedPlate, normalizedVin) {
@@ -119,7 +149,17 @@ function findMockVehicles(normalizedPlate, normalizedVin) {
 }
 
 function findMockReferences(references, normalizedInput) {
-  return references.filter((item) => normalizeReference(item.value) === normalizedInput);
+  return references.filter((item) => fuzzyReferenceMatch(normalizeReference(item.value), normalizedInput));
+}
+
+function fuzzyReferenceMatch(candidate, input) {
+  let position = 0;
+  for (const character of Array.from(input)) {
+    const matchAt = candidate.indexOf(character, position);
+    if (matchAt < 0) return false;
+    position = matchAt + character.length;
+  }
+  return true;
 }
 
 function publicVehicle(vehicle) {

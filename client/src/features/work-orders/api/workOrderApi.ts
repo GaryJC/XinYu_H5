@@ -16,6 +16,8 @@ import {
   VehicleIdentifierOcrResult,
   VehicleLicenseOcrResult,
   VehicleLookupInput,
+  VehicleReferenceKind,
+  VehicleReferenceSearchResult,
   WorkOrder,
   WorkOrderDraft,
   WorkOrderStatus
@@ -37,6 +39,7 @@ export type WorkOrderApi = {
   recognizeLicensePlate(imageBase64: string): Promise<VehicleIdentifierOcrResult>;
   recognizeVin(imageBase64: string): Promise<VehicleIdentifierOcrResult>;
   lookupVehicle(identifier: VehicleLookupInput): Promise<VehicleHistoryLookupResult>;
+  searchVehicleReferences(kind: VehicleReferenceKind, query: string): Promise<VehicleReferenceSearchResult>;
   uploadFile(file: { orderId?: string; kind: StoredFile["kind"]; fileName: string; mimeType: string; imageBase64: string }): Promise<StoredFile>;
   attachFile(fileId: string, orderId: string): Promise<StoredFile>;
   createOcrRecord(orderId: string | undefined, field: OcrFieldKey, source: string, value: string, confidence: number, fileId: string): Promise<OcrRecord>;
@@ -103,6 +106,9 @@ export const workOrderApi: WorkOrderApi = {
   },
   lookupVehicle(identifier) {
     return request("/api/company-system/vehicles/lookup", { method: "POST", body: identifier });
+  },
+  searchVehicleReferences(kind, query) {
+    return request("/api/company-system/vehicle-references/search", { method: "POST", body: { kind, query } });
   },
   uploadFile(file) {
     return request("/api/files", { method: "POST", body: file });

@@ -105,6 +105,33 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
     await runVehicleLookup({ plate, vin, model: result.model, owner: result.owner });
   }
 
+  async function lookupVehicleLicenseForDevelopment(input: VehicleLookupInput) {
+    const plate = normalizeIdentifier(input.plate || "");
+    const vin = normalizeIdentifier(input.vin || "");
+    setIdentifierRecognition((current) => ({
+      plate: plate ? { status: "已识别", value: plate } : current.plate,
+      vin: vin ? { status: "已识别", value: vin } : current.vin
+    }));
+    setDraft((current) => ({
+      ...current,
+      vehicle: {
+        ...current.vehicle,
+        plate: plate || current.vehicle.plate,
+        vin: vin || current.vehicle.vin,
+        model: input.model?.trim() || current.vehicle.model
+      },
+      customer: input.owner?.trim()
+        ? {
+            ...current.customer,
+            name: input.owner.trim(),
+            legacyCode: "",
+            contact: input.owner.trim()
+          }
+        : current.customer
+    }));
+    await runVehicleLookup({ plate, vin, model: input.model, owner: input.owner });
+  }
+
   function selectVehicleReference(kind: "model" | "organization", candidate: VehicleReferenceCandidate) {
     setDraft((current) => applyReferenceCandidate(current, kind, candidate));
     setVehicleHistory((current) => {
@@ -147,6 +174,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
     scanVehicleIdentifier,
     lookupVehicleIdentifier,
     lookupVehicleLicense,
+    lookupVehicleLicenseForDevelopment,
     selectVehicleReference
   };
 }

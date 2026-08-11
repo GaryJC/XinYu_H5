@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Alert, Button, Input, Spin } from "antd";
-import { VehicleHistoryLookupResult, VehicleReferenceCandidate, VehicleReferenceResolution } from "../../../../shared/types";
+import { VehicleHistoryLookupResult, VehicleLookupInput } from "../../../../shared/types";
 import { ImageSourcePicker } from "../../shared/ui/ImageSourcePicker";
 import { IdentifierKind, IdentifierRecognitionState } from "./useVehicleIdentityRecognition";
+import { VehicleReferenceAutocomplete } from "./VehicleReferenceAutocomplete";
 
 type Props = {
   disabled?: boolean;
@@ -11,15 +12,14 @@ type Props = {
   historyLoading: boolean;
   historyError: string;
   onScan: (kind: IdentifierKind, file: File) => Promise<void>;
-  onManualLookup: (kind: IdentifierKind, value: string) => Promise<void>;
-  onSelectReference: (kind: "model" | "organization", candidate: VehicleReferenceCandidate) => void;
+  onManualLicenseLookup: (input: VehicleLookupInput) => Promise<void>;
 };
 
-export function VehicleIdentityRecognition({ disabled, recognition, history, historyLoading, historyError, onScan, onManualLookup, onSelectReference }: Props) {
-  const [testPlate, setTestPlate] = useState("");
+export function VehicleIdentityRecognition({ disabled, recognition, history, historyLoading, historyError, onScan, onManualLicenseLookup }: Props) {
+  const [testLicense, setTestLicense] = useState<VehicleLookupInput>({ plate: "", vin: "", model: "", owner: "" });
 
-  async function submitTestPlate() {
-    await onManualLookup("plate", testPlate);
+  async function submitTestLicense() {
+    await onManualLicenseLookup(testLicense);
   }
 
   return (
@@ -33,21 +33,37 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
         <IdentifierScanner kind="vin" title="识别 VIN 码" hint="请对准车架上的 17 位识别码" disabled={disabled} state={recognition.vin} onScan={onScan} />
       </div>
       {import.meta.env.DEV ? (
-        <div className="vehicle-test-lookup">
-          <Input
-            aria-label="测试车牌号码"
-            disabled={disabled || historyLoading}
-            placeholder="输入数据库中已有的车牌号码"
-            value={testPlate}
-            onChange={(event) => setTestPlate(event.target.value)}
-            onPressEnter={() => void submitTestPlate()}
-          />
+        <div className="vehicle-test-license">
+          <strong>DEV 行驶证匹配测试</strong>
+          <span>模拟行驶证 OCR 返回，不上传图片、不创建 OCR 记录。</span>
+          <div className="vehicle-test-license-fields">
+            <Input aria-label="测试行驶证车牌号码" disabled={disabled || historyLoading} placeholder="车牌号码" value={testLicense.plate} onChange={(event) => setTestLicense((current) => ({ ...current, plate: event.target.value }))} />
+            <Input aria-label="测试行驶证VIN" disabled={disabled || historyLoading} placeholder="VIN/底盘号" value={testLicense.vin} onChange={(event) => setTestLicense((current) => ({ ...current, vin: event.target.value }))} />
+            <VehicleReferenceAutocomplete
+              kind="model"
+              ariaLabel="测试行驶证车型"
+              disabled={disabled || historyLoading}
+              placeholder="车型，例如大众"
+              value={testLicense.model || ""}
+              onChange={(value) => setTestLicense((current) => ({ ...current, model: value }))}
+              onSelect={(candidate) => setTestLicense((current) => ({ ...current, model: candidate.value }))}
+            />
+            <VehicleReferenceAutocomplete
+              kind="organization"
+              ariaLabel="测试行驶证所有人"
+              disabled={disabled || historyLoading}
+              placeholder="所有人/所属单位，例如水务公司"
+              value={testLicense.owner || ""}
+              onChange={(value) => setTestLicense((current) => ({ ...current, owner: value }))}
+              onSelect={(candidate) => setTestLicense((current) => ({ ...current, owner: candidate.value }))}
+            />
+          </div>
           <Button
-            disabled={disabled || historyLoading || !testPlate.trim()}
+            disabled={disabled || historyLoading || (!testLicense.plate?.trim() && !testLicense.vin?.trim())}
             loading={historyLoading}
-            onClick={() => void submitTestPlate()}
+            onClick={() => void submitTestLicense()}
           >
-            查询并回填
+            模拟识别并匹配
           </Button>
         </div>
       ) : null}
@@ -59,57 +75,10 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
           title={history.message}
           description={history.vehicle
             ? `车型：${history.vehicle.model || "-"}；所属单位：${history.vehicle.organization?.name || "-"}；VIN：${history.vehicle.vin || "-"}`
-            : history.references
-              ? <ReferenceResults references={history.references} disabled={disabled} onSelect={onSelectReference} />
-              : undefined}
+            : undefined}
         />
       ) : null}
       {historyError ? <Alert showIcon type="warning" title="车辆已识别，但公司系统查询失败" description={historyError} /> : null}
-    </div>
-  );
-}
-
-function ReferenceResults({ references, disabled, onSelect }: {
-  references: NonNullable<VehicleHistoryLookupResult["references"]>;
-  disabled?: boolean;
-  onSelect: (kind: "model" | "organization", candidate: VehicleReferenceCandidate) => void;
-}) {
-  return (
-    <div className="vehicle-reference-results">
-      {references.model ? <ReferenceResult label="车型" kind="model" resolution={references.model} disabled={disabled} onSelect={onSelect} /> : null}
-      {references.organization ? <ReferenceResult label="所属单位" kind="organization" resolution={references.organization} disabled={disabled} onSelect={onSelect} /> : null}
-    </div>
-  );
-}
-
-function ReferenceResult({ label, kind, resolution, disabled, onSelect }: {
-  label: string;
-  kind: "model" | "organization";
-  resolution: VehicleReferenceResolution;
-  disabled?: boolean;
-  onSelect: (kind: "model" | "organization", candidate: VehicleReferenceCandidate) => void;
-}) {
-  if (resolution.status === "matched" && resolution.selected) {
-    return <span><b>{label}：</b>已复用“{resolution.selected.value}”{resolution.selected.code ? `（编码 ${resolution.selected.code}）` : ""}</span>;
-  }
-  if (resolution.status === "not_found") {
-    return <span><b>{label}：</b>没有匹配到已有记录，保留行驶证识别值“{resolution.input}”</span>;
-  }
-  return (
-    <div>
-      <b>{label}：</b>存在多个同名编码，请选择：
-      <div className="vehicle-reference-candidates">
-        {resolution.candidates.map((candidate) => (
-          <Button
-            key={`${candidate.code || candidate.value}-${candidate.usageCount}`}
-            size="small"
-            disabled={disabled}
-            onClick={() => onSelect(kind, candidate)}
-          >
-            {candidate.value}{candidate.code ? `（${candidate.code}）` : ""} · {candidate.usageCount}辆
-          </Button>
-        ))}
-      </div>
     </div>
   );
 }

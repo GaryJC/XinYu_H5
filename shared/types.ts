@@ -45,6 +45,14 @@ export type VehicleReferenceCandidate = {
   usageCount: number;
 };
 
+export type VehicleReferenceKind = "model" | "organization";
+
+export type VehicleReferenceSearchResult = {
+  kind: VehicleReferenceKind;
+  query: string;
+  candidates: VehicleReferenceCandidate[];
+};
+
 export type VehicleReferenceResolution = {
   input: string;
   status: "matched" | "ambiguous" | "not_found";

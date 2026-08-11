@@ -4,7 +4,8 @@ import {
   lookupVehicleInCompanySystem,
   normalizeReference,
   resolveReference,
-  resolveVehicleCandidates
+  resolveVehicleCandidates,
+  searchCompanyVehicleReferences
 } from "../server/integrations/company/vehicleLookup.mjs";
 import { HttpError } from "../server/http/HttpError.mjs";
 
@@ -45,6 +46,44 @@ test("company vehicle lookup reuses normalized model and organization for a new 
   assert.equal(result.references.model.selected.value, "奥迪 A6");
   assert.equal(result.references.organization.status, "matched");
   assert.equal(result.references.organization.selected.code, "QDDTGSYXYYFGS");
+});
+
+test("fuzzy model and organization matches are returned for manual selection", async () => {
+  const result = await lookupVehicleInCompanySystem({
+    plate: "辽B00002",
+    model: "大众",
+    owner: "水务公司"
+  });
+
+  assert.equal(result.status, "new");
+  assert.equal(result.references.model.status, "ambiguous");
+  assert.deepEqual(result.references.model.candidates.map((item) => item.value), [
+    "大众 帕萨特 2023款",
+    "大众汽车 SVW7142BPV"
+  ]);
+  assert.equal(result.references.organization.status, "ambiguous");
+  assert.deepEqual(result.references.organization.candidates.map((item) => item.code), ["QDSWJT", "QDSWFZ"]);
+  assert.match(result.message, /请选择/);
+});
+
+test("a single fuzzy candidate still requires manual confirmation", () => {
+  const result = resolveReference("大众", [
+    { value: "大众 帕萨特 2023款", usageCount: 12 }
+  ], false);
+  assert.equal(result.status, "ambiguous");
+});
+
+test("autocomplete searches fuzzy vehicle references", async () => {
+  const models = await searchCompanyVehicleReferences({ kind: "model", query: "大众" });
+  const organizations = await searchCompanyVehicleReferences({ kind: "organization", query: "水务公司" });
+
+  assert.equal(models.candidates.length, 2);
+  assert.deepEqual(organizations.candidates.map((item) => item.code), ["QDSWJT", "QDSWFZ"]);
+  assert.deepEqual(await searchCompanyVehicleReferences({ kind: "model", query: "大" }), {
+    kind: "model",
+    query: "大",
+    candidates: []
+  });
 });
 
 test("vehicle lookup refuses to merge conflicting plate and VIN matches", () => {

@@ -45,7 +45,7 @@ export const FIND_LEGACY_MODEL_CANDIDATES_QUERY = `
   from dbo.qxclxxb vehicle
   where
     @model <> ''
-    and UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(vehicle.cx)), ' ', ''), '　', ''), '-', ''), '_', ''), '－', '')) = @model
+    and UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(vehicle.cx)), ' ', ''), '　', ''), '-', ''), '_', ''), '－', '')) like @model_pattern
   group by RTRIM(vehicle.cx)
   order by count(*) desc, RTRIM(vehicle.cx)
 `;
@@ -59,8 +59,9 @@ export const FIND_LEGACY_ORGANIZATION_CANDIDATES_QUERY = `
   left join dbo.qxclxxb vehicle on RTRIM(vehicle.ssdw) = RTRIM(customer.bm)
   where
     @organization <> ''
-    and UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(customer.mc)), ' ', ''), '　', ''), '-', ''), '_', ''), '－', '')) = @organization
+    and UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(customer.mc)), ' ', ''), '　', ''), '-', ''), '_', ''), '－', '')) like @organization_pattern
   group by RTRIM(customer.bm), RTRIM(customer.mc)
+  having count(vehicle.reid) > 0
   order by count(vehicle.reid) desc, RTRIM(customer.bm)
 `;
 
@@ -75,6 +76,7 @@ export async function findLegacyVehicle({ plate = "", vin = "" }, execute = exec
 export async function findLegacyModelCandidates(model, execute = executeSqlServerQuery) {
   const result = await execute(FIND_LEGACY_MODEL_CANDIDATES_QUERY, (request, sql) => {
     request.input("model", sql.VarChar(200), model);
+    request.input("model_pattern", sql.VarChar(500), buildFuzzyLikePattern(model));
   });
   return (result.recordset || []).map((row) => ({
     value: row.value || "",
@@ -85,12 +87,25 @@ export async function findLegacyModelCandidates(model, execute = executeSqlServe
 export async function findLegacyOrganizationCandidates(organization, execute = executeSqlServerQuery) {
   const result = await execute(FIND_LEGACY_ORGANIZATION_CANDIDATES_QUERY, (request, sql) => {
     request.input("organization", sql.VarChar(200), organization);
+    request.input("organization_pattern", sql.VarChar(500), buildFuzzyLikePattern(organization));
   });
-  return (result.recordset || []).map((row) => ({
-    value: row.value || "",
-    code: row.code || "",
-    usageCount: Number(row.usage_count || 0)
-  }));
+  return (result.recordset || [])
+    .map((row) => ({
+      value: row.value || "",
+      code: row.code || "",
+      usageCount: Number(row.usage_count || 0)
+    }))
+    .filter((candidate) => candidate.usageCount > 0);
+}
+
+export function buildFuzzyLikePattern(value) {
+  const escapedCharacters = Array.from(value).map((character) => {
+    if (character === "%") return "[%]";
+    if (character === "[") return "[[]";
+    if (character === "]") return "[]]";
+    return character;
+  });
+  return `%${escapedCharacters.join("%")}%`;
 }
 
 function mapVehicleRow(row) {

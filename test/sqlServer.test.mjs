@@ -12,6 +12,7 @@ import {
   findLegacyVehicle,
   findLegacyModelCandidates,
   findLegacyOrganizationCandidates,
+  buildFuzzyLikePattern,
   FIND_LEGACY_MODEL_CANDIDATES_QUERY,
   FIND_LEGACY_ORGANIZATION_CANDIDATES_QUERY,
   FIND_LEGACY_VEHICLE_QUERY
@@ -180,15 +181,22 @@ test("legacy model and organization candidate queries are normalized and paramet
     assert.equal(query, FIND_LEGACY_ORGANIZATION_CANDIDATES_QUERY);
     assert.match(query, /dbo\.khxxb/i);
     assert.match(query, /dbo\.qxclxxb/i);
-    return [{ value: "青岛地铁运营有限公司", code: "QDDT", usage_count: 10 }];
+    assert.match(query, /having count\(vehicle\.reid\) > 0/i);
+    return [
+      { value: "青岛地铁运营有限公司", code: "QDDT", usage_count: 10 },
+      { value: "青岛地铁运营有限公司", code: "QDDT-ERROR", usage_count: 0 }
+    ];
   }));
 
   assert.deepEqual(models, [{ value: "Audi A6", usageCount: 8 }]);
   assert.deepEqual(organizations, [{ value: "青岛地铁运营有限公司", code: "QDDT", usageCount: 10 }]);
   assert.deepEqual(inputs, [
     { name: "model", type: { type: "VarChar", length: 200 }, value: "AUDIA6" },
-    { name: "organization", type: { type: "VarChar", length: 200 }, value: "青岛地铁运营有限公司" }
+    { name: "model_pattern", type: { type: "VarChar", length: 500 }, value: "%A%U%D%I%A%6%" },
+    { name: "organization", type: { type: "VarChar", length: 200 }, value: "青岛地铁运营有限公司" },
+    { name: "organization_pattern", type: { type: "VarChar", length: 500 }, value: "%青%岛%地%铁%运%营%有%限%公%司%" }
   ]);
+  assert.equal(buildFuzzyLikePattern("水务公司"), "%水%务%公%司%");
 });
 
 test("legacy departments come from SQL Server repair-order departments", async () => {

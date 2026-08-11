@@ -48,6 +48,7 @@ export function useWorkbenchController() {
     scanVehicleIdentifier,
     lookupVehicleIdentifier,
     lookupVehicleLicense,
+    lookupVehicleLicenseForDevelopment,
     selectVehicleReference
   } = useVehicleIdentityRecognition({ setDraft });
   const { ocrState, vehicleLicenseOcr, vehicleLicenseFileId, resetOcr, scanVehicleLicense, confirmVehicleLicenseOcr } =
@@ -362,6 +363,7 @@ export function useWorkbenchController() {
     confirmVehicleLicenseOcr,
     scanVehicleIdentifier,
     lookupVehicleIdentifier,
+    lookupVehicleLicenseForDevelopment,
     selectVehicleReference,
     updateDraft,
     updateVehicle,

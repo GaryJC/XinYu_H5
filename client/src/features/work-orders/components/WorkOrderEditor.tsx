@@ -7,6 +7,8 @@ import { canCreateOrder, canSendSignature } from "../domain/permissions";
 import { Checklist, Field, TextArea } from "../../../shared/ui/FormControls";
 import { VehicleLicenseOcrControl } from "../../vehicle-license-ocr/VehicleLicenseOcrControl";
 import { VehicleIdentityRecognition } from "../../vehicle-identity/VehicleIdentityRecognition";
+import { VehicleReferenceAutocomplete } from "../../vehicle-identity/VehicleReferenceAutocomplete";
+import { VehicleReferenceTags } from "../../vehicle-identity/VehicleReferenceTags";
 import { WorkbenchController } from "../../workbench/useWorkbenchController";
 import { belongings, exteriorIssues } from "../../workbench/workbenchConfig";
 import { SignaturePad } from "../../signature/SignaturePad";
@@ -27,7 +29,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     toggleArrayField, setDraft, totalLabor, updateRepairItem,
     syncPlatform, actionLoading, completeSignature, identifierRecognition,
     vehicleHistory, vehicleHistoryLoading, vehicleHistoryError, scanVehicleIdentifier,
-    lookupVehicleIdentifier, selectVehicleReference, departments, departmentError
+    lookupVehicleLicenseForDevelopment, selectVehicleReference, departments, departmentError
   } = controller;
   const canSyncPlatform = Boolean(selectedOrder && !selectedOrder.platformOrderNo && !["草稿", "待客户签字"].includes(selectedOrder.status) && (role === "advisor" || role === "manager"));
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
@@ -142,8 +144,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               historyLoading={vehicleHistoryLoading}
               historyError={vehicleHistoryError}
               onScan={scanVehicleIdentifier}
-              onManualLookup={lookupVehicleIdentifier}
-              onSelectReference={selectVehicleReference}
+              onManualLicenseLookup={lookupVehicleLicenseForDevelopment}
             />
 
             <div className="field-grid">
@@ -202,8 +203,48 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               <Field required error={fieldError("车牌号码")} disabled={!canEditForm} label="车牌号码" value={draft.vehicle.plate} onChange={(value) => updateVehicle("plate", value)} />
               <Field required error={fieldError("VIN")} disabled={!canEditForm} label="VIN/底盘号" value={draft.vehicle.vin} onChange={(value) => updateVehicle("vin", value)} />
               <Field required error={fieldError("进厂里程")} disabled={!canEditForm} label="进厂里程" value={draft.vehicle.mileage} suffix="km" onChange={(value) => updateVehicle("mileage", value)} />
-              <Field disabled={!canEditForm} label="车型" value={draft.vehicle.model} onChange={(value) => updateVehicle("model", value)} />
-              <Field required error={fieldError("车主名称")} disabled={!canEditForm} label="车主名称" value={draft.customer.name} onChange={(value) => updateCustomer("name", value)} />
+              <Form.Item className="field" label="车型">
+                <VehicleReferenceAutocomplete
+                  kind="model"
+                  ariaLabel="车型"
+                  disabled={!canEditForm}
+                  placeholder="输入至少两个字符查询已有车型"
+                  value={draft.vehicle.model}
+                  onChange={(value) => updateVehicle("model", value)}
+                  onSelect={(candidate) => updateVehicle("model", candidate.value)}
+                />
+                <VehicleReferenceTags
+                  label="车型"
+                  disabled={!canEditForm}
+                  resolution={vehicleHistory?.references?.model}
+                  onSelect={(candidate) => selectVehicleReference("model", candidate)}
+                />
+              </Form.Item>
+              <Form.Item className="field" label="车主名称" required validateStatus={fieldError("车主名称") ? "error" : undefined} help={fieldError("车主名称")}>
+                <VehicleReferenceAutocomplete
+                  kind="organization"
+                  ariaLabel="车主名称"
+                  disabled={!canEditForm}
+                  placeholder="输入至少两个字符查询已有单位"
+                  value={draft.customer.name}
+                  onChange={(value) => updateCustomer("name", value)}
+                  onSelect={(candidate) => setDraft((current) => ({
+                    ...current,
+                    customer: {
+                      ...current.customer,
+                      name: candidate.value,
+                      legacyCode: candidate.code || "",
+                      contact: candidate.value
+                    }
+                  }))}
+                />
+                <VehicleReferenceTags
+                  label="车主单位"
+                  disabled={!canEditForm}
+                  resolution={vehicleHistory?.references?.organization}
+                  onSelect={(candidate) => selectVehicleReference("organization", candidate)}
+                />
+              </Form.Item>
               <Field disabled={!canEditForm} label="联系人" value={draft.customer.contact} onChange={(value) => updateCustomer("contact", value)} />
               <Field required error={fieldError("联系电话")} disabled={!canEditForm} label="联系电话" value={draft.customer.phone} onChange={(value) => updateCustomer("phone", value)} />
             </div>
