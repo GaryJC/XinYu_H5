@@ -15,6 +15,7 @@ import {
   VehicleHistoryLookupResult,
   VehicleIdentifierOcrResult,
   VehicleLicenseOcrResult,
+  VehicleLookupInput,
   WorkOrder,
   WorkOrderDraft,
   WorkOrderStatus
@@ -35,10 +36,10 @@ export type WorkOrderApi = {
   recognizeVehicleLicense(imageBase64: string): Promise<VehicleLicenseOcrResult>;
   recognizeLicensePlate(imageBase64: string): Promise<VehicleIdentifierOcrResult>;
   recognizeVin(imageBase64: string): Promise<VehicleIdentifierOcrResult>;
-  lookupVehicle(identifier: { plate?: string; vin?: string }): Promise<VehicleHistoryLookupResult>;
+  lookupVehicle(identifier: VehicleLookupInput): Promise<VehicleHistoryLookupResult>;
   uploadFile(file: { orderId?: string; kind: StoredFile["kind"]; fileName: string; mimeType: string; imageBase64: string }): Promise<StoredFile>;
   attachFile(fileId: string, orderId: string): Promise<StoredFile>;
-  createOcrRecord(orderId: string | undefined, field: OcrFieldKey, source: string, value: string, confidence: number, fileId?: string): Promise<OcrRecord>;
+  createOcrRecord(orderId: string | undefined, field: OcrFieldKey, source: string, value: string, confidence: number, fileId: string): Promise<OcrRecord>;
   confirmOcrRecord(id: string, value: string, actor: string): Promise<OcrRecord>;
   syncPlatform(id: string, actor: string): Promise<WorkOrder>;
   repairItemAction(id: string, itemId: number, action: string, actor: string, patch?: Record<string, unknown>): Promise<WorkOrder>;
@@ -112,7 +113,7 @@ export const workOrderApi: WorkOrderApi = {
   createOcrRecord(orderId, field, source, value, confidence, fileId) {
     return request(`/api/work-orders/${orderId ?? "draft"}/ocr-records`, {
       method: "POST",
-      body: { field, source, fileId: fileId || `mock-upload-${Date.now()}`, value, confidence }
+      body: { field, source, fileId, value, confidence }
     });
   },
   confirmOcrRecord(id, value, actor) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildTrend, countBy, createOrderId, repairActionText } from "../server/domain/workOrderModel.mjs";
+import { buildTrend, countBy, createOrderFromDraft, createOrderId, repairActionText } from "../server/domain/workOrderModel.mjs";
 
 test("countBy aggregates values without database state", () => {
   const result = countBy(
@@ -31,4 +31,23 @@ test("work order IDs remain unique beyond the former daily 900-value range", () 
   const ids = Array.from({ length: 1_000 }, () => createOrderId());
   assert.equal(new Set(ids).size, ids.length);
   assert.ok(ids.every((id) => /^WT-\d{8}-[0-9A-F]{12}$/.test(id)));
+});
+
+test("new work orders ignore client-controlled workflow fields", () => {
+  const order = createOrderFromDraft({
+    status: "完成",
+    technician: "伪造技师",
+    inspector: "伪造检验员",
+    dispatchNo: "A99999",
+    platformOrderNo: "PLAT-forged",
+    repairItems: [{ id: 1, name: "测试", status: "已完工", owner: "伪造技师" }],
+    signatures: { customer: "伪造签字" }
+  });
+
+  assert.equal(order.status, "草稿");
+  assert.equal(order.dispatchNo, "");
+  assert.equal(order.platformOrderNo, undefined);
+  assert.deepEqual(order.signatures, {});
+  assert.equal(order.repairItems[0].status, "待派工");
+  assert.equal(order.repairItems[0].owner, "待派工");
 });

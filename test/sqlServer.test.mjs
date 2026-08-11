@@ -10,6 +10,10 @@ import {
 } from "../server/repositories/sqlServerRepository.mjs";
 import {
   findLegacyVehicle,
+  findLegacyModelCandidates,
+  findLegacyOrganizationCandidates,
+  FIND_LEGACY_MODEL_CANDIDATES_QUERY,
+  FIND_LEGACY_ORGANIZATION_CANDIDATES_QUERY,
   FIND_LEGACY_VEHICLE_QUERY
 } from "../server/repositories/legacyVehicleRepository.mjs";
 import {
@@ -114,13 +118,24 @@ test("legacy vehicle lookup uses SQL Server 2000 parameters and maps the public 
       assert.equal(query, FIND_LEGACY_VEHICLE_QUERY);
       assert.match(query, /dbo\.qxclxxb/i);
       assert.match(query, /select top 1/i);
+      assert.match(query, /union all/i);
+      assert.match(query, /dbo\.khxxb/i);
       configureRequest({
         input(name, type, value) {
           inputs.push({ name, type, value });
         }
       }, sqlTypes);
       return {
-        recordset: [{ plate: "辽A12345", vin: "LSV123", model: "测试车型" }]
+        recordset: [{
+          id: 12,
+          plate: "辽A12345",
+          vin: "LSV123",
+          model: "测试车型",
+          organization_code: "QDDT",
+          organization_name: "青岛地铁运营有限公司",
+          plate_matched: 1,
+          vin_matched: 0
+        }]
       };
     }
   );
@@ -129,7 +144,51 @@ test("legacy vehicle lookup uses SQL Server 2000 parameters and maps the public 
     { name: "plate", type: { type: "VarChar", length: 50 }, value: "辽A12345" },
     { name: "vin", type: { type: "VarChar", length: 50 }, value: "" }
   ]);
-  assert.deepEqual(vehicle, { plate: "辽A12345", vin: "LSV123", model: "测试车型" });
+  assert.deepEqual(vehicle, [{
+    id: "12",
+    plate: "辽A12345",
+    vin: "LSV123",
+    model: "测试车型",
+    organization: { code: "QDDT", name: "青岛地铁运营有限公司" },
+    plateMatched: true,
+    vinMatched: false
+  }]);
+});
+
+test("legacy model and organization candidate queries are normalized and parameterized", async () => {
+  const inputs = [];
+  const sqlTypes = {
+    VarChar(length) {
+      return { type: "VarChar", length };
+    }
+  };
+  const execute = (rows) => async (query, configureRequest) => {
+    configureRequest({
+      input(name, type, value) {
+        inputs.push({ name, type, value });
+      }
+    }, sqlTypes);
+    return { recordset: rows(query) };
+  };
+
+  const models = await findLegacyModelCandidates("AUDIA6", execute((query) => {
+    assert.equal(query, FIND_LEGACY_MODEL_CANDIDATES_QUERY);
+    assert.match(query, /group by RTRIM\(vehicle\.cx\)/i);
+    return [{ value: "Audi A6", usage_count: 8 }];
+  }));
+  const organizations = await findLegacyOrganizationCandidates("青岛地铁运营有限公司", execute((query) => {
+    assert.equal(query, FIND_LEGACY_ORGANIZATION_CANDIDATES_QUERY);
+    assert.match(query, /dbo\.khxxb/i);
+    assert.match(query, /dbo\.qxclxxb/i);
+    return [{ value: "青岛地铁运营有限公司", code: "QDDT", usage_count: 10 }];
+  }));
+
+  assert.deepEqual(models, [{ value: "Audi A6", usageCount: 8 }]);
+  assert.deepEqual(organizations, [{ value: "青岛地铁运营有限公司", code: "QDDT", usageCount: 10 }]);
+  assert.deepEqual(inputs, [
+    { name: "model", type: { type: "VarChar", length: 200 }, value: "AUDIA6" },
+    { name: "organization", type: { type: "VarChar", length: 200 }, value: "青岛地铁运营有限公司" }
+  ]);
 });
 
 test("legacy departments come from SQL Server repair-order departments", async () => {

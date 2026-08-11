@@ -9,6 +9,8 @@ JWT_SECRET=
 DINGTALK_APP_KEY=
 DINGTALK_APP_SECRET=
 DINGTALK_CORP_ID=
+FILE_STORAGE_PROVIDER=local
+LOCAL_UPLOAD_ROOT=/opt/repair-h5-dingtalk/server/data/uploads
 ALIYUN_ACCESS_KEY_ID=
 ALIYUN_ACCESS_KEY_SECRET=
 OSS_REGION=oss-cn-hangzhou
@@ -43,7 +45,7 @@ VITE_DINGTALK_CLIENT_ID=
 
 1. 前端拍照或选择图片。
 2. 前端调用 `POST /api/files` 上传图片。
-3. 后端配置了 `OSS_BUCKET` 时上传 OSS；仅非生产环境未配置时写入 `server/data/uploads` 作为本地开发模式。生产环境缺少 `OSS_BUCKET` 会直接拒绝上传。
+3. `FILE_STORAGE_PROVIDER=local` 时写入 `LOCAL_UPLOAD_ROOT`；配置为 `oss` 时上传 OSS。为兼容旧配置，未指定存储方式但存在 `OSS_BUCKET` 时仍使用 OSS。
 4. 数据库 `files` 表只保存文件元数据，不保存图片二进制。
 5. 行驶证 OCR 会把 OCR 记录关联到上传后的 `fileId`。
 
@@ -51,5 +53,5 @@ VITE_DINGTALK_CLIENT_ID=
 
 - `users.dingtalk_user_id` 必须由管理员预先绑定，不能靠姓名自动匹配。
 - 生产环境必须配置强随机 `JWT_SECRET`。
-- 生产环境应配置 OSS，不使用本地文件目录。
+- 使用本地存储时，`LOCAL_UPLOAD_ROOT` 必须指向 ECS 的持久化目录并纳入磁盘备份；多台 ECS 不能共享本地文件。
 - 钉钉应用首页必须是 HTTPS 公网地址，不能是 localhost。

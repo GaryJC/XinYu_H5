@@ -1,11 +1,5 @@
 import { authenticateRequest, loginForDevelopment, loginWithDingTalk } from "../auth.mjs";
 import {
-  assertFileAccess,
-  assertOcrRecordAccess,
-  assertWorkOrderAccess,
-  confirmOcrRecord,
-  attachFileToOrder,
-  createOcrRecord,
   createSignatureTokenForOrder,
   createSettlementForOrder,
   createWorkOrder,
@@ -34,6 +28,9 @@ import { HttpError } from "../http/HttpError.mjs";
 import { readStoredFile, saveUploadedFile } from "../storage.mjs";
 import { requireAnyRole, requireAuthenticatedUser, requireTransitionRole } from "../domain/accessPolicy.mjs";
 import { listLegacyDepartments } from "../repositories/legacyDepartmentRepository.mjs";
+import { assertFileAccess, attachFileToOrder } from "../repositories/fileRepository.mjs";
+import { assertOcrRecordAccess, assertWorkOrderAccess } from "../repositories/accessRepository.mjs";
+import { confirmOcrRecord, createOcrRecord } from "../repositories/ocrRecordRepository.mjs";
 
 export async function handleApiRequest(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/health") {
@@ -147,6 +144,8 @@ export async function handleApiRequest(req, res, url) {
     const { record, body } = await readStoredFile(fileContentMatch[1]);
     res.statusCode = 200;
     res.setHeader("Content-Type", record.mimeType || "application/octet-stream");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "sandbox");
     res.setHeader("Content-Length", body.byteLength);
     res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(record.originalName || record.id)}"`);
     res.setHeader("Cache-Control", "private, max-age=300");
@@ -207,6 +206,8 @@ export async function handleApiRequest(req, res, url) {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     if (ocrMatch[1] !== "draft") await assertWorkOrderAccess(ocrMatch[1], currentUser);
     const body = await readJson(req);
+    if (!body.fileId || typeof body.fileId !== "string") throw new HttpError(400, "OCR 记录缺少有效文件");
+    await assertFileAccess(body.fileId, currentUser);
     sendJson(res, 201, await createOcrRecord({ ...body, orderId: ocrMatch[1] === "draft" ? null : ocrMatch[1] }));
     return true;
   }

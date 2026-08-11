@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeDingTalkUserProfile, resolveDingTalkOrganizationMapping } from "../server/integrations/dingtalk/organization.mjs";
+import {
+  normalizeDingTalkUserProfile,
+  resolveDingTalkOrganizationMapping,
+  validateRoleMapping
+} from "../server/integrations/dingtalk/organization.mjs";
+import { HttpError } from "../server/http/HttpError.mjs";
 
 test("normalizes DingTalk department and role data from the employee detail response", () => {
   const profile = normalizeDingTalkUserProfile({
@@ -76,6 +81,40 @@ test("does not grant access for a job title or an unknown DingTalk role name", (
     { roleMappings: [], departmentMappings: [] }
   );
   assert.equal(mapping, undefined);
+});
+
+test("MVP role mappings reject unsupported workflow roles", () => {
+  assert.throws(
+    () => validateRoleMapping({
+      dingtalkRoleId: "role-technician",
+      dingtalkRoleName: "维修技师",
+      appRole: "technician",
+      homeRoute: "workbench"
+    }),
+    (error) => error instanceof HttpError && error.status === 400
+  );
+  assert.equal(
+    resolveDingTalkOrganizationMapping(
+      {
+        userId: "ding-user-technician",
+        name: "维修技师",
+        active: true,
+        departmentIds: [],
+        roles: [{ id: "role-technician", name: "维修技师" }]
+      },
+      {
+        roleMappings: [{
+          dingtalkRoleId: "role-technician",
+          dingtalkRoleName: "维修技师",
+          appRole: "technician",
+          homeRoute: "workbench",
+          enabled: true
+        }],
+        departmentMappings: []
+      }
+    ),
+    undefined
+  );
 });
 
 test("maps the built-in DingTalk role names without administrator configuration", () => {

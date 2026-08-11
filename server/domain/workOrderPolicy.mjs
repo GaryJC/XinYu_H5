@@ -15,6 +15,13 @@ const repairActionSourceStatus = new Map([
   ["inspect", "待检验"]
 ]);
 
+const transitionPatchFields = new Map([
+  ["待派工", []],
+  ["维修中", ["technician"]],
+  ["待结算", ["inspector", "signatures"]],
+  ["完成", ["settlementAmount", "feeNote"]]
+]);
+
 export function assertDraftEditable(status) {
   if (status !== "草稿") throw new HttpError(409, `当前状态“${status}”不能修改委托单内容`);
 }
@@ -23,6 +30,27 @@ export function assertStatusTransition(currentStatus, targetStatus) {
   if (nextStatus.get(currentStatus) !== targetStatus) {
     throw new HttpError(409, `不能从“${currentStatus}”直接变更为“${targetStatus}”`);
   }
+}
+
+export function sanitizeTransitionPatch(targetStatus, patch) {
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+    throw new HttpError(400, "流程变更参数必须是对象");
+  }
+  const allowedFields = transitionPatchFields.get(targetStatus) || [];
+  const unexpectedFields = Object.keys(patch).filter((field) => !allowedFields.includes(field));
+  if (unexpectedFields.length) {
+    throw new HttpError(400, `流程变更包含不允许的字段：${unexpectedFields.join("、")}`);
+  }
+  if (targetStatus === "维修中" && (typeof patch.technician !== "string" || !patch.technician.trim())) {
+    throw new HttpError(400, "进入维修中前必须指定维修技师");
+  }
+  if (patch.signatures !== undefined && (!patch.signatures || typeof patch.signatures !== "object" || Array.isArray(patch.signatures))) {
+    throw new HttpError(400, "签字参数必须是对象");
+  }
+  if (patch.settlementAmount !== undefined && (!Number.isFinite(Number(patch.settlementAmount)) || Number(patch.settlementAmount) < 0)) {
+    throw new HttpError(400, "结算金额必须是非负数字");
+  }
+  return Object.fromEntries(allowedFields.filter((field) => Object.hasOwn(patch, field)).map((field) => [field, patch[field]]));
 }
 
 export function assertRepairItemAction(item, action) {

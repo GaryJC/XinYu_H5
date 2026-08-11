@@ -18,7 +18,7 @@ const order = {
   inspector: "待检验",
   shop: { id: "shop-hq", name: "抚顺路店", address: "抚顺路店", phone: "021-1" },
   vehicle: { plate: "鲁B12345", vin: "LSV12345678901234", mileage: "123", model: "测试车型", purchaseDate: "" },
-  customer: { name: "测试客户", phone: "13800000000", contact: "测试客户", address: "" },
+  customer: { name: "测试客户", legacyCode: "CSKH", phone: "13800000000", contact: "测试客户", address: "" },
   inspection: { belongings: ["行驶证"], fuelLevel: "1/2", exteriorIssues: [] },
   faultDescription: "测试故障",
   repairItems: [{
@@ -56,6 +56,7 @@ test("legacy sync payload is versioned and preserves structured work-order data"
   assert.equal(payload.revision, 3);
   assert.equal(payload.order.dispatchNo, "");
   assert.deepEqual(payload.order.department, { code: "A", name: "机电一部" });
+  assert.equal(payload.order.customer.legacyCode, "CSKH");
   assert.deepEqual(payload.order.repairItems[0], {
     id: 7,
     itemNo: 1,
@@ -118,6 +119,16 @@ test("outbox migration provides ordered claiming and ACK backfill", async () => 
   assert.match(migration, /earlier\.revision < candidate\.revision/i);
   assert.match(migration, /create or replace function acknowledge_legacy_sync_event/i);
   assert.match(migration, /dispatch_no = coalesce\(nullif\(new\.legacy_dispatch_no/i);
+});
+
+test("customer legacy code migration preserves the matched khxxb bm", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/202608110001_work_order_customer_legacy_code.sql", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(migration, /add column if not exists customer_legacy_code text not null default ''/i);
+  assert.match(migration, /idx_work_orders_customer_legacy_code/i);
 });
 
 test("batch result migration ACKs and fails up to 100 claimed events", async () => {

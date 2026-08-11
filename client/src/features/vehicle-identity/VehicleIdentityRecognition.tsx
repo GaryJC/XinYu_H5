@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Alert, Button, Input, Spin } from "antd";
-import { VehicleHistoryLookupResult } from "../../../../shared/types";
+import { VehicleHistoryLookupResult, VehicleReferenceCandidate, VehicleReferenceResolution } from "../../../../shared/types";
 import { ImageSourcePicker } from "../../shared/ui/ImageSourcePicker";
 import { IdentifierKind, IdentifierRecognitionState } from "./useVehicleIdentityRecognition";
 
@@ -12,9 +12,10 @@ type Props = {
   historyError: string;
   onScan: (kind: IdentifierKind, file: File) => Promise<void>;
   onManualLookup: (kind: IdentifierKind, value: string) => Promise<void>;
+  onSelectReference: (kind: "model" | "organization", candidate: VehicleReferenceCandidate) => void;
 };
 
-export function VehicleIdentityRecognition({ disabled, recognition, history, historyLoading, historyError, onScan, onManualLookup }: Props) {
+export function VehicleIdentityRecognition({ disabled, recognition, history, historyLoading, historyError, onScan, onManualLookup, onSelectReference }: Props) {
   const [testPlate, setTestPlate] = useState("");
 
   async function submitTestPlate() {
@@ -54,12 +55,61 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
       {history ? (
         <Alert
           showIcon
-          type={history.found ? "success" : "info"}
+          type={history.status === "conflict" ? "error" : history.found ? "success" : "info"}
           title={history.message}
-          description={history.vehicle ? `车型：${history.vehicle.model || "-"}；VIN：${history.vehicle.vin || "-"}` : undefined}
+          description={history.vehicle
+            ? `车型：${history.vehicle.model || "-"}；所属单位：${history.vehicle.organization?.name || "-"}；VIN：${history.vehicle.vin || "-"}`
+            : history.references
+              ? <ReferenceResults references={history.references} disabled={disabled} onSelect={onSelectReference} />
+              : undefined}
         />
       ) : null}
       {historyError ? <Alert showIcon type="warning" title="车辆已识别，但公司系统查询失败" description={historyError} /> : null}
+    </div>
+  );
+}
+
+function ReferenceResults({ references, disabled, onSelect }: {
+  references: NonNullable<VehicleHistoryLookupResult["references"]>;
+  disabled?: boolean;
+  onSelect: (kind: "model" | "organization", candidate: VehicleReferenceCandidate) => void;
+}) {
+  return (
+    <div className="vehicle-reference-results">
+      {references.model ? <ReferenceResult label="车型" kind="model" resolution={references.model} disabled={disabled} onSelect={onSelect} /> : null}
+      {references.organization ? <ReferenceResult label="所属单位" kind="organization" resolution={references.organization} disabled={disabled} onSelect={onSelect} /> : null}
+    </div>
+  );
+}
+
+function ReferenceResult({ label, kind, resolution, disabled, onSelect }: {
+  label: string;
+  kind: "model" | "organization";
+  resolution: VehicleReferenceResolution;
+  disabled?: boolean;
+  onSelect: (kind: "model" | "organization", candidate: VehicleReferenceCandidate) => void;
+}) {
+  if (resolution.status === "matched" && resolution.selected) {
+    return <span><b>{label}：</b>已复用“{resolution.selected.value}”{resolution.selected.code ? `（编码 ${resolution.selected.code}）` : ""}</span>;
+  }
+  if (resolution.status === "not_found") {
+    return <span><b>{label}：</b>没有匹配到已有记录，保留行驶证识别值“{resolution.input}”</span>;
+  }
+  return (
+    <div>
+      <b>{label}：</b>存在多个同名编码，请选择：
+      <div className="vehicle-reference-candidates">
+        {resolution.candidates.map((candidate) => (
+          <Button
+            key={`${candidate.code || candidate.value}-${candidate.usageCount}`}
+            size="small"
+            disabled={disabled}
+            onClick={() => onSelect(kind, candidate)}
+          >
+            {candidate.value}{candidate.code ? `（${candidate.code}）` : ""} · {candidate.usageCount}辆
+          </Button>
+        ))}
+      </div>
     </div>
   );
 }

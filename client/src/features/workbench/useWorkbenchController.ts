@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DashboardSummary,
   DevelopmentPersonaKey,
@@ -13,6 +13,7 @@ import { getDingTalkAuthCode } from "../../integrations/dingtalk/auth";
 import { clearAuthToken } from "../../shared/api/httpClient";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
 import { useWorkOrderDraft } from "../work-orders/hooks/useWorkOrderDraft";
+import { createWorkOrderWorkflowActions } from "../work-orders/hooks/createWorkOrderWorkflowActions";
 import { useVehicleLicenseOcr } from "../vehicle-license-ocr/useVehicleLicenseOcr";
 import { useVehicleIdentityRecognition } from "../vehicle-identity/useVehicleIdentityRecognition";
 import { navItems } from "./workbenchConfig";
@@ -34,11 +35,10 @@ export function useWorkbenchController() {
   const [departmentError, setDepartmentError] = useState("");
   const [actionLoading, setActionLoading] = useState<"save" | "signature" | "sync" | "">("");
   const [devLoginLoading, setDevLoginLoading] = useState(false);
+  const sessionGeneration = useRef(0);
 
   const selectedOrder = orders.find((order) => order.id === selectedId);
   const actor = currentUser?.name || roles[role].name;
-  const { ocrState, vehicleLicenseOcr, vehicleLicenseFileId, resetOcr, scanVehicleLicense, confirmVehicleLicenseOcr } =
-    useVehicleLicenseOcr({ orderId: selectedOrder?.id, actor, setDraft });
   const {
     identifierRecognition,
     vehicleHistory,
@@ -46,8 +46,12 @@ export function useWorkbenchController() {
     vehicleHistoryError,
     resetVehicleIdentityRecognition,
     scanVehicleIdentifier,
-    lookupVehicleIdentifier
+    lookupVehicleIdentifier,
+    lookupVehicleLicense,
+    selectVehicleReference
   } = useVehicleIdentityRecognition({ setDraft });
+  const { ocrState, vehicleLicenseOcr, vehicleLicenseFileId, resetOcr, scanVehicleLicense, confirmVehicleLicenseOcr } =
+    useVehicleLicenseOcr({ orderId: selectedOrder?.id, actor, setDraft, onRecognized: lookupVehicleLicense });
   const visibleNavItems = useMemo(() => navItems.filter((item) => item.roles.includes(role)), [role]);
   const canEditForm = canCreateOrder(role) && (!selectedOrder || selectedOrder.status === "草稿");
   const totalLabor = useMemo(() => sumLabor(draft.repairItems), [draft.repairItems]);
@@ -58,7 +62,7 @@ export function useWorkbenchController() {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return orders;
     return orders.filter((order) =>
-      [order.id, order.vehicle.plate, order.vehicle.vin, order.customer.name].some((value) =>
+      [order.id, order.vehicle.plate, order.vehicle.vin, order.vehicle.model, order.customer.name].some((value) =>
         value.toLowerCase().includes(term)
       )
     );
@@ -78,6 +82,7 @@ export function useWorkbenchController() {
   }, []);
 
   useEffect(() => {
+    const generation = ++sessionGeneration.current;
     if (!currentUser) {
       setOrders([]);
       setDashboard(undefined);
@@ -86,10 +91,13 @@ export function useWorkbenchController() {
       setDepartmentError("");
       return;
     }
-    void loadOrders(currentUser.role);
-    void loadDashboard(currentUser.role);
-    void workOrderApi.users().then(setUsers).catch(() => setUsers([]));
-    void loadDepartments();
+    void loadOrders(currentUser.role, selectedId, generation);
+    void loadDashboard(currentUser.role, generation);
+    void loadUsers(generation);
+    void loadDepartments(generation);
+    return () => {
+      if (sessionGeneration.current === generation) sessionGeneration.current += 1;
+    };
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -98,10 +106,11 @@ export function useWorkbenchController() {
     }
   }, [activeNav, visibleNavItems]);
 
-  async function loadOrders(nextRole = role, keepId = selectedId) {
+  async function loadOrders(nextRole = role, keepId = selectedId, generation = sessionGeneration.current) {
     try {
       setApiError("");
       const next = await workOrderApi.list(nextRole);
+      if (generation !== sessionGeneration.current) return;
       const safeNext = Array.isArray(next) ? next : [];
       setOrders(safeNext);
       const nextSelected = safeNext.find((order) => order.id === keepId) ?? safeNext[0];
@@ -112,6 +121,7 @@ export function useWorkbenchController() {
         resetDraft(undefined, currentUser?.name || "");
       }
     } catch (error) {
+      if (generation !== sessionGeneration.current) return;
       setOrders([]);
       setSelectedId(null);
       resetDraft(undefined, currentUser?.name || "");
@@ -119,18 +129,29 @@ export function useWorkbenchController() {
     }
   }
 
-  async function loadDashboard(nextRole = role) {
+  async function loadDashboard(nextRole = role, generation = sessionGeneration.current) {
     try {
-      setDashboard(await workOrderApi.dashboard(nextRole));
+      const next = await workOrderApi.dashboard(nextRole);
+      if (generation === sessionGeneration.current) setDashboard(next);
     } catch {
-      setDashboard(undefined);
+      if (generation === sessionGeneration.current) setDashboard(undefined);
     }
   }
 
-  async function loadDepartments() {
+  async function loadUsers(generation = sessionGeneration.current) {
+    try {
+      const next = await workOrderApi.users();
+      if (generation === sessionGeneration.current) setUsers(next);
+    } catch {
+      if (generation === sessionGeneration.current) setUsers([]);
+    }
+  }
+
+  async function loadDepartments(generation = sessionGeneration.current) {
     try {
       setDepartmentError("");
       const next = await workOrderApi.departments();
+      if (generation !== sessionGeneration.current) return;
       setDepartments(next);
       const defaultDepartment = next.find((item) => item.isDefault) || next[0];
       if (defaultDepartment) {
@@ -147,6 +168,7 @@ export function useWorkbenchController() {
         );
       }
     } catch (error) {
+      if (generation !== sessionGeneration.current) return;
       setDepartments([]);
       setDepartmentError(actionError(error, "部门加载失败"));
     }
@@ -188,6 +210,7 @@ export function useWorkbenchController() {
   }
 
   async function loginForDevelopment(persona: DevelopmentPersonaKey) {
+    sessionGeneration.current += 1;
     clearAuthToken();
     setCurrentUser(undefined);
     setOrders([]);
@@ -273,84 +296,6 @@ export function useWorkbenchController() {
     }
   }
 
-  async function submitDispatch() {
-    if (!selectedOrder) return;
-    const updated = await workOrderApi.transition(selectedOrder.id, "待派工", actor, "提交派工池");
-    await loadOrders(role, updated.id);
-  }
-
-  async function dispatchToTechnician(technician: string) {
-    if (!selectedOrder) return;
-    const updated = await workOrderApi.transition(selectedOrder.id, "维修中", actor, `指派维修技师：${technician}`, {
-      technician,
-      repairItems: selectedOrder.repairItems.map((item) => ({ ...item, owner: item.owner === "待派工" ? technician : item.owner }))
-    });
-    await loadOrders(role, updated.id);
-  }
-
-  async function completeRepair() {
-    if (!selectedOrder) return;
-    const updated = await workOrderApi.transition(selectedOrder.id, "待结算", actor, role === "inspector" ? "检验通过" : "维修完成提报", {
-      inspector: role === "inspector" ? actor : selectedOrder.inspector,
-      signatures: role === "inspector" ? { ...selectedOrder.signatures, inspector: actor } : selectedOrder.signatures
-    });
-    await loadOrders(role, updated.id);
-  }
-
-  async function settleOrder() {
-    if (!selectedOrder) return;
-    if (!selectedOrder.settlementStatements.length) {
-      await workOrderApi.createSettlement(selectedOrder.id, actor);
-    }
-    const updated = await workOrderApi.transition(selectedOrder.id, "完成", actor, "确认结算并归档", {
-      settlementAmount: Number(draft.settlementAmount || draft.estimatedFee || totalLabor),
-      feeNote: draft.feeNote
-    });
-    await loadOrders(role, updated.id);
-  }
-
-  async function syncPlatform() {
-    if (!selectedOrder) return;
-    setActionLoading("sync");
-    setFormErrors([]);
-    try {
-      const updated = await workOrderApi.syncPlatform(selectedOrder.id, actor);
-      await loadOrders(role, updated.id);
-      await loadDashboard(role);
-    } catch (error) {
-      setFormErrors([actionError(error, "同步维修平台失败")]);
-    } finally {
-      setActionLoading("");
-    }
-  }
-
-  async function completeSignature(order: WorkOrder, token: string, signatureImage: string) {
-    const signatureFile = await workOrderApi.uploadFile({
-      orderId: order.id,
-      kind: "signature_image",
-      fileName: `signature-${order.id}.png`,
-      mimeType: "image/png",
-      imageBase64: signatureImage
-    });
-    const signed = await workOrderApi.signByToken(token, order.customer.name || "客户签名", signatureFile.id);
-    await loadOrders(role, signed.id);
-    return signed;
-  }
-
-  async function updateRepairAction(itemId: number, action: string, patch: Record<string, unknown> = {}) {
-    if (!selectedOrder) return;
-    const updated = await workOrderApi.repairItemAction(selectedOrder.id, itemId, action, actor, patch);
-    await loadOrders(role, updated.id);
-    await loadDashboard(role);
-  }
-
-  async function createSettlement() {
-    if (!selectedOrder) return;
-    const updated = await workOrderApi.createSettlement(selectedOrder.id, actor);
-    await loadOrders(role, updated.id);
-    await loadDashboard(role);
-  }
-
   function validateBeforeSignature() {
     const errors = validateWorkOrderDraft(draft);
     if (ocrState.vehicleLicense.status === "未识别") errors.push("请拍照识别并确认行驶证");
@@ -358,6 +303,18 @@ export function useWorkbenchController() {
     if (ocrState.vehicleLicense.status === "待确认") errors.push("请确认行驶证 OCR 结果");
     return errors;
   }
+
+  const workflowActions = createWorkOrderWorkflowActions({
+    selectedOrder,
+    draft,
+    role,
+    actor,
+    totalLabor,
+    setFormErrors,
+    setActionLoading,
+    loadOrders,
+    loadDashboard
+  });
 
   return {
     activeNav,
@@ -400,18 +357,12 @@ export function useWorkbenchController() {
     startNewOrder,
     saveDraft,
     sendSignature,
-    completeSignature,
-    submitDispatch,
-    dispatchToTechnician,
-    completeRepair,
-    settleOrder,
+    ...workflowActions,
     scanVehicleLicense,
     confirmVehicleLicenseOcr,
     scanVehicleIdentifier,
     lookupVehicleIdentifier,
-    syncPlatform,
-    updateRepairAction,
-    createSettlement,
+    selectVehicleReference,
     updateDraft,
     updateVehicle,
     updateCustomer,

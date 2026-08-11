@@ -22,6 +22,7 @@ export function workOrderValues(order) {
     order.vehicle?.model || "",
     order.vehicle?.purchaseDate || "",
     order.customer?.name || "",
+    order.customer?.legacyCode || "",
     order.customer?.phone || "",
     order.customer?.contact || "",
     order.customer?.address || "",
@@ -68,6 +69,7 @@ export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecord
     },
     customer: {
       name: row.customer_name,
+      legacyCode: row.customer_legacy_code || "",
       phone: row.customer_phone,
       contact: row.customer_contact,
       address: row.customer_address
@@ -167,7 +169,10 @@ export function createOrderFromDraft(draft) {
   const at = nowString();
   return {
     ...draft,
-    dispatchNo: draft.dispatchNo || "",
+    status: "草稿",
+    technician: "待派工",
+    inspector: "待检验",
+    dispatchNo: "",
     arrivalDate: draft.arrivalDate || new Date().toISOString().slice(0, 10),
     shop: draft.shop || {
       id: "shop-hq",
@@ -176,6 +181,17 @@ export function createOrderFromDraft(draft) {
       phone: "021-6000-8618"
     },
     department: draft.department || { code: "", name: "" },
+    repairItems: (draft.repairItems || []).map((item, index) => ({
+      ...item,
+      id: Number(item?.id || index + 1),
+      owner: "待派工",
+      startAt: "",
+      finishAt: "",
+      inspector: "待检验",
+      status: "待派工"
+    })),
+    signatures: {},
+    platformOrderNo: undefined,
     id: createOrderId(),
     createdAt: at,
     updatedAt: at,

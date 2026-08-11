@@ -66,8 +66,8 @@ store populated by the Runfeng poller. PostgreSQL is authoritative for new H5 or
 
 Image bytes are intentionally kept outside Postgres:
 
-- local development writes them under `server/data/uploads`;
-- production uses OSS when `OSS_BUCKET` is configured;
+- `FILE_STORAGE_PROVIDER=local` writes them under `LOCAL_UPLOAD_ROOT` (default `server/data/uploads`);
+- `FILE_STORAGE_PROVIDER=oss` uses the configured OSS bucket;
 - Postgres stores the durable file record (`kind`, provider, bucket, object key, MIME type, size, uploader, and work-order relation).
 
 Customer signature rows directly reference their `signature_image` file record through `signatures.file_id`. This keeps the relational workflow complete without putting large binary objects into transactional tables.

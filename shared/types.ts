@@ -39,13 +39,47 @@ export type VehicleIdentifierOcrResult = {
   confidence: number;
 };
 
+export type VehicleReferenceCandidate = {
+  value: string;
+  code?: string;
+  usageCount: number;
+};
+
+export type VehicleReferenceResolution = {
+  input: string;
+  status: "matched" | "ambiguous" | "not_found";
+  selected?: VehicleReferenceCandidate;
+  candidates: VehicleReferenceCandidate[];
+};
+
+export type VehicleLookupInput = {
+  plate?: string;
+  vin?: string;
+  model?: string;
+  owner?: string;
+};
+
 export type VehicleHistoryLookupResult = {
   found: boolean;
+  status: "found" | "new" | "conflict";
   vehicle?: {
     plate: string;
     vin: string;
     model: string;
+    organization?: {
+      code: string;
+      name: string;
+    };
   };
+  references?: {
+    model?: VehicleReferenceResolution;
+    organization?: VehicleReferenceResolution;
+  };
+  conflicts?: Array<{
+    identifier: "plate" | "vin";
+    plate: string;
+    vin: string;
+  }>;
   message: string;
 };
 
@@ -223,6 +257,7 @@ export type WorkOrder = {
   };
   customer: {
     name: string;
+    legacyCode: string;
     phone: string;
     contact: string;
     address: string;

@@ -87,6 +87,7 @@ export function buildLegacySyncPayload({ eventId, revision, eventType, order }) 
       },
       customer: {
         name: order.customer?.name || "",
+        legacyCode: order.customer?.legacyCode || "",
         phone: order.customer?.phone || "",
         contact: order.customer?.contact || "",
         address: order.customer?.address || ""

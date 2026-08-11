@@ -11,9 +11,10 @@ type Options = {
   orderId?: string;
   actor: string;
   setDraft: Dispatch<SetStateAction<WorkOrderDraft>>;
+  onRecognized?: (result: VehicleLicenseOcrResult) => Promise<void>;
 };
 
-export function useVehicleLicenseOcr({ orderId, actor, setDraft }: Options) {
+export function useVehicleLicenseOcr({ orderId, actor, setDraft, onRecognized }: Options) {
   const [ocrState, setOcrState] = useState(initialOcrState);
   const [ocrRecordIds, setOcrRecordIds] = useState<Partial<Record<OcrFieldKey, string>>>({});
   const [vehicleLicenseOcr, setVehicleLicenseOcr] = useState<VehicleLicenseOcrResult>();
@@ -91,10 +92,12 @@ export function useVehicleLicenseOcr({ orderId, actor, setDraft }: Options) {
         customer: {
           ...current.customer,
           name: result.owner || current.customer.name,
+          legacyCode: "",
           contact: result.owner || current.customer.contact,
           address: result.address || current.customer.address
         }
       }));
+      await onRecognized?.(result);
     } catch (error) {
       setOcrState((current) => ({
         ...current,

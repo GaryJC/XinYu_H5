@@ -18,7 +18,14 @@ export function useWorkOrderDraft() {
   }
 
   function updateCustomer(key: keyof WorkOrderDraft["customer"], value: string) {
-    setDraft((current) => ({ ...current, customer: { ...current.customer, [key]: value } }));
+    setDraft((current) => ({
+      ...current,
+      customer: {
+        ...current.customer,
+        [key]: value,
+        ...(key === "name" ? { legacyCode: "" } : {})
+      }
+    }));
   }
 
   function updateRepairItem(id: number, patch: Partial<RepairItem>) {

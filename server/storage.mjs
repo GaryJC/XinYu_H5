@@ -1,14 +1,26 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import OSS from "ali-oss";
-import { createFileRecord, findFileRecord } from "./db.mjs";
 import { HttpError } from "./http/HttpError.mjs";
+import { createFileRecord, findFileRecord } from "./repositories/fileRepository.mjs";
 
 let ossClient;
 
+const allowedFileKinds = new Set(["vehicle_license", "repair_order_photo", "damage_photo", "signature_image", "other"]);
+const allowedImageMimeTypes = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/bmp",
+  "image/tiff",
+  "image/heic",
+  "image/heif"
+]);
+
 export async function saveUploadedFile({ orderId, kind, fileName, mimeType, imageBase64, uploadedBy }) {
   if (!imageBase64 || typeof imageBase64 !== "string") throw new HttpError(400, "缺少文件内容");
-  if (!kind || typeof kind !== "string") throw new HttpError(400, "缺少文件类型");
+  validateUploadedImageMetadata(kind, mimeType);
 
   const buffer = Buffer.from(stripDataUrlPrefix(imageBase64), "base64");
   if (!buffer.length) throw new HttpError(400, "文件内容为空");
@@ -30,6 +42,13 @@ export async function saveUploadedFile({ orderId, kind, fileName, mimeType, imag
   });
 }
 
+export function validateUploadedImageMetadata(kind, mimeType) {
+  if (!kind || typeof kind !== "string") throw new HttpError(400, "缺少文件类型");
+  if (!allowedFileKinds.has(kind)) throw new HttpError(400, "不支持的文件类型");
+  if (!mimeType || typeof mimeType !== "string") throw new HttpError(400, "缺少图片 MIME 类型");
+  if (!allowedImageMimeTypes.has(mimeType.toLowerCase())) throw new HttpError(400, "仅支持安全的图片格式");
+}
+
 export async function readStoredFile(fileId) {
   const record = await findFileRecord(fileId);
   if (record.storageProvider === "oss") {
@@ -37,7 +56,7 @@ export async function readStoredFile(fileId) {
     return { record, body: result.content };
   }
 
-  const uploadRoot = path.resolve("server/data/uploads");
+  const uploadRoot = getLocalUploadRoot();
   const target = path.resolve(uploadRoot, record.objectKey);
   const relative = path.relative(uploadRoot, target);
   if (relative.startsWith("..") || path.isAbsolute(relative)) throw new HttpError(403, "文件路径非法");
@@ -45,8 +64,9 @@ export async function readStoredFile(fileId) {
 }
 
 async function putObject(objectKey, buffer, mimeType) {
+  const provider = resolveStorageProvider();
   const bucket = process.env.OSS_BUCKET;
-  if (bucket) {
+  if (provider === "oss") {
     const client = getOssClient();
     await client.put(objectKey, buffer, {
       headers: {
@@ -56,15 +76,28 @@ async function putObject(objectKey, buffer, mimeType) {
     return { provider: "oss", bucket, objectKey };
   }
 
-  if (process.env.APP_ENV === "production") {
-    throw new HttpError(500, "生产环境未配置 OSS_BUCKET，已拒绝写入本地文件系统");
-  }
-
-  const uploadRoot = path.resolve("server/data/uploads");
+  const uploadRoot = getLocalUploadRoot();
   const target = path.join(uploadRoot, objectKey);
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.writeFile(target, buffer);
   return { provider: "local", bucket: "local", objectKey };
+}
+
+export function resolveStorageProvider(env = process.env) {
+  const configuredProvider = String(env.FILE_STORAGE_PROVIDER || "").trim().toLowerCase();
+  if (configuredProvider && configuredProvider !== "local" && configuredProvider !== "oss") {
+    throw new HttpError(500, "FILE_STORAGE_PROVIDER 仅支持 local 或 oss");
+  }
+  if (configuredProvider) return configuredProvider;
+  if (env.OSS_BUCKET) return "oss";
+  if (env.APP_ENV === "production") {
+    throw new HttpError(500, "生产环境请配置 FILE_STORAGE_PROVIDER=local 或 oss");
+  }
+  return "local";
+}
+
+function getLocalUploadRoot() {
+  return path.resolve(process.env.LOCAL_UPLOAD_ROOT || "server/data/uploads");
 }
 
 function getOssClient() {

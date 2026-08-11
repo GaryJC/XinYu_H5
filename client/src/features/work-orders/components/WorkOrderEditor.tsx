@@ -27,7 +27,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     toggleArrayField, setDraft, totalLabor, updateRepairItem,
     syncPlatform, actionLoading, completeSignature, identifierRecognition,
     vehicleHistory, vehicleHistoryLoading, vehicleHistoryError, scanVehicleIdentifier,
-    lookupVehicleIdentifier, departments, departmentError
+    lookupVehicleIdentifier, selectVehicleReference, departments, departmentError
   } = controller;
   const canSyncPlatform = Boolean(selectedOrder && !selectedOrder.platformOrderNo && !["草稿", "待客户签字"].includes(selectedOrder.status) && (role === "advisor" || role === "manager"));
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
@@ -143,6 +143,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               historyError={vehicleHistoryError}
               onScan={scanVehicleIdentifier}
               onManualLookup={lookupVehicleIdentifier}
+              onSelectReference={selectVehicleReference}
             />
 
             <div className="field-grid">

@@ -93,6 +93,9 @@ DINGTALK_APP_KEY=
 DINGTALK_APP_SECRET=
 VITE_DINGTALK_CORP_ID=和DINGTALK_CORP_ID一致
 
+# 不使用 OSS 时明确选择本地存储；该目录需要持久化并定期备份
+FILE_STORAGE_PROVIDER=local
+LOCAL_UPLOAD_ROOT=/opt/repair-h5-dingtalk/server/data/uploads
 OSS_REGION=oss-cn-hangzhou
 OSS_BUCKET=
 ```

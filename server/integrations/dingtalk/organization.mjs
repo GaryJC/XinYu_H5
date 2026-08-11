@@ -1,6 +1,6 @@
 import { HttpError } from "../../http/HttpError.mjs";
 
-const VALID_ROLES = new Set(["advisor", "dispatcher", "technician", "inspector", "manager"]);
+const MVP_ROLES = new Set(["advisor", "manager"]);
 const VALID_HOME_ROUTES = new Set(["workbench", "order-create"]);
 const BUILT_IN_ROLE_MAPPINGS = new Map([
   ["服务顾问", { appRole: "advisor", homeRoute: "order-create" }],
@@ -41,7 +41,7 @@ export function normalizeDingTalkUserProfile(raw, userId) {
 }
 
 export function resolveDingTalkOrganizationMapping(profile, { roleMappings = [], departmentMappings = [] }) {
-  const enabledRoleMappings = roleMappings.filter((mapping) => mapping.enabled);
+  const enabledRoleMappings = roleMappings.filter((mapping) => mapping.enabled && MVP_ROLES.has(mapping.appRole));
   const enabledDepartmentMappings = departmentMappings.filter((mapping) => mapping.enabled);
   const profileRoleIds = new Set(profile.roles.map((role) => role.id));
   const roleMapping = enabledRoleMappings
@@ -84,7 +84,7 @@ export function validateRoleMapping(input) {
   const appRole = String(input?.appRole || "").trim();
   const shopId = input?.shopId ? String(input.shopId).trim() : undefined;
   const homeRoute = String(input?.homeRoute || "").trim();
-  if (!dingtalkRoleId || !dingtalkRoleName || !VALID_ROLES.has(appRole) || !VALID_HOME_ROUTES.has(homeRoute)) {
+  if (!dingtalkRoleId || !dingtalkRoleName || !MVP_ROLES.has(appRole) || !VALID_HOME_ROUTES.has(homeRoute)) {
     throw new HttpError(400, "钉钉角色映射参数无效");
   }
   return { dingtalkRoleId, dingtalkRoleName, appRole, shopId, homeRoute, enabled: input?.enabled !== false };

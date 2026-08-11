@@ -6,12 +6,10 @@ import {
   createId,
   createOrderFromDraft,
   createSignatureToken,
-  formatDate,
   groupBy,
   nowString,
   parseDate,
   repairActionText,
-  rowToOcrRecord,
   rowToWorkOrder,
   workOrderValues
 } from "./domain/workOrderModel.mjs";
@@ -20,7 +18,8 @@ import {
   assertPlatformSyncAllowed,
   assertRepairItemAction,
   assertSettlementAllowed,
-  assertStatusTransition
+  assertStatusTransition,
+  sanitizeTransitionPatch
 } from "./domain/workOrderPolicy.mjs";
 import { enqueueLegacySyncEvent } from "./repositories/legacySyncOutboxRepository.mjs";
 
@@ -53,6 +52,9 @@ export async function listWorkOrders(role = "manager", user) {
 }
 
 export async function createWorkOrder(draft, actor) {
+  if (!draft || typeof draft !== "object" || Array.isArray(draft)) {
+    throw new HttpError(400, "缺少有效的委托单草稿");
+  }
   return transaction(async (client) => {
     const order = {
       ...createOrderFromDraft(draft),
@@ -73,9 +75,16 @@ export async function updateWorkOrder(order, actor, action) {
     const next = {
       ...existing,
       ...order,
+      id: existing.id,
+      createdAt: existing.createdAt,
       advisor: existing.advisor,
+      technician: existing.technician,
+      inspector: existing.inspector,
       dispatchNo: existing.dispatchNo,
       status: existing.status,
+      signatures: existing.signatures,
+      platformOrderNo: existing.platformOrderNo,
+      repairItems: normalizeDraftRepairItems(order.repairItems),
       updatedAt: nowString()
     };
     await upsertWorkOrder(client, next);
@@ -89,7 +98,14 @@ export async function transitionWorkOrder(id, status, actor, action, patch = {})
     const order = await findWorkOrderById(client, id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
     assertStatusTransition(order.status, status);
-    const next = { ...order, ...patch, advisor: order.advisor, status, updatedAt: nowString() };
+    const safePatch = sanitizeTransitionPatch(status, patch);
+    const repairItems = status === "维修中"
+      ? order.repairItems.map((item) => ({
+        ...item,
+        owner: item.owner === "待派工" ? safePatch.technician : item.owner
+      }))
+      : order.repairItems;
+    const next = { ...order, ...safePatch, id: order.id, advisor: order.advisor, repairItems, status, updatedAt: nowString() };
     await upsertWorkOrder(client, next);
     await addAudit(client, id, actor, action);
     return findWorkOrderById(client, id);
@@ -111,6 +127,7 @@ export async function createSignatureTokenForOrder(id, actor) {
           and ocr.field = 'vehicleLicense'
           and ocr.status = '已确认'
           and f.kind = 'vehicle_license'
+          and f.order_id = ocr.order_id
         order by ocr.confirmed_at desc
         limit 1
       `,
@@ -190,33 +207,6 @@ export async function signWorkOrderByToken(token, signature, signatureFileId) {
   });
 }
 
-export async function createOcrRecord({ orderId, field, source, fileId, value, confidence, error }) {
-  const id = createId("ocr");
-  const status = error ? "识别失败" : "待确认";
-  await pool.query(
-    `
-      insert into ocr_records (id, order_id, field, source, file_id, status, value, confidence, error)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    `,
-    [id, orderId || null, field, source, fileId || createId("file"), status, value || "", Number(confidence || 0), error || null]
-  );
-  if (orderId) await addAudit(pool, orderId, "OCR", `${source}识别${error ? "失败" : "待确认"}`);
-  return findOcrRecord(id);
-}
-
-export async function confirmOcrRecord(id, value, actor) {
-  const record = await findOcrRecord(id);
-  if (!record) throw new HttpError(404, "OCR 记录不存在");
-  await transaction(async (client) => {
-    await client.query(
-      "update ocr_records set status = '已确认', value = $2, confirmed_at = now() where id = $1",
-      [id, value || record.value]
-    );
-    if (record.orderId) await addAudit(client, record.orderId, actor || "服务顾问", `确认OCR字段：${record.field}`);
-  });
-  return findOcrRecord(id);
-}
-
 export async function syncWorkOrderToPlatform(id, actor) {
   return transaction(async (client) => {
     const order = await findWorkOrderById(client, id, true);
@@ -294,6 +284,7 @@ export async function createSettlementForOrder(orderId, actor) {
     const order = await findWorkOrderById(client, orderId, true);
     if (!order) throw new HttpError(404, "委托单不存在");
     assertSettlementAllowed(order.status);
+    if (order.settlementStatements.length) return order;
     const amount = Number(order.settlementAmount || order.estimatedFee || order.repairItems.reduce((sum, item) => sum + Number(item.laborFee || 0), 0));
     const id = createId("settle");
     await client.query(
@@ -307,141 +298,6 @@ export async function createSettlementForOrder(orderId, actor) {
     await addAudit(client, orderId, actor, "同步并匹配结算清单");
     return findWorkOrderById(client, orderId);
   });
-}
-
-export async function createFileRecord({ orderId, kind, storageProvider, bucket, objectKey, originalName, mimeType, sizeBytes, uploadedBy }) {
-  const id = createId("file");
-  await pool.query(
-    `
-      insert into files (
-        id, order_id, kind, storage_provider, bucket, object_key,
-        original_name, mime_type, size_bytes, uploaded_by
-      ) values (
-        $1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10
-      )
-    `,
-    [
-      id,
-      orderId || null,
-      kind,
-      storageProvider || "oss",
-      bucket,
-      objectKey,
-      originalName || "",
-      mimeType || "",
-      Number(sizeBytes || 0),
-      uploadedBy || null
-    ]
-  );
-  return {
-    id,
-    orderId: orderId || undefined,
-    kind,
-    storageProvider: storageProvider || "oss",
-    bucket,
-    objectKey,
-    originalName: originalName || "",
-    mimeType: mimeType || "",
-    sizeBytes: Number(sizeBytes || 0),
-    uploadedBy: uploadedBy || undefined,
-    createdAt: nowString()
-  };
-}
-
-export async function findFileRecord(fileId) {
-  const { rows } = await pool.query("select * from files where id = $1", [fileId]);
-  const row = rows[0];
-  if (!row) throw new HttpError(404, "文件不存在");
-  return {
-    id: row.id,
-    orderId: row.order_id || undefined,
-    kind: row.kind,
-    storageProvider: row.storage_provider,
-    bucket: row.bucket,
-    objectKey: row.object_key,
-    originalName: row.original_name || "",
-    mimeType: row.mime_type || "application/octet-stream",
-    sizeBytes: Number(row.size_bytes || 0),
-    uploadedBy: row.uploaded_by || undefined,
-    createdAt: formatDate(row.created_at)
-  };
-}
-
-export async function attachFileToOrder(fileId, orderId) {
-  const { rows } = await pool.query(
-    `
-      update files
-      set order_id = $2
-      where id = $1
-        and (order_id is null or order_id = $2)
-      returning *
-    `,
-    [fileId, orderId]
-  );
-  const row = rows[0];
-  if (!row) throw new HttpError(404, "文件不存在或已关联其他委托单");
-  await pool.query(
-    "update ocr_records set order_id = $2 where file_id = $1 and (order_id is null or order_id = $2)",
-    [fileId, orderId]
-  );
-  return {
-    id: row.id,
-    orderId: row.order_id,
-    kind: row.kind,
-    storageProvider: row.storage_provider,
-    bucket: row.bucket,
-    objectKey: row.object_key,
-    originalName: row.original_name || "",
-    mimeType: row.mime_type || "",
-    sizeBytes: Number(row.size_bytes || 0),
-    uploadedBy: row.uploaded_by || undefined,
-    createdAt: formatDate(row.created_at)
-  };
-}
-
-export async function assertWorkOrderAccess(orderId, user) {
-  const { rows } = await pool.query("select advisor from work_orders where id = $1", [orderId]);
-  const order = rows[0];
-  if (!order) throw new HttpError(404, "委托单不存在");
-  if (user.role === "manager") return;
-  if (user.role === "advisor" && order.advisor === user.name) return;
-  throw new HttpError(403, "无权访问该委托单");
-}
-
-export async function assertFileAccess(fileId, user) {
-  const { rows } = await pool.query(
-    `
-      select f.uploaded_by, wo.advisor
-      from files f
-      left join work_orders wo on wo.id = f.order_id
-      where f.id = $1
-    `,
-    [fileId]
-  );
-  const file = rows[0];
-  if (!file) throw new HttpError(404, "文件不存在");
-  if (user.role === "manager") return;
-  if (user.role === "advisor" && (file.uploaded_by === user.id || file.advisor === user.name)) return;
-  throw new HttpError(403, "无权访问该文件");
-}
-
-export async function assertOcrRecordAccess(recordId, user) {
-  const { rows } = await pool.query(
-    `
-      select ocr.order_id, f.uploaded_by, wo.advisor
-      from ocr_records ocr
-      left join files f on f.id = ocr.file_id
-      left join work_orders wo on wo.id = ocr.order_id
-      where ocr.id = $1
-    `,
-    [recordId]
-  );
-  const record = rows[0];
-  if (!record) throw new HttpError(404, "OCR 记录不存在");
-  if (user.role === "manager") return;
-  if (user.role === "advisor" && (record.uploaded_by === user.id || record.advisor === user.name)) return;
-  throw new HttpError(403, "无权访问该 OCR 记录");
 }
 
 export async function dashboardSummary(role = "manager", user) {
@@ -604,7 +460,7 @@ async function upsertWorkOrder(client, order) {
         id, status, advisor, department_code, department_name, technician, inspector,
         dispatch_no, arrival_date, shop_id, shop_name, shop_address, shop_phone,
         vehicle_plate, vehicle_vin, vehicle_mileage, vehicle_model, vehicle_purchase_date,
-        customer_name, customer_phone, customer_contact, customer_address,
+        customer_name, customer_legacy_code, customer_phone, customer_contact, customer_address,
         inspection, fault_description, estimated_fee, old_parts_handling,
         estimated_delivery_at, settlement_amount, fee_note, platform_order_no,
         created_at, updated_at
@@ -612,10 +468,10 @@ async function upsertWorkOrder(client, order) {
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10, $11, $12, $13,
         $14, $15, $16, $17, $18,
-        $19, $20, $21, $22,
-        $23::jsonb, $24, $25, $26,
-        $27, $28, $29, $30,
-        $31, $32
+        $19, $20, $21, $22, $23,
+        $24::jsonb, $25, $26, $27,
+        $28, $29, $30, $31,
+        $32, $33
       )
       on conflict (id) do update set
         status = excluded.status,
@@ -636,6 +492,7 @@ async function upsertWorkOrder(client, order) {
         vehicle_model = excluded.vehicle_model,
         vehicle_purchase_date = excluded.vehicle_purchase_date,
         customer_name = excluded.customer_name,
+        customer_legacy_code = excluded.customer_legacy_code,
         customer_phone = excluded.customer_phone,
         customer_contact = excluded.customer_contact,
         customer_address = excluded.customer_address,
@@ -680,6 +537,19 @@ async function replaceRepairItems(client, orderId, items) {
   }
 }
 
+function normalizeDraftRepairItems(items) {
+  if (!Array.isArray(items)) throw new HttpError(400, "维修项目参数必须是数组");
+  return items.map((item, index) => ({
+    ...item,
+    id: Number(item?.id || index + 1),
+    owner: "待派工",
+    startAt: "",
+    finishAt: "",
+    inspector: "待检验",
+    status: "待派工"
+  }));
+}
+
 async function replaceSignatures(client, orderId, signatures) {
   const entries = Object.entries(signatures).filter(([, signerName]) => Boolean(signerName));
   const signerTypes = entries.map(([signerType]) => signerType);
@@ -716,11 +586,6 @@ function roleFilter(role, user) {
   if (role === "advisor") return { where: "where wo.advisor = $1", params: [user?.name || "林佳"] };
   if (role === "inspector") return { where: "where wo.status = any($1::text[])", params: [["维修中", "待结算"]] };
   return { where: "", params: [] };
-}
-
-async function findOcrRecord(id) {
-  const { rows } = await pool.query("select * from ocr_records where id = $1", [id]);
-  return rows[0] ? rowToOcrRecord(rows[0]) : undefined;
 }
 
 async function upsertOutboundOrder(client, orderId, dispatchNo, platformOrderNo, repairItems, technician) {

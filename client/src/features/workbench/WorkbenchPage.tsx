@@ -1,14 +1,19 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { ClipboardCheck, LockKeyhole, Menu, RefreshCcw, UserRound } from "lucide-react";
 import { Alert, Button, Drawer, Grid, Layout, Select, Space } from "antd";
 import { DevelopmentPersonaKey } from "../../../../shared/types";
 import { MetricCard } from "../../shared/ui/Status";
 import { roles } from "../work-orders/domain/workOrderDomain";
-import { WorkOrderEditor } from "../work-orders/components/WorkOrderEditor";
-import { ModulePanel } from "./ModulePanel";
 import { OrdersArchive } from "./OrdersArchive";
 import { roleFocus } from "./workbenchConfig";
 import { useWorkbenchController } from "./useWorkbenchController";
+
+const WorkOrderEditor = lazy(() =>
+  import("../work-orders/components/WorkOrderEditor").then((module) => ({ default: module.WorkOrderEditor }))
+);
+const ModulePanel = lazy(() =>
+  import("./ModulePanel").then((module) => ({ default: module.ModulePanel }))
+);
 
 export function WorkbenchPage() {
   const screens = Grid.useBreakpoint();
@@ -111,9 +116,17 @@ export function WorkbenchPage() {
           </>
         ) : null}
 
-        {activeNav === "委托开单" ? <WorkOrderEditor controller={controller} /> : null}
+        {activeNav === "委托开单" ? (
+          <Suspense fallback={<div role="status">正在加载委托开单…</div>}>
+            <WorkOrderEditor controller={controller} />
+          </Suspense>
+        ) : null}
 
-        <ModulePanel activeNav={activeNav} orders={orders} dashboard={dashboard} users={users} />
+        {activeNav === "数据看板" || activeNav === "权限设置" ? (
+          <Suspense fallback={<div role="status">正在加载功能模块…</div>}>
+            <ModulePanel activeNav={activeNav} orders={orders} dashboard={dashboard} users={users} />
+          </Suspense>
+        ) : null}
       </Layout.Content>
     </Layout>
   );

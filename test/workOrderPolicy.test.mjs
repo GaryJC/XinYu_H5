@@ -5,7 +5,8 @@ import {
   assertPlatformSyncAllowed,
   assertRepairItemAction,
   assertSettlementAllowed,
-  assertStatusTransition
+  assertStatusTransition,
+  sanitizeTransitionPatch
 } from "../server/domain/workOrderPolicy.mjs";
 import { HttpError } from "../server/http/HttpError.mjs";
 
@@ -15,6 +16,21 @@ test("work-order state changes must follow the workflow", () => {
   assert.throws(
     () => assertStatusTransition("草稿", "完成"),
     (error) => error instanceof HttpError && error.status === 409
+  );
+});
+
+test("workflow patches reject server-owned and malformed fields", () => {
+  assert.deepEqual(
+    sanitizeTransitionPatch("维修中", { technician: "陈立" }),
+    { technician: "陈立" }
+  );
+  assert.throws(
+    () => sanitizeTransitionPatch("维修中", { id: "another-order" }),
+    (error) => error instanceof HttpError && error.status === 400
+  );
+  assert.throws(
+    () => sanitizeTransitionPatch("完成", { settlementAmount: -1 }),
+    (error) => error instanceof HttpError && error.status === 400
   );
 });
 
