@@ -14,7 +14,14 @@ export function useWorkOrderDraft() {
   }
 
   function updateVehicle(key: keyof WorkOrderDraft["vehicle"], value: string) {
-    setDraft((current) => ({ ...current, vehicle: { ...current.vehicle, [key]: value } }));
+    setDraft((current) => ({
+      ...current,
+      vehicle: {
+        ...current.vehicle,
+        [key]: value,
+        ...(key === "model" ? { modelLegacyCode: "" } : {})
+      }
+    }));
   }
 
   function updateCustomer(key: keyof WorkOrderDraft["customer"], value: string) {

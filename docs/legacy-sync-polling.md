@@ -33,7 +33,16 @@ from claim_legacy_sync_events('runfeng-production', 20);
 字段映射：
 
 - `payload.order.department.code` → `qxwxb.bm`
+- `payload.order.vehicle.model` → `cxb.qc` / `qxclxxb.cx` 名称部分
+- `payload.order.vehicle.modelLegacyCode` → `cxb.bh` / `qxclxxb.cx` 编码部分
+- `payload.order.customer.name` → `khxxb.mc`
+- `payload.order.customer.legacyCode` → `khxxb.bm` / `qxclxxb.ssdw`
 - `payload.order.advisor` → `qxwxb.jcr`
+
+例如 `vehicle.modelLegacyCode = "DZXPST"`、`vehicle.model = "大众-新帕萨特"` 时，
+车辆档案车型按旧库格式写为 `DZXPST 大众-新帕萨特`。润丰应优先使用 payload
+中已提供的编码，不要再次根据名称生成编码。完整规则见
+[`runfeng-sync-field-reference.md`](./runfeng-sync-field-reference.md)。
 
 领取使用 `FOR UPDATE SKIP LOCKED`，支持多个消费者并行工作。消费者崩溃后，
 管理员可以将长时间处于 `processing` 的事件标记为失败或重新入队。

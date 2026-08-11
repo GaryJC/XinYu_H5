@@ -74,6 +74,7 @@ export type VehicleHistoryLookupResult = {
     plate: string;
     vin: string;
     model: string;
+    modelLegacyCode: string;
     organization?: {
       code: string;
       name: string;
@@ -261,6 +262,7 @@ export type WorkOrder = {
     vin: string;
     mileage: string;
     model: string;
+    modelLegacyCode: string;
     purchaseDate: string;
   };
   customer: {

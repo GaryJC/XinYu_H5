@@ -247,9 +247,9 @@ function validateOrderForSignature(order) {
   if (!order.vehicle?.plate?.trim()) missing.push("车牌号码");
   if (!/^[A-Z0-9]{17}$/i.test(order.vehicle?.vin?.trim() || "")) missing.push("17 位 VIN");
   if (!/^\d+(\.\d+)?$/.test(order.vehicle?.mileage?.trim() || "")) missing.push("进厂里程");
-  if (!order.customer?.name?.trim()) missing.push("车主名称");
+  if (!order.vehicle?.model?.trim()) missing.push("车型");
+  if (!order.customer?.name?.trim()) missing.push("车主名称/所属单位");
   if (!order.customer?.phone?.trim()) missing.push("联系电话");
-  if (!order.faultDescription?.trim()) missing.push("故障描述");
   if (!order.repairItems?.length || order.repairItems.some((item) => !item.name?.trim())) missing.push("维修项目");
   if (missing.length) throw new HttpError(400, `请完善必填项：${missing.join("、")}`);
 }
@@ -459,7 +459,7 @@ async function upsertWorkOrder(client, order) {
       insert into work_orders (
         id, status, advisor, department_code, department_name, technician, inspector,
         dispatch_no, arrival_date, shop_id, shop_name, shop_address, shop_phone,
-        vehicle_plate, vehicle_vin, vehicle_mileage, vehicle_model, vehicle_purchase_date,
+        vehicle_plate, vehicle_vin, vehicle_mileage, vehicle_model, vehicle_model_legacy_code, vehicle_purchase_date,
         customer_name, customer_legacy_code, customer_phone, customer_contact, customer_address,
         inspection, fault_description, estimated_fee, old_parts_handling,
         estimated_delivery_at, settlement_amount, fee_note, platform_order_no,
@@ -467,11 +467,11 @@ async function upsertWorkOrder(client, order) {
       ) values (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10, $11, $12, $13,
-        $14, $15, $16, $17, $18,
-        $19, $20, $21, $22, $23,
-        $24::jsonb, $25, $26, $27,
-        $28, $29, $30, $31,
-        $32, $33
+        $14, $15, $16, $17, $18, $19,
+        $20, $21, $22, $23, $24,
+        $25::jsonb, $26, $27, $28,
+        $29, $30, $31, $32,
+        $33, $34
       )
       on conflict (id) do update set
         status = excluded.status,
@@ -490,6 +490,7 @@ async function upsertWorkOrder(client, order) {
         vehicle_vin = excluded.vehicle_vin,
         vehicle_mileage = excluded.vehicle_mileage,
         vehicle_model = excluded.vehicle_model,
+        vehicle_model_legacy_code = excluded.vehicle_model_legacy_code,
         vehicle_purchase_date = excluded.vehicle_purchase_date,
         customer_name = excluded.customer_name,
         customer_legacy_code = excluded.customer_legacy_code,

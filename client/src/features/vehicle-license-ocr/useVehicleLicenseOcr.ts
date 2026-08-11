@@ -87,6 +87,7 @@ export function useVehicleLicenseOcr({ orderId, actor, setDraft, onRecognized }:
           plate: result.plate || current.vehicle.plate,
           vin: result.vin || current.vehicle.vin,
           model: result.model || current.vehicle.model,
+          modelLegacyCode: result.model ? "" : current.vehicle.modelLegacyCode,
           purchaseDate: normalizeOcrDate(result.registerDate) || current.vehicle.purchaseDate
         },
         customer: {

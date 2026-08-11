@@ -83,6 +83,7 @@ export function buildLegacySyncPayload({ eventId, revision, eventType, order }) 
         vin: order.vehicle?.vin || "",
         mileage: order.vehicle?.mileage || "",
         model: order.vehicle?.model || "",
+        modelLegacyCode: order.vehicle?.modelLegacyCode || "",
         purchaseDate: order.vehicle?.purchaseDate || ""
       },
       customer: {

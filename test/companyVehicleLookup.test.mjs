@@ -15,6 +15,7 @@ test("company vehicle lookup matches a saved vehicle by plate", async () => {
   assert.equal(result.status, "found");
   assert.equal(result.vehicle.vin, "LSVNV2182E2123456");
   assert.equal(result.vehicle.model, "大众 帕萨特 2023款");
+  assert.equal(result.vehicle.modelLegacyCode, "DZPST");
   assert.deepEqual(result.vehicle.organization, { code: "GR", name: "个人" });
 });
 
@@ -44,6 +45,7 @@ test("company vehicle lookup reuses normalized model and organization for a new 
   assert.equal(result.status, "new");
   assert.equal(result.references.model.status, "matched");
   assert.equal(result.references.model.selected.value, "奥迪 A6");
+  assert.equal(result.references.model.selected.code, "ADA6");
   assert.equal(result.references.organization.status, "matched");
   assert.equal(result.references.organization.selected.code, "QDDTGSYXYYFGS");
 });
@@ -61,6 +63,7 @@ test("fuzzy model and organization matches are returned for manual selection", a
     "大众 帕萨特 2023款",
     "大众汽车 SVW7142BPV"
   ]);
+  assert.deepEqual(result.references.model.candidates.map((item) => item.code), ["DZPST", "DZ"]);
   assert.equal(result.references.organization.status, "ambiguous");
   assert.deepEqual(result.references.organization.candidates.map((item) => item.code), ["QDSWJT", "QDSWFZ"]);
   assert.match(result.message, /请选择/);
@@ -104,6 +107,15 @@ test("organization matching requires a unique bm code", () => {
   assert.equal(result.status, "ambiguous");
   assert.equal(result.candidates.length, 2);
   assert.equal(normalizeReference(" Audi-A6 "), "AUDIA6");
+});
+
+test("model matching requires a unique cxb bh code", () => {
+  const result = resolveReference("测试车型", [
+    { value: "测试车型", code: "CSCX1", usageCount: 20 },
+    { value: "测试车型", code: "CSCX2", usageCount: 5 }
+  ], true);
+  assert.equal(result.status, "ambiguous");
+  assert.equal(result.candidates.length, 2);
 });
 
 test("company vehicle lookup rejects an empty identifier", async () => {

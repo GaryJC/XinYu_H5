@@ -7,14 +7,14 @@ import {
 } from "../../repositories/legacyVehicleRepository.mjs";
 
 const mockVehicles = [
-  { id: "1", plate: "辽A12345", vin: "LSVNV2182E2123456", model: "大众 帕萨特 2023款", organization: { code: "GR", name: "个人" } },
-  { id: "2", plate: "沪AG12345", vin: "LSVCY6C49MN027789", model: "大众汽车 SVW7142BPV", organization: { code: "QDDTGSYXYYFGS", name: "青岛地铁运营有限公司" } }
+  { id: "1", plate: "辽A12345", vin: "LSVNV2182E2123456", model: "大众 帕萨特 2023款", modelLegacyCode: "DZPST", organization: { code: "GR", name: "个人" } },
+  { id: "2", plate: "沪AG12345", vin: "LSVCY6C49MN027789", model: "大众汽车 SVW7142BPV", modelLegacyCode: "DZ", organization: { code: "QDDTGSYXYYFGS", name: "青岛地铁运营有限公司" } }
 ];
 
 const mockModels = [
-  { value: "大众 帕萨特 2023款", usageCount: 12 },
-  { value: "大众汽车 SVW7142BPV", usageCount: 6 },
-  { value: "奥迪 A6", usageCount: 8 }
+  { value: "大众 帕萨特 2023款", code: "DZPST", usageCount: 12 },
+  { value: "大众汽车 SVW7142BPV", code: "DZ", usageCount: 6 },
+  { value: "奥迪 A6", code: "ADA6", usageCount: 8 }
 ];
 
 const mockOrganizations = [
@@ -66,7 +66,7 @@ export async function lookupVehicleInCompanySystem({ plate, vin, model, owner } 
       : Promise.resolve([])
   ]);
   const references = {};
-  if (typeof model === "string" && model.trim()) references.model = resolveReference(model, modelCandidates, false);
+  if (typeof model === "string" && model.trim()) references.model = resolveReference(model, modelCandidates, true);
   if (typeof owner === "string" && owner.trim()) references.organization = resolveReference(owner, organizationCandidates, true);
 
   const matchedParts = [
@@ -167,6 +167,7 @@ function publicVehicle(vehicle) {
     plate: vehicle.plate,
     vin: vehicle.vin,
     model: vehicle.model,
+    modelLegacyCode: vehicle.modelLegacyCode || "",
     organization: vehicle.organization
   };
 }

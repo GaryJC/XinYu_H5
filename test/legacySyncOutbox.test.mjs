@@ -17,7 +17,7 @@ const order = {
   technician: "待派工",
   inspector: "待检验",
   shop: { id: "shop-hq", name: "抚顺路店", address: "抚顺路店", phone: "021-1" },
-  vehicle: { plate: "鲁B12345", vin: "LSV12345678901234", mileage: "123", model: "测试车型", purchaseDate: "" },
+  vehicle: { plate: "鲁B12345", vin: "LSV12345678901234", mileage: "123", model: "测试车型", modelLegacyCode: "CSCX", purchaseDate: "" },
   customer: { name: "测试客户", legacyCode: "CSKH", phone: "13800000000", contact: "测试客户", address: "" },
   inspection: { belongings: ["行驶证"], fuelLevel: "1/2", exteriorIssues: [] },
   faultDescription: "测试故障",
@@ -57,6 +57,7 @@ test("legacy sync payload is versioned and preserves structured work-order data"
   assert.equal(payload.order.dispatchNo, "");
   assert.deepEqual(payload.order.department, { code: "A", name: "机电一部" });
   assert.equal(payload.order.customer.legacyCode, "CSKH");
+  assert.equal(payload.order.vehicle.modelLegacyCode, "CSCX");
   assert.deepEqual(payload.order.repairItems[0], {
     id: 7,
     itemNo: 1,
@@ -129,6 +130,15 @@ test("customer legacy code migration preserves the matched khxxb bm", async () =
 
   assert.match(migration, /add column if not exists customer_legacy_code text not null default ''/i);
   assert.match(migration, /idx_work_orders_customer_legacy_code/i);
+});
+
+test("vehicle model legacy code migration preserves the matched cxb bh", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/202608110002_work_order_vehicle_model_legacy_code.sql", import.meta.url),
+    "utf8"
+  );
+  assert.match(migration, /add column if not exists vehicle_model_legacy_code text not null default ''/i);
+  assert.match(migration, /idx_work_orders_vehicle_model_legacy_code/i);
 });
 
 test("batch result migration ACKs and fails up to 100 claimed events", async () => {

@@ -118,7 +118,8 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
         ...current.vehicle,
         plate: plate || current.vehicle.plate,
         vin: vin || current.vehicle.vin,
-        model: input.model?.trim() || current.vehicle.model
+        model: input.model?.trim() || current.vehicle.model,
+        modelLegacyCode: input.model?.trim() ? "" : current.vehicle.modelLegacyCode
       },
       customer: input.owner?.trim()
         ? {
@@ -188,7 +189,8 @@ function applyVehicleLookup(draft: WorkOrderDraft, history: VehicleHistoryLookup
         ...draft.vehicle,
         plate: history.vehicle.plate || draft.vehicle.plate,
         vin: history.vehicle.vin || draft.vehicle.vin,
-        model: history.vehicle.model || draft.vehicle.model
+        model: history.vehicle.model || draft.vehicle.model,
+        modelLegacyCode: history.vehicle.modelLegacyCode || ""
       },
       customer: organizationName
         ? {
@@ -211,7 +213,14 @@ function applyVehicleLookup(draft: WorkOrderDraft, history: VehicleHistoryLookup
 
 function applyReferenceCandidate(draft: WorkOrderDraft, kind: "model" | "organization", candidate: VehicleReferenceCandidate) {
   if (kind === "model") {
-    return { ...draft, vehicle: { ...draft.vehicle, model: candidate.value } };
+    return {
+      ...draft,
+      vehicle: {
+        ...draft.vehicle,
+        model: candidate.value,
+        modelLegacyCode: candidate.code || ""
+      }
+    };
   }
   return {
     ...draft,

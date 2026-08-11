@@ -14,32 +14,32 @@ on conflict (id) do update set
 
 insert into work_orders (
   id, status, advisor, technician, inspector,
-  vehicle_plate, vehicle_vin, vehicle_mileage, vehicle_model, vehicle_purchase_date,
-  customer_name, customer_phone, customer_contact, customer_address,
+  vehicle_plate, vehicle_vin, vehicle_mileage, vehicle_model, vehicle_model_legacy_code, vehicle_purchase_date,
+  customer_name, customer_legacy_code, customer_phone, customer_contact, customer_address,
   inspection, fault_description, estimated_fee, old_parts_handling,
   estimated_delivery_at, settlement_amount, fee_note, platform_order_no,
   created_at, updated_at
 ) values
   (
     'WT-20260626-018', '维修中', '林佳', '陈立', '待检验',
-    '沪A·7K92D', 'LSGPC52U9MF018736', '68240', '别克 GL8', '2021-08-16',
-    '周先生', '138****2641', '周先生', '上海市闵行区',
+    '沪A·7K92D', 'LSGPC52U9MF018736', '68240', '别克-GL8', 'BKGL8', '2021-08-16',
+    '周先生', 'MOCK-ZHOU', '138****2641', '周先生', '上海市闵行区',
     '{"belongings": ["行驶证", "备胎", "千斤顶"], "fuelLevel": "1/2", "exteriorIssues": ["划伤"]}'::jsonb,
     '刹车异响，发动机舱低速异响。', 880, '环保处理', '2026-06-27 18:00', 0, '', null,
     '2026-06-26T09:00:00+08:00', '2026-06-26T10:00:00+08:00'
   ),
   (
     'WT-20260626-017', '待派工', '林佳', '待派工', '待检验',
-    '沪C·N581Q', 'LGBH52E04NY218456', '45210', '本田 雅阁', '2020-03-12',
-    '沈女士', '139****8812', '沈女士', '上海市长宁区',
+    '沪C·N581Q', 'LGBH52E04NY218456', '45210', '本田-雅阁', 'BTYG', '2020-03-12',
+    '沈女士', 'MOCK-SHEN', '139****8812', '沈女士', '上海市长宁区',
     '{"belongings": ["行驶证"], "fuelLevel": "1/2", "exteriorIssues": []}'::jsonb,
     '空调制冷效果差。', 520, '环保处理', '', 0, '', null,
     '2026-06-26T09:30:00+08:00', '2026-06-26T10:10:00+08:00'
   ),
   (
     'WT-20260626-016', '待结算', '林佳', '刘峰', '黄检',
-    '苏E·45M8A', 'LSVNV2189P2184501', '81200', '大众 途腾', '2019-11-03',
-    '许先生', '136****6032', '许先生', '苏州市工业园区',
+    '苏E·45M8A', 'LSVNV2189P2184501', '81200', '大众-途观', 'DZTG', '2019-11-03',
+    '许先生', 'MOCK-XU', '136****6032', '许先生', '苏州市工业园区',
     '{"belongings": ["行驶证"], "fuelLevel": "1/2", "exteriorIssues": []}'::jsonb,
     '保养并更换机油滤芯。', 980, '环保处理', '', 980, '', null,
     '2026-06-26T08:30:00+08:00', '2026-06-26T10:20:00+08:00'
@@ -53,8 +53,10 @@ on conflict (id) do update set
   vehicle_vin = excluded.vehicle_vin,
   vehicle_mileage = excluded.vehicle_mileage,
   vehicle_model = excluded.vehicle_model,
+  vehicle_model_legacy_code = excluded.vehicle_model_legacy_code,
   vehicle_purchase_date = excluded.vehicle_purchase_date,
   customer_name = excluded.customer_name,
+  customer_legacy_code = excluded.customer_legacy_code,
   customer_phone = excluded.customer_phone,
   customer_contact = excluded.customer_contact,
   customer_address = excluded.customer_address,

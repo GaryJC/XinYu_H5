@@ -5,6 +5,7 @@
     "start": "node --env-file-if-exists=.env.production server/server.mjs",
     "migrate": "node --env-file-if-exists=.env.production --env-file-if-exists=.env.local scripts/migrate.mjs",
     "mock:runfeng": "node --env-file-if-exists=.env.production --env-file-if-exists=.env.local scripts/seed-runfeng-mock.mjs",
+    "mock:runfeng:refresh": "node --env-file-if-exists=.env.production --env-file-if-exists=.env.local scripts/seed-runfeng-mock.mjs --refresh",
     "sqlserver:check": "node --env-file-if-exists=.env.production --env-file-if-exists=.env.local scripts/check-sqlserver.mjs",
     "db:start": "supabase start",
     "db:reset": "supabase db reset",

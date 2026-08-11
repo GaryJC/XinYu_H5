@@ -10,7 +10,7 @@
 | `revision` | `bigint` | 同一委托单的同步版本号，从 1 递增。 | 无直接对应字段；用于同步程序判断和记录事件版本。当前只同步首次创建，通常为 1。 |
 | `event_type` | `text` | 事件类型：`created`、`updated`、`cancelled`；当前实际发送 `created`。 | 无直接对应字段；决定润丰执行新增、修改或取消操作。当前 `created` 表示新增 `qxwxb/qxwxmxb`。 |
 | `payload_version` | `integer` | `payload` JSON 的结构版本，当前为 1。 | 无直接对应字段；仅用于润丰选择正确的 JSON 解析规则。 |
-| `payload` | `jsonb` | 完整接车单业务数据，包含委托单主信息和 `order.repairItems` 维修项目数组。 | 不是单个 SQL Server 字段。应拆分后写入 `qxwxb` 主表和 `qxwxmxb` 维修项目表。当前已确认：`payload.order.department.code` → `qxwxb.bm`；`payload.order.customer.legacyCode` 是匹配到的 `khxxb.bm`，创建车辆档案时写入 `qxclxxb.ssdw`；`payload.order.advisor` → `qxwxb.jcr`。其他业务字段映射需由润丰依据旧库字段定义确认。 |
+| `payload` | `jsonb` | 完整接车单业务数据，包含委托单主信息和 `order.repairItems` 维修项目数组。 | 不是单个 SQL Server 字段。应拆分后写入 `qxwxb` 主表和 `qxwxmxb` 维修项目表。当前已确认：`payload.order.department.code` → `qxwxb.bm`；`payload.order.vehicle.modelLegacyCode` 是匹配到的 `cxb.bh`，创建车辆档案时与车型名称组合写入 `qxclxxb.cx`；`payload.order.customer.legacyCode` 是匹配到的 `khxxb.bm`，创建车辆档案时写入 `qxclxxb.ssdw`；`payload.order.advisor` → `qxwxb.jcr`。其他业务字段映射需由润丰依据旧库字段定义确认。 |
 | `status` | `text` | 同步状态：`pending` 待领取、`processing` 处理中、`synced` 已成功、`failed` 失败待重试。 | 无直接对应字段；属于 PostgreSQL 队列状态，不应写入 `qxwxb/qxwxmxb`。 |
 | `attempt_count` | `integer` | 事件被领取的次数，每次领取加 1。 | 无直接对应字段；用于重试和故障排查。 |
 | `available_at` | `timestamptz` | 最早允许领取/重试的时间。 | 无直接对应字段；由 PostgreSQL 轮询程序使用。 |
@@ -24,6 +24,43 @@
 | `created_at` | `timestamptz` | 同步事件创建时间。 | 无直接对应字段；用于事件排序和排查，不等同于 SQL Server 的接车时间。 |
 | `updated_at` | `timestamptz` | 同步事件最后更新时间，由 PostgreSQL 自动维护。 | 无直接对应字段；不需要写入 SQL Server。 |
 
+## 车型与所属单位编码
+
+车型和所属单位都采用“名称、旧系统编码分列保存”，润丰不需要从名称中截取或生成已有编码。
+
+| PostgreSQL `work_orders` 字段 | `payload.order` JSON 路径 | 含义 | SQL Server 对应关系 |
+| --- | --- | --- | --- |
+| `vehicle_model` | `vehicle.model` | 车型名称，例如 `大众-新帕萨特` | `dbo.cxb.qc`；创建车辆档案时作为 `dbo.qxclxxb.cx` 的名称部分 |
+| `vehicle_model_legacy_code` | `vehicle.modelLegacyCode` | 已匹配车型编码，例如 `DZXPST` | `dbo.cxb.bh`；创建车辆档案时作为 `dbo.qxclxxb.cx` 的编码部分 |
+| `customer_name` | `customer.name` | 车主名称或所属单位名称 | `dbo.khxxb.mc` |
+| `customer_legacy_code` | `customer.legacyCode` | 已匹配所属单位编码，例如 `grqdswjty` | `dbo.khxxb.bm`，并写入 `dbo.qxclxxb.ssdw` |
+
+同步事件示例：
+
+```json
+{
+  "order": {
+    "vehicle": {
+      "model": "大众-新帕萨特",
+      "modelLegacyCode": "DZXPST"
+    },
+    "customer": {
+      "name": "青岛水务集团有限公司",
+      "legacyCode": "grqdswjty"
+    }
+  }
+}
+```
+
+润丰创建 `qxclxxb` 车辆档案时，车型建议按旧库现有格式写入：
+
+```text
+qxclxxb.cx   = vehicle.modelLegacyCode + ' ' + vehicle.model
+qxclxxb.ssdw = customer.legacyCode
+```
+
+上例应写为 `qxclxxb.cx = 'DZXPST 大众-新帕萨特'`。编码字段为空表示 H5 没有匹配到已有字典项；润丰不得把名称误当作已有编码，应按双方约定的新车型或新客户建档规则处理。
+
 ## 直接对应关系汇总
 
 ```text
@@ -32,6 +69,9 @@ legacy_sync_outbox.legacy_document_no  → dbo.qxwxb.dh
 legacy_sync_outbox.legacy_dispatch_no  → dbo.qxwxb.pgd
 
 legacy_sync_outbox.payload.order.department.code → dbo.qxwxb.bm
+legacy_sync_outbox.payload.order.vehicle.model   → dbo.cxb.qc / dbo.qxclxxb.cx 名称部分
+legacy_sync_outbox.payload.order.vehicle.modelLegacyCode → dbo.cxb.bh / dbo.qxclxxb.cx 编码部分
+legacy_sync_outbox.payload.order.customer.name → dbo.khxxb.mc
 legacy_sync_outbox.payload.order.customer.legacyCode → dbo.qxclxxb.ssdw
 legacy_sync_outbox.payload.order.advisor         → dbo.qxwxb.jcr
 ```

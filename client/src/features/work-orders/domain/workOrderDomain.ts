@@ -53,6 +53,7 @@ export function createEmptyDraft(advisor = ""): WorkOrderDraft {
       vin: "",
       mileage: "",
       model: "",
+      modelLegacyCode: "",
       purchaseDate: ""
     },
     customer: {
@@ -93,7 +94,8 @@ export function validateWorkOrderDraft(draft: WorkOrderDraft) {
   if (!draft.vehicle.plate.trim()) errors.push("车牌号码必填");
   if (!/^[A-Z0-9]{17}$/i.test(draft.vehicle.vin.trim())) errors.push("VIN 必须为 17 位字母数字");
   if (!/^\d+(\.\d+)?$/.test(draft.vehicle.mileage.trim())) errors.push("进厂里程必须为数字");
-  if (!draft.customer.name.trim()) errors.push("车主名称必填");
+  if (!draft.vehicle.model.trim()) errors.push("车型必填");
+  if (!draft.customer.name.trim()) errors.push("车主名称/所属单位必填");
   if (!draft.customer.phone.trim()) errors.push("联系电话必填");
   if (!draft.repairItems.length || draft.repairItems.some((item) => !item.name.trim())) errors.push("维修项目不能为空");
   return errors;

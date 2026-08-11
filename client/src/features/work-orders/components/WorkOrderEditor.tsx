@@ -219,7 +219,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               <Field required error={fieldError("车牌号码")} disabled={!canEditForm} label="车牌号码" value={draft.vehicle.plate} onChange={(value) => updateVehicle("plate", value)} />
               <Field required error={fieldError("VIN")} disabled={!canEditForm} label="VIN/底盘号" value={draft.vehicle.vin} onChange={(value) => updateVehicle("vin", value)} />
               <Field required error={fieldError("进厂里程")} disabled={!canEditForm} label="进厂里程" value={draft.vehicle.mileage} suffix="km" onChange={(value) => updateVehicle("mileage", value)} />
-              <Form.Item className="field" label="车型">
+              <Form.Item className="field" label="车型" required validateStatus={fieldError("车型") ? "error" : undefined} help={fieldError("车型")}>
                 <VehicleReferenceAutocomplete
                   kind="model"
                   ariaLabel="车型"
@@ -227,7 +227,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   placeholder="输入至少两个字符查询已有车型"
                   value={draft.vehicle.model}
                   onChange={(value) => updateVehicle("model", value)}
-                  onSelect={(candidate) => updateVehicle("model", candidate.value)}
+                  onSelect={(candidate) => selectVehicleReference("model", candidate)}
                 />
                 <VehicleReferenceTags
                   label="车型"
@@ -236,10 +236,10 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   onSelect={(candidate) => selectVehicleReference("model", candidate)}
                 />
               </Form.Item>
-              <Form.Item className="field" label="车主名称" required validateStatus={fieldError("车主名称") ? "error" : undefined} help={fieldError("车主名称")}>
+              <Form.Item className="field" label="车主名称/所属单位" required validateStatus={fieldError("车主名称/所属单位") ? "error" : undefined} help={fieldError("车主名称/所属单位")}>
                 <VehicleReferenceAutocomplete
                   kind="organization"
-                  ariaLabel="车主名称"
+                  ariaLabel="车主名称/所属单位"
                   disabled={!canEditForm}
                   placeholder="输入至少两个字符查询已有单位"
                   value={draft.customer.name}
@@ -255,7 +255,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   }))}
                 />
                 <VehicleReferenceTags
-                  label="车主单位"
+                  label="车主名称/所属单位"
                   disabled={!canEditForm}
                   resolution={vehicleHistory?.references?.organization}
                   onSelect={(candidate) => selectVehicleReference("organization", candidate)}
@@ -380,7 +380,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 <div className="summary-grid">
                   <Summary label="委托单号" value={signatureSession.order.id} />
                   <Summary label="车牌号码" value={signatureSession.order.vehicle.plate} />
-                  <Summary label="车主" value={signatureSession.order.customer.name} />
+                  <Summary label="车主名称/所属单位" value={signatureSession.order.customer.name} />
                   <Summary label="车型" value={signatureSession.order.vehicle.model || "-"} />
                   <Summary label="预计费用" value={`¥${signatureSession.order.estimatedFee || sumLabor(signatureSession.order.repairItems)}`} />
                   <Summary label="旧件处置" value={signatureSession.order.oldPartsHandling} />

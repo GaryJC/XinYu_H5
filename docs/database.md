@@ -51,7 +51,8 @@ npm run sqlserver:check
 SQL Server 2000 requires TDS 7.1 and the current instance does not support encrypted connections. Keep port 1433 private, use a least-privilege account instead of `sa`, and grant only the reads and `dbo.qxwxb` writes required by the application. Keep all legacy SQL inside dedicated repositories. Catalog queries must use SQL Server 2000 objects such as `dbo.sysobjects`; newer views such as `sys.tables` are unavailable.
 
 Vehicle recognition still reads the vehicle master from `dbo.qxclxxb` (`ch` = plate,
-`sbdm` = VIN/chassis number, `cx` = model). H5 work-order creation and updates do not
+`sbdm` = VIN/chassis number, `cx` = model code plus name) and resolves canonical model
+codes/names from `dbo.cxb` (`bh` = code, `qc` = full name). H5 work-order creation and updates do not
 write SQL Server. They commit the PostgreSQL business data and a versioned
 `legacy_sync_outbox` event in one transaction. The Runfeng integration polls those
 events, writes its own SQL Server, then acknowledges the event with `reid`, `dh`, and

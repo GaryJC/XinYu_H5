@@ -106,7 +106,7 @@ function OrderDetail({ order, isMobile }: { order: WorkOrder; isMobile: boolean 
     { key: "mileage", label: "进厂里程", children: order.vehicle.mileage ? `${order.vehicle.mileage} km` : "-" },
     { key: "model", label: "车型", children: order.vehicle.model || "-" },
     { key: "purchase", label: "购车日期", children: order.vehicle.purchaseDate || "-" },
-    { key: "customer", label: "车主名称", children: order.customer.name || "-" },
+    { key: "customer", label: "车主名称/所属单位", children: order.customer.name || "-" },
     { key: "contact", label: "联系人", children: order.customer.contact || "-" },
     { key: "phone", label: "联系电话", children: order.customer.phone || "-" },
     { key: "address", label: "车辆地址", children: order.customer.address || "-", span: isMobile ? 1 : 3 },

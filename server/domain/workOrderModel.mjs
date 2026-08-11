@@ -20,6 +20,7 @@ export function workOrderValues(order) {
     order.vehicle?.vin || "",
     order.vehicle?.mileage || "",
     order.vehicle?.model || "",
+    order.vehicle?.modelLegacyCode || "",
     order.vehicle?.purchaseDate || "",
     order.customer?.name || "",
     order.customer?.legacyCode || "",
@@ -65,6 +66,7 @@ export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecord
       vin: row.vehicle_vin,
       mileage: row.vehicle_mileage,
       model: row.vehicle_model,
+      modelLegacyCode: row.vehicle_model_legacy_code || "",
       purchaseDate: row.vehicle_purchase_date
     },
     customer: {

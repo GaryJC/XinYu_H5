@@ -6,12 +6,17 @@ export const FIND_LEGACY_VEHICLE_QUERY = `
       vehicle.reid as id,
       RTRIM(vehicle.ch) as plate,
       RTRIM(vehicle.sbdm) as vin,
-      RTRIM(vehicle.cx) as model,
+      COALESCE(NULLIF(RTRIM(model_ref.qc), ''), NULLIF(RTRIM(model_ref.mc), ''), RTRIM(vehicle.cx)) as model,
+      RTRIM(model_ref.bh) as model_code,
       RTRIM(vehicle.ssdw) as organization_code,
       RTRIM(customer.mc) as organization_name,
       1 as plate_matched,
       0 as vin_matched
     from dbo.qxclxxb vehicle
+    left join dbo.cxb model_ref on
+      RTRIM(vehicle.cx) = RTRIM(model_ref.bh)
+      or RTRIM(vehicle.cx) = RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.qc)
+      or RTRIM(vehicle.cx) = RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.mc)
     left join dbo.khxxb customer on RTRIM(customer.bm) = RTRIM(vehicle.ssdw)
     where
       @plate <> ''
@@ -24,12 +29,17 @@ export const FIND_LEGACY_VEHICLE_QUERY = `
       vehicle.reid as id,
       RTRIM(vehicle.ch) as plate,
       RTRIM(vehicle.sbdm) as vin,
-      RTRIM(vehicle.cx) as model,
+      COALESCE(NULLIF(RTRIM(model_ref.qc), ''), NULLIF(RTRIM(model_ref.mc), ''), RTRIM(vehicle.cx)) as model,
+      RTRIM(model_ref.bh) as model_code,
       RTRIM(vehicle.ssdw) as organization_code,
       RTRIM(customer.mc) as organization_name,
       0 as plate_matched,
       1 as vin_matched
     from dbo.qxclxxb vehicle
+    left join dbo.cxb model_ref on
+      RTRIM(vehicle.cx) = RTRIM(model_ref.bh)
+      or RTRIM(vehicle.cx) = RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.qc)
+      or RTRIM(vehicle.cx) = RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.mc)
     left join dbo.khxxb customer on RTRIM(customer.bm) = RTRIM(vehicle.ssdw)
     where
       @vin <> ''
@@ -40,14 +50,24 @@ export const FIND_LEGACY_VEHICLE_QUERY = `
 
 export const FIND_LEGACY_MODEL_CANDIDATES_QUERY = `
   select top 10
-    RTRIM(vehicle.cx) as value,
-    count(*) as usage_count
-  from dbo.qxclxxb vehicle
+    RTRIM(model_ref.bh) as code,
+    COALESCE(NULLIF(RTRIM(model_ref.qc), ''), RTRIM(model_ref.mc)) as value,
+    count(vehicle.reid) as usage_count
+  from dbo.cxb model_ref
+  left join dbo.qxclxxb vehicle on
+    RTRIM(vehicle.cx) = RTRIM(model_ref.bh)
+    or RTRIM(vehicle.cx) = RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.qc)
+    or RTRIM(vehicle.cx) = RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.mc)
   where
     @model <> ''
-    and UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(vehicle.cx)), ' ', ''), '　', ''), '-', ''), '_', ''), '－', '')) like @model_pattern
-  group by RTRIM(vehicle.cx)
-  order by count(*) desc, RTRIM(vehicle.cx)
+    and (
+      UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(model_ref.bh)), ' ', ''), '　', ''), '-', ''), '_', ''), '－', '')) like @model_pattern
+      or UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(model_ref.mc)), ' ', ''), '　', ''), '-', ''), '_', ''), '－', '')) like @model_pattern
+      or UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(model_ref.qc)), ' ', ''), '　', ''), '-', ''), '_', ''), '－', '')) like @model_pattern
+    )
+  group by RTRIM(model_ref.bh), COALESCE(NULLIF(RTRIM(model_ref.qc), ''), RTRIM(model_ref.mc))
+  having count(vehicle.reid) > 0
+  order by count(vehicle.reid) desc, RTRIM(model_ref.bh)
 `;
 
 export const FIND_LEGACY_ORGANIZATION_CANDIDATES_QUERY = `
@@ -80,8 +100,9 @@ export async function findLegacyModelCandidates(model, execute = executeSqlServe
   });
   return (result.recordset || []).map((row) => ({
     value: row.value || "",
+    code: row.code || "",
     usageCount: Number(row.usage_count || 0)
-  }));
+  })).filter((candidate) => candidate.usageCount > 0);
 }
 
 export async function findLegacyOrganizationCandidates(organization, execute = executeSqlServerQuery) {
@@ -114,6 +135,7 @@ function mapVehicleRow(row) {
     plate: row.plate || "",
     vin: row.vin || "",
     model: row.model || "",
+    modelLegacyCode: row.model_code || "",
     organization: row.organization_code || row.organization_name
       ? { code: row.organization_code || "", name: row.organization_name || "" }
       : undefined,

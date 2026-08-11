@@ -4,6 +4,7 @@ import { createWorkOrder } from "../server/db.mjs";
 const DEFAULT_BATCH = "RUNFENG-MOCK-20260731-V1";
 const batch = String(process.env.RUNFENG_MOCK_BATCH || DEFAULT_BATCH).trim();
 const cleanup = process.argv.includes("--cleanup");
+const refresh = process.argv.includes("--refresh");
 
 if (!batch.startsWith("RUNFENG-MOCK-")) {
   throw new Error("RUNFENG_MOCK_BATCH must start with RUNFENG-MOCK-");
@@ -25,6 +26,9 @@ try {
       deletedCount: deleted.rowCount
     }, null, 2));
   } else {
+    if (refresh) {
+      await pool.query("delete from work_orders where fee_note = $1", [batch]);
+    }
     const existing = await findBatchOrders();
     if (existing.length) {
       console.log(JSON.stringify({
@@ -67,6 +71,12 @@ async function findBatchOrders() {
         work_order.department_name,
         work_order.advisor,
         work_order.vehicle_plate,
+        work_order.vehicle_model,
+        work_order.vehicle_model_legacy_code,
+        work_order.customer_name,
+        work_order.customer_legacy_code,
+        event.payload #>> '{order,vehicle,modelLegacyCode}' as payload_model_legacy_code,
+        event.payload #>> '{order,customer,legacyCode}' as payload_customer_legacy_code,
         event.event_id,
         event.revision,
         event.event_type,
@@ -121,11 +131,13 @@ function mockDrafts() {
         plate: "鲁BTEST01",
         vin: "LSVTEST2607310001",
         mileage: "12000",
-        model: "联调测试车型A",
+        model: "大众-新帕萨特",
+        modelLegacyCode: "DZXPST",
         purchaseDate: "2024-01-10"
       },
       customer: {
-        name: "润丰联调客户一",
+        name: "个人（水务集团）",
+        legacyCode: "grqdswjty",
         phone: "13000000001",
         contact: "联调联系人一",
         address: "联调测试地址一"
@@ -145,11 +157,13 @@ function mockDrafts() {
         plate: "鲁BTEST02",
         vin: "LSVTEST2607310002",
         mileage: "35600",
-        model: "联调测试车型B",
+        model: "奥迪A6",
+        modelLegacyCode: "ADA6",
         purchaseDate: "2022-08-15"
       },
       customer: {
-        name: "润丰联调客户二",
+        name: "青岛水务集团有限公司",
+        legacyCode: "qdswjtyxgs",
         phone: "13000000002",
         contact: "联调联系人二",
         address: "联调测试地址二"
@@ -168,11 +182,13 @@ function mockDrafts() {
         plate: "鲁BTEST03",
         vin: "LSVTEST2607310003",
         mileage: "68800",
-        model: "联调测试车型C",
+        model: "大众-帕萨特",
+        modelLegacyCode: "DZPST",
         purchaseDate: "2020-05-20"
       },
       customer: {
-        name: "润丰联调客户三",
+        name: "青岛水务集团有限公司",
+        legacyCode: "jtyxgs",
         phone: "13000000003",
         contact: "联调联系人三",
         address: "联调测试地址三"

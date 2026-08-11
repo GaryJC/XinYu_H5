@@ -132,6 +132,7 @@ test("legacy vehicle lookup uses SQL Server 2000 parameters and maps the public 
           plate: "辽A12345",
           vin: "LSV123",
           model: "测试车型",
+          model_code: "CSCX",
           organization_code: "QDDT",
           organization_name: "青岛地铁运营有限公司",
           plate_matched: 1,
@@ -150,6 +151,7 @@ test("legacy vehicle lookup uses SQL Server 2000 parameters and maps the public 
     plate: "辽A12345",
     vin: "LSV123",
     model: "测试车型",
+    modelLegacyCode: "CSCX",
     organization: { code: "QDDT", name: "青岛地铁运营有限公司" },
     plateMatched: true,
     vinMatched: false
@@ -174,8 +176,9 @@ test("legacy model and organization candidate queries are normalized and paramet
 
   const models = await findLegacyModelCandidates("AUDIA6", execute((query) => {
     assert.equal(query, FIND_LEGACY_MODEL_CANDIDATES_QUERY);
-    assert.match(query, /group by RTRIM\(vehicle\.cx\)/i);
-    return [{ value: "Audi A6", usage_count: 8 }];
+    assert.match(query, /dbo\.cxb/i);
+    assert.match(query, /having count\(vehicle\.reid\) > 0/i);
+    return [{ value: "Audi A6", code: "ADA6", usage_count: 8 }];
   }));
   const organizations = await findLegacyOrganizationCandidates("青岛地铁运营有限公司", execute((query) => {
     assert.equal(query, FIND_LEGACY_ORGANIZATION_CANDIDATES_QUERY);
@@ -188,7 +191,7 @@ test("legacy model and organization candidate queries are normalized and paramet
     ];
   }));
 
-  assert.deepEqual(models, [{ value: "Audi A6", usageCount: 8 }]);
+  assert.deepEqual(models, [{ value: "Audi A6", code: "ADA6", usageCount: 8 }]);
   assert.deepEqual(organizations, [{ value: "青岛地铁运营有限公司", code: "QDDT", usageCount: 10 }]);
   assert.deepEqual(inputs, [
     { name: "model", type: { type: "VarChar", length: 200 }, value: "AUDIA6" },
