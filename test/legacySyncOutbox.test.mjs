@@ -9,7 +9,7 @@ import {
 
 const order = {
   id: "WT-20260730-001",
-  status: "草稿",
+  status: "已委托",
   dispatchNo: "",
   arrivalDate: "2026-07-30",
   advisor: "张三",
@@ -71,14 +71,21 @@ test("legacy sync payload is versioned and preserves structured work-order data"
   });
 });
 
-test("only work-order creation enqueues a legacy sync event", async () => {
+test("only a completed customer signature enqueues the initial legacy sync event", async () => {
   const source = await readFile(new URL("../server/db.mjs", import.meta.url), "utf8");
   const enqueueCalls = source.match(/await enqueueLegacySyncEvent\(/g) || [];
+  const createSource = source.match(
+    /export async function createWorkOrder[\s\S]*?(?=\nexport async function)/
+  )?.[0] || "";
+  const signSource = source.match(
+    /export async function signWorkOrderByToken[\s\S]*?(?=\nexport async function)/
+  )?.[0] || "";
 
   assert.equal(enqueueCalls.length, 1);
+  assert.doesNotMatch(createSource, /enqueueLegacySyncEvent/);
   assert.match(
-    source,
-    /export async function createWorkOrder[\s\S]*?await enqueueLegacySyncEvent\(client, order, "created"\)/
+    signSource,
+    /status: "已委托"[\s\S]*?await enqueueLegacySyncEvent\(client, next, "created"\)/
   );
   assert.doesNotMatch(
     source,
@@ -139,6 +146,18 @@ test("vehicle model legacy code migration preserves the matched cxb bh", async (
   );
   assert.match(migration, /add column if not exists vehicle_model_legacy_code text not null default ''/i);
   assert.match(migration, /idx_work_orders_vehicle_model_legacy_code/i);
+});
+
+test("draft cleanup migration removes unconsumed outbox events and resets the display status", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/202608170001_remove_draft_legacy_sync_events.sql", import.meta.url),
+    "utf8"
+  );
+  const deleteStatement = migration.split("update work_orders")[0];
+
+  assert.match(migration, /work_order\.status = '草稿'/i);
+  assert.match(deleteStatement, /sync_event\.status in \('pending', 'failed'\)/i);
+  assert.match(migration, /legacy_sync_status = 'not_applicable'/i);
 });
 
 test("batch result migration ACKs and fails up to 100 claimed events", async () => {

@@ -7,7 +7,7 @@
 | --- | --- | --- | --- |
 | `event_id` | `text` | 同步事件唯一编号，也是消费幂等键。领取及成功、失败回填都使用该值。 | `qxwxb` 中暂无已确认的对应字段。润丰应在自己的同步日志或幂等记录中保存该值，防止同一事件重复生成接车单。 |
 | `order_id` | `text` | H5 委托单编号，关联 PostgreSQL `work_orders.id`。 | 暂无已确认的 SQL Server 对应字段。不能直接当作 `qxwxb.reid`、`dh` 或 `pgd`。 |
-| `revision` | `bigint` | 同一委托单的同步版本号，从 1 递增。 | 无直接对应字段；用于同步程序判断和记录事件版本。当前只同步首次创建，通常为 1。 |
+| `revision` | `bigint` | 同一委托单的同步版本号，从 1 递增。 | 无直接对应字段；用于同步程序判断和记录事件版本。当前在客户完成签字后首次入队，通常为 1。 |
 | `event_type` | `text` | 事件类型：`created`、`updated`、`cancelled`；当前实际发送 `created`。 | 无直接对应字段；决定润丰执行新增、修改或取消操作。当前 `created` 表示新增 `qxwxb/qxwxmxb`。 |
 | `payload_version` | `integer` | `payload` JSON 的结构版本，当前为 1。 | 无直接对应字段；仅用于润丰选择正确的 JSON 解析规则。 |
 | `payload` | `jsonb` | 完整接车单业务数据，包含委托单主信息和 `order.repairItems` 维修项目数组。 | 不是单个 SQL Server 字段。应拆分后写入 `qxwxb` 主表和 `qxwxmxb` 维修项目表。当前已确认：`payload.order.department.code` → `qxwxb.bm`；`payload.order.vehicle.modelLegacyCode` 是匹配到的 `cxb.bh`，创建车辆档案时与车型名称组合写入 `qxclxxb.cx`；`payload.order.customer.legacyCode` 是匹配到的 `khxxb.bm`，创建车辆档案时写入 `qxclxxb.ssdw`；`payload.order.advisor` → `qxwxb.jcr`。其他业务字段映射需由润丰依据旧库字段定义确认。 |
@@ -23,6 +23,10 @@
 | `last_error` | `text` | 最近一次同步失败原因，最多保留 2000 个字符。 | 无直接对应字段；SQL Server 写入失败时，把异常摘要通过失败回填函数写到这里。 |
 | `created_at` | `timestamptz` | 同步事件创建时间。 | 无直接对应字段；用于事件排序和排查，不等同于 SQL Server 的接车时间。 |
 | `updated_at` | `timestamptz` | 同步事件最后更新时间，由 PostgreSQL 自动维护。 | 无直接对应字段；不需要写入 SQL Server。 |
+
+保存中的草稿不会出现在 `legacy_sync_outbox`。客户完成签字后，业务状态变为
+`work_orders.status = '已委托'`，系统才创建 `status = 'pending'` 的同步事件。
+`work_orders.legacy_sync_status` 只是便于 H5 展示的队列状态镜像。
 
 ## 车型与所属单位编码
 

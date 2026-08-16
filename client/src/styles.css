@@ -132,6 +132,8 @@ body { margin: 0; background: #f5f5f5; }
 .archive-order-card:active, .archive-order-card.selected { border-color: #1677ff; background: #f0f5ff; }
 .archive-order-card-main { min-width: 0; }
 .archive-order-card-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.archive-order-statuses { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.archive-order-statuses .ant-tag { margin-inline-end: 0; }
 .archive-order-card-title strong { font-size: 17px; }
 .archive-order-owner, .archive-order-id { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-order-owner { margin-top: 4px; font-size: 14px; }
@@ -140,6 +142,7 @@ body { margin: 0; background: #f5f5f5; }
 .archive-order-meta span { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
 .archive-order-meta b { display: block; margin-bottom: 2px; color: rgba(0, 0, 0, .45); font-size: 11px; font-weight: 400; }
 .archive-mobile-collapse { margin-top: 18px; }
+.archive-detail-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .archive-mobile-record { margin: 0; padding: 4px 12px; border: 1px solid #f0f0f0; border-radius: 8px; background: #fafafa; }
 .archive-mobile-record > div { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
 .archive-mobile-record > div:last-child { border-bottom: 0; }
@@ -244,6 +247,8 @@ body { margin: 0; background: #f5f5f5; }
   .archive-header { gap: 10px; }
   .archive-order-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .archive-order-meta span:last-child { grid-column: 1 / -1; }
+  .archive-detail-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+  .archive-detail-actions .ant-btn { width: 100%; }
   .archive-detail-modal .ant-modal { max-width: calc(100vw - 16px); margin: 0 auto; padding-bottom: 0; }
   .archive-detail-modal .ant-modal-content { padding: 14px; border-radius: 10px; }
   .archive-detail-modal .ant-modal-header { margin-bottom: 12px; }

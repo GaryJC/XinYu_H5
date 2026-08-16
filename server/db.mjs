@@ -61,8 +61,7 @@ export async function createWorkOrder(draft, actor) {
       dispatchNo: ""
     };
     await upsertWorkOrder(client, order);
-    await enqueueLegacySyncEvent(client, order, "created");
-    await addAudit(client, order.id, actor, "创建委托单草稿并进入润丰同步队列");
+    await addAudit(client, order.id, actor, "创建委托单草稿");
     return findWorkOrderById(client, order.id);
   });
 }
@@ -203,6 +202,7 @@ export async function signWorkOrderByToken(token, signature, signatureFileId) {
     );
     await client.query("update signature_tokens set used = true, used_at = now() where token = $1", [token]);
     await addAudit(client, order.id, order.customer.name || "车主", "客户完成电子签名");
+    await enqueueLegacySyncEvent(client, next, "created");
     return findWorkOrderById(client, order.id);
   });
 }

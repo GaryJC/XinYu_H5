@@ -34,6 +34,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     lookupVehicleLicenseForDevelopment, selectVehicleReference, departments, departmentError
   } = controller;
   const canSyncPlatform = Boolean(selectedOrder && !selectedOrder.platformOrderNo && !["草稿", "待客户签字"].includes(selectedOrder.status) && (role === "advisor" || role === "manager"));
+  const showLegacySyncStatus = Boolean(selectedOrder && selectedOrder.status !== "草稿");
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
   const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "行驶证"].some((phrase) => error.includes(phrase)));
   const canResumeSignature = Boolean(selectedOrder?.status === "待客户签字" && selectedOrder.signatureToken && !selectedOrder.signatureTokenUsed);
@@ -108,19 +109,19 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               <Alert className="platform-sync-state" type="success" showIcon title={`已同步平台工单：${selectedOrder.platformOrderNo}`} />
             ) : null}
 
-            {selectedOrder?.legacySyncStatus === "pending" ? (
-              <Alert className="platform-sync-state" type="info" showIcon title="委托单已保存，等待润丰系统拉取" />
+            {showLegacySyncStatus && selectedOrder?.legacySyncStatus === "pending" ? (
+              <Alert className="platform-sync-state" type="info" showIcon title="委托单已完成签字，等待润丰系统拉取" />
             ) : null}
 
-            {selectedOrder?.legacySyncStatus === "processing" ? (
+            {showLegacySyncStatus && selectedOrder?.legacySyncStatus === "processing" ? (
               <Alert className="platform-sync-state" type="info" showIcon title="润丰系统正在处理当前委托单" />
             ) : null}
 
-            {selectedOrder?.legacySyncStatus === "synced" ? (
+            {showLegacySyncStatus && selectedOrder?.legacySyncStatus === "synced" ? (
               <Alert className="platform-sync-state" type="success" showIcon title={`润丰同步成功${selectedOrder.dispatchNo ? `：${selectedOrder.dispatchNo}` : ""}`} />
             ) : null}
 
-            {selectedOrder?.legacySyncStatus === "failed" ? (
+            {showLegacySyncStatus && selectedOrder?.legacySyncStatus === "failed" ? (
               <Alert className="platform-sync-state" type="error" showIcon title="润丰同步失败" description={selectedOrder.legacySyncError || "请联系管理员重试同步"} />
             ) : null}
 

@@ -10,6 +10,8 @@ export type WorkOrderStatus =
   | "待结算"
   | "完成";
 
+export type LegacySyncStatus = "not_applicable" | "pending" | "processing" | "synced" | "failed";
+
 export type OcrFieldKey = "vehicleLicense";
 export type RepairItemStatus = "待派工" | "待领料" | "待开工" | "维修中" | "待检验" | "已完工";
 
@@ -294,7 +296,7 @@ export type WorkOrder = {
   signatureToken?: string;
   signatureTokenUsed?: boolean;
   platformOrderNo?: string;
-  legacySyncStatus?: "not_applicable" | "pending" | "processing" | "synced" | "failed";
+  legacySyncStatus?: LegacySyncStatus;
   legacySyncRevision?: number;
   legacySyncedAt?: string;
   legacySyncError?: string;

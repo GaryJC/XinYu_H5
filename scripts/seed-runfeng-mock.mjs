@@ -1,5 +1,6 @@
 import { pool } from "../server/database/pool.mjs";
 import { createWorkOrder } from "../server/db.mjs";
+import { enqueueLegacySyncEvent } from "../server/repositories/legacySyncOutboxRepository.mjs";
 
 const DEFAULT_BATCH = "RUNFENG-MOCK-20260731-V1";
 const batch = String(process.env.RUNFENG_MOCK_BATCH || DEFAULT_BATCH).trim();
@@ -43,6 +44,7 @@ try {
         for (const draft of mockDrafts()) {
           const order = await createWorkOrder(draft, draft.advisor);
           createdOrderIds.push(order.id);
+          await markMockOrderReadyForRunfeng(order);
         }
       } catch (error) {
         if (createdOrderIds.length) {
@@ -62,11 +64,51 @@ try {
   await pool.end();
 }
 
+async function markMockOrderReadyForRunfeng(order) {
+  const client = await pool.connect();
+  const next = {
+    ...order,
+    status: "已委托",
+    updatedAt: new Date().toISOString(),
+    signatures: { ...order.signatures, customer: "润丰联调测试签字" }
+  };
+  try {
+    await client.query("begin");
+    await client.query(
+      "update work_orders set status = '已委托', updated_at = now() where id = $1",
+      [order.id]
+    );
+    await client.query(
+      `
+        insert into signatures (order_id, signer_type, signer_name)
+        values ($1, 'customer', $2)
+        on conflict (order_id, signer_type) do update set
+          signer_name = excluded.signer_name,
+          signed_at = now()
+      `,
+      [order.id, next.signatures.customer]
+    );
+    await enqueueLegacySyncEvent(client, next, "created");
+    await client.query(
+      "insert into audit_logs (order_id, actor, action) values ($1, $2, $3)",
+      [order.id, order.customer.name || "联调客户", "润丰联调 mock 完成委托并进入同步队列"]
+    );
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function findBatchOrders() {
   const { rows } = await pool.query(
     `
       select
         work_order.id as order_id,
+        work_order.status as work_order_status,
+        work_order.legacy_sync_status as work_order_sync_status,
         work_order.department_code,
         work_order.department_name,
         work_order.advisor,

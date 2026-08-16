@@ -1,8 +1,15 @@
 # 润丰数据库轮询接入
 
-H5 委托单以 PostgreSQL 为主库。只有首次创建委托单时，系统才会在同一个
-PostgreSQL 事务中写入 `legacy_sync_outbox`，不再由 H5 直接写 SQL Server。
-后续保存、签字、派工、维修和结算状态变化不会再次加入润丰同步队列。
+H5 委托单以 PostgreSQL 为主库。保存草稿时只写 `work_orders`，不会创建同步事件。
+客户完成签字后，系统在同一个 PostgreSQL 事务中把委托单状态改为 `已委托`，并向
+`legacy_sync_outbox` 写入一条 `pending` 事件，不再由 H5 直接写 SQL Server。
+后续保存、派工、维修和结算状态变化不会再次加入润丰同步队列。
+
+因此两类状态应分开理解：
+
+- `work_orders.status` 是业务状态；草稿只显示 `草稿`。
+- `legacy_sync_outbox.status` 是润丰队列状态；签字后的 `已委托` 才可能显示 `待拉取`。
+- `work_orders.legacy_sync_status` 是队列状态在委托单表中的展示镜像，不是另一条队列。
 
 润丰同步程序负责：
 

@@ -1,14 +1,22 @@
-import { WorkOrderStatus } from "../../../../shared/types";
+import { LegacySyncStatus, WorkOrderStatus } from "../../../../shared/types";
 import { Card, Statistic, Tag } from "antd";
 
-const statusTone: Record<WorkOrderStatus, "amber" | "blue" | "green" | "violet" | "gray"> = {
-  草稿: "gray",
-  待客户签字: "amber",
-  已委托: "blue",
+const statusColor: Record<WorkOrderStatus, string> = {
+  草稿: "default",
+  待客户签字: "gold",
+  已委托: "cyan",
   待派工: "blue",
   维修中: "green",
-  待结算: "violet",
-  完成: "gray"
+  待结算: "purple",
+  完成: "success"
+};
+
+const legacySyncPresentation: Record<LegacySyncStatus, { label: string; color: string }> = {
+  not_applicable: { label: "无需同步", color: "default" },
+  pending: { label: "待拉取", color: "gold" },
+  processing: { label: "拉取中", color: "processing" },
+  synced: { label: "已同步", color: "success" },
+  failed: { label: "同步失败", color: "error" }
 };
 
 export function MetricCard({ label, value }: { label: string; value: number }) {
@@ -20,5 +28,10 @@ export function MetricCard({ label, value }: { label: string; value: number }) {
 }
 
 export function StatusChip({ status }: { status: WorkOrderStatus }) {
-  return <Tag className={`status-chip ${statusTone[status]}`}>{status}</Tag>;
+  return <Tag color={statusColor[status]}>{status}</Tag>;
+}
+
+export function LegacySyncStatusChip({ status = "not_applicable" }: { status?: LegacySyncStatus }) {
+  const presentation = legacySyncPresentation[status];
+  return <Tag color={presentation.color}>润丰：{presentation.label}</Tag>;
 }

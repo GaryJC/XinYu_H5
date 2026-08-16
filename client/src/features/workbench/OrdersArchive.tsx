@@ -1,13 +1,13 @@
 import { useState, type ReactNode } from "react";
 import { Button, Card, Collapse, Descriptions, Empty, Grid, Image, Input, Modal, Table } from "antd";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, PencilLine } from "lucide-react";
 import { WorkOrder } from "../../../../shared/types";
-import { StatusChip } from "../../shared/ui/Status";
+import { LegacySyncStatusChip, StatusChip } from "../../shared/ui/Status";
 import { AuthenticatedImage } from "../../shared/ui/AuthenticatedImage";
 import { WorkbenchController } from "./useWorkbenchController";
 
 export function OrdersArchive({ controller }: { controller: WorkbenchController }) {
-  const { searchTerm, setSearchTerm, searchedOrders, selectedId, selectOrder } = controller;
+  const { searchTerm, setSearchTerm, searchedOrders, selectedId, selectOrder, setActiveNav, role } = controller;
   const [detailOrder, setDetailOrder] = useState<WorkOrder>();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
@@ -15,6 +15,12 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
   function openDetail(order: WorkOrder) {
     selectOrder(order);
     setDetailOrder(order);
+  }
+
+  function resumeDraft(order: WorkOrder) {
+    selectOrder(order);
+    setDetailOrder(undefined);
+    setActiveNav("委托开单");
   }
 
   return (
@@ -34,7 +40,10 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
               <div className="archive-order-card-main">
                 <div className="archive-order-card-title">
                   <strong>{order.vehicle.plate || "未登记车牌"}</strong>
-                  <StatusChip status={order.status} />
+                  <span className="archive-order-statuses">
+                    <StatusChip status={order.status} />
+                    <OrderLegacySyncStatus order={order} />
+                  </span>
                 </div>
                 <span className="archive-order-owner">{order.customer.name || "未登记车主"}</span>
                 <span className="archive-order-id">{order.id}</span>
@@ -63,7 +72,8 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
             { title: "车主", render: (_, order) => order.customer.name || "-" },
             { title: "服务顾问", dataIndex: "advisor" },
             { title: "维修技师", dataIndex: "technician" },
-            { title: "状态", render: (_, order) => <StatusChip status={order.status} /> },
+            { title: "业务状态", render: (_, order) => <StatusChip status={order.status} /> },
+            { title: "润丰同步", render: (_, order) => <OrderLegacySyncStatus order={order} /> },
             { title: "金额", render: (_, order) => order.settlementAmount || order.estimatedFee ? `¥${order.settlementAmount || order.estimatedFee}` : "-" },
             { title: "更新时间", dataIndex: "updatedAt", width: 145 }
           ]}
@@ -77,7 +87,14 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
         width={isMobile ? "calc(100vw - 16px)" : 980}
         style={isMobile ? { top: 8, paddingBottom: 8 } : undefined}
         onCancel={() => setDetailOrder(undefined)}
-        footer={<Button type="primary" block={isMobile} onClick={() => setDetailOrder(undefined)}>关闭</Button>}
+        footer={(
+          <div className="archive-detail-actions">
+            {detailOrder?.status === "草稿" && (role === "advisor" || role === "manager") ? (
+              <Button type="primary" icon={<PencilLine size={16} />} onClick={() => resumeDraft(detailOrder)}>继续编辑草稿</Button>
+            ) : null}
+            <Button onClick={() => setDetailOrder(undefined)}>关闭</Button>
+          </div>
+        )}
         styles={{ body: { maxHeight: isMobile ? "calc(100vh - 132px)" : "72vh", overflowY: "auto" } }}
       >
         {detailOrder ? <OrderDetail order={detailOrder} isMobile={isMobile} /> : null}
@@ -93,6 +110,7 @@ function OrderDetail({ order, isMobile }: { order: WorkOrder; isMobile: boolean 
   const descriptions = [
     { key: "id", label: "委托单号", children: order.id },
     { key: "status", label: "状态", children: <StatusChip status={order.status} /> },
+    { key: "legacySyncStatus", label: "润丰同步", children: <OrderLegacySyncStatus order={order} /> },
     { key: "advisor", label: "服务顾问", children: order.advisor || "-" },
     { key: "dispatch", label: "派工号", children: order.dispatchNo || "-" },
     { key: "arrival", label: "进厂日期", children: order.arrivalDate || "-" },
@@ -129,6 +147,11 @@ function OrderDetail({ order, isMobile }: { order: WorkOrder; isMobile: boolean 
       {isMobile ? <MobileOrderRecords order={order} /> : <DesktopOrderRecords order={order} />}
     </>
   );
+}
+
+function OrderLegacySyncStatus({ order }: { order: WorkOrder }) {
+  if (order.status === "草稿") return null;
+  return <LegacySyncStatusChip status={order.legacySyncStatus} />;
 }
 
 function MobileOrderRecords({ order }: { order: WorkOrder }) {
