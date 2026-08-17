@@ -7,6 +7,8 @@ import {
   FIND_LEGACY_ORGANIZATION_BY_CODE_QUERY,
   FIND_LEGACY_VEHICLE_FOR_WRITE_QUERY,
   FIND_LEGACY_WORK_ORDER_BY_SOURCE_QUERY,
+  INSERT_LEGACY_MODEL_QUERY,
+  INSERT_LEGACY_ORGANIZATION_QUERY,
   INSERT_LEGACY_REPAIR_ITEM_QUERY,
   INSERT_LEGACY_VEHICLE_QUERY,
   INSERT_LEGACY_WORK_ORDER_QUERY,
@@ -197,8 +199,62 @@ test("direct write stops when plate and VIN point to different legacy vehicles",
   );
 });
 
-test("direct write rejects stale model and organization codes before allocating a number", async () => {
+test("direct write creates new model and organization master data in the same transaction", async () => {
   const calls = [];
+  const responses = new Map([
+    [FIND_LEGACY_WORK_ORDER_BY_SOURCE_QUERY, { recordset: [] }],
+    [FIND_LEGACY_DEPARTMENT_QUERY, { recordset: [{ code: "A" }] }],
+    [FIND_LEGACY_VEHICLE_FOR_WRITE_QUERY, { recordset: [] }],
+    [FIND_LEGACY_MODEL_BY_CODE_QUERY, { recordset: [] }],
+    [INSERT_LEGACY_MODEL_QUERY, { recordset: [] }],
+    [FIND_LEGACY_ORGANIZATION_BY_CODE_QUERY, { recordset: [] }],
+    [INSERT_LEGACY_ORGANIZATION_QUERY, { recordset: [] }],
+    [ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY, { recordset: [{ max_document_no: 85994, max_dispatch_number: 66658 }] }],
+    [INSERT_LEGACY_VEHICLE_QUERY, { recordset: [] }],
+    [INSERT_LEGACY_WORK_ORDER_QUERY, { recordset: [{ reid: 1029598 }] }],
+    [INSERT_LEGACY_REPAIR_ITEM_QUERY, { recordset: [] }]
+  ]);
+
+  await writeLegacyWorkOrder(order, {
+    executeTransaction: async (work) => work(async (query, configure) => {
+      calls.push({ query, inputs: collectInputs(configure) });
+      return responses.get(query);
+    })
+  });
+
+  const modelInsert = calls.find((call) => call.query === INSERT_LEGACY_MODEL_QUERY);
+  assert.deepEqual(modelInsert.inputs, { model_code: "DZPST", model_name: "大众-帕萨特" });
+  const organizationInsert = calls.find((call) => call.query === INSERT_LEGACY_ORGANIZATION_QUERY);
+  assert.deepEqual(organizationInsert.inputs, {
+    organization_code: "grqdswjty",
+    organization_name: "青岛水务集团有限公司",
+    contact: "李经理",
+    phone: "13800000000",
+    address: "青岛市"
+  });
+  assert.ok(calls.indexOf(modelInsert) < calls.findIndex((call) => call.query === INSERT_LEGACY_VEHICLE_QUERY));
+  assert.ok(calls.indexOf(organizationInsert) < calls.findIndex((call) => call.query === INSERT_LEGACY_VEHICLE_QUERY));
+});
+
+test("direct write rejects a code occupied by a differently named reference before allocating a number", async () => {
+  const calls = [];
+  const responses = new Map([
+    [FIND_LEGACY_WORK_ORDER_BY_SOURCE_QUERY, { recordset: [] }],
+    [FIND_LEGACY_DEPARTMENT_QUERY, { recordset: [{ code: "A" }] }],
+    [FIND_LEGACY_VEHICLE_FOR_WRITE_QUERY, { recordset: [] }],
+    [FIND_LEGACY_MODEL_BY_CODE_QUERY, { recordset: [{ code: "DZPST", name: "其他车型" }] }]
+  ]);
+
+  await assert.rejects(() => writeLegacyWorkOrder(order, {
+    executeTransaction: async (work) => work(async (query, configure) => {
+      calls.push({ query, inputs: collectInputs(configure) });
+      return responses.get(query);
+    })
+  }), /车型编码 DZPST 已被“其他车型”使用，请修改编码/);
+  assert.equal(calls.some((call) => call.query === ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY), false);
+});
+
+test("a concurrent duplicate master-data insert is translated into an editable code error", async () => {
   const responses = new Map([
     [FIND_LEGACY_WORK_ORDER_BY_SOURCE_QUERY, { recordset: [] }],
     [FIND_LEGACY_DEPARTMENT_QUERY, { recordset: [{ code: "A" }] }],
@@ -206,15 +262,33 @@ test("direct write rejects stale model and organization codes before allocating 
     [FIND_LEGACY_MODEL_BY_CODE_QUERY, { recordset: [] }]
   ]);
 
-  await assert.rejects(
-    () => writeLegacyWorkOrder(order, {
-      executeTransaction: async (work) => work(async (query, configure) => {
-        calls.push({ query, inputs: collectInputs(configure) });
-        return responses.get(query);
-      })
-    }),
-    /润丰车型编码不存在：DZPST/
-  );
+  await assert.rejects(() => writeLegacyWorkOrder(order, {
+    executeTransaction: async (work) => work(async (query, configure) => {
+      collectInputs(configure);
+      if (query === INSERT_LEGACY_MODEL_QUERY) {
+        throw { originalError: { info: { number: 2627 } } };
+      }
+      return responses.get(query);
+    })
+  }), /车型编码 DZPST 已被其他记录使用，请修改编码/);
+});
+
+test("a new vehicle cannot be written before both reference codes are confirmed", async () => {
+  const calls = [];
+  await assert.rejects(() => writeLegacyWorkOrder({
+    ...order,
+    vehicle: { ...order.vehicle, modelLegacyCode: "" }
+  }, {
+    executeTransaction: async (work) => work(async (query, configure) => {
+      calls.push({ query, inputs: collectInputs(configure) });
+      const responses = new Map([
+        [FIND_LEGACY_WORK_ORDER_BY_SOURCE_QUERY, { recordset: [] }],
+        [FIND_LEGACY_DEPARTMENT_QUERY, { recordset: [{ code: "A" }] }],
+        [FIND_LEGACY_VEHICLE_FOR_WRITE_QUERY, { recordset: [] }]
+      ]);
+      return responses.get(query);
+    })
+  }), /新车辆必须选择已有车型或新增车型编码/);
   assert.equal(calls.some((call) => call.query === ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY), false);
 });
 

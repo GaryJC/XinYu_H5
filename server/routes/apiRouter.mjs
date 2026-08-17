@@ -16,7 +16,11 @@ import {
 } from "../db.mjs";
 import { readJson, requestContext, sendJson } from "../http/response.mjs";
 import { recognizeLicensePlate, recognizeVehicleLicense, recognizeVin } from "../ocr.mjs";
-import { lookupVehicleInCompanySystem, searchCompanyVehicleReferences } from "../integrations/company/vehicleLookup.mjs";
+import {
+  checkCompanyVehicleReferenceCode,
+  lookupVehicleInCompanySystem,
+  searchCompanyVehicleReferences
+} from "../integrations/company/vehicleLookup.mjs";
 import {
   getDingTalkIdentitySnapshot,
   listDingTalkMappings,
@@ -134,6 +138,12 @@ export async function handleApiRequest(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/company-system/vehicle-references/search") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     sendJson(res, 200, await searchCompanyVehicleReferences(await readJson(req)));
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/company-system/vehicle-references/code-check") {
+    requireAnyRole(currentUser, ["advisor", "manager"]);
+    sendJson(res, 200, await checkCompanyVehicleReferenceCode(await readJson(req)));
     return true;
   }
 

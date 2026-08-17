@@ -9,6 +9,7 @@ import { VehicleLicenseOcrControl } from "../../vehicle-license-ocr/VehicleLicen
 import { VehicleIdentityRecognition } from "../../vehicle-identity/VehicleIdentityRecognition";
 import { VehicleReferenceAutocomplete } from "../../vehicle-identity/VehicleReferenceAutocomplete";
 import { VehicleReferenceTags } from "../../vehicle-identity/VehicleReferenceTags";
+import { CreateVehicleReferenceButton } from "../../vehicle-identity/CreateVehicleReferenceButton";
 import { WorkbenchController } from "../../workbench/useWorkbenchController";
 import { belongings, exteriorIssues } from "../../workbench/workbenchConfig";
 import { SignaturePad } from "../../signature/SignaturePad";
@@ -228,6 +229,13 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   resolution={vehicleHistory?.references?.model}
                   onSelect={(candidate) => selectVehicleReference("model", candidate)}
                 />
+                <CreateVehicleReferenceButton
+                  kind="model"
+                  currentName={draft.vehicle.model}
+                  currentCode={draft.vehicle.modelLegacyCode}
+                  disabled={!canEditForm}
+                  onCreate={(candidate) => selectVehicleReference("model", candidate)}
+                />
               </Form.Item>
               <Form.Item className="field" label="车主名称/所属单位" required validateStatus={fieldError("车主名称/所属单位") ? "error" : undefined} help={fieldError("车主名称/所属单位")}>
                 <VehicleReferenceAutocomplete
@@ -252,6 +260,13 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   disabled={!canEditForm}
                   resolution={vehicleHistory?.references?.organization}
                   onSelect={(candidate) => selectVehicleReference("organization", candidate)}
+                />
+                <CreateVehicleReferenceButton
+                  kind="organization"
+                  currentName={draft.customer.name}
+                  currentCode={draft.customer.legacyCode}
+                  disabled={!canEditForm}
+                  onCreate={(candidate) => selectVehicleReference("organization", candidate)}
                 />
               </Form.Item>
               <Field disabled={!canEditForm} label="联系人" value={draft.customer.contact} onChange={(value) => updateCustomer("contact", value)} />

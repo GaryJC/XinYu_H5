@@ -45,6 +45,16 @@ export const FIND_LEGACY_ORGANIZATION_BY_CODE_QUERY = `
   where RTRIM(bm) = @organization_code
 `;
 
+export const INSERT_LEGACY_MODEL_QUERY = `
+  insert into dbo.cxb (bh, mc, qc)
+  values (@model_code, @model_name, @model_name)
+`;
+
+export const INSERT_LEGACY_ORGANIZATION_QUERY = `
+  insert into dbo.khxxb (bm, mc, lxr, lxdh, jydz)
+  values (@organization_code, @organization_name, @contact, @phone, @address)
+`;
+
 export const FIND_LEGACY_VEHICLE_FOR_WRITE_QUERY = `
   select * from (
     select top 1 reid, RTRIM(cx) as cx, RTRIM(ssdw) as ssdw, 1 as plate_matched
@@ -128,26 +138,52 @@ export async function writeLegacyWorkOrder(
     let organizationCode = existingVehicle?.ssdw || "";
 
     if (!existingVehicle) {
-      const modelCode = truncateLegacyText(order.vehicle?.modelLegacyCode, 50);
-      if (modelCode) {
-        const model = await execute(FIND_LEGACY_MODEL_BY_CODE_QUERY, (request, sql) => {
-          request.input("model_code", sql.VarChar(50), modelCode);
-        });
-        const modelRow = model.recordset?.[0];
-        if (!modelRow) throw new Error(`润丰车型编码不存在：${modelCode}`);
+      const modelCode = requiredLegacyCode(order.vehicle?.modelLegacyCode, 10, "车型");
+      const modelName = truncateLegacyText(order.vehicle?.model, 100);
+      const model = await execute(FIND_LEGACY_MODEL_BY_CODE_QUERY, (request, sql) => {
+        request.input("model_code", sql.VarChar(10), modelCode);
+      });
+      const modelRow = model.recordset?.[0];
+      if (modelRow) {
+        assertMatchingReferenceName("车型", modelCode, modelName, modelRow.name);
         modelText = buildLegacyModel({ modelLegacyCode: modelRow.code, model: modelRow.name });
       } else {
-        modelText = buildLegacyModel(order.vehicle);
+        assertNewLegacyCode(modelCode, "车型");
+        try {
+          await execute(INSERT_LEGACY_MODEL_QUERY, (request, sql) => {
+            request.input("model_code", sql.Char(10), modelCode);
+            request.input("model_name", sql.VarChar(100), modelName);
+          });
+        } catch (error) {
+          if (isDuplicateKeyError(error)) throw new Error(`车型编码 ${modelCode} 已被其他记录使用，请修改编码`);
+          throw error;
+        }
+        modelText = buildLegacyModel({ modelLegacyCode: modelCode, model: modelName });
       }
 
-      organizationCode = truncateLegacyText(order.customer?.legacyCode, 50);
-      if (organizationCode) {
-        const organization = await execute(FIND_LEGACY_ORGANIZATION_BY_CODE_QUERY, (request, sql) => {
-          request.input("organization_code", sql.VarChar(50), organizationCode);
-        });
-        const organizationRow = organization.recordset?.[0];
-        if (!organizationRow) throw new Error(`润丰所属单位编码不存在：${organizationCode}`);
+      organizationCode = requiredLegacyCode(order.customer?.legacyCode, 50, "所属单位");
+      const organizationName = truncateLegacyText(order.customer?.name, 150);
+      const organization = await execute(FIND_LEGACY_ORGANIZATION_BY_CODE_QUERY, (request, sql) => {
+        request.input("organization_code", sql.VarChar(50), organizationCode);
+      });
+      const organizationRow = organization.recordset?.[0];
+      if (organizationRow) {
+        assertMatchingReferenceName("所属单位", organizationCode, organizationName, organizationRow.name);
         organizationCode = organizationRow.code;
+      } else {
+        assertNewLegacyCode(organizationCode, "所属单位");
+        try {
+          await execute(INSERT_LEGACY_ORGANIZATION_QUERY, (request, sql) => {
+            request.input("organization_code", sql.VarChar(50), organizationCode);
+            request.input("organization_name", sql.VarChar(150), organizationName);
+            request.input("contact", sql.VarChar(80), truncateLegacyText(order.customer?.contact, 80));
+            request.input("phone", sql.VarChar(80), truncateLegacyText(order.customer?.phone, 80));
+            request.input("address", sql.VarChar(150), truncateLegacyText(order.customer?.address, 150));
+          });
+        } catch (error) {
+          if (isDuplicateKeyError(error)) throw new Error(`所属单位编码 ${organizationCode} 已被其他记录使用，请修改编码`);
+          throw error;
+        }
       }
     }
 
@@ -253,6 +289,42 @@ function buildLegacyModel(vehicle = {}) {
 
 function normalizeIdentifier(value) {
   return String(value || "").trim().toUpperCase().replace(/[\s-]/g, "");
+}
+
+function requiredLegacyCode(value, maxLength, label) {
+  const code = String(value || "").trim();
+  if (!code) throw new Error(`新车辆必须选择已有${label}或新增${label}编码`);
+  if (code.length > maxLength) throw new Error(`${label}编码最多 ${maxLength} 个字符`);
+  return code;
+}
+
+function assertNewLegacyCode(code, label) {
+  if (!/^[A-Za-z0-9]+$/.test(code)) throw new Error(`新增${label}编码只能包含英文字母和数字`);
+}
+
+function assertMatchingReferenceName(label, code, inputName, existingName) {
+  if (normalizeReferenceName(inputName) !== normalizeReferenceName(existingName)) {
+    throw new Error(`${label}编码 ${code} 已被“${String(existingName || "其他记录").trim()}”使用，请修改编码`);
+  }
+}
+
+function isDuplicateKeyError(error) {
+  const pending = [error];
+  const visited = new Set();
+  while (pending.length) {
+    const current = pending.shift();
+    if (!current || typeof current !== "object" || visited.has(current)) continue;
+    visited.add(current);
+    if (current.number === 2601 || current.number === 2627 || current.info?.number === 2601 || current.info?.number === 2627) {
+      return true;
+    }
+    pending.push(current.originalError, current.cause, ...(current.precedingErrors || []));
+  }
+  return false;
+}
+
+function normalizeReferenceName(value) {
+  return String(value || "").normalize("NFKC").trim().replace(/[\s\-_]/g, "").toUpperCase();
 }
 
 function normalizeDispatchPrefix(value) {

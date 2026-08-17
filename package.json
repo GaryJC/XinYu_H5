@@ -34,6 +34,7 @@
     "lucide-react": "latest",
     "mssql": "^12.7.0",
     "pg": "^8.22.0",
+    "pinyin-pro": "^3.27.0",
     "pm2": "^7.0.3",
     "react": "latest",
     "react-dom": "latest",

@@ -10,11 +10,14 @@ import {
 } from "../server/repositories/sqlServerRepository.mjs";
 import {
   findLegacyVehicle,
+  findLegacyReferenceByCode,
   findLegacyModelCandidates,
   findLegacyOrganizationCandidates,
   buildFuzzyLikePattern,
   FIND_LEGACY_MODEL_CANDIDATES_QUERY,
+  FIND_LEGACY_MODEL_BY_CODE_QUERY,
   FIND_LEGACY_ORGANIZATION_CANDIDATES_QUERY,
+  FIND_LEGACY_ORGANIZATION_BY_CODE_QUERY,
   FIND_LEGACY_VEHICLE_QUERY
 } from "../server/repositories/legacyVehicleRepository.mjs";
 import {
@@ -200,6 +203,26 @@ test("legacy model and organization candidate queries are normalized and paramet
     { name: "organization_pattern", type: { type: "VarChar", length: 500 }, value: "%青%岛%地%铁%运%营%有%限%公%司%" }
   ]);
   assert.equal(buildFuzzyLikePattern("水务公司"), "%水%务%公%司%");
+});
+
+test("exact reference code lookup includes unused master data and uses legacy field lengths", async () => {
+  const inputs = [];
+  const execute = async (query, configureRequest) => {
+    assert.equal(query, FIND_LEGACY_MODEL_BY_CODE_QUERY);
+    assert.doesNotMatch(query, /having count/i);
+    configureRequest({ input(name, type, value) { inputs.push({ name, type, value }); } }, {
+      VarChar(length) { return { type: "VarChar", length }; }
+    });
+    return { recordset: [{ code: "DZXPST", value: "大众-新帕萨特", usage_count: 0 }] };
+  };
+
+  assert.deepEqual(await findLegacyReferenceByCode("model", "DZXPST", execute), {
+    value: "大众-新帕萨特",
+    code: "DZXPST",
+    usageCount: 0
+  });
+  assert.deepEqual(inputs, [{ name: "code", type: { type: "VarChar", length: 10 }, value: "DZXPST" }]);
+  assert.match(FIND_LEGACY_ORGANIZATION_BY_CODE_QUERY, /dbo\.khxxb/i);
 });
 
 test("legacy departments come from SQL Server repair-order departments", async () => {

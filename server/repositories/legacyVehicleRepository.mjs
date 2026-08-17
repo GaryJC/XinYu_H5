@@ -85,6 +85,28 @@ export const FIND_LEGACY_ORGANIZATION_CANDIDATES_QUERY = `
   order by count(vehicle.reid) desc, RTRIM(customer.bm)
 `;
 
+export const FIND_LEGACY_MODEL_BY_CODE_QUERY = `
+  select top 1
+    RTRIM(model_ref.bh) as code,
+    COALESCE(NULLIF(RTRIM(model_ref.qc), ''), RTRIM(model_ref.mc)) as value,
+    (select count(*) from dbo.qxclxxb vehicle where
+      RTRIM(vehicle.cx) = RTRIM(model_ref.bh)
+      or RTRIM(vehicle.cx) = RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.qc)
+      or RTRIM(vehicle.cx) = RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.mc)
+    ) as usage_count
+  from dbo.cxb model_ref
+  where RTRIM(model_ref.bh) = @code
+`;
+
+export const FIND_LEGACY_ORGANIZATION_BY_CODE_QUERY = `
+  select top 1
+    RTRIM(customer.bm) as code,
+    RTRIM(customer.mc) as value,
+    (select count(*) from dbo.qxclxxb vehicle where RTRIM(vehicle.ssdw) = RTRIM(customer.bm)) as usage_count
+  from dbo.khxxb customer
+  where RTRIM(customer.bm) = @code
+`;
+
 export async function findLegacyVehicle({ plate = "", vin = "" }, execute = executeSqlServerQuery) {
   const result = await execute(FIND_LEGACY_VEHICLE_QUERY, (request, sql) => {
     request.input("plate", sql.VarChar(50), plate);
@@ -117,6 +139,20 @@ export async function findLegacyOrganizationCandidates(organization, execute = e
       usageCount: Number(row.usage_count || 0)
     }))
     .filter((candidate) => candidate.usageCount > 0);
+}
+
+export async function findLegacyReferenceByCode(kind, code, execute = executeSqlServerQuery) {
+  const query = kind === "model" ? FIND_LEGACY_MODEL_BY_CODE_QUERY : FIND_LEGACY_ORGANIZATION_BY_CODE_QUERY;
+  const maxLength = kind === "model" ? 10 : 50;
+  const result = await execute(query, (request, sql) => {
+    request.input("code", sql.VarChar(maxLength), code);
+  });
+  const row = result.recordset?.[0];
+  return row ? {
+    value: row.value || "",
+    code: row.code || "",
+    usageCount: Number(row.usage_count || 0)
+  } : undefined;
 }
 
 export function buildFuzzyLikePattern(value) {

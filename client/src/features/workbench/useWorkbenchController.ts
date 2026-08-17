@@ -325,6 +325,14 @@ export function useWorkbenchController() {
 
   function validateBeforeSignature() {
     const errors = validateWorkOrderDraft(draft);
+    if (vehicleHistory?.status === "new") {
+      if (!draft.vehicle.modelLegacyCode.trim()) {
+        errors.push("新车辆请从已有车型中选择，或点击新增车型确认编码");
+      }
+      if (!draft.customer.legacyCode.trim()) {
+        errors.push("新车辆请从已有所属单位中选择，或点击新增所属单位确认编码");
+      }
+    }
     if (ocrState.vehicleLicense.status === "未识别") errors.push("请拍照识别并确认行驶证");
     if (ocrState.vehicleLicense.status === "识别中") errors.push("行驶证正在识别，请稍候");
     if (ocrState.vehicleLicense.status === "待确认") errors.push("请确认行驶证 OCR 结果");
