@@ -1,9 +1,5 @@
 # 润丰数据库轮询接入
 
-> 历史方案，已停用。新委托单在客户完成签字时由 Node API 直接写入 SQL Server，
-> 不再产生 `pending` 事件，也不再显示“润丰：待拉取”。当前实现和字段映射见
-> [runfeng-sync-field-reference.md](./runfeng-sync-field-reference.md)。以下内容仅用于排查旧数据。
-
 H5 委托单以 PostgreSQL 为主库。保存草稿时只写 `work_orders`，不会创建同步事件。
 客户完成签字后，系统在同一个 PostgreSQL 事务中把委托单状态改为 `已委托`，并向
 `legacy_sync_outbox` 写入一条 `pending` 事件，不再由 H5 直接写 SQL Server。

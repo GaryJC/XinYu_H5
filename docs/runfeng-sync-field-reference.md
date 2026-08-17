@@ -1,100 +1,87 @@
-# H5 直接写入润丰字段对应关系
+# `legacy_sync_outbox` 与润丰字段对应关系
 
-新建委托单和保存草稿只写 PostgreSQL。客户完成签字时，Node API 在一个 SQL Server
-`SERIALIZABLE` 事务内完成编号分配、车辆档案复用或创建、维修单主表和项目明细写入。
-写入成功后，H5 将 SQL Server 标识回写 PostgreSQL；不再等待润丰轮询或回填。
+H5 以 PostgreSQL 为主库。草稿不进入同步队列；客户完成签字后，系统创建一条
+`legacy_sync_outbox.status = 'pending'` 事件，由润丰程序轮询处理。H5 API 不直接写
+`qxwxb`、`qxwxmxb`、`qxclxxb`、`cxb` 或 `khxxb`。
 
-旧的 `legacy_sync_outbox` 表和领取/ACK 函数暂时保留，用于识别历史数据和兼容已部署
-迁移，但新签字流程不会再创建 `pending` 事件。
+## 队列与回填字段
 
-## 编号与幂等
-
-| PostgreSQL | SQL Server | 处理方式 |
+| PostgreSQL 字段 | 含义 | 润丰处理 |
 | --- | --- | --- |
-| `work_orders.id` | `qxwxb.bzxx` | 写为 `H5:<委托单号>`，重试时先查询该标记，防止重复插单 |
-| `work_orders.legacy_reid` | `qxwxb.reid` | SQL Server identity，插入后用 `SCOPE_IDENTITY()` 读取 |
-| `work_orders.legacy_document_no` | `qxwxb.dh` | 在锁定 `qxwxb` 后取当前最大值加 1 |
-| `work_orders.dispatch_no` | `qxwxb.pgd` | 在同一锁定事务中按部门派工号序列取最大数字加 1，例如 `A66659`、`B1275` |
+| `event_id` | 同步事件和幂等键 | 消费端保存并防止同一事件重复插单 |
+| `order_id` | H5 委托单号 | 业务来源标识，不得作为 `reid/dh/pgd` |
+| `revision` | 同一委托单的同步版本 | 按版本顺序处理 |
+| `event_type` | 当前为 `created` | 创建维修单 |
+| `payload` | 完整委托单 JSON | 拆分写入润丰业务表 |
+| `status` | `pending/processing/synced/failed` | 由领取和 ACK/失败函数维护 |
+| `legacy_reid` | 润丰主记录标识 | 成功后回填 `qxwxb.reid` |
+| `legacy_document_no` | 润丰内部单号 | 成功后回填 `qxwxb.dh` |
+| `legacy_dispatch_no` | 润丰派工号 | 成功后回填 `qxwxb.pgd` |
+| `last_error` | 最近一次错误 | 失败回填时填写 |
 
-`dh` 和 `pgd` 必须在同一个 SQL Server 事务内生成，不能在浏览器或 PostgreSQL 中用
-`MAX + 1` 预生成。编号查询使用 `TABLOCKX, HOLDLOCK`，避免 H5 并发签字生成相同编号。
-派工号前缀按真实库现有规则生成：`A→A`、`B→B`、`F→F`、`J→J`，机电二部
-`M` 与机电一部共用 `A` 系列。
+ACK 成功后，数据库函数同步更新 `work_orders.legacy_reid`、
+`work_orders.legacy_document_no`、`work_orders.dispatch_no` 和
+`work_orders.legacy_sync_status = 'synced'`。因此派工号在润丰处理成功后才出现在 H5。
 
-## `qxwxb` 维修单主表
+## payload 关键字段
 
-| H5 字段 | SQL Server 字段 | 说明 |
-| --- | --- | --- |
-| `department.code` | `bm` | 润丰部门编码，例如 `A` |
-| 固定空字符串 | `wd` | 创建内单；不创建 `wd='1'` 的外部维修单 |
-| 自动生成 | `dh` | 内部单据号 |
-| `arrivalDate` | `jcrq` | 写入前转换成 `YYYY.MM.DD`，例如 `2026.08.17` |
-| 服务端当前时间 | `jcsj` | `HH:mm` |
-| `vehicle.plate` | `ch` | 车牌号 |
-| 已有车辆 `qxclxxb.cx`，否则车型编码加名称 | `cx` | 例如 `DZXPST 大众-新帕萨特` |
-| `customer.contact`，为空时使用单位名称 | `sxr` | 送修人 |
-| 维修项目名称合并 | `wxnr` | 维修内容 |
-| 项目工费合计 | `fyhj`、`xmfy` | 当前 H5 只写项目工费，不创建材料费用 |
-| `faultDescription` | `bz` | 故障描述/备注 |
-| `advisor` | `jcr` | 服务顾问姓名 |
-| 按部门序列自动生成 | `pgd` | `A/B/F/J` 系列派工号 |
-| `vehicle.mileage` | `lc` | 进厂里程 |
-| `customer.phone` | `lxdh` | 联系电话 |
-| 固定 `小修` | `wxlb` | 初始维修类别 |
-| `customer.contact` | `lxr` | 联系人 |
-| 已有车辆 `qxclxxb.ssdw`，否则 `customer.legacyCode` | `ssdw` | `khxxb.bm`，不是中文单位名称 |
-| 固定 `0` | `ywd` | 尚未生成外部维修单 |
-| 固定 `0` | `zcbz` | 新内单初始值 |
-| `H5:<work_orders.id>` | `bzxx` | H5 幂等来源标记 |
-
-## `qxwxmxb` 维修项目明细
-
-每个 H5 `repairItems` 元素写一条 `lb='项目'` 的记录：
-
-| H5 字段/值 | SQL Server 字段 |
+| payload 路径 | 润丰对应关系 |
 | --- | --- |
-| 固定空字符串 | `wd` |
-| 主表 `dh` | `dh` |
-| 固定 `项目` | `lb` |
-| `repairItems[].name` | `hh` |
-| 固定 `1` | `sl` |
-| `repairItems[].laborFee` | `dj`、`je`、`gs` |
-| 项目顺序，从 1 开始 | `Xh` |
+| `order.department.code` | `qxwxb.bm` |
+| `order.arrivalDate` | `qxwxb.jcrq`，消费端转换为润丰日期格式 |
+| `order.vehicle.plate` | `qxwxb.ch` / `qxclxxb.ch` |
+| `order.vehicle.vin` | `qxclxxb.sbdm` |
+| `order.vehicle.mileage` | `qxwxb.lc` |
+| `order.vehicle.model` | `cxb.qc`，车辆档案 `qxclxxb.cx` 的名称部分 |
+| `order.vehicle.modelLegacyCode` | `cxb.bh`，车辆档案 `qxclxxb.cx` 的编码部分 |
+| `order.customer.name` | `khxxb.mc` |
+| `order.customer.legacyCode` | `khxxb.bm` / `qxclxxb.ssdw` |
+| `order.customer.contact` | 联系人/送修人字段 |
+| `order.customer.phone` | 联系电话字段 |
+| `order.advisor` | `qxwxb.jcr` |
+| `order.repairItems[]` | `qxwxmxb` 维修项目明细 |
 
-H5 不写 `lb='材料'`，也不直接写 `ckdb1/ckdb2`。仓库仍由润丰客户端按派工号生成
-出库单并追加材料明细。
+## 已有车辆与新增主数据
 
-## 车辆档案、车型和所属单位
+H5 在录单时仍直接读取润丰主数据用于匹配，但不会写入润丰：
 
-写维修单前按车牌或 VIN 查询 `qxclxxb`：
+- 优先按车牌或 VIN 匹配 `qxclxxb`；已有车辆继续使用其现存车型和所属单位编码；
+- 车型和所属单位使用 AutoComplete，可选择已有 `cxb`/`khxxb` 项；
+- 找不到时允许员工新增。H5 根据中文名称生成拼音首字母默认编码：车型默认大写、
+  所属单位默认小写，员工可以修改；
+- 编码输入停止 350ms 后查询润丰，已被任何主数据占用时要求修改；
+- 确认后的名称和编码分别保存在 PostgreSQL，并随 payload 一起交给润丰消费者。
 
-- 已有车辆：继续使用该车辆现存的 `cx` 和 `ssdw`，避免相同车辆产生不同编码；
-- 新车辆：车型和所属单位先搜索现有主数据；员工可以复用候选项，也可以点击“新增车型”或
-  “新增所属单位”；
-- 车型和所属单位使用可编辑的 AutoComplete 搜索框：键入的名称可以保留和删除，但手工修改
-  会立即清空原润丰编码；只有选择已有项，或在无结果时点击“新增‘当前名称’”并确认编码后，
-  才视为可写入润丰的已确认主数据；
-- 搜索框支持清除；清除已选车型或所属单位时，对应名称和润丰编码会一起清空，不能保留失配编码；
-- 新增主数据时，H5 按中文名称自动生成拼音首字母编码：车型默认大写，所属单位默认小写，
-  与润丰现存习惯一致。车型编码最多 10 位，所属单位编码最多 50 位，只允许英文字母和数字；
-  员工可以直接修改自动生成的编码并保留其大小写；
-- 编码输入停止 350ms 后，H5 查询 `cxb.bh` 或 `khxxb.bm`。即使该主数据当前关联 0 辆车，
-  也视为编码已占用；重复时显示占用该编码的名称，并要求员工修改；
-- 客户签字时，服务端在同一 `SERIALIZABLE` 事务中再次检查编码。编码不存在则先插入
-  `cxb`/`khxxb`，随后创建 `qxclxxb`；如果编码已经被不同名称占用，整个事务回滚并提示修改；
-- 新车辆的 `qxclxxb.cx` 使用 `modelLegacyCode + ' ' + model`，`ssdw` 使用
-  `customer.legacyCode`，VIN 写入 `sbdm`；
-- 所属单位编码来自 `khxxb.bm`，例如 `grqdswjty`；车型编码来自 `cxb.bh`，例如
-  `DZXPST`。中文名称和编码不得互相替代。
+润丰消费者处理新车辆时必须在同一个 SQL Server 事务内：
 
-前端 debounce 查询用于尽早提醒，不作为最终唯一性保证；最终以 SQL Server 主键和签字事务
-中的再次查询为准。因此多人同时使用同一新编码时，不会生成部分主数据或半张委托单。
+1. 再次按车牌或 VIN 查询 `qxclxxb`，防止轮询等待期间其他员工已经建档；
+2. 已有车辆复用现存 `qxclxxb.cx` 和 `qxclxxb.ssdw`；
+3. 新车辆按 `modelLegacyCode` 查询 `cxb.bh`。不存在时创建车型；如果编码已被不同名称
+   占用，则回滚并通过失败接口提示员工修改；
+4. 按 `customer.legacyCode` 查询 `khxxb.bm`，同样执行复用、创建或冲突回滚；
+5. 创建车辆档案，其中 `qxclxxb.cx = modelLegacyCode + ' ' + model`，
+   `qxclxxb.ssdw = customer.legacyCode`；
+6. 创建 `qxwxb/qxwxmxb`，提交 SQL Server 事务后再 ACK PostgreSQL 事件。
 
-旧库大量字段是 `char/varchar`，写入前会按旧编码的字节长度截断；日期不会把
-PostgreSQL 的 `YYYY-MM-DD` 原样写进润丰。
+例如：
 
-## 失败行为
+```text
+vehicle.modelLegacyCode = DZXPST
+vehicle.model           = 大众-新帕萨特
+customer.legacyCode     = grqdswjty
 
-SQL Server 写入失败时，签字事务不会完成，签字 token 保持可重试状态，H5 会直接显示
-写入失败原因。SQL Server 已提交但 PostgreSQL 回写失败时，再次请求会通过
-`qxwxb.bzxx = H5:<委托单号>` 找到原记录并复用同一 `reid/dh/pgd`，不会创建第二张维修单。
+qxclxxb.cx   = DZXPST 大众-新帕萨特
+qxclxxb.ssdw = grqdswjty
+```
+
+前端 debounce 查询只用于尽早提醒，最终唯一性必须由润丰消费者事务和数据库约束保证。
+消费者不得只相信 H5 查询时的结果，也不得用中文名称代替编码。
+
+## 失败与重试
+
+消费者写润丰失败时必须回滚 SQL Server 事务，再调用失败回填函数。事件会显示“同步失败”，
+并可在延迟后重新领取。只有 SQL Server 已成功提交后才能 ACK；ACK 会把状态改为“已同步”并
+回填 `reid/dh/pgd`。
+
+领取、批量 ACK、失败回填和权限说明见
+[`legacy-sync-polling.md`](./legacy-sync-polling.md)。
