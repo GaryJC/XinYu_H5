@@ -325,7 +325,7 @@ export function useWorkbenchController() {
 
   function validateBeforeSignature() {
     const errors = validateWorkOrderDraft(draft);
-    if (vehicleHistory?.status === "new") {
+    if (vehicleHistory?.status !== "found") {
       if (!draft.vehicle.modelLegacyCode.trim()) {
         errors.push("新车辆请从已有车型中选择，或点击新增车型确认编码");
       }

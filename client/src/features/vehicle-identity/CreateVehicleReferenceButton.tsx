@@ -10,6 +10,7 @@ type Props = {
   currentName: string;
   currentCode: string;
   disabled?: boolean;
+  openRequest?: { key: number; name: string };
   onCreate: (candidate: VehicleReferenceCandidate) => void;
 };
 
@@ -18,7 +19,7 @@ type CheckState = {
   message: string;
 };
 
-export function CreateVehicleReferenceButton({ kind, currentName, currentCode, disabled, onCreate }: Props) {
+export function CreateVehicleReferenceButton({ kind, currentName, currentCode, disabled, openRequest, onCreate }: Props) {
   const label = kind === "model" ? "车型" : "所属单位";
   const maxLength = kind === "model" ? 10 : 50;
   const [open, setOpen] = useState(false);
@@ -62,8 +63,12 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
     return () => window.clearTimeout(timer);
   }, [code, kind, maxLength, open]);
 
-  function showModal() {
-    const nextName = currentName.trim();
+  useEffect(() => {
+    if (openRequest) showModal(openRequest.name);
+  }, [openRequest?.key]);
+
+  function showModal(requestedName?: string) {
+    const nextName = (requestedName ?? currentName).trim();
     setName(nextName);
     setCode(currentCode.trim() || generateLegacyReferenceCode(nextName, kind));
     setCodeEdited(Boolean(currentCode.trim()));
@@ -103,7 +108,7 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
 
   return (
     <div className="vehicle-reference-create">
-      <Button type="link" icon={<Plus size={15} />} disabled={disabled} onClick={showModal}>
+      <Button type="link" icon={<Plus size={15} />} disabled={disabled} onClick={() => showModal()}>
         新增{label}
       </Button>
       {currentCode ? <span>当前编码：{currentCode}</span> : <span>未选择已有编码时，请新增{label}</span>}

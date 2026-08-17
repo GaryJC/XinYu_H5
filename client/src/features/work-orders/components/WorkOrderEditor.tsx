@@ -23,6 +23,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const [signatureResult, setSignatureResult] = useState("");
   const [landscapeSignature, setLandscapeSignature] = useState(false);
   const [showSignatureValidation, setShowSignatureValidation] = useState(false);
+  const [modelCreateRequest, setModelCreateRequest] = useState<{ key: number; name: string }>();
+  const [organizationCreateRequest, setOrganizationCreateRequest] = useState<{ key: number; name: string }>();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
   const {
@@ -37,7 +39,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const canSyncPlatform = Boolean(selectedOrder && !selectedOrder.platformOrderNo && !["草稿", "待客户签字"].includes(selectedOrder.status) && (role === "advisor" || role === "manager"));
   const showLegacySyncStatus = Boolean(selectedOrder && selectedOrder.status !== "草稿");
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
-  const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "行驶证"].some((phrase) => error.includes(phrase)));
+  const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "行驶证", "编码", "选择已有"].some((phrase) => error.includes(phrase)));
   const canResumeSignature = Boolean(selectedOrder?.status === "待客户签字" && selectedOrder.signatureToken && !selectedOrder.signatureTokenUsed);
   const signatureDisabled = !canResumeSignature && (!canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder)));
   const signatureDisabledReason = selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) ? `当前状态“${selectedOrder.status}”不能再次发起签字` : "";
@@ -220,7 +222,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   disabled={!canEditForm}
                   placeholder="输入至少两个字符查询已有车型"
                   value={draft.vehicle.model}
-                  onChange={(value) => updateVehicle("model", value)}
+                  code={draft.vehicle.modelLegacyCode}
+                  onRequestCreate={(name) => setModelCreateRequest({ key: Date.now(), name })}
                   onSelect={(candidate) => selectVehicleReference("model", candidate)}
                 />
                 <VehicleReferenceTags
@@ -234,6 +237,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   currentName={draft.vehicle.model}
                   currentCode={draft.vehicle.modelLegacyCode}
                   disabled={!canEditForm}
+                  openRequest={modelCreateRequest}
                   onCreate={(candidate) => selectVehicleReference("model", candidate)}
                 />
               </Form.Item>
@@ -244,16 +248,19 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   disabled={!canEditForm}
                   placeholder="输入至少两个字符查询已有单位"
                   value={draft.customer.name}
-                  onChange={(value) => updateCustomer("name", value)}
-                  onSelect={(candidate) => setDraft((current) => ({
-                    ...current,
-                    customer: {
-                      ...current.customer,
-                      name: candidate.value,
-                      legacyCode: candidate.code || "",
-                      contact: candidate.value
-                    }
-                  }))}
+                  code={draft.customer.legacyCode}
+                  onRequestCreate={(name) => setOrganizationCreateRequest({ key: Date.now(), name })}
+                  onSelect={(candidate) => {
+                    setDraft((current) => ({
+                      ...current,
+                      customer: {
+                        ...current.customer,
+                        name: candidate.value,
+                        legacyCode: candidate.code || "",
+                        contact: candidate.value
+                      }
+                    }));
+                  }}
                 />
                 <VehicleReferenceTags
                   label="车主名称/所属单位"
@@ -266,6 +273,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   currentName={draft.customer.name}
                   currentCode={draft.customer.legacyCode}
                   disabled={!canEditForm}
+                  openRequest={organizationCreateRequest}
                   onCreate={(candidate) => selectVehicleReference("organization", candidate)}
                 />
               </Form.Item>
