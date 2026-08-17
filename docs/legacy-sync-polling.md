@@ -149,15 +149,13 @@ order by created_at;
 
 ## 数据库权限
 
-数据库登录账号由部署环境单独管理，应用不依赖固定的 PostgreSQL 角色名。联调期间，
-可由管理员向实际使用的同步登录账号授权同步队列读写权限和批量同步函数。下面用
+数据库登录账号由部署环境单独管理，应用不依赖固定的 PostgreSQL 角色名。可由管理员向
+实际使用的同步登录账号授予同步函数执行权限。下面用
 `your_sync_login` 代表该账号：
 
 ```sql
 grant connect on database your_database to your_sync_login;
 grant usage on schema public to your_sync_login;
-
-grant select, insert, update, delete on table legacy_sync_outbox to your_sync_login;
 
 grant execute on function claim_legacy_sync_events(text, integer)
   to your_sync_login;
@@ -167,7 +165,8 @@ grant execute on function fail_legacy_sync_events(text, jsonb)
   to your_sync_login;
 ```
 
-`retry_legacy_sync_event` 建议只授权给新系统管理员。
+生产账号不需要直接修改 `legacy_sync_outbox`。联调确需查看原始事件时可临时授予
+`select`；`retry_legacy_sync_event` 建议只授权给新系统管理员。
 
 ## 幂等和写入规则
 
