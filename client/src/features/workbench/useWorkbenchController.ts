@@ -33,7 +33,7 @@ export function useWorkbenchController() {
   const [currentUser, setCurrentUser] = useState<UserProfile>();
   const [departments, setDepartments] = useState<LegacyDepartment[]>([]);
   const [departmentError, setDepartmentError] = useState("");
-  const [actionLoading, setActionLoading] = useState<"save" | "signature" | "sync" | "">("");
+  const [actionLoading, setActionLoading] = useState<"save" | "signature" | "sync" | "delete" | "">("");
   const [devLoginLoading, setDevLoginLoading] = useState(false);
   const sessionGeneration = useRef(0);
 
@@ -54,7 +54,12 @@ export function useWorkbenchController() {
   const { ocrState, vehicleLicenseOcr, vehicleLicenseFileId, resetOcr, scanVehicleLicense, confirmVehicleLicenseOcr } =
     useVehicleLicenseOcr({ orderId: selectedOrder?.id, actor, setDraft, onRecognized: lookupVehicleLicense });
   const visibleNavItems = useMemo(() => navItems.filter((item) => item.roles.includes(role)), [role]);
-  const canEditForm = canCreateOrder(role) && (!selectedOrder || selectedOrder.status === "草稿");
+  const canEditForm = canCreateOrder(role) && (
+    !selectedOrder || (
+      selectedOrder.status === "草稿"
+      && (role === "manager" || selectedOrder.advisor === currentUser?.name)
+    )
+  );
   const totalLabor = useMemo(() => sumLabor(draft.repairItems), [draft.repairItems]);
   const technicianOptions = useMemo(() => users.filter((user) => user.active && user.role === "technician").map((user) => user.name), [users]);
   const inspectorOptions = useMemo(() => users.filter((user) => user.active && user.role === "inspector").map((user) => user.name), [users]);
@@ -114,7 +119,10 @@ export function useWorkbenchController() {
       if (generation !== sessionGeneration.current) return;
       const safeNext = Array.isArray(next) ? next : [];
       setOrders(safeNext);
-      const nextSelected = safeNext.find((order) => order.id === keepId) ?? safeNext[0];
+      const nextSelected = safeNext.find((order) => order.id === keepId)
+        ?? (nextRole === "advisor"
+          ? safeNext.find((order) => order.advisor === currentUser?.name)
+          : safeNext[0]);
       if (nextSelected) {
         selectOrder(nextSelected);
       } else {
@@ -273,6 +281,24 @@ export function useWorkbenchController() {
     }
   }
 
+  async function deleteDraft(order: WorkOrder) {
+    if (order.status !== "草稿") return "只能删除草稿";
+    if (role !== "manager" && order.advisor !== currentUser?.name) return "只能删除自己创建的草稿";
+    setActionLoading("delete");
+    try {
+      await workOrderApi.deleteDraft(order.id);
+      setSelectedId(null);
+      resetDraft(undefined, currentUser?.name || "");
+      await loadOrders(role, null);
+      await loadDashboard(role);
+      return undefined;
+    } catch (error) {
+      return actionError(error, "删除草稿失败");
+    } finally {
+      setActionLoading("");
+    }
+  }
+
   async function sendSignature() {
     const errors = validateBeforeSignature();
     if (errors.length) {
@@ -357,6 +383,7 @@ export function useWorkbenchController() {
     selectOrder,
     startNewOrder,
     saveDraft,
+    deleteDraft,
     sendSignature,
     ...workflowActions,
     scanVehicleLicense,

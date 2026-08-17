@@ -1,19 +1,24 @@
 import { useState, type ReactNode } from "react";
-import { Button, Card, Collapse, Descriptions, Empty, Grid, Image, Input, Modal, Table } from "antd";
-import { ChevronRight, PencilLine } from "lucide-react";
+import { Alert, Button, Card, Collapse, Descriptions, Empty, Grid, Image, Input, Modal, Popconfirm, Table } from "antd";
+import { ChevronRight, PencilLine, Trash2 } from "lucide-react";
 import { WorkOrder } from "../../../../shared/types";
 import { LegacySyncStatusChip, StatusChip } from "../../shared/ui/Status";
 import { AuthenticatedImage } from "../../shared/ui/AuthenticatedImage";
 import { WorkbenchController } from "./useWorkbenchController";
 
 export function OrdersArchive({ controller }: { controller: WorkbenchController }) {
-  const { searchTerm, setSearchTerm, searchedOrders, selectedId, selectOrder, setActiveNav, role } = controller;
+  const {
+    searchTerm, setSearchTerm, searchedOrders, selectedId, selectOrder, setActiveNav,
+    role, currentUser, deleteDraft, actionLoading
+  } = controller;
   const [detailOrder, setDetailOrder] = useState<WorkOrder>();
+  const [deleteError, setDeleteError] = useState("");
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
 
   function openDetail(order: WorkOrder) {
     selectOrder(order);
+    setDeleteError("");
     setDetailOrder(order);
   }
 
@@ -21,6 +26,21 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
     selectOrder(order);
     setDetailOrder(undefined);
     setActiveNav("委托开单");
+  }
+
+  const canManageDraft = Boolean(
+    detailOrder?.status === "草稿"
+    && (role === "manager" || detailOrder.advisor === currentUser?.name)
+  );
+
+  async function handleDeleteDraft(order: WorkOrder) {
+    setDeleteError("");
+    const error = await deleteDraft(order);
+    if (error) {
+      setDeleteError(error);
+      return;
+    }
+    setDetailOrder(undefined);
   }
 
   return (
@@ -89,7 +109,19 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
         onCancel={() => setDetailOrder(undefined)}
         footer={(
           <div className="archive-detail-actions">
-            {detailOrder?.status === "草稿" && (role === "advisor" || role === "manager") ? (
+            {canManageDraft && detailOrder ? (
+              <Popconfirm
+                title="确认删除这张草稿？"
+                description="草稿及其照片、OCR 和操作记录将从系统中删除，无法恢复。"
+                okText="确认删除"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => handleDeleteDraft(detailOrder)}
+              >
+                <Button danger icon={<Trash2 size={16} />} loading={actionLoading === "delete"}>删除草稿</Button>
+              </Popconfirm>
+            ) : null}
+            {canManageDraft && detailOrder ? (
               <Button type="primary" icon={<PencilLine size={16} />} onClick={() => resumeDraft(detailOrder)}>继续编辑草稿</Button>
             ) : null}
             <Button onClick={() => setDetailOrder(undefined)}>关闭</Button>
@@ -97,6 +129,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
         )}
         styles={{ body: { maxHeight: isMobile ? "calc(100vh - 132px)" : "72vh", overflowY: "auto" } }}
       >
+        {deleteError ? <Alert type="error" showIcon title="删除草稿失败" description={deleteError} style={{ marginBottom: 12 }} /> : null}
         {detailOrder ? <OrderDetail order={detailOrder} isMobile={isMobile} /> : null}
       </Modal>
     </Card>

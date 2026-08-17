@@ -31,6 +31,7 @@ export type WorkOrderApi = {
   list(role: RoleKey): Promise<WorkOrder[]>;
   create(draft: WorkOrderDraft, actor: string): Promise<WorkOrder>;
   update(order: WorkOrder, actor: string, action: string): Promise<WorkOrder>;
+  deleteDraft(id: string): Promise<{ id: string }>;
   transition(id: string, status: WorkOrderStatus, actor: string, action: string, patch?: Partial<WorkOrder>): Promise<WorkOrder>;
   createSignatureToken(id: string, actor: string): Promise<WorkOrder>;
   signByToken(token: string, signature: string, signatureFileId: string): Promise<WorkOrder>;
@@ -78,6 +79,9 @@ export const workOrderApi: WorkOrderApi = {
   },
   update(order, actor, action) {
     return request(`/api/work-orders/${order.id}`, { method: "PUT", body: { order, actor, action } });
+  },
+  deleteDraft(id) {
+    return request(`/api/work-orders/${id}`, { method: "DELETE" });
   },
   transition(id, status, actor, action, patch = {}) {
     return request(`/api/work-orders/${id}/transition`, { method: "POST", body: { status, actor, action, patch } });

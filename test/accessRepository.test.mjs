@@ -5,7 +5,7 @@ import { HttpError } from "../server/http/HttpError.mjs";
 process.env.DATABASE_URL ||= "postgresql://test:test@127.0.0.1:5432/test";
 const { assertOcrRecordAccess, assertWorkOrderAccess } = await import("../server/repositories/accessRepository.mjs");
 
-test("work-order access is scoped to the owning advisor", async () => {
+test("work-order mutations remain scoped to the owning advisor", async () => {
   const database = { query: async () => ({ rows: [{ advisor: "张三" }] }) };
   await assert.doesNotReject(() => assertWorkOrderAccess("order-1", { role: "advisor", name: "张三" }, database));
   await assert.rejects(
