@@ -325,14 +325,10 @@ export function useWorkbenchController() {
 
   function validateBeforeSignature() {
     const errors = validateWorkOrderDraft(draft);
-    const foundVehicle = vehicleHistory?.status === "found" ? vehicleHistory.vehicle : undefined;
-    const usesExistingModel = foundVehicle && normalizeVehicleReference(draft.vehicle.model) === normalizeVehicleReference(foundVehicle.model);
-    const usesExistingOrganization = foundVehicle?.organization
-      && normalizeVehicleReference(draft.customer.name) === normalizeVehicleReference(foundVehicle.organization.name);
-    if (!draft.vehicle.modelLegacyCode.trim() && !usesExistingModel) {
+    if (!draft.vehicle.modelLegacyCode.trim()) {
       errors.push("车型尚未确认，请从搜索结果中选择，或新增车型并确认编码");
     }
-    if (!draft.customer.legacyCode.trim() && !usesExistingOrganization) {
+    if (!draft.customer.legacyCode.trim()) {
       errors.push("所属单位尚未确认，请从搜索结果中选择，或新增所属单位并确认编码");
     }
     if (ocrState.vehicleLicense.status === "未识别") errors.push("请拍照识别并确认行驶证");
@@ -408,10 +404,6 @@ export function useWorkbenchController() {
     updateRepairItem,
     toggleArrayField
   };
-}
-
-function normalizeVehicleReference(value: string) {
-  return value.normalize("NFKC").trim().replace(/[\s\-_]/g, "").toUpperCase();
 }
 
 export type WorkbenchController = ReturnType<typeof useWorkbenchController>;

@@ -26,6 +26,21 @@ export function assertDraftEditable(status) {
   if (status !== "草稿") throw new HttpError(409, `当前状态“${status}”不能修改委托单内容`);
 }
 
+export function assertOrderReadyForSignature(order) {
+  const missing = [];
+  if (!order.department?.code?.trim() || !order.department?.name?.trim()) missing.push("部门");
+  if (!order.vehicle?.plate?.trim()) missing.push("车牌号码");
+  if (!/^[A-Z0-9]{17}$/i.test(order.vehicle?.vin?.trim() || "")) missing.push("17 位 VIN");
+  if (!/^\d+(\.\d+)?$/.test(order.vehicle?.mileage?.trim() || "")) missing.push("进厂里程");
+  if (!order.vehicle?.model?.trim()) missing.push("车型");
+  if (!order.vehicle?.modelLegacyCode?.trim()) missing.push("车型编码");
+  if (!order.customer?.name?.trim()) missing.push("车主名称/所属单位");
+  if (!order.customer?.legacyCode?.trim()) missing.push("所属单位编码");
+  if (!order.customer?.phone?.trim()) missing.push("联系电话");
+  if (!order.repairItems?.length || order.repairItems.some((item) => !item.name?.trim())) missing.push("维修项目");
+  if (missing.length) throw new HttpError(400, `请完善必填项：${missing.join("、")}`);
+}
+
 export function assertStatusTransition(currentStatus, targetStatus) {
   if (nextStatus.get(currentStatus) !== targetStatus) {
     throw new HttpError(409, `不能从“${currentStatus}”直接变更为“${targetStatus}”`);

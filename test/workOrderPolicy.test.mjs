@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   assertDraftEditable,
+  assertOrderReadyForSignature,
   assertPlatformSyncAllowed,
   assertRepairItemAction,
   assertSettlementAllowed,
@@ -37,6 +38,38 @@ test("workflow patches reject server-owned and malformed fields", () => {
 test("signed work orders cannot be edited as drafts", () => {
   assert.doesNotThrow(() => assertDraftEditable("草稿"));
   assert.throws(() => assertDraftEditable("已委托"), (error) => error.status === 409);
+});
+
+test("signing requires the legacy model and organization codes used by Runfeng", () => {
+  const readyOrder = {
+    department: { code: "A", name: "机电一部" },
+    vehicle: {
+      plate: "鲁B12345",
+      vin: "LSV12345678901234",
+      mileage: "12000",
+      model: "大众-帕萨特",
+      modelLegacyCode: "DZPST"
+    },
+    customer: {
+      name: "个人（水务集团）",
+      legacyCode: "grqdswjty",
+      phone: "13800000000"
+    },
+    repairItems: [{ name: "常规保养" }]
+  };
+
+  assert.doesNotThrow(() => assertOrderReadyForSignature(readyOrder));
+  assert.throws(
+    () => assertOrderReadyForSignature({
+      ...readyOrder,
+      vehicle: { ...readyOrder.vehicle, modelLegacyCode: "" },
+      customer: { ...readyOrder.customer, legacyCode: "" }
+    }),
+    (error) => error instanceof HttpError
+      && error.status === 400
+      && /车型编码/.test(error.message)
+      && /所属单位编码/.test(error.message)
+  );
 });
 
 test("repair-item actions reject missing items, unknown actions, and wrong states", () => {

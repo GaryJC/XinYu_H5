@@ -23,7 +23,7 @@ function Invoke-Native {
     }
 }
 
-Invoke-Native { npm.cmd ci --include=dev } "npm ci failed"
+Invoke-Native { npm.cmd ci --include=dev --no-audit --no-fund } "npm ci failed"
 Invoke-Native { npm.cmd run check } "Application check or build failed"
 Invoke-Native { npm.cmd run migrate } "PostgreSQL migration failed"
 

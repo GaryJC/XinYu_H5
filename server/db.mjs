@@ -15,6 +15,7 @@ import {
 } from "./domain/workOrderModel.mjs";
 import {
   assertDraftEditable,
+  assertOrderReadyForSignature,
   assertPlatformSyncAllowed,
   assertRepairItemAction,
   assertSettlementAllowed,
@@ -138,7 +139,7 @@ export async function createSignatureTokenForOrder(id, actor) {
     const order = await findWorkOrderById(client, id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
     if (order.status !== "草稿") throw new HttpError(409, `当前状态“${order.status}”不能发起签字`);
-    validateOrderForSignature(order);
+    assertOrderReadyForSignature(order);
     const confirmedLicense = await client.query(
       `
         select ocr.id
@@ -262,18 +263,6 @@ export async function syncWorkOrderToPlatform(id, actor) {
     await addAudit(client, id, actor, "同步至维修业务平台并生成出库单");
     return findWorkOrderById(client, id);
   });
-}
-
-function validateOrderForSignature(order) {
-  const missing = [];
-  if (!order.vehicle?.plate?.trim()) missing.push("车牌号码");
-  if (!/^[A-Z0-9]{17}$/i.test(order.vehicle?.vin?.trim() || "")) missing.push("17 位 VIN");
-  if (!/^\d+(\.\d+)?$/.test(order.vehicle?.mileage?.trim() || "")) missing.push("进厂里程");
-  if (!order.vehicle?.model?.trim()) missing.push("车型");
-  if (!order.customer?.name?.trim()) missing.push("车主名称/所属单位");
-  if (!order.customer?.phone?.trim()) missing.push("联系电话");
-  if (!order.repairItems?.length || order.repairItems.some((item) => !item.name?.trim())) missing.push("维修项目");
-  if (missing.length) throw new HttpError(400, `请完善必填项：${missing.join("、")}`);
 }
 
 export async function repairItemAction(orderId, itemId, action, actor, patch = {}) {
