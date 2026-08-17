@@ -47,6 +47,7 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
               value={testLicense.model || ""}
               code=""
               onSearchChange={(value) => setTestLicense((current) => ({ ...current, model: value }))}
+              onClear={() => setTestLicense((current) => ({ ...current, model: "" }))}
               onSelect={(candidate) => setTestLicense((current) => ({ ...current, model: candidate.value }))}
             />
             <VehicleReferenceAutocomplete
@@ -57,6 +58,7 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
               value={testLicense.owner || ""}
               code=""
               onSearchChange={(value) => setTestLicense((current) => ({ ...current, owner: value }))}
+              onClear={() => setTestLicense((current) => ({ ...current, owner: "" }))}
               onSelect={(candidate) => setTestLicense((current) => ({ ...current, owner: candidate.value }))}
             />
           </div>

@@ -12,6 +12,7 @@ type Props = {
   ariaLabel: string;
   onSearchChange?: (value: string) => void;
   onRequestCreate?: (value: string) => void;
+  onClear?: () => void;
   onSelect: (candidate: VehicleReferenceCandidate) => void;
 };
 
@@ -21,7 +22,7 @@ type ReferenceOption = {
   candidate: VehicleReferenceCandidate;
 };
 
-export function VehicleReferenceAutocomplete({ kind, value, code, disabled, placeholder, ariaLabel, onSearchChange, onRequestCreate, onSelect }: Props) {
+export function VehicleReferenceAutocomplete({ kind, value, code, disabled, placeholder, ariaLabel, onSearchChange, onRequestCreate, onClear, onSelect }: Props) {
   const [options, setOptions] = useState<ReferenceOption[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -107,6 +108,7 @@ export function VehicleReferenceAutocomplete({ kind, value, code, disabled, plac
       options={visibleOptions}
       open={open}
       showSearch
+      allowClear
       filterOption={false}
       notFoundContent={loading ? "正在查询公司数据库…" : emptyContent}
       onSearch={(query) => {
@@ -123,6 +125,18 @@ export function VehicleReferenceAutocomplete({ kind, value, code, disabled, plac
         }
       }}
       onOpenChange={setOpen}
+      onClear={() => {
+        setSearchValue("");
+        setOptions([]);
+        setOpen(false);
+        onSearchChange?.("");
+        onClear?.();
+      }}
+      onInputKeyDown={(event) => {
+        if ((event.key === "Backspace" || event.key === "Delete") && !searchValue && code) {
+          onClear?.();
+        }
+      }}
       onSelect={(_selectedValue, option) => {
         setOpen(false);
         setSearchValue("");
