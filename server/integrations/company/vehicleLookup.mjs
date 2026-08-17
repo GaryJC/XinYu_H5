@@ -3,6 +3,7 @@ import { hasSqlServerConfig } from "../../config/sqlServerConfig.mjs";
 import {
   findLegacyModelCandidates,
   findLegacyOrganizationCandidates,
+  findLegacyReferenceByCode,
   findLegacyVehicle
 } from "../../repositories/legacyVehicleRepository.mjs";
 
@@ -107,6 +108,25 @@ export async function searchCompanyVehicleReferences({ kind, query } = {}) {
   return { kind, query, candidates };
 }
 
+export async function checkCompanyVehicleReferenceCode({ kind, code } = {}) {
+  if (kind !== "model" && kind !== "organization") {
+    throw new HttpError(400, "请选择车型或所属单位编码类型");
+  }
+  const maxLength = kind === "model" ? 10 : 50;
+  const normalizedCode = normalizeNewReferenceCode(code, maxLength);
+  const configured = hasSqlServerConfig();
+  const references = kind === "model" ? mockModels : mockOrganizations;
+  const existing = configured
+    ? await findLegacyReferenceByCode(kind, normalizedCode)
+    : references.find((item) => item.code.toUpperCase() === normalizedCode.toUpperCase());
+  return {
+    kind,
+    code: normalizedCode,
+    available: !existing,
+    ...(existing ? { existing } : {})
+  };
+}
+
 export function resolveVehicleCandidates(candidates, normalizedPlate, normalizedVin) {
   const plateMatch = normalizedPlate ? candidates.find((item) => item.plateMatched ?? normalizeIdentifier(item.plate) === normalizedPlate) : undefined;
   const vinMatch = normalizedVin ? candidates.find((item) => item.vinMatched ?? normalizeIdentifier(item.vin) === normalizedVin) : undefined;
@@ -180,4 +200,12 @@ export function normalizeReference(value) {
   return typeof value === "string"
     ? value.normalize("NFKC").trim().replace(/[\s\-_]/g, "").toUpperCase()
     : "";
+}
+
+export function normalizeNewReferenceCode(value, maxLength) {
+  const code = typeof value === "string" ? value.normalize("NFKC").trim() : "";
+  if (!code) throw new HttpError(400, "编码不能为空");
+  if (!/^[A-Za-z0-9]+$/.test(code)) throw new HttpError(400, "编码只能包含英文字母和数字");
+  if (code.length > maxLength) throw new HttpError(400, `编码最多 ${maxLength} 个字符`);
+  return code;
 }

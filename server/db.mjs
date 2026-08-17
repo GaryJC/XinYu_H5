@@ -48,7 +48,15 @@ export async function listWorkOrders(role = "manager", user) {
     `,
     params
   );
-  return hydrateOrders(rows);
+  const orders = await hydrateOrders(rows);
+  return sanitizeVisibleOrders(orders, role, user);
+}
+
+export function sanitizeVisibleOrders(orders, role, user) {
+  if (role !== "advisor") return orders;
+  return orders.map((order) => order.advisor === user?.name
+    ? order
+    : { ...order, signatureToken: undefined, signatureTokenUsed: undefined });
 }
 
 export async function createWorkOrder(draft, actor) {
@@ -89,6 +97,20 @@ export async function updateWorkOrder(order, actor, action) {
     await upsertWorkOrder(client, next);
     await addAudit(client, next.id, actor, action);
     return findWorkOrderById(client, next.id);
+  });
+}
+
+export async function deleteDraftWorkOrder(id, runTransaction = transaction) {
+  return runTransaction(async (client) => {
+    const existing = await client.query(
+      "select id, status from work_orders where id = $1 for update",
+      [id]
+    );
+    const order = existing.rows[0];
+    if (!order) throw new HttpError(404, "委托单不存在");
+    if (order.status !== "草稿") throw new HttpError(409, `当前状态“${order.status}”不能删除，只能删除草稿`);
+    const deleted = await client.query("delete from work_orders where id = $1 returning id", [id]);
+    return { id: deleted.rows[0].id };
   });
 }
 
@@ -580,11 +602,11 @@ async function addAudit(client, orderId, actor, action) {
   await client.query("insert into audit_logs (order_id, actor, action) values ($1, $2, $3)", [orderId, actor || "系统", action || "更新委托单"]);
 }
 
-function roleFilter(role, user) {
+export function roleFilter(role, user) {
   if (!validRoles.has(role)) return { where: "", params: [] };
   if (role === "technician") return { where: "where wo.technician = $1", params: [user?.name || "陈立"] };
   if (role === "dispatcher") return { where: "where wo.status = any($1::text[])", params: [["待派工", "维修中"]] };
-  if (role === "advisor") return { where: "where wo.advisor = $1", params: [user?.name || "林佳"] };
+  if (role === "advisor") return { where: "", params: [] };
   if (role === "inspector") return { where: "where wo.status = any($1::text[])", params: [["维修中", "待结算"]] };
   return { where: "", params: [] };
 }

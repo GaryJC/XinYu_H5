@@ -17,6 +17,7 @@ import {
   VehicleLicenseOcrResult,
   VehicleLookupInput,
   VehicleReferenceKind,
+  VehicleReferenceCodeCheckResult,
   VehicleReferenceSearchResult,
   WorkOrder,
   WorkOrderDraft,
@@ -31,6 +32,7 @@ export type WorkOrderApi = {
   list(role: RoleKey): Promise<WorkOrder[]>;
   create(draft: WorkOrderDraft, actor: string): Promise<WorkOrder>;
   update(order: WorkOrder, actor: string, action: string): Promise<WorkOrder>;
+  deleteDraft(id: string): Promise<{ id: string }>;
   transition(id: string, status: WorkOrderStatus, actor: string, action: string, patch?: Partial<WorkOrder>): Promise<WorkOrder>;
   createSignatureToken(id: string, actor: string): Promise<WorkOrder>;
   signByToken(token: string, signature: string, signatureFileId: string): Promise<WorkOrder>;
@@ -40,6 +42,7 @@ export type WorkOrderApi = {
   recognizeVin(imageBase64: string): Promise<VehicleIdentifierOcrResult>;
   lookupVehicle(identifier: VehicleLookupInput): Promise<VehicleHistoryLookupResult>;
   searchVehicleReferences(kind: VehicleReferenceKind, query: string): Promise<VehicleReferenceSearchResult>;
+  checkVehicleReferenceCode(kind: VehicleReferenceKind, code: string): Promise<VehicleReferenceCodeCheckResult>;
   uploadFile(file: { orderId?: string; kind: StoredFile["kind"]; fileName: string; mimeType: string; imageBase64: string }): Promise<StoredFile>;
   attachFile(fileId: string, orderId: string): Promise<StoredFile>;
   createOcrRecord(orderId: string | undefined, field: OcrFieldKey, source: string, value: string, confidence: number, fileId: string): Promise<OcrRecord>;
@@ -79,6 +82,9 @@ export const workOrderApi: WorkOrderApi = {
   update(order, actor, action) {
     return request(`/api/work-orders/${order.id}`, { method: "PUT", body: { order, actor, action } });
   },
+  deleteDraft(id) {
+    return request(`/api/work-orders/${id}`, { method: "DELETE" });
+  },
   transition(id, status, actor, action, patch = {}) {
     return request(`/api/work-orders/${id}/transition`, { method: "POST", body: { status, actor, action, patch } });
   },
@@ -109,6 +115,9 @@ export const workOrderApi: WorkOrderApi = {
   },
   searchVehicleReferences(kind, query) {
     return request("/api/company-system/vehicle-references/search", { method: "POST", body: { kind, query } });
+  },
+  checkVehicleReferenceCode(kind, code) {
+    return request("/api/company-system/vehicle-references/code-check", { method: "POST", body: { kind, code } });
   },
   uploadFile(file) {
     return request("/api/files", { method: "POST", body: file });

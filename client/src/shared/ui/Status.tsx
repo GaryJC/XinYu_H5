@@ -32,6 +32,7 @@ export function StatusChip({ status }: { status: WorkOrderStatus }) {
 }
 
 export function LegacySyncStatusChip({ status = "not_applicable" }: { status?: LegacySyncStatus }) {
+  if (status === "not_applicable") return null;
   const presentation = legacySyncPresentation[status];
   return <Tag color={presentation.color}>润丰：{presentation.label}</Tag>;
 }

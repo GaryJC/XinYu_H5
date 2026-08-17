@@ -1,110 +1,87 @@
-# `legacy_sync_outbox` 字段及 SQL Server 对应关系
+# `legacy_sync_outbox` 与润丰字段对应关系
 
-`legacy_sync_outbox` 是 PostgreSQL 的同步队列表，不是 SQL Server 业务表的镜像。
-因此大部分字段用于领取、锁定、重试和记录同步结果，在 SQL Server 中没有对应字段。
+H5 以 PostgreSQL 为主库。草稿不进入同步队列；客户完成签字后，系统创建一条
+`legacy_sync_outbox.status = 'pending'` 事件，由润丰程序轮询处理。H5 API 不直接写
+`qxwxb`、`qxwxmxb`、`qxclxxb`、`cxb` 或 `khxxb`。
 
-| PostgreSQL 字段 | 类型 | 字段含义 | SQL Server 对应字段/处理方式 |
-| --- | --- | --- | --- |
-| `event_id` | `text` | 同步事件唯一编号，也是消费幂等键。领取及成功、失败回填都使用该值。 | `qxwxb` 中暂无已确认的对应字段。润丰应在自己的同步日志或幂等记录中保存该值，防止同一事件重复生成接车单。 |
-| `order_id` | `text` | H5 委托单编号，关联 PostgreSQL `work_orders.id`。 | 暂无已确认的 SQL Server 对应字段。不能直接当作 `qxwxb.reid`、`dh` 或 `pgd`。 |
-| `revision` | `bigint` | 同一委托单的同步版本号，从 1 递增。 | 无直接对应字段；用于同步程序判断和记录事件版本。当前在客户完成签字后首次入队，通常为 1。 |
-| `event_type` | `text` | 事件类型：`created`、`updated`、`cancelled`；当前实际发送 `created`。 | 无直接对应字段；决定润丰执行新增、修改或取消操作。当前 `created` 表示新增 `qxwxb/qxwxmxb`。 |
-| `payload_version` | `integer` | `payload` JSON 的结构版本，当前为 1。 | 无直接对应字段；仅用于润丰选择正确的 JSON 解析规则。 |
-| `payload` | `jsonb` | 完整接车单业务数据，包含委托单主信息和 `order.repairItems` 维修项目数组。 | 不是单个 SQL Server 字段。应拆分后写入 `qxwxb` 主表和 `qxwxmxb` 维修项目表。当前已确认：`payload.order.department.code` → `qxwxb.bm`；`payload.order.vehicle.modelLegacyCode` 是匹配到的 `cxb.bh`，创建车辆档案时与车型名称组合写入 `qxclxxb.cx`；`payload.order.customer.legacyCode` 是匹配到的 `khxxb.bm`，创建车辆档案时写入 `qxclxxb.ssdw`；`payload.order.advisor` → `qxwxb.jcr`。其他业务字段映射需由润丰依据旧库字段定义确认。 |
-| `status` | `text` | 同步状态：`pending` 待领取、`processing` 处理中、`synced` 已成功、`failed` 失败待重试。 | 无直接对应字段；属于 PostgreSQL 队列状态，不应写入 `qxwxb/qxwxmxb`。 |
-| `attempt_count` | `integer` | 事件被领取的次数，每次领取加 1。 | 无直接对应字段；用于重试和故障排查。 |
-| `available_at` | `timestamptz` | 最早允许领取/重试的时间。 | 无直接对应字段；由 PostgreSQL 轮询程序使用。 |
-| `locked_by` | `text` | 当前领取事件的消费者标识，例如 `runfeng-production`。 | 无直接对应字段；回填时传入的消费者标识必须与该值一致。 |
-| `locked_at` | `timestamptz` | 事件被当前消费者领取的时间。 | 无直接对应字段；用于识别长时间未完成的任务。 |
-| `legacy_reid` | `bigint` | SQL Server 接车单主记录内部编号，成功后由润丰回填。 | **`dbo.qxwxb.reid`** |
-| `legacy_document_no` | `integer` | SQL Server 接车单单据号，成功后由润丰回填。 | **`dbo.qxwxb.dh`** |
-| `legacy_dispatch_no` | `text` | SQL Server 派工单号，格式为 `A` 加数字，例如 `A66329`，成功后由润丰回填。 | **`dbo.qxwxb.pgd`** |
-| `acknowledged_at` | `timestamptz` | 成功 ACK 的时间，状态变成 `synced` 时由 PostgreSQL 自动填写。 | 无直接对应字段；SQL Server 事务提交后再由 ACK 函数写入。 |
-| `last_error` | `text` | 最近一次同步失败原因，最多保留 2000 个字符。 | 无直接对应字段；SQL Server 写入失败时，把异常摘要通过失败回填函数写到这里。 |
-| `created_at` | `timestamptz` | 同步事件创建时间。 | 无直接对应字段；用于事件排序和排查，不等同于 SQL Server 的接车时间。 |
-| `updated_at` | `timestamptz` | 同步事件最后更新时间，由 PostgreSQL 自动维护。 | 无直接对应字段；不需要写入 SQL Server。 |
+## 队列与回填字段
 
-保存中的草稿不会出现在 `legacy_sync_outbox`。客户完成签字后，业务状态变为
-`work_orders.status = '已委托'`，系统才创建 `status = 'pending'` 的同步事件。
-`work_orders.legacy_sync_status` 只是便于 H5 展示的队列状态镜像。
+| PostgreSQL 字段 | 含义 | 润丰处理 |
+| --- | --- | --- |
+| `event_id` | 同步事件和幂等键 | 消费端保存并防止同一事件重复插单 |
+| `order_id` | H5 委托单号 | 业务来源标识，不得作为 `reid/dh/pgd` |
+| `revision` | 同一委托单的同步版本 | 按版本顺序处理 |
+| `event_type` | 当前为 `created` | 创建维修单 |
+| `payload` | 完整委托单 JSON | 拆分写入润丰业务表 |
+| `status` | `pending/processing/synced/failed` | 由领取和 ACK/失败函数维护 |
+| `legacy_reid` | 润丰主记录标识 | 成功后回填 `qxwxb.reid` |
+| `legacy_document_no` | 润丰内部单号 | 成功后回填 `qxwxb.dh` |
+| `legacy_dispatch_no` | 润丰派工号 | 成功后回填 `qxwxb.pgd` |
+| `last_error` | 最近一次错误 | 失败回填时填写 |
 
-## 车型与所属单位编码
+ACK 成功后，数据库函数同步更新 `work_orders.legacy_reid`、
+`work_orders.legacy_document_no`、`work_orders.dispatch_no` 和
+`work_orders.legacy_sync_status = 'synced'`。因此派工号在润丰处理成功后才出现在 H5。
 
-车型和所属单位都采用“名称、旧系统编码分列保存”，润丰不需要从名称中截取或生成已有编码。
+## payload 关键字段
 
-| PostgreSQL `work_orders` 字段 | `payload.order` JSON 路径 | 含义 | SQL Server 对应关系 |
-| --- | --- | --- | --- |
-| `vehicle_model` | `vehicle.model` | 车型名称，例如 `大众-新帕萨特` | `dbo.cxb.qc`；创建车辆档案时作为 `dbo.qxclxxb.cx` 的名称部分 |
-| `vehicle_model_legacy_code` | `vehicle.modelLegacyCode` | 已匹配车型编码，例如 `DZXPST` | `dbo.cxb.bh`；创建车辆档案时作为 `dbo.qxclxxb.cx` 的编码部分 |
-| `customer_name` | `customer.name` | 车主名称或所属单位名称 | `dbo.khxxb.mc` |
-| `customer_legacy_code` | `customer.legacyCode` | 已匹配所属单位编码，例如 `grqdswjty` | `dbo.khxxb.bm`，并写入 `dbo.qxclxxb.ssdw` |
+| payload 路径 | 润丰对应关系 |
+| --- | --- |
+| `order.department.code` | `qxwxb.bm` |
+| `order.arrivalDate` | `qxwxb.jcrq`，消费端转换为润丰日期格式 |
+| `order.vehicle.plate` | `qxwxb.ch` / `qxclxxb.ch` |
+| `order.vehicle.vin` | `qxclxxb.sbdm` |
+| `order.vehicle.mileage` | `qxwxb.lc` |
+| `order.vehicle.model` | `cxb.qc`，车辆档案 `qxclxxb.cx` 的名称部分 |
+| `order.vehicle.modelLegacyCode` | `cxb.bh`，车辆档案 `qxclxxb.cx` 的编码部分 |
+| `order.customer.name` | `khxxb.mc` |
+| `order.customer.legacyCode` | `khxxb.bm` / `qxclxxb.ssdw` |
+| `order.customer.contact` | 联系人/送修人字段 |
+| `order.customer.phone` | 联系电话字段 |
+| `order.advisor` | `qxwxb.jcr` |
+| `order.repairItems[]` | `qxwxmxb` 维修项目明细 |
 
-同步事件示例：
+## 已有车辆与新增主数据
 
-```json
-{
-  "order": {
-    "vehicle": {
-      "model": "大众-新帕萨特",
-      "modelLegacyCode": "DZXPST"
-    },
-    "customer": {
-      "name": "青岛水务集团有限公司",
-      "legacyCode": "grqdswjty"
-    }
-  }
-}
-```
+H5 在录单时仍直接读取润丰主数据用于匹配，但不会写入润丰：
 
-润丰创建 `qxclxxb` 车辆档案时，车型建议按旧库现有格式写入：
+- 优先按车牌或 VIN 匹配 `qxclxxb`；已有车辆继续使用其现存车型和所属单位编码；
+- 车型和所属单位使用 AutoComplete，可选择已有 `cxb`/`khxxb` 项；
+- 找不到时允许员工新增。H5 根据中文名称生成拼音首字母默认编码：车型默认大写、
+  所属单位默认小写，员工可以修改；
+- 编码输入停止 350ms 后查询润丰，已被任何主数据占用时要求修改；
+- 确认后的名称和编码分别保存在 PostgreSQL，并随 payload 一起交给润丰消费者。
 
-```text
-qxclxxb.cx   = vehicle.modelLegacyCode + ' ' + vehicle.model
-qxclxxb.ssdw = customer.legacyCode
-```
+润丰消费者处理新车辆时必须在同一个 SQL Server 事务内：
 
-上例应写为 `qxclxxb.cx = 'DZXPST 大众-新帕萨特'`。编码字段为空表示 H5 没有匹配到已有字典项；润丰不得把名称误当作已有编码，应按双方约定的新车型或新客户建档规则处理。
+1. 再次按车牌或 VIN 查询 `qxclxxb`，防止轮询等待期间其他员工已经建档；
+2. 已有车辆复用现存 `qxclxxb.cx` 和 `qxclxxb.ssdw`；
+3. 新车辆按 `modelLegacyCode` 查询 `cxb.bh`。不存在时创建车型；如果编码已被不同名称
+   占用，则回滚并通过失败接口提示员工修改；
+4. 按 `customer.legacyCode` 查询 `khxxb.bm`，同样执行复用、创建或冲突回滚；
+5. 创建车辆档案，其中 `qxclxxb.cx = modelLegacyCode + ' ' + model`，
+   `qxclxxb.ssdw = customer.legacyCode`；
+6. 创建 `qxwxb/qxwxmxb`，提交 SQL Server 事务后再 ACK PostgreSQL 事件。
 
-## 直接对应关系汇总
+例如：
 
 ```text
-legacy_sync_outbox.legacy_reid         → dbo.qxwxb.reid
-legacy_sync_outbox.legacy_document_no  → dbo.qxwxb.dh
-legacy_sync_outbox.legacy_dispatch_no  → dbo.qxwxb.pgd
+vehicle.modelLegacyCode = DZXPST
+vehicle.model           = 大众-新帕萨特
+customer.legacyCode     = grqdswjty
 
-legacy_sync_outbox.payload.order.department.code → dbo.qxwxb.bm
-legacy_sync_outbox.payload.order.vehicle.model   → dbo.cxb.qc / dbo.qxclxxb.cx 名称部分
-legacy_sync_outbox.payload.order.vehicle.modelLegacyCode → dbo.cxb.bh / dbo.qxclxxb.cx 编码部分
-legacy_sync_outbox.payload.order.customer.name → dbo.khxxb.mc
-legacy_sync_outbox.payload.order.customer.legacyCode → dbo.qxclxxb.ssdw
-legacy_sync_outbox.payload.order.advisor         → dbo.qxwxb.jcr
+qxclxxb.cx   = DZXPST 大众-新帕萨特
+qxclxxb.ssdw = grqdswjty
 ```
 
-前三项不是创建 SQL Server 记录前的输入值，而是润丰在 `qxwxb` 及维修项目写入成功、
-SQL Server 事务提交后，再批量回填到 PostgreSQL 的结果值。
+前端 debounce 查询只用于尽早提醒，最终唯一性必须由润丰消费者事务和数据库约束保证。
+消费者不得只相信 H5 查询时的结果，也不得用中文名称代替编码。
 
-## 润丰读取时建议字段
+## 失败与重试
 
-```sql
-select
-  event_id,
-  order_id,
-  revision,
-  event_type,
-  payload_version,
-  payload::text as payload_json,
-  status,
-  attempt_count,
-  available_at,
-  locked_by,
-  locked_at,
-  legacy_reid,
-  legacy_document_no,
-  legacy_dispatch_no,
-  acknowledged_at,
-  last_error,
-  created_at,
-  updated_at
-from legacy_sync_outbox
-order by created_at, event_id;
-```
+消费者写润丰失败时必须回滚 SQL Server 事务，再调用失败回填函数。事件会显示“同步失败”，
+并可在延迟后重新领取。只有 SQL Server 已成功提交后才能 ACK；ACK 会把状态改为“已同步”并
+回填 `reid/dh/pgd`。
+
+领取、批量 ACK、失败回填和权限说明见
+[`legacy-sync-polling.md`](./legacy-sync-polling.md)。

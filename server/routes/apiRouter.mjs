@@ -4,6 +4,7 @@ import {
   createSettlementForOrder,
   createWorkOrder,
   dashboardSummary,
+  deleteDraftWorkOrder,
   findWorkOrderByToken,
   healthCheck,
   listWorkOrders,
@@ -15,7 +16,11 @@ import {
 } from "../db.mjs";
 import { readJson, requestContext, sendJson } from "../http/response.mjs";
 import { recognizeLicensePlate, recognizeVehicleLicense, recognizeVin } from "../ocr.mjs";
-import { lookupVehicleInCompanySystem, searchCompanyVehicleReferences } from "../integrations/company/vehicleLookup.mjs";
+import {
+  checkCompanyVehicleReferenceCode,
+  lookupVehicleInCompanySystem,
+  searchCompanyVehicleReferences
+} from "../integrations/company/vehicleLookup.mjs";
 import {
   getDingTalkIdentitySnapshot,
   listDingTalkMappings,
@@ -28,7 +33,7 @@ import { HttpError } from "../http/HttpError.mjs";
 import { readStoredFile, saveUploadedFile } from "../storage.mjs";
 import { requireAnyRole, requireAuthenticatedUser, requireTransitionRole } from "../domain/accessPolicy.mjs";
 import { listLegacyDepartments } from "../repositories/legacyDepartmentRepository.mjs";
-import { assertFileAccess, attachFileToOrder } from "../repositories/fileRepository.mjs";
+import { assertFileAccess, assertFileReadAccess, attachFileToOrder } from "../repositories/fileRepository.mjs";
 import { assertOcrRecordAccess, assertWorkOrderAccess } from "../repositories/accessRepository.mjs";
 import { confirmOcrRecord, createOcrRecord } from "../repositories/ocrRecordRepository.mjs";
 
@@ -136,6 +141,12 @@ export async function handleApiRequest(req, res, url) {
     return true;
   }
 
+  if (req.method === "POST" && url.pathname === "/api/company-system/vehicle-references/code-check") {
+    requireAnyRole(currentUser, ["advisor", "manager"]);
+    sendJson(res, 200, await checkCompanyVehicleReferenceCode(await readJson(req)));
+    return true;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/files") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     const body = await readJson(req);
@@ -146,7 +157,7 @@ export async function handleApiRequest(req, res, url) {
 
   const fileContentMatch = url.pathname.match(/^\/api\/files\/([^/]+)\/content$/);
   if (fileContentMatch && req.method === "GET") {
-    await assertFileAccess(fileContentMatch[1], currentUser);
+    await assertFileReadAccess(fileContentMatch[1], currentUser);
     const { record, body } = await readStoredFile(fileContentMatch[1]);
     res.statusCode = 200;
     res.setHeader("Content-Type", record.mimeType || "application/octet-stream");
@@ -186,6 +197,13 @@ export async function handleApiRequest(req, res, url) {
     }
     await assertWorkOrderAccess(workOrderMatch[1], currentUser);
     sendJson(res, 200, await updateWorkOrder(order, currentUser.name || actor, action));
+    return true;
+  }
+
+  if (workOrderMatch && req.method === "DELETE") {
+    requireAnyRole(currentUser, ["advisor", "manager"]);
+    await assertWorkOrderAccess(workOrderMatch[1], currentUser);
+    sendJson(res, 200, await deleteDraftWorkOrder(workOrderMatch[1]));
     return true;
   }
 

@@ -175,3 +175,13 @@ test("batch result migration ACKs and fails up to 100 claimed events", async () 
   assert.match(migration, /returns table\(event_id text, acknowledged boolean\)/i);
   assert.match(migration, /returns table\(event_id text, failed boolean\)/i);
 });
+
+test("Runfeng ACK accepts every production dispatch prefix", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/202608170002_allow_runfeng_dispatch_prefixes.sql", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(migration, /legacy_dispatch_no ~ '\^\[ABFJ\]\[0-9\]\+\$'/);
+  assert.match(migration, /legacy_sync_outbox_synced_result_check/);
+});

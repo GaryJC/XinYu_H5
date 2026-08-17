@@ -2,7 +2,7 @@ import { type Dispatch, type SetStateAction } from "react";
 import { RoleKey, WorkOrder, WorkOrderDraft } from "../../../../../shared/types";
 import { workOrderApi } from "../api/workOrderApi";
 
-type ActionLoading = "save" | "signature" | "sync" | "";
+type ActionLoading = "save" | "signature" | "sync" | "delete" | "";
 
 type Options = {
   selectedOrder?: WorkOrder;

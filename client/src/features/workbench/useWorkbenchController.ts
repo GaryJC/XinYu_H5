@@ -33,7 +33,7 @@ export function useWorkbenchController() {
   const [currentUser, setCurrentUser] = useState<UserProfile>();
   const [departments, setDepartments] = useState<LegacyDepartment[]>([]);
   const [departmentError, setDepartmentError] = useState("");
-  const [actionLoading, setActionLoading] = useState<"save" | "signature" | "sync" | "">("");
+  const [actionLoading, setActionLoading] = useState<"save" | "signature" | "sync" | "delete" | "">("");
   const [devLoginLoading, setDevLoginLoading] = useState(false);
   const sessionGeneration = useRef(0);
 
@@ -54,7 +54,12 @@ export function useWorkbenchController() {
   const { ocrState, vehicleLicenseOcr, vehicleLicenseFileId, resetOcr, scanVehicleLicense, confirmVehicleLicenseOcr } =
     useVehicleLicenseOcr({ orderId: selectedOrder?.id, actor, setDraft, onRecognized: lookupVehicleLicense });
   const visibleNavItems = useMemo(() => navItems.filter((item) => item.roles.includes(role)), [role]);
-  const canEditForm = canCreateOrder(role) && (!selectedOrder || selectedOrder.status === "草稿");
+  const canEditForm = canCreateOrder(role) && (
+    !selectedOrder || (
+      selectedOrder.status === "草稿"
+      && (role === "manager" || selectedOrder.advisor === currentUser?.name)
+    )
+  );
   const totalLabor = useMemo(() => sumLabor(draft.repairItems), [draft.repairItems]);
   const technicianOptions = useMemo(() => users.filter((user) => user.active && user.role === "technician").map((user) => user.name), [users]);
   const inspectorOptions = useMemo(() => users.filter((user) => user.active && user.role === "inspector").map((user) => user.name), [users]);
@@ -114,7 +119,10 @@ export function useWorkbenchController() {
       if (generation !== sessionGeneration.current) return;
       const safeNext = Array.isArray(next) ? next : [];
       setOrders(safeNext);
-      const nextSelected = safeNext.find((order) => order.id === keepId) ?? safeNext[0];
+      const nextSelected = safeNext.find((order) => order.id === keepId)
+        ?? (nextRole === "advisor"
+          ? safeNext.find((order) => order.advisor === currentUser?.name)
+          : safeNext[0]);
       if (nextSelected) {
         selectOrder(nextSelected);
       } else {
@@ -273,6 +281,24 @@ export function useWorkbenchController() {
     }
   }
 
+  async function deleteDraft(order: WorkOrder) {
+    if (order.status !== "草稿") return "只能删除草稿";
+    if (role !== "manager" && order.advisor !== currentUser?.name) return "只能删除自己创建的草稿";
+    setActionLoading("delete");
+    try {
+      await workOrderApi.deleteDraft(order.id);
+      setSelectedId(null);
+      resetDraft(undefined, currentUser?.name || "");
+      await loadOrders(role, null);
+      await loadDashboard(role);
+      return undefined;
+    } catch (error) {
+      return actionError(error, "删除草稿失败");
+    } finally {
+      setActionLoading("");
+    }
+  }
+
   async function sendSignature() {
     const errors = validateBeforeSignature();
     if (errors.length) {
@@ -299,6 +325,16 @@ export function useWorkbenchController() {
 
   function validateBeforeSignature() {
     const errors = validateWorkOrderDraft(draft);
+    const foundVehicle = vehicleHistory?.status === "found" ? vehicleHistory.vehicle : undefined;
+    const usesExistingModel = foundVehicle && normalizeVehicleReference(draft.vehicle.model) === normalizeVehicleReference(foundVehicle.model);
+    const usesExistingOrganization = foundVehicle?.organization
+      && normalizeVehicleReference(draft.customer.name) === normalizeVehicleReference(foundVehicle.organization.name);
+    if (!draft.vehicle.modelLegacyCode.trim() && !usesExistingModel) {
+      errors.push("车型尚未确认，请从搜索结果中选择，或新增车型并确认编码");
+    }
+    if (!draft.customer.legacyCode.trim() && !usesExistingOrganization) {
+      errors.push("所属单位尚未确认，请从搜索结果中选择，或新增所属单位并确认编码");
+    }
     if (ocrState.vehicleLicense.status === "未识别") errors.push("请拍照识别并确认行驶证");
     if (ocrState.vehicleLicense.status === "识别中") errors.push("行驶证正在识别，请稍候");
     if (ocrState.vehicleLicense.status === "待确认") errors.push("请确认行驶证 OCR 结果");
@@ -357,6 +393,7 @@ export function useWorkbenchController() {
     selectOrder,
     startNewOrder,
     saveDraft,
+    deleteDraft,
     sendSignature,
     ...workflowActions,
     scanVehicleLicense,
@@ -371,6 +408,10 @@ export function useWorkbenchController() {
     updateRepairItem,
     toggleArrayField
   };
+}
+
+function normalizeVehicleReference(value: string) {
+  return value.normalize("NFKC").trim().replace(/[\s\-_]/g, "").toUpperCase();
 }
 
 export type WorkbenchController = ReturnType<typeof useWorkbenchController>;

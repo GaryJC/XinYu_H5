@@ -71,8 +71,22 @@ export async function attachFileToOrder(fileId, orderId, runTransaction = transa
   });
 }
 
-export async function assertFileAccess(fileId, user) {
-  const { rows } = await pool.query(
+export async function assertFileReadAccess(fileId, user, database = pool) {
+  const file = await findFileAccess(fileId, database);
+  if (user.role === "manager") return;
+  if (user.role === "advisor" && (file.uploaded_by === user.id || file.advisor)) return;
+  throw new HttpError(403, "无权查看该文件");
+}
+
+export async function assertFileAccess(fileId, user, database = pool) {
+  const file = await findFileAccess(fileId, database);
+  if (user.role === "manager") return;
+  if (user.role === "advisor" && (file.uploaded_by === user.id || file.advisor === user.name)) return;
+  throw new HttpError(403, "无权访问该文件");
+}
+
+async function findFileAccess(fileId, database) {
+  const { rows } = await database.query(
     `
       select f.uploaded_by, wo.advisor
       from files f
@@ -83,9 +97,7 @@ export async function assertFileAccess(fileId, user) {
   );
   const file = rows[0];
   if (!file) throw new HttpError(404, "文件不存在");
-  if (user.role === "manager") return;
-  if (user.role === "advisor" && (file.uploaded_by === user.id || file.advisor === user.name)) return;
-  throw new HttpError(403, "无权访问该文件");
+  return file;
 }
 
 function mapFileRecord(row) {

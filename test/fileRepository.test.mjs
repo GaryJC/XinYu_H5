@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { HttpError } from "../server/http/HttpError.mjs";
 
 process.env.DATABASE_URL ||= "postgresql://test:test@127.0.0.1:5432/test";
-const { attachFileToOrder } = await import("../server/repositories/fileRepository.mjs");
+const { assertFileAccess, assertFileReadAccess, attachFileToOrder } = await import("../server/repositories/fileRepository.mjs");
 
 test("attaching a file and its OCR records uses one transaction client", async () => {
   const calls = [];
@@ -43,4 +44,14 @@ test("attaching a file and its OCR records uses one transaction client", async (
   assert.match(calls[1].query, /update ocr_records/i);
   assert.deepEqual(calls[0].params, ["file-1", "order-1"]);
   assert.equal(record.orderId, "order-1");
+});
+
+test("advisors can view files from every work order but cannot modify another advisor's files", async () => {
+  const database = { query: async () => ({ rows: [{ uploaded_by: "user-1", advisor: "张三" }] }) };
+  const advisor = { id: "user-2", role: "advisor", name: "李四" };
+  await assert.doesNotReject(() => assertFileReadAccess("file-1", advisor, database));
+  await assert.rejects(
+    () => assertFileAccess("file-1", advisor, database),
+    (error) => error instanceof HttpError && error.status === 403
+  );
 });

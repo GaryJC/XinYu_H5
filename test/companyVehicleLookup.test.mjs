@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  checkCompanyVehicleReferenceCode,
   lookupVehicleInCompanySystem,
+  normalizeNewReferenceCode,
   normalizeReference,
   resolveReference,
   resolveVehicleCandidates,
@@ -87,6 +89,26 @@ test("autocomplete searches fuzzy vehicle references", async () => {
     query: "大",
     candidates: []
   });
+});
+
+test("reference code check detects existing codes and accepts unused codes", async () => {
+  assert.deepEqual(await checkCompanyVehicleReferenceCode({ kind: "model", code: " ADA6 " }), {
+    kind: "model",
+    code: "ADA6",
+    available: false,
+    existing: { value: "奥迪 A6", code: "ADA6", usageCount: 8 }
+  });
+  assert.deepEqual(await checkCompanyVehicleReferenceCode({ kind: "organization", code: "qdxkh" }), {
+    kind: "organization",
+    code: "qdxkh",
+    available: true
+  });
+});
+
+test("new reference codes preserve conventional case and respect legacy lengths", () => {
+  assert.equal(normalizeNewReferenceCode(" grqdswjty ", 50), "grqdswjty");
+  assert.throws(() => normalizeNewReferenceCode("DZ-XPST", 10), /只能包含英文字母和数字/);
+  assert.throws(() => normalizeNewReferenceCode("ABCDEFGHIJK", 10), /最多 10 个字符/);
 });
 
 test("vehicle lookup refuses to merge conflicting plate and VIN matches", () => {

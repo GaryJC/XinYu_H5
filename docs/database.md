@@ -48,22 +48,23 @@ Run the connection and table inventory check with:
 npm run sqlserver:check
 ```
 
-SQL Server 2000 requires TDS 7.1 and the current instance does not support encrypted connections. Keep port 1433 private, use a least-privilege account instead of `sa`, and grant only the reads and `dbo.qxwxb` writes required by the application. Keep all legacy SQL inside dedicated repositories. Catalog queries must use SQL Server 2000 objects such as `dbo.sysobjects`; newer views such as `sys.tables` are unavailable.
+SQL Server 2000 requires TDS 7.1 and the current instance does not support encrypted connections. Keep port 1433 private, use a least-privilege account instead of `sa`, and grant only the reads and inserts required on `dbo.qxwxb`, `dbo.qxwxmxb`, and `dbo.qxclxxb`. Keep all legacy SQL inside dedicated repositories. Catalog queries must use SQL Server 2000 objects such as `dbo.sysobjects`; newer views such as `sys.tables` are unavailable.
 
 Vehicle recognition still reads the vehicle master from `dbo.qxclxxb` (`ch` = plate,
 `sbdm` = VIN/chassis number, `cx` = model code plus name) and resolves canonical model
-codes/names from `dbo.cxb` (`bh` = code, `qc` = full name). H5 work-order creation and updates do not
-write SQL Server. They commit the PostgreSQL business data and a versioned
-`legacy_sync_outbox` event in one transaction. The Runfeng integration polls those
-events, writes its own SQL Server, then acknowledges the event with `reid`, `dh`, and
-`pgd`. See [legacy-sync-polling.md](./legacy-sync-polling.md).
+codes/names from `dbo.cxb` (`bh` = code, `qc` = full name). Saving a draft still writes
+only PostgreSQL. When the customer completes the signature, the Node API creates a pending
+`legacy_sync_outbox` event. The Runfeng consumer writes SQL Server and ACKs the generated
+`reid`, `dh`, and `pgd` back to PostgreSQL. See
+[runfeng-integration-handoff.md](./runfeng-integration-handoff.md).
 
 ## Database responsibilities
 
 Postgres is the system of record for the complete H5 workflow. It stores the work order and dispatch number, SQL Server record link, arrival date, vehicle/customer snapshot, repair-item assignments and status, signature records, OCR records, outbound-order data, settlement data, audit history, and authenticated file metadata.
 
-SQL Server remains a read-only vehicle source for H5 and a downstream interoperability
-store populated by the Runfeng poller. PostgreSQL is authoritative for new H5 orders.
+SQL Server is the vehicle/model/customer reference source and receives signed Runfeng repair
+orders through the polling consumer. PostgreSQL remains authoritative for the complete H5
+workflow and keeps the SQL Server record identifiers for correlation.
 
 Image bytes are intentionally kept outside Postgres:
 
