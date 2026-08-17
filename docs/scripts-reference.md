@@ -24,6 +24,7 @@
 | `npm run db:clear-work-orders` | 预览 PostgreSQL 全部委托单数量 | 生产优先，本地回退 | 默认不删除；带确认参数后极危险 |
 | `npm run db:delete-test-orders` | 按 H5 委托单号清理生产测试单 | 生产优先，本地回退 | 可删除 PostgreSQL 和润丰测试单 |
 | `npm run sqlserver:check` | 检查润丰 SQL Server 连接和表清单 | 生产优先，本地回退 | 只读 |
+| `npm run sqlserver:inspect-latest-h5` | 对比最新 H5 维修单与润丰原生维修单的字段和关联数据 | 生产优先，本地回退 | 只读 |
 | `npm run db:start` | 启动本地 Supabase | Supabase CLI | 启动本地服务 |
 | `npm run db:reset` | 重建本地 Supabase 并重新执行 migration/seed | Supabase CLI | 危险：清空本地数据库 |
 | `npm run db:stop` | 停止本地 Supabase | Supabase CLI | 停止本地服务 |
@@ -115,6 +116,31 @@ $env:SQLSERVER_CHECK_LIST_TABLES="false"
 npm run sqlserver:check
 Remove-Item Env:SQLSERVER_CHECK_LIST_TABLES
 ```
+
+### `npm run sqlserver:inspect-latest-h5`
+
+只读检查最新一张由 H5 直接写入的润丰维修单，并输出：
+
+- `qxwxb` 的完整 H5 记录；
+- 同部门、同内外单标记且位置最近的一张润丰原生记录；
+- 两张主表记录的不同字段；
+- 车牌对应的 `qxclxxb` 车辆档案、车型 `cxb`、所属单位 `khxxb`；
+- 由 `wd + dh` 关联到的 `qxwxmxb` 项目明细；
+- 相关表的字段类型、是否可空和是否存在默认值。
+
+默认检查最新记录：
+
+```powershell
+npm run sqlserver:inspect-latest-h5
+```
+
+也可以按 H5 委托单号检查指定记录（`H5:` 前缀可省略）：
+
+```powershell
+npm run sqlserver:inspect-latest-h5 -- --order-id WT-20260817-0001
+```
+
+该脚本只执行 `SELECT`，可以在 ECS 生产目录中运行，不会更改润丰数据。
 
 ### `npm run db:start`
 

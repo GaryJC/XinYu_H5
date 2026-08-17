@@ -9,6 +9,7 @@
     "db:clear-work-orders": "node --env-file-if-exists=.env.production --env-file-if-exists=.env.local scripts/clear-work-orders.mjs",
     "db:delete-test-orders": "node --env-file-if-exists=.env.production --env-file-if-exists=.env.local scripts/delete-production-test-orders.mjs",
     "sqlserver:check": "node --env-file-if-exists=.env.production --env-file-if-exists=.env.local scripts/check-sqlserver.mjs",
+    "sqlserver:inspect-latest-h5": "node --env-file-if-exists=.env.production --env-file-if-exists=.env.local scripts/inspect-latest-runfeng-order.mjs",
     "db:start": "supabase start",
     "db:reset": "supabase db reset",
     "db:stop": "supabase stop",
