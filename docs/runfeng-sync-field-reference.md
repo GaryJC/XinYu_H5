@@ -14,10 +14,12 @@
 | `work_orders.id` | `qxwxb.bzxx` | 写为 `H5:<委托单号>`，重试时先查询该标记，防止重复插单 |
 | `work_orders.legacy_reid` | `qxwxb.reid` | SQL Server identity，插入后用 `SCOPE_IDENTITY()` 读取 |
 | `work_orders.legacy_document_no` | `qxwxb.dh` | 在锁定 `qxwxb` 后取当前最大值加 1 |
-| `work_orders.dispatch_no` | `qxwxb.pgd` | 在同一锁定事务中取最大 A 系列数字加 1，例如 `A66659` |
+| `work_orders.dispatch_no` | `qxwxb.pgd` | 在同一锁定事务中按部门派工号序列取最大数字加 1，例如 `A66659`、`B1275` |
 
 `dh` 和 `pgd` 必须在同一个 SQL Server 事务内生成，不能在浏览器或 PostgreSQL 中用
 `MAX + 1` 预生成。编号查询使用 `TABLOCKX, HOLDLOCK`，避免 H5 并发签字生成相同编号。
+派工号前缀按真实库现有规则生成：`A→A`、`B→B`、`F→F`、`J→J`，机电二部
+`M` 与机电一部共用 `A` 系列。
 
 ## `qxwxb` 维修单主表
 
@@ -35,7 +37,7 @@
 | 项目工费合计 | `fyhj`、`xmfy` | 当前 H5 只写项目工费，不创建材料费用 |
 | `faultDescription` | `bz` | 故障描述/备注 |
 | `advisor` | `jcr` | 服务顾问姓名 |
-| 自动生成 | `pgd` | A 系列派工号 |
+| 按部门序列自动生成 | `pgd` | `A/B/F/J` 系列派工号 |
 | `vehicle.mileage` | `lc` | 进厂里程 |
 | `customer.phone` | `lxdh` | 联系电话 |
 | 固定 `小修` | `wxlb` | 初始维修类别 |

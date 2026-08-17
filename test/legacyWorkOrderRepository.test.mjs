@@ -2,11 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY,
+  FIND_LEGACY_DEPARTMENT_QUERY,
+  FIND_LEGACY_MODEL_BY_CODE_QUERY,
+  FIND_LEGACY_ORGANIZATION_BY_CODE_QUERY,
   FIND_LEGACY_VEHICLE_FOR_WRITE_QUERY,
   FIND_LEGACY_WORK_ORDER_BY_SOURCE_QUERY,
   INSERT_LEGACY_REPAIR_ITEM_QUERY,
   INSERT_LEGACY_VEHICLE_QUERY,
   INSERT_LEGACY_WORK_ORDER_QUERY,
+  dispatchPrefixForDepartment,
   formatLegacyDate,
   truncateLegacyText,
   writeLegacyWorkOrder
@@ -57,6 +61,15 @@ test("legacy text truncation respects the old database byte budget", () => {
   assert.equal(truncateLegacyText("  鲁B5P226  ", 10), "鲁B5P226");
 });
 
+test("dispatch prefixes follow the real Runfeng department sequences", () => {
+  assert.equal(dispatchPrefixForDepartment("A"), "A");
+  assert.equal(dispatchPrefixForDepartment("B"), "B");
+  assert.equal(dispatchPrefixForDepartment("F"), "F");
+  assert.equal(dispatchPrefixForDepartment("J"), "J");
+  assert.equal(dispatchPrefixForDepartment("M"), "A");
+  assert.throws(() => dispatchPrefixForDepartment("C"), /无法确定/);
+});
+
 test("direct write is idempotent for an existing H5 source marker", async () => {
   const calls = [];
   const result = await writeLegacyWorkOrder(order, {
@@ -78,12 +91,29 @@ test("direct write is idempotent for an existing H5 source marker", async () => 
   assert.equal(calls[0].inputs.source_marker, `H5:${order.id}`);
 });
 
+test("direct write refuses an ambiguous duplicated H5 source marker", async () => {
+  await assert.rejects(
+    () => writeLegacyWorkOrder(order, {
+      executeTransaction: async (work) => work(async () => ({
+        recordset: [
+          { reid: 1029600, dh: 85995, pgd: "A66659" },
+          { reid: 1029601, dh: 85996, pgd: "A66660" }
+        ]
+      }))
+    }),
+    /存在重复的 H5 委托单标记/
+  );
+});
+
 test("direct write allocates both numbers under a table lock and inserts header, vehicle and project lines", async () => {
   const calls = [];
   const responses = new Map([
     [FIND_LEGACY_WORK_ORDER_BY_SOURCE_QUERY, { recordset: [] }],
-    [ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY, { recordset: [{ max_document_no: 85994, max_dispatch_number: 66658 }] }],
+    [FIND_LEGACY_DEPARTMENT_QUERY, { recordset: [{ code: "A" }] }],
     [FIND_LEGACY_VEHICLE_FOR_WRITE_QUERY, { recordset: [] }],
+    [FIND_LEGACY_MODEL_BY_CODE_QUERY, { recordset: [{ code: "DZPST", name: "大众-帕萨特" }] }],
+    [FIND_LEGACY_ORGANIZATION_BY_CODE_QUERY, { recordset: [{ code: "grqdswjty", name: "青岛水务集团有限公司" }] }],
+    [ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY, { recordset: [{ max_document_no: 85994, max_dispatch_number: 66658 }] }],
     [INSERT_LEGACY_VEHICLE_QUERY, { recordset: [] }],
     [INSERT_LEGACY_WORK_ORDER_QUERY, { recordset: [{ reid: 1029598 }] }],
     [INSERT_LEGACY_REPAIR_ITEM_QUERY, { recordset: [] }]
@@ -126,8 +156,9 @@ test("an existing vehicle keeps its stored model and organization codes", async 
   const calls = [];
   const responses = new Map([
     [FIND_LEGACY_WORK_ORDER_BY_SOURCE_QUERY, { recordset: [] }],
-    [ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY, { recordset: [{ max_document_no: 9, max_dispatch_number: 19 }] }],
+    [FIND_LEGACY_DEPARTMENT_QUERY, { recordset: [{ code: "A" }] }],
     [FIND_LEGACY_VEHICLE_FOR_WRITE_QUERY, { recordset: [{ reid: 12, cx: "OLD 现有车型", ssdw: "existing-code", plate_matched: 1 }] }],
+    [ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY, { recordset: [{ max_document_no: 9, max_dispatch_number: 19 }] }],
     [INSERT_LEGACY_WORK_ORDER_QUERY, { recordset: [{ reid: 20 }] }],
     [INSERT_LEGACY_REPAIR_ITEM_QUERY, { recordset: [] }]
   ]);
@@ -148,7 +179,7 @@ test("an existing vehicle keeps its stored model and organization codes", async 
 test("direct write stops when plate and VIN point to different legacy vehicles", async () => {
   const responses = new Map([
     [FIND_LEGACY_WORK_ORDER_BY_SOURCE_QUERY, { recordset: [] }],
-    [ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY, { recordset: [{ max_document_no: 9, max_dispatch_number: 19 }] }],
+    [FIND_LEGACY_DEPARTMENT_QUERY, { recordset: [{ code: "A" }] }],
     [FIND_LEGACY_VEHICLE_FOR_WRITE_QUERY, { recordset: [
       { reid: 12, cx: "车型一", ssdw: "one", plate_matched: 1 },
       { reid: 13, cx: "车型二", ssdw: "two", plate_matched: 0 }
@@ -164,6 +195,64 @@ test("direct write stops when plate and VIN point to different legacy vehicles",
     }),
     /车牌号和 VIN 指向润丰中的不同车辆/
   );
+});
+
+test("direct write rejects stale model and organization codes before allocating a number", async () => {
+  const calls = [];
+  const responses = new Map([
+    [FIND_LEGACY_WORK_ORDER_BY_SOURCE_QUERY, { recordset: [] }],
+    [FIND_LEGACY_DEPARTMENT_QUERY, { recordset: [{ code: "A" }] }],
+    [FIND_LEGACY_VEHICLE_FOR_WRITE_QUERY, { recordset: [] }],
+    [FIND_LEGACY_MODEL_BY_CODE_QUERY, { recordset: [] }]
+  ]);
+
+  await assert.rejects(
+    () => writeLegacyWorkOrder(order, {
+      executeTransaction: async (work) => work(async (query, configure) => {
+        calls.push({ query, inputs: collectInputs(configure) });
+        return responses.get(query);
+      })
+    }),
+    /润丰车型编码不存在：DZPST/
+  );
+  assert.equal(calls.some((call) => call.query === ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY), false);
+});
+
+test("department B allocates from the B dispatch sequence", async () => {
+  const bOrder = { ...order, department: { code: "B", name: "保险部" } };
+  const calls = [];
+  const responses = new Map([
+    [FIND_LEGACY_WORK_ORDER_BY_SOURCE_QUERY, { recordset: [] }],
+    [FIND_LEGACY_DEPARTMENT_QUERY, { recordset: [{ code: "B" }] }],
+    [FIND_LEGACY_VEHICLE_FOR_WRITE_QUERY, { recordset: [{ reid: 12, cx: "OLD 现有车型", ssdw: "existing-code", plate_matched: 1 }] }],
+    [ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY, { recordset: [{ max_document_no: 85994, max_dispatch_number: 1274 }] }],
+    [INSERT_LEGACY_WORK_ORDER_QUERY, { recordset: [{ reid: 1029598 }] }],
+    [INSERT_LEGACY_REPAIR_ITEM_QUERY, { recordset: [] }]
+  ]);
+
+  const result = await writeLegacyWorkOrder(bOrder, {
+    executeTransaction: async (work) => work(async (query, configure) => {
+      calls.push({ query, inputs: collectInputs(configure) });
+      return responses.get(query);
+    })
+  });
+
+  assert.equal(result.dispatchNo, "B1275");
+  const allocation = calls.find((call) => call.query === ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY);
+  assert.equal(allocation.inputs.dispatch_prefix, "B");
+});
+
+test("invalid labor fees fail before opening a SQL Server transaction", async () => {
+  let transactionOpened = false;
+  await assert.rejects(
+    () => writeLegacyWorkOrder({ ...order, repairItems: [{ name: "异常项目", laborFee: -1 }] }, {
+      executeTransaction: async () => {
+        transactionOpened = true;
+      }
+    }),
+    /工费.*无效/
+  );
+  assert.equal(transactionOpened, false);
 });
 
 function collectInputs(configure) {

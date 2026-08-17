@@ -1,7 +1,7 @@
 import { executeSqlServerTransaction } from "../database/sqlServerPool.mjs";
 
 export const FIND_LEGACY_WORK_ORDER_BY_SOURCE_QUERY = `
-  select top 1
+  select top 2
     reid,
     dh,
     RTRIM(pgd) as pgd
@@ -10,19 +10,39 @@ export const FIND_LEGACY_WORK_ORDER_BY_SOURCE_QUERY = `
   order by reid desc
 `;
 
+export const FIND_LEGACY_DEPARTMENT_QUERY = `
+  select top 1 RTRIM(bm) as code
+  from dbo.bmxxb with (holdlock)
+  where RTRIM(bm) = @department_code
+`;
+
 export const ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY = `
   select
     ISNULL(MAX(dh), 0) as max_document_no,
     ISNULL(MAX(
       case
         when LEFT(UPPER(RTRIM(pgd)), 1) = @dispatch_prefix
-          and LEN(RTRIM(pgd)) > 1
+          and LEN(RTRIM(pgd)) between 2 and 10
           and PATINDEX('%[^0-9]%', SUBSTRING(RTRIM(pgd), 2, 19)) = 0
         then CONVERT(int, SUBSTRING(RTRIM(pgd), 2, 19))
         else 0
       end
     ), 0) as max_dispatch_number
   from dbo.qxwxb with (tablockx, holdlock)
+`;
+
+export const FIND_LEGACY_MODEL_BY_CODE_QUERY = `
+  select top 1
+    RTRIM(bh) as code,
+    COALESCE(NULLIF(RTRIM(qc), ''), RTRIM(mc)) as name
+  from dbo.cxb with (holdlock)
+  where RTRIM(bh) = @model_code
+`;
+
+export const FIND_LEGACY_ORGANIZATION_BY_CODE_QUERY = `
+  select top 1 RTRIM(bm) as code, RTRIM(mc) as name
+  from dbo.khxxb with (holdlock)
+  where RTRIM(bm) = @organization_code
 `;
 
 export const FIND_LEGACY_VEHICLE_FOR_WRITE_QUERY = `
@@ -65,24 +85,35 @@ export const INSERT_LEGACY_REPAIR_ITEM_QUERY = `
 
 export async function writeLegacyWorkOrder(
   order,
-  { executeTransaction = executeSqlServerTransaction, now = new Date(), dispatchPrefix = "A" } = {}
+  { executeTransaction = executeSqlServerTransaction, now = new Date(), dispatchPrefix } = {}
 ) {
-  const prefix = normalizeDispatchPrefix(dispatchPrefix);
+  if (!String(order.id || "").trim()) throw new Error("H5 委托单号不能为空");
+  const departmentCode = truncateLegacyText(order.department?.code, 2).toUpperCase();
+  const prefix = normalizeDispatchPrefix(dispatchPrefix || dispatchPrefixForDepartment(departmentCode));
   const sourceMarker = truncateLegacyText(`H5:${order.id}`, 50);
+  const arrivalDate = formatLegacyDate(order.arrivalDate || now);
+  const arrivalTime = formatLegacyTime(now);
+  const productionDate = formatLegacyDate(order.vehicle?.purchaseDate);
+  const repairItems = order.repairItems || [];
+  const projectFees = repairItems.map((item) => normalizeLegacyMoney(item.laborFee, `维修项目“${item.name || "未命名"}”工费`));
+  const projectFee = normalizeLegacyMoney(projectFees.reduce((sum, value) => sum + value, 0), "项目工费合计");
+  const repairContent = repairItems.map((item) => item.name?.trim()).filter(Boolean).join("；");
 
   return executeTransaction(async (execute) => {
     const existing = await execute(FIND_LEGACY_WORK_ORDER_BY_SOURCE_QUERY, (request, sql) => {
       request.input("source_marker", sql.VarChar(50), sourceMarker);
     });
-    const existingRow = existing.recordset?.[0];
-    if (existingRow) return mapLegacyWriteResult(existingRow, true);
+    const existingRows = existing.recordset || [];
+    if (new Set(existingRows.map((row) => Number(row.reid))).size > 1) {
+      throw new Error(`润丰中存在重复的 H5 委托单标记：${order.id}`);
+    }
+    const existingRow = existingRows[0];
+    if (existingRow) return validateLegacyWriteResult(mapLegacyWriteResult(existingRow, true));
 
-    const allocated = await execute(ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY, (request, sql) => {
-      request.input("dispatch_prefix", sql.Char(1), prefix);
+    const department = await execute(FIND_LEGACY_DEPARTMENT_QUERY, (request, sql) => {
+      request.input("department_code", sql.VarChar(2), departmentCode);
     });
-    const documentNo = Number(allocated.recordset?.[0]?.max_document_no || 0) + 1;
-    const dispatchNumber = Number(allocated.recordset?.[0]?.max_dispatch_number || 0) + 1;
-    const dispatchNo = `${prefix}${dispatchNumber}`;
+    if (!department.recordset?.[0]) throw new Error(`润丰部门编码不存在：${departmentCode || "空"}`);
 
     const vehicleResult = await execute(FIND_LEGACY_VEHICLE_FOR_WRITE_QUERY, (request, sql) => {
       request.input("plate", sql.VarChar(50), normalizeIdentifier(order.vehicle?.plate));
@@ -93,14 +124,51 @@ export async function writeLegacyWorkOrder(
       throw new Error("车牌号和 VIN 指向润丰中的不同车辆，已停止写入");
     }
     const existingVehicle = vehicleRows.find((row) => row.plate_matched) || vehicleRows[0];
-    const modelText = existingVehicle?.cx || buildLegacyModel(order.vehicle);
-    const organizationCode = existingVehicle?.ssdw || truncateLegacyText(order.customer?.legacyCode, 50);
+    let modelText = existingVehicle?.cx || "";
+    let organizationCode = existingVehicle?.ssdw || "";
+
+    if (!existingVehicle) {
+      const modelCode = truncateLegacyText(order.vehicle?.modelLegacyCode, 50);
+      if (modelCode) {
+        const model = await execute(FIND_LEGACY_MODEL_BY_CODE_QUERY, (request, sql) => {
+          request.input("model_code", sql.VarChar(50), modelCode);
+        });
+        const modelRow = model.recordset?.[0];
+        if (!modelRow) throw new Error(`润丰车型编码不存在：${modelCode}`);
+        modelText = buildLegacyModel({ modelLegacyCode: modelRow.code, model: modelRow.name });
+      } else {
+        modelText = buildLegacyModel(order.vehicle);
+      }
+
+      organizationCode = truncateLegacyText(order.customer?.legacyCode, 50);
+      if (organizationCode) {
+        const organization = await execute(FIND_LEGACY_ORGANIZATION_BY_CODE_QUERY, (request, sql) => {
+          request.input("organization_code", sql.VarChar(50), organizationCode);
+        });
+        const organizationRow = organization.recordset?.[0];
+        if (!organizationRow) throw new Error(`润丰所属单位编码不存在：${organizationCode}`);
+        organizationCode = organizationRow.code;
+      }
+    }
+
+    const allocated = await execute(ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY, (request, sql) => {
+      request.input("dispatch_prefix", sql.Char(1), prefix);
+    });
+    const documentNo = Number(allocated.recordset?.[0]?.max_document_no || 0) + 1;
+    const dispatchNumber = Number(allocated.recordset?.[0]?.max_dispatch_number || 0) + 1;
+    if (!Number.isSafeInteger(documentNo) || documentNo < 1 || documentNo > 2147483647) {
+      throw new Error("润丰内部单号已超出可用范围");
+    }
+    if (!Number.isSafeInteger(dispatchNumber) || dispatchNumber < 1 || dispatchNumber > 999999999) {
+      throw new Error(`润丰 ${prefix} 系列派工号已超出可用范围`);
+    }
+    const dispatchNo = `${prefix}${dispatchNumber}`;
 
     if (!existingVehicle) {
       await execute(INSERT_LEGACY_VEHICLE_QUERY, (request, sql) => {
         request.input("plate_text", sql.VarChar(10), truncateLegacyText(order.vehicle?.plate, 10));
         request.input("model_text", sql.VarChar(100), modelText);
-        request.input("production_date", sql.Char(10), formatLegacyDate(order.vehicle?.purchaseDate));
+        request.input("production_date", sql.Char(10), productionDate);
         request.input("organization_code", sql.VarChar(50), organizationCode);
         request.input("contact", sql.VarChar(20), truncateLegacyText(order.customer?.contact, 20));
         request.input("phone", sql.VarChar(50), truncateLegacyText(order.customer?.phone, 50));
@@ -109,12 +177,8 @@ export async function writeLegacyWorkOrder(
       });
     }
 
-    const arrivalDate = formatLegacyDate(order.arrivalDate || now);
-    const arrivalTime = formatLegacyTime(now);
-    const projectFee = (order.repairItems || []).reduce((sum, item) => sum + Number(item.laborFee || 0), 0);
-    const repairContent = (order.repairItems || []).map((item) => item.name?.trim()).filter(Boolean).join("；");
     const header = await execute(INSERT_LEGACY_WORK_ORDER_QUERY, (request, sql) => {
-      request.input("department_code", sql.VarChar(50), truncateLegacyText(order.department?.code, 50));
+      request.input("department_code", sql.VarChar(50), departmentCode);
       request.input("document_no", sql.Int, documentNo);
       request.input("arrival_date", sql.Char(10), arrivalDate);
       request.input("arrival_time", sql.Char(5), arrivalTime);
@@ -135,21 +199,21 @@ export async function writeLegacyWorkOrder(
       request.input("source_marker", sql.VarChar(50), sourceMarker);
     });
 
-    for (const [index, item] of (order.repairItems || []).entries()) {
+    for (const [index, item] of repairItems.entries()) {
       await execute(INSERT_LEGACY_REPAIR_ITEM_QUERY, (request, sql) => {
         request.input("document_no", sql.Int, documentNo);
         request.input("item_name", sql.VarChar(100), truncateLegacyText(item.name, 100));
-        request.input("labor_fee", sql.Decimal(18, 2), Number(item.laborFee || 0));
+        request.input("labor_fee", sql.Decimal(18, 2), projectFees[index]);
         request.input("item_no", sql.SmallInt, index + 1);
       });
     }
 
-    return {
+    return validateLegacyWriteResult({
       reid: Number(header.recordset?.[0]?.reid || 0),
       documentNo,
       dispatchNo,
       existing: false
-    };
+    });
   });
 }
 
@@ -197,6 +261,22 @@ function normalizeDispatchPrefix(value) {
   return prefix;
 }
 
+export function dispatchPrefixForDepartment(departmentCode) {
+  const code = String(departmentCode || "").trim().toUpperCase();
+  if (code === "M") return "A";
+  if (/^[ABFJ]$/.test(code)) return code;
+  throw new Error(`无法确定润丰部门“${code || "空"}”的派工号前缀`);
+}
+
+function normalizeLegacyMoney(value, label) {
+  const amount = Number(value || 0);
+  const cents = Math.round((amount + Number.EPSILON) * 100);
+  if (!Number.isFinite(amount) || amount < 0 || !Number.isSafeInteger(cents)) {
+    throw new Error(`${label}无效`);
+  }
+  return cents / 100;
+}
+
 function formatLegacyTime(value) {
   return `${pad(value.getHours())}:${pad(value.getMinutes())}`;
 }
@@ -208,6 +288,13 @@ function mapLegacyWriteResult(row, existing) {
     dispatchNo: String(row.pgd || "").trim(),
     existing
   };
+}
+
+function validateLegacyWriteResult(result) {
+  if (!Number.isInteger(result.reid) || result.reid < 1) throw new Error("润丰未返回有效的维修单 reid");
+  if (!Number.isInteger(result.documentNo) || result.documentNo < 1) throw new Error("润丰未返回有效的内部单号");
+  if (!/^[A-Z][0-9]+$/.test(result.dispatchNo)) throw new Error("润丰未返回有效的派工号");
+  return result;
 }
 
 function pad(value) {
