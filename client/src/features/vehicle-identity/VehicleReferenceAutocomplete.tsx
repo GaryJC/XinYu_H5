@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Select } from "antd";
+import { AutoComplete, Button } from "antd";
 import { VehicleReferenceCandidate, VehicleReferenceKind } from "../../../../shared/types";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
 
@@ -10,24 +10,25 @@ type Props = {
   disabled?: boolean;
   placeholder?: string;
   ariaLabel: string;
-  onSearchChange?: (value: string) => void;
+  onChange: (value: string) => void;
   onRequestCreate?: (value: string) => void;
   onClear?: () => void;
   onSelect: (candidate: VehicleReferenceCandidate) => void;
 };
 
 type ReferenceOption = {
+  key: string;
   value: string;
   label: string;
   candidate: VehicleReferenceCandidate;
 };
 
-export function VehicleReferenceAutocomplete({ kind, value, code, disabled, placeholder, ariaLabel, onSearchChange, onRequestCreate, onClear, onSelect }: Props) {
+export function VehicleReferenceAutocomplete({ kind, value, disabled, placeholder, ariaLabel, onChange, onRequestCreate, onClear, onSelect }: Props) {
   const [options, setOptions] = useState<ReferenceOption[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
-  const [searchValue, setSearchValue] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const requestSequence = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -54,7 +55,8 @@ export function VehicleReferenceAutocomplete({ kind, value, code, disabled, plac
         const result = await workOrderApi.searchVehicleReferences(kind, query);
         if (sequence !== requestSequence.current) return;
         setOptions(result.candidates.map((candidate) => ({
-          value: candidate.code || candidate.value,
+          key: candidate.code || candidate.value,
+          value: candidate.value,
           label: `${candidate.value}${candidate.code ? `（${candidate.code}）` : ""} · ${candidate.usageCount}辆`,
           candidate
         })));
@@ -70,78 +72,59 @@ export function VehicleReferenceAutocomplete({ kind, value, code, disabled, plac
     }, 300);
   }
 
-  const selectedOption = code ? {
-    value: code,
-    label: `${value}（${code}）`,
-    candidate: { value, code, usageCount: 0 }
-  } : undefined;
-  const visibleOptions = selectedOption && !options.some((option) => option.value === code)
-    ? [selectedOption, ...options]
-    : options;
   const label = kind === "model" ? "车型" : "所属单位";
   const emptyContent = searchError || (
     <div className="vehicle-reference-empty">
       <span>没有相关记录</span>
-      {searchValue.trim() && onRequestCreate ? (
+      {searchQuery.trim() && onRequestCreate ? (
         <Button
           type="link"
           size="small"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
             setOpen(false);
-            onRequestCreate(searchValue.trim());
+            onRequestCreate(searchQuery.trim());
           }}
         >
-          新增“{searchValue.trim()}”
+          新增“{searchQuery.trim()}”
         </Button>
       ) : <span>请使用下方“新增{label}”</span>}
     </div>
   );
 
   return (
-    <Select
-      value={code || undefined}
-      searchValue={searchValue}
+    <AutoComplete
+      value={value}
       disabled={disabled}
       aria-label={ariaLabel}
-      placeholder={!code && value ? `待确认：${value}（点击搜索或新增）` : placeholder}
-      options={visibleOptions}
+      placeholder={placeholder}
+      options={options}
       open={open}
-      showSearch
       allowClear
       filterOption={false}
       notFoundContent={loading ? "正在查询公司数据库…" : emptyContent}
+      onChange={(nextValue) => {
+        setSearchQuery(nextValue);
+        onChange(nextValue);
+      }}
       onSearch={(query) => {
-        setSearchValue(query);
-        onSearchChange?.(query);
+        setSearchQuery(query);
         search(query);
       }}
-      onFocus={() => {
-        const initialQuery = searchValue || (!code ? value : "");
-        if (initialQuery) {
-          setSearchValue(initialQuery);
-          onSearchChange?.(initialQuery);
-          search(initialQuery);
-        }
-      }}
+      onFocus={() => search(value)}
       onOpenChange={setOpen}
       onClear={() => {
-        setSearchValue("");
+        setSearchQuery("");
         setOptions([]);
         setOpen(false);
-        onSearchChange?.("");
         onClear?.();
       }}
-      onInputKeyDown={(event) => {
-        if ((event.key === "Backspace" || event.key === "Delete") && !searchValue && code) {
-          onClear?.();
-        }
-      }}
-      onSelect={(_selectedValue, option) => {
+      onSelect={(selectedValue, option) => {
+        const selectedOption = options.find((item) => item.key === String(option.key) || item.value === selectedValue);
+        if (!selectedOption) return;
         setOpen(false);
-        setSearchValue("");
-        onSearchChange?.("");
-        onSelect((option as ReferenceOption).candidate);
+        setSearchQuery("");
+        onSelect(selectedOption.candidate);
       }}
     />
   );

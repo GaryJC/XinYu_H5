@@ -46,7 +46,7 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
               placeholder="车型，例如大众"
               value={testLicense.model || ""}
               code=""
-              onSearchChange={(value) => setTestLicense((current) => ({ ...current, model: value }))}
+              onChange={(value) => setTestLicense((current) => ({ ...current, model: value }))}
               onClear={() => setTestLicense((current) => ({ ...current, model: "" }))}
               onSelect={(candidate) => setTestLicense((current) => ({ ...current, model: candidate.value }))}
             />
@@ -57,7 +57,7 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
               placeholder="所有人/所属单位，例如水务公司"
               value={testLicense.owner || ""}
               code=""
-              onSearchChange={(value) => setTestLicense((current) => ({ ...current, owner: value }))}
+              onChange={(value) => setTestLicense((current) => ({ ...current, owner: value }))}
               onClear={() => setTestLicense((current) => ({ ...current, owner: "" }))}
               onSelect={(candidate) => setTestLicense((current) => ({ ...current, owner: candidate.value }))}
             />

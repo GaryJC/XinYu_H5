@@ -223,6 +223,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   placeholder="输入至少两个字符查询已有车型"
                   value={draft.vehicle.model}
                   code={draft.vehicle.modelLegacyCode}
+                  onChange={(value) => updateVehicle("model", value)}
                   onClear={() => updateVehicle("model", "")}
                   onRequestCreate={(name) => setModelCreateRequest({ key: Date.now(), name })}
                   onSelect={(candidate) => selectVehicleReference("model", candidate)}
@@ -250,6 +251,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   placeholder="输入至少两个字符查询已有单位"
                   value={draft.customer.name}
                   code={draft.customer.legacyCode}
+                  onChange={(value) => updateCustomer("name", value)}
                   onClear={() => updateCustomer("name", "")}
                   onRequestCreate={(name) => setOrganizationCreateRequest({ key: Date.now(), name })}
                   onSelect={(candidate) => {
