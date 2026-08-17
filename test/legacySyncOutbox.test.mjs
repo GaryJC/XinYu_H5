@@ -71,7 +71,7 @@ test("legacy sync payload is versioned and preserves structured work-order data"
   });
 });
 
-test("only a completed customer signature enqueues the initial legacy sync event", async () => {
+test("a completed customer signature writes directly to Runfeng instead of enqueueing", async () => {
   const source = await readFile(new URL("../server/db.mjs", import.meta.url), "utf8");
   const enqueueCalls = source.match(/await enqueueLegacySyncEvent\(/g) || [];
   const createSource = source.match(
@@ -81,12 +81,11 @@ test("only a completed customer signature enqueues the initial legacy sync event
     /export async function signWorkOrderByToken[\s\S]*?(?=\nexport async function)/
   )?.[0] || "";
 
-  assert.equal(enqueueCalls.length, 1);
+  assert.equal(enqueueCalls.length, 0);
   assert.doesNotMatch(createSource, /enqueueLegacySyncEvent/);
-  assert.match(
-    signSource,
-    /status: "已委托"[\s\S]*?await enqueueLegacySyncEvent\(client, next, "created"\)/
-  );
+  assert.match(signSource, /writeLegacyWorkOrder/);
+  assert.match(signSource, /status: "已委托"/);
+  assert.match(signSource, /legacy_sync_status = 'synced'/);
   assert.doesNotMatch(
     source,
     /async function upsertWorkOrder[\s\S]*?await enqueueLegacySyncEvent/

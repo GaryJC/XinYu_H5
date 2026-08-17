@@ -74,8 +74,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     if (!signatureSession || !signatureImage) return;
     setSignatureSubmitting(true);
     try {
-      await completeSignature(signatureSession.order, signatureSession.token, signatureImage);
-      setSignatureResult("客户签字已保存，委托单已进入“已委托”。");
+      const signed = await completeSignature(signatureSession.order, signatureSession.token, signatureImage);
+      setSignatureResult(`客户签字已保存，已写入润丰${signed.dispatchNo ? `，派工号：${signed.dispatchNo}` : ""}。`);
     } catch (error) {
       setSignatureResult(error instanceof Error ? error.message : "签字保存失败");
     } finally {
@@ -109,20 +109,12 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               <Alert className="platform-sync-state" type="success" showIcon title={`已同步平台工单：${selectedOrder.platformOrderNo}`} />
             ) : null}
 
-            {showLegacySyncStatus && selectedOrder?.legacySyncStatus === "pending" ? (
-              <Alert className="platform-sync-state" type="info" showIcon title="委托单已完成签字，等待润丰系统拉取" />
-            ) : null}
-
-            {showLegacySyncStatus && selectedOrder?.legacySyncStatus === "processing" ? (
-              <Alert className="platform-sync-state" type="info" showIcon title="润丰系统正在处理当前委托单" />
-            ) : null}
-
             {showLegacySyncStatus && selectedOrder?.legacySyncStatus === "synced" ? (
-              <Alert className="platform-sync-state" type="success" showIcon title={`润丰同步成功${selectedOrder.dispatchNo ? `：${selectedOrder.dispatchNo}` : ""}`} />
+              <Alert className="platform-sync-state" type="success" showIcon title={`已写入润丰${selectedOrder.dispatchNo ? `，派工号：${selectedOrder.dispatchNo}` : ""}`} />
             ) : null}
 
             {showLegacySyncStatus && selectedOrder?.legacySyncStatus === "failed" ? (
-              <Alert className="platform-sync-state" type="error" showIcon title="润丰同步失败" description={selectedOrder.legacySyncError || "请联系管理员重试同步"} />
+              <Alert className="platform-sync-state" type="error" showIcon title="润丰写入失败" description={selectedOrder.legacySyncError || "请联系管理员重试写入"} />
             ) : null}
 
             {formErrors.length ? (
@@ -168,7 +160,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               <Field
                 disabled
                 label="派工号"
-                placeholder="润丰同步成功后自动回填"
+                placeholder="客户签字后从数据库自动生成"
                 value={draft.dispatchNo}
                 onChange={() => undefined}
               />

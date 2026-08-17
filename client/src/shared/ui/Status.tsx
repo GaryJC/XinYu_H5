@@ -13,10 +13,10 @@ const statusColor: Record<WorkOrderStatus, string> = {
 
 const legacySyncPresentation: Record<LegacySyncStatus, { label: string; color: string }> = {
   not_applicable: { label: "无需同步", color: "default" },
-  pending: { label: "待拉取", color: "gold" },
-  processing: { label: "拉取中", color: "processing" },
-  synced: { label: "已同步", color: "success" },
-  failed: { label: "同步失败", color: "error" }
+  pending: { label: "", color: "default" },
+  processing: { label: "", color: "default" },
+  synced: { label: "已写入", color: "success" },
+  failed: { label: "写入失败", color: "error" }
 };
 
 export function MetricCard({ label, value }: { label: string; value: number }) {
@@ -32,6 +32,7 @@ export function StatusChip({ status }: { status: WorkOrderStatus }) {
 }
 
 export function LegacySyncStatusChip({ status = "not_applicable" }: { status?: LegacySyncStatus }) {
+  if (status === "not_applicable" || status === "pending" || status === "processing") return null;
   const presentation = legacySyncPresentation[status];
   return <Tag color={presentation.color}>润丰：{presentation.label}</Tag>;
 }

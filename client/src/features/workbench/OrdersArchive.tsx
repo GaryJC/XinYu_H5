@@ -73,7 +73,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
             { title: "服务顾问", dataIndex: "advisor" },
             { title: "维修技师", dataIndex: "technician" },
             { title: "业务状态", render: (_, order) => <StatusChip status={order.status} /> },
-            { title: "润丰同步", render: (_, order) => <OrderLegacySyncStatus order={order} /> },
+            { title: "润丰写入", render: (_, order) => <OrderLegacySyncStatus order={order} /> },
             { title: "金额", render: (_, order) => order.settlementAmount || order.estimatedFee ? `¥${order.settlementAmount || order.estimatedFee}` : "-" },
             { title: "更新时间", dataIndex: "updatedAt", width: 145 }
           ]}
@@ -110,7 +110,7 @@ function OrderDetail({ order, isMobile }: { order: WorkOrder; isMobile: boolean 
   const descriptions = [
     { key: "id", label: "委托单号", children: order.id },
     { key: "status", label: "状态", children: <StatusChip status={order.status} /> },
-    { key: "legacySyncStatus", label: "润丰同步", children: <OrderLegacySyncStatus order={order} /> },
+    { key: "legacySyncStatus", label: "润丰写入", children: <OrderLegacySyncStatus order={order} /> },
     { key: "advisor", label: "服务顾问", children: order.advisor || "-" },
     { key: "dispatch", label: "派工号", children: order.dispatchNo || "-" },
     { key: "arrival", label: "进厂日期", children: order.arrivalDate || "-" },

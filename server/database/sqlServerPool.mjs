@@ -43,6 +43,31 @@ export async function executeSqlServerQuery(query, configureRequest) {
   return request.query(query);
 }
 
+export async function executeSqlServerTransaction(work) {
+  const connectedPool = await getSqlServerPoolWithRetry();
+  const transaction = new sql.Transaction(connectedPool);
+  await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+
+  const execute = async (query, configureRequest) => {
+    const request = new sql.Request(transaction);
+    if (configureRequest) configureRequest(request, sql);
+    return request.query(query);
+  };
+
+  try {
+    const result = await work(execute);
+    await transaction.commit();
+    return result;
+  } catch (error) {
+    try {
+      await transaction.rollback();
+    } catch {
+      // Preserve the original query error when the connection also fails during rollback.
+    }
+    throw error;
+  }
+}
+
 export async function closeSqlServerPool() {
   const connectedPool = pool;
   pool = undefined;

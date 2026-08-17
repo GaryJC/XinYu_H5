@@ -21,7 +21,7 @@ import {
   assertStatusTransition,
   sanitizeTransitionPatch
 } from "./domain/workOrderPolicy.mjs";
-import { enqueueLegacySyncEvent } from "./repositories/legacySyncOutboxRepository.mjs";
+import { writeLegacyWorkOrder } from "./repositories/legacyWorkOrderRepository.mjs";
 
 const validRoles = new Set(["advisor", "dispatcher", "technician", "inspector", "manager"]);
 
@@ -186,8 +186,19 @@ export async function signWorkOrderByToken(token, signature, signatureFileId) {
     );
     if (!signatureFile.rows[0]) throw new HttpError(400, "签字图片不存在或未关联当前委托单");
 
+    let legacyWrite;
+    try {
+      legacyWrite = await writeLegacyWorkOrder({
+        ...order,
+        signatures: { ...order.signatures, customer: signature }
+      });
+    } catch (error) {
+      throw new HttpError(502, `写入润丰维修单失败：${error instanceof Error ? error.message : "SQL Server 暂时不可用"}`);
+    }
+
     const next = {
       ...order,
+      dispatchNo: legacyWrite.dispatchNo,
       status: "已委托",
       updatedAt: nowString(),
       signatures: {
@@ -201,8 +212,19 @@ export async function signWorkOrderByToken(token, signature, signatureFileId) {
       [order.id, "customer", signatureFileId]
     );
     await client.query("update signature_tokens set used = true, used_at = now() where token = $1", [token]);
-    await addAudit(client, order.id, order.customer.name || "车主", "客户完成电子签名");
-    await enqueueLegacySyncEvent(client, next, "created");
+    await client.query(
+      `
+        update work_orders
+        set legacy_reid = $2,
+            legacy_document_no = $3,
+            legacy_sync_status = 'synced',
+            legacy_synced_at = now(),
+            legacy_sync_error = null
+        where id = $1
+      `,
+      [order.id, legacyWrite.reid, legacyWrite.documentNo]
+    );
+    await addAudit(client, order.id, order.customer.name || "车主", `客户完成电子签名并写入润丰：${legacyWrite.dispatchNo}`);
     return findWorkOrderById(client, order.id);
   });
 }
