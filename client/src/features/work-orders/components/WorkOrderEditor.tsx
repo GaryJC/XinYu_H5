@@ -440,7 +440,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 </div>
                 <Button icon={<Minimize2 size={16} />} onClick={() => setLandscapeSignature(false)}>完成横屏签字</Button>
               </div>
-              <SignaturePad value={signatureImage} disabled={signatureSubmitting || signatureCompleted} onChange={setSignatureImage} />
+              <SignaturePad landscapeMode value={signatureImage} disabled={signatureSubmitting || signatureCompleted} onChange={setSignatureImage} />
             </div>
           ) : null}
           </Card>
