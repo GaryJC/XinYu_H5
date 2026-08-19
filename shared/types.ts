@@ -62,6 +62,11 @@ export type VehicleReferenceCodeCheckResult = {
   existing?: VehicleReferenceCandidate;
 };
 
+export type VehicleReferenceCreateResult = VehicleReferenceCandidate & {
+  kind: VehicleReferenceKind;
+  created: boolean;
+};
+
 export type VehicleReferenceResolution = {
   input: string;
   status: "matched" | "ambiguous" | "not_found";

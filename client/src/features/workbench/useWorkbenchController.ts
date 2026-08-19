@@ -33,7 +33,7 @@ export function useWorkbenchController() {
   const [currentUser, setCurrentUser] = useState<UserProfile>();
   const [departments, setDepartments] = useState<LegacyDepartment[]>([]);
   const [departmentError, setDepartmentError] = useState("");
-  const [actionLoading, setActionLoading] = useState<"save" | "signature" | "sync" | "delete" | "">("");
+  const [actionLoading, setActionLoading] = useState<"save" | "signature" | "delete" | "">("");
   const [devLoginLoading, setDevLoginLoading] = useState(false);
   const sessionGeneration = useRef(0);
 

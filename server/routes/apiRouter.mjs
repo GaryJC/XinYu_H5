@@ -18,6 +18,7 @@ import { readJson, requestContext, sendJson } from "../http/response.mjs";
 import { recognizeLicensePlate, recognizeVehicleLicense, recognizeVin } from "../ocr.mjs";
 import {
   checkCompanyVehicleReferenceCode,
+  createCompanyVehicleReference,
   lookupVehicleInCompanySystem,
   searchCompanyVehicleReferences
 } from "../integrations/company/vehicleLookup.mjs";
@@ -144,6 +145,12 @@ export async function handleApiRequest(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/company-system/vehicle-references/code-check") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     sendJson(res, 200, await checkCompanyVehicleReferenceCode(await readJson(req)));
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/company-system/vehicle-references") {
+    requireAnyRole(currentUser, ["advisor", "manager"]);
+    sendJson(res, 201, await createCompanyVehicleReference(await readJson(req)));
     return true;
   }
 

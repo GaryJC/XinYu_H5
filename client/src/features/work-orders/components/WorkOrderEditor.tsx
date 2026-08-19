@@ -1,4 +1,4 @@
-import { FileSignature, LockKeyhole, Maximize2, Minimize2, Plus, RefreshCcw, Save, Send, Trash2 } from "lucide-react";
+import { FileSignature, LockKeyhole, Maximize2, Minimize2, Plus, Save, Send, Trash2 } from "lucide-react";
 import { Alert, Button, Card, DatePicker, Form, Grid, Input, Modal, Select, Tooltip } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
@@ -32,12 +32,10 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     formErrors, vehicleLicenseOcr, vehicleLicenseFileId, ocrState, scanVehicleLicense,
     confirmVehicleLicenseOcr, draft, updateDraft, updateVehicle, updateCustomer,
     toggleArrayField, setDraft, totalLabor, updateRepairItem,
-    syncPlatform, actionLoading, completeSignature, identifierRecognition,
+    actionLoading, completeSignature, identifierRecognition,
     vehicleHistory, vehicleHistoryLoading, vehicleHistoryError, scanVehicleIdentifier,
     lookupVehicleLicenseForDevelopment, selectVehicleReference, departments, departmentError
   } = controller;
-  const customerHasSigned = Boolean(selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status));
-  const canSyncPlatform = Boolean(selectedOrder?.dispatchNo?.trim() && !selectedOrder.platformOrderNo && customerHasSigned && (role === "advisor" || role === "manager"));
   const showLegacySyncStatus = Boolean(selectedOrder && selectedOrder.status !== "草稿");
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
   const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "编码", "选择已有"].some((phrase) => error.includes(phrase)));
@@ -45,6 +43,14 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const signatureDisabled = !canResumeSignature && (!canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder)));
   const signatureDisabledReason = selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) ? `当前状态“${selectedOrder.status}”不能再次发起签字` : "";
   const signatureCompleted = signatureResult.includes("已保存");
+  const signatureUploaded = Boolean(selectedOrder?.signatures.customer);
+  const signatureUploadDescription = selectedOrder?.legacySyncStatus === "synced"
+    ? `委托单已同步至润丰${selectedOrder.dispatchNo ? `，派工号：${selectedOrder.dispatchNo}` : ""}。`
+    : selectedOrder?.legacySyncStatus === "failed"
+      ? `签字已保存，但润丰同步失败：${selectedOrder.legacySyncError || "请联系管理员处理"}`
+      : selectedOrder?.legacySyncStatus === "processing"
+        ? "签字和委托单已上传，润丰正在处理。"
+        : "签字和委托单已上传，正在等待润丰系统拉取。";
   const vehicleLicenseRequirement = vehicleHistory?.status === "new"
     ? "required"
     : vehicleHistory?.status === "found"
@@ -378,11 +384,15 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             <div className="workflow-actions">
               <div>
                 <strong>完成开单流程</strong>
-                <span>{canSyncPlatform
-                  ? "派工号已回填，可以同步维修平台。"
-                  : customerHasSigned && !selectedOrder?.dispatchNo
-                    ? "客户已签字，正在等待润丰回填派工号。"
-                    : "请先完成客户签字，再同步维修平台。"}</span>
+                {signatureUploaded ? (
+                  <Alert
+                    className="workflow-upload-success"
+                    type={selectedOrder?.legacySyncStatus === "failed" ? "warning" : "success"}
+                    showIcon
+                    title="签字已上传成功"
+                    description={signatureUploadDescription}
+                  />
+                ) : <span>客户签字完成后，委托单会自动进入润丰待拉取队列。</span>}
                 {showSignatureValidation && formErrors.length ? (
                   <Alert
                     className="signature-validation-summary"
@@ -397,7 +407,6 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 <Tooltip title={signatureDisabledReason}>
                   <span><Button size="large" color="blue" variant="solid" icon={<Send size={17} />} onClick={handleSendSignature} loading={actionLoading === "signature"} disabled={signatureDisabled}>{canResumeSignature ? "继续签字" : "发起签字"}</Button></span>
                 </Tooltip>
-                <Button size="large" color="green" variant="solid" icon={<RefreshCcw size={17} />} onClick={syncPlatform} loading={actionLoading === "sync"} disabled={!canSyncPlatform}>同步维修平台</Button>
               </div>
             </div>
 

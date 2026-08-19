@@ -48,8 +48,9 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
       try {
         const result = await workOrderApi.checkVehicleReferenceCode(kind, code);
         if (sequence !== requestSequence.current) return;
-        setCheck(result.available
-          ? { status: "available", message: "编码可用" }
+        const sameName = result.existing && normalizeReferenceName(result.existing.value) === normalizeReferenceName(name);
+        setCheck(result.available || sameName
+          ? { status: "available", message: sameName ? "编码已有同名记录，将直接复用" : "编码可用" }
           : {
               status: "duplicate",
               message: `编码已被“${result.existing?.value || "其他记录"}”使用，请修改编码`
@@ -89,15 +90,8 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
     }
     setSubmitting(true);
     try {
-      const result = await workOrderApi.checkVehicleReferenceCode(kind, code);
-      if (!result.available) {
-        setCheck({
-          status: "duplicate",
-          message: `编码已被“${result.existing?.value || "其他记录"}”使用，请修改编码`
-        });
-        return;
-      }
-      onCreate({ value: normalizedName, code: result.code, usageCount: 0 });
+      const result = await workOrderApi.createVehicleReference(kind, normalizedName, code);
+      onCreate(result);
       setOpen(false);
     } catch (error) {
       setCheck({ status: "error", message: error instanceof Error ? error.message : "编码查询失败" });
@@ -115,7 +109,7 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
       <Modal
         open={open}
         title={`新增${label}`}
-        okText="确认使用"
+        okText="写入润丰并使用"
         cancelText="取消"
         confirmLoading={submitting}
         okButtonProps={{ disabled: check.status !== "available" }}
@@ -127,7 +121,7 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
           type="info"
           showIcon
           title="系统默认生成中文拼音首字母编码"
-          description="编码重复时请在下方手动修改。保存草稿只记录编码，客户签字写入润丰时才会正式创建主数据。"
+          description="确认后会立即写入润丰 SQL Server。编码已存在且名称一致时复用，名称不一致时要求修改编码。"
           style={{ marginBottom: 16 }}
         />
         <Form layout="vertical">
@@ -172,4 +166,8 @@ function validateCode(code: string, maxLength: number) {
   if (!/^[A-Za-z0-9]+$/.test(normalized)) return "编码只能包含英文字母和数字";
   if (normalized.length > maxLength) return `编码最多 ${maxLength} 个字符`;
   return "";
+}
+
+function normalizeReferenceName(value: string) {
+  return value.normalize("NFKC").trim().replace(/[\s\-_]/g, "").toUpperCase();
 }

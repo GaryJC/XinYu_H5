@@ -2,7 +2,7 @@ import { type Dispatch, type SetStateAction } from "react";
 import { RoleKey, WorkOrder, WorkOrderDraft } from "../../../../../shared/types";
 import { workOrderApi } from "../api/workOrderApi";
 
-type ActionLoading = "save" | "signature" | "sync" | "delete" | "";
+type ActionLoading = "save" | "signature" | "delete" | "";
 
 type Options = {
   selectedOrder?: WorkOrder;
@@ -79,21 +79,6 @@ export function createWorkOrderWorkflowActions({
     }, "确认结算归档失败");
   }
 
-  async function syncPlatform() {
-    if (!selectedOrder) return;
-    setActionLoading("sync");
-    setFormErrors([]);
-    try {
-      const updated = await workOrderApi.syncPlatform(selectedOrder.id, actor);
-      await loadOrders(role, updated.id);
-      await loadDashboard(role);
-    } catch (error) {
-      setFormErrors([actionError(error, "同步维修平台失败")]);
-    } finally {
-      setActionLoading("");
-    }
-  }
-
   async function completeSignature(order: WorkOrder, token: string, signatureImage: string) {
     const signatureFile = await workOrderApi.uploadFile({
       orderId: order.id,
@@ -130,7 +115,6 @@ export function createWorkOrderWorkflowActions({
     dispatchToTechnician,
     completeRepair,
     settleOrder,
-    syncPlatform,
     completeSignature,
     updateRepairAction,
     createSettlement

@@ -13,7 +13,10 @@ import {
   findLegacyReferenceByCode,
   findLegacyModelCandidates,
   findLegacyOrganizationCandidates,
+  createLegacyVehicleReference,
   buildFuzzyLikePattern,
+  CREATE_LEGACY_MODEL_QUERY,
+  CREATE_LEGACY_ORGANIZATION_QUERY,
   FIND_LEGACY_MODEL_CANDIDATES_QUERY,
   FIND_LEGACY_MODEL_BY_CODE_QUERY,
   FIND_LEGACY_ORGANIZATION_CANDIDATES_QUERY,
@@ -223,6 +226,37 @@ test("exact reference code lookup includes unused master data and uses legacy fi
   });
   assert.deepEqual(inputs, [{ name: "code", type: { type: "VarChar", length: 10 }, value: "DZXPST" }]);
   assert.match(FIND_LEGACY_ORGANIZATION_BY_CODE_QUERY, /dbo\.khxxb/i);
+});
+
+test("new vehicle references are inserted with parameters inside a SQL Server transaction", async () => {
+  const calls = [];
+  const runTransaction = async (work) => work(async (query, configureRequest) => {
+    const inputs = [];
+    configureRequest({ input(name, type, value) { inputs.push({ name, type, value }); } }, {
+      VarChar(length) { return { type: "VarChar", length }; }
+    });
+    calls.push({ query, inputs });
+    return { recordset: [{ code: inputs[0].value, value: inputs[1].value, was_created: 1 }] };
+  });
+
+  assert.deepEqual(await createLegacyVehicleReference({
+    kind: "model",
+    code: "DZXPST",
+    name: "大众新帕萨特"
+  }, runTransaction), {
+    value: "大众新帕萨特",
+    code: "DZXPST",
+    usageCount: 0,
+    created: true
+  });
+  assert.equal(calls[0].query, CREATE_LEGACY_MODEL_QUERY);
+  assert.match(calls[0].query, /insert into dbo\.cxb \(bh, mc, qc\)/i);
+  assert.deepEqual(calls[0].inputs, [
+    { name: "code", type: { type: "VarChar", length: 10 }, value: "DZXPST" },
+    { name: "name", type: { type: "VarChar", length: 200 }, value: "大众新帕萨特" }
+  ]);
+  assert.match(CREATE_LEGACY_ORGANIZATION_QUERY, /insert into dbo\.khxxb \(bm, mc\)/i);
+  assert.match(CREATE_LEGACY_ORGANIZATION_QUERY, /updlock, holdlock/i);
 });
 
 test("legacy departments come from SQL Server repair-order departments", async () => {

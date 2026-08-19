@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   checkCompanyVehicleReferenceCode,
+  createCompanyVehicleReference,
   lookupVehicleInCompanySystem,
   normalizeNewReferenceCode,
   normalizeReference,
@@ -103,6 +104,31 @@ test("reference code check detects existing codes and accepts unused codes", asy
     code: "qdxkh",
     available: true
   });
+});
+
+test("creating a reference validates input and rejects a conflicting SQL Server code", async () => {
+  const created = await createCompanyVehicleReference({
+    kind: "model",
+    name: " 大众新帕萨特 ",
+    code: " dzxpst "
+  }, async (input) => ({ value: input.name, code: input.code, usageCount: 0, created: true }));
+  assert.deepEqual(created, {
+    kind: "model",
+    value: "大众新帕萨特",
+    code: "dzxpst",
+    usageCount: 0,
+    created: true
+  });
+
+  await assert.rejects(
+    () => createCompanyVehicleReference({ kind: "organization", name: "新单位", code: "qdsw" }, async () => ({
+      value: "已有单位",
+      code: "qdsw",
+      usageCount: 0,
+      created: false
+    })),
+    (error) => error instanceof HttpError && error.status === 409 && /已有单位/.test(error.message)
+  );
 });
 
 test("new reference codes preserve conventional case and respect legacy lengths", () => {

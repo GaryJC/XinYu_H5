@@ -2,12 +2,12 @@ import { CheckCircle2, Gauge, ShieldCheck } from "lucide-react";
 import { Card, Tag } from "antd";
 import { roles, workflow } from "../domain/workOrderDomain";
 import { WorkbenchController } from "../../workbench/useWorkbenchController";
-import { ActionPanel, PlatformPanel, SettlementPanel } from "./WorkflowPanels";
+import { ActionPanel, SettlementPanel } from "./WorkflowPanels";
 
 export function WorkflowSidebar({ controller }: { controller: WorkbenchController }) {
   const {
     selectedOrder, submitDispatch, dispatchToTechnician, technicianOptions, role,
-    completeRepair, settleOrder, syncPlatform, createSettlement
+    completeRepair, settleOrder, createSettlement
   } = controller;
 
   return (
@@ -42,7 +42,6 @@ export function WorkflowSidebar({ controller }: { controller: WorkbenchControlle
               onSettle={settleOrder}
             />
 
-            <PlatformPanel order={selectedOrder} role={role} onSync={syncPlatform} />
             <SettlementPanel order={selectedOrder} role={role} onCreateSettlement={createSettlement} />
 
             <div className="permission-card">

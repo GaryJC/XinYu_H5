@@ -18,6 +18,7 @@ import {
   VehicleLookupInput,
   VehicleReferenceKind,
   VehicleReferenceCodeCheckResult,
+  VehicleReferenceCreateResult,
   VehicleReferenceSearchResult,
   WorkOrder,
   WorkOrderDraft,
@@ -43,11 +44,11 @@ export type WorkOrderApi = {
   lookupVehicle(identifier: VehicleLookupInput): Promise<VehicleHistoryLookupResult>;
   searchVehicleReferences(kind: VehicleReferenceKind, query: string): Promise<VehicleReferenceSearchResult>;
   checkVehicleReferenceCode(kind: VehicleReferenceKind, code: string): Promise<VehicleReferenceCodeCheckResult>;
+  createVehicleReference(kind: VehicleReferenceKind, name: string, code: string): Promise<VehicleReferenceCreateResult>;
   uploadFile(file: { orderId?: string; kind: StoredFile["kind"]; fileName: string; mimeType: string; imageBase64: string }): Promise<StoredFile>;
   attachFile(fileId: string, orderId: string): Promise<StoredFile>;
   createOcrRecord(orderId: string | undefined, field: OcrFieldKey, source: string, value: string, confidence: number, fileId: string): Promise<OcrRecord>;
   confirmOcrRecord(id: string, value: string, actor: string): Promise<OcrRecord>;
-  syncPlatform(id: string, actor: string): Promise<WorkOrder>;
   repairItemAction(id: string, itemId: number, action: string, actor: string, patch?: Record<string, unknown>): Promise<WorkOrder>;
   createSettlement(id: string, actor: string): Promise<WorkOrder>;
   dashboard(role: RoleKey): Promise<DashboardSummary>;
@@ -119,6 +120,9 @@ export const workOrderApi: WorkOrderApi = {
   checkVehicleReferenceCode(kind, code) {
     return request("/api/company-system/vehicle-references/code-check", { method: "POST", body: { kind, code } });
   },
+  createVehicleReference(kind, name, code) {
+    return request("/api/company-system/vehicle-references", { method: "POST", body: { kind, name, code } });
+  },
   uploadFile(file) {
     return request("/api/files", { method: "POST", body: file });
   },
@@ -133,9 +137,6 @@ export const workOrderApi: WorkOrderApi = {
   },
   confirmOcrRecord(id, value, actor) {
     return request(`/api/ocr-records/${id}/confirm`, { method: "POST", body: { value, actor } });
-  },
-  syncPlatform(id, actor) {
-    return request(`/api/work-orders/${id}/platform-sync`, { method: "POST", body: { actor } });
   },
   repairItemAction(id, itemId, action, actor, patch = {}) {
     return request(`/api/work-orders/${id}/repair-items/${itemId}/action`, { method: "POST", body: { action, actor, patch } });

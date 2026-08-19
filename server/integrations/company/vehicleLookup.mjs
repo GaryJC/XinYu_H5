@@ -4,7 +4,8 @@ import {
   findLegacyModelCandidates,
   findLegacyOrganizationCandidates,
   findLegacyReferenceByCode,
-  findLegacyVehicle
+  findLegacyVehicle,
+  createLegacyVehicleReference
 } from "../../repositories/legacyVehicleRepository.mjs";
 
 const mockVehicles = [
@@ -125,6 +126,23 @@ export async function checkCompanyVehicleReferenceCode({ kind, code } = {}) {
     available: !existing,
     ...(existing ? { existing } : {})
   };
+}
+
+export async function createCompanyVehicleReference({ kind, name, code } = {}, createReference = createLegacyVehicleReference) {
+  if (kind !== "model" && kind !== "organization") {
+    throw new HttpError(400, "请选择车型或所属单位类型");
+  }
+  const normalizedName = typeof name === "string" ? name.normalize("NFKC").trim() : "";
+  if (!normalizedName) throw new HttpError(400, `${kind === "model" ? "车型" : "所属单位"}名称不能为空`);
+  if (normalizedName.length > (kind === "model" ? 100 : 150)) {
+    throw new HttpError(400, `${kind === "model" ? "车型" : "所属单位"}名称过长`);
+  }
+  const normalizedCode = normalizeNewReferenceCode(code, kind === "model" ? 10 : 50);
+  const result = await createReference({ kind, name: normalizedName, code: normalizedCode });
+  if (!result.created && normalizeReference(result.value) !== normalizeReference(normalizedName)) {
+    throw new HttpError(409, `编码已被“${result.value || "其他记录"}”使用，请修改编码`);
+  }
+  return { kind, ...result };
 }
 
 export function resolveVehicleCandidates(candidates, normalizedPlate, normalizedVin) {

@@ -109,8 +109,8 @@ function IdentifierScanner({ kind, title, hint, disabled, state, onScan }: {
         disabled={disabled}
         loading={scanning}
         label={title}
-        primaryActionLabel={`拍照${title}`}
-        galleryActionLabel="从相册选择"
+        primaryActionLabel="拍照识别"
+        galleryActionLabel="相册选择"
         onSelect={(file) => onScan(kind, file)}
       />
     </div>

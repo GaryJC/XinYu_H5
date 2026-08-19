@@ -1,33 +1,7 @@
-import { FileSignature, LockKeyhole, ReceiptText, RefreshCcw } from "lucide-react";
+import { FileSignature, LockKeyhole, ReceiptText } from "lucide-react";
 import { Button } from "antd";
 import { RoleKey, WorkOrder } from "../../../../../shared/types";
 import { canCompleteRepair, canDispatch, canSettle, canSubmitDispatch } from "../domain/permissions";
-
-export function PlatformPanel({ order, role, onSync }: { order?: WorkOrder; role: RoleKey; onSync: () => void }) {
-  const canSync = Boolean(order?.dispatchNo?.trim() && !order.platformOrderNo && (role === "advisor" || role === "manager") && !["草稿", "待客户签字"].includes(order.status));
-  return (
-    <div className="permission-card">
-      <div className="permission-head">
-        <RefreshCcw size={18} />
-        <strong>平台同步 / 出库单</strong>
-      </div>
-      {!order ? <p>选择委托单后可同步维修业务平台。</p> : (
-        <>
-          <p>平台工单：{order.platformOrderNo || "未同步"}；派工号：{order.dispatchNo || "待润丰回填"}</p>
-          <Button block disabled={!canSync} onClick={onSync}>同步并生成出库单</Button>
-          <div className="mini-list">
-            {order.platformSyncRecords.map((item) => (
-              <span key={item.id}>{item.status} · {item.platformOrderNo} · {item.message}</span>
-            ))}
-            {order.outboundOrders.map((outbound) => (
-              <span key={outbound.id}>出库单 {outbound.id} · {outbound.status} · {outbound.items.length} 项</span>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 
 export function SettlementPanel({ order, role, onCreateSettlement }: { order?: WorkOrder; role: RoleKey; onCreateSettlement: () => void }) {
   return (

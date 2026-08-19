@@ -52,8 +52,8 @@ export function VehicleLicenseOcrControl({ state, result, disabled, requirement 
           disabled={disabled}
           loading={state.status === "识别中"}
           label="识别行驶证照片"
-          primaryActionLabel="拍照扫描行驶证"
-          galleryActionLabel="从相册选择"
+          primaryActionLabel="拍照识别"
+          galleryActionLabel="相册选择"
           onSelect={onScan}
         />
         <Button
@@ -64,7 +64,7 @@ export function VehicleLicenseOcrControl({ state, result, disabled, requirement 
           onClick={onConfirm}
           disabled={disabled || state.status !== "待确认"}
         >
-          {state.status === "已确认" ? "识别结果已确认" : "确认识别结果"}
+          {state.status === "已确认" ? "已确认" : "确认结果"}
         </Button>
       </Flex>
     </div>

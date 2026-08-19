@@ -1,4 +1,4 @@
-import { executeSqlServerQuery } from "../database/sqlServerPool.mjs";
+import { executeSqlServerQuery, executeSqlServerTransaction } from "../database/sqlServerPool.mjs";
 
 export const FIND_LEGACY_VEHICLE_QUERY = `
   select * from (
@@ -107,6 +107,37 @@ export const FIND_LEGACY_ORGANIZATION_BY_CODE_QUERY = `
   where RTRIM(customer.bm) = @code
 `;
 
+export const CREATE_LEGACY_MODEL_QUERY = `
+  if exists (select 1 from dbo.cxb with (updlock, holdlock) where RTRIM(bh) = @code)
+  begin
+    select top 1
+      RTRIM(bh) as code,
+      COALESCE(NULLIF(RTRIM(qc), ''), RTRIM(mc)) as value,
+      0 as was_created
+    from dbo.cxb
+    where RTRIM(bh) = @code
+  end
+  else
+  begin
+    insert into dbo.cxb (bh, mc, qc) values (@code, @name, @name)
+    select @code as code, @name as value, 1 as was_created
+  end
+`;
+
+export const CREATE_LEGACY_ORGANIZATION_QUERY = `
+  if exists (select 1 from dbo.khxxb with (updlock, holdlock) where RTRIM(bm) = @code)
+  begin
+    select top 1 RTRIM(bm) as code, RTRIM(mc) as value, 0 as was_created
+    from dbo.khxxb
+    where RTRIM(bm) = @code
+  end
+  else
+  begin
+    insert into dbo.khxxb (bm, mc) values (@code, @name)
+    select @code as code, @name as value, 1 as was_created
+  end
+`;
+
 export async function findLegacyVehicle({ plate = "", vin = "" }, execute = executeSqlServerQuery) {
   const result = await execute(FIND_LEGACY_VEHICLE_QUERY, (request, sql) => {
     request.input("plate", sql.VarChar(50), plate);
@@ -153,6 +184,25 @@ export async function findLegacyReferenceByCode(kind, code, execute = executeSql
     code: row.code || "",
     usageCount: Number(row.usage_count || 0)
   } : undefined;
+}
+
+export async function createLegacyVehicleReference({ kind, code, name }, runTransaction = executeSqlServerTransaction) {
+  const query = kind === "model" ? CREATE_LEGACY_MODEL_QUERY : CREATE_LEGACY_ORGANIZATION_QUERY;
+  const codeLength = kind === "model" ? 10 : 50;
+  return runTransaction(async (execute) => {
+    const result = await execute(query, (request, sql) => {
+      request.input("code", sql.VarChar(codeLength), code);
+      request.input("name", sql.VarChar(200), name);
+    });
+    const row = result.recordset?.[0];
+    if (!row) throw new Error("SQL Server 新增主数据后未返回结果");
+    return {
+      value: row.value || "",
+      code: row.code || "",
+      usageCount: 0,
+      created: Boolean(row.was_created)
+    };
+  });
 }
 
 export function buildFuzzyLikePattern(value) {

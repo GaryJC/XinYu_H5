@@ -162,6 +162,7 @@ body { margin: 0; background: #f5f5f5; }
 .workflow-actions { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px; margin-top: 8px; border: 1px solid #d9d9d9; border-radius: 8px; background: #fafafa; }
 .workflow-actions > div:first-child > strong, .workflow-actions > div:first-child > span { display: block; }
 .workflow-actions > div:first-child > span { margin-top: 4px; color: rgba(0, 0, 0, .45); font-size: 13px; }
+.workflow-upload-success { margin-top: 12px; }
 .signature-validation-summary { margin-top: 12px; max-width: 640px; }
 .workflow-action-buttons { display: flex; align-items: center; gap: 10px; }
 .signature-page { min-height: 100vh; display: grid; place-items: start center; padding: 32px 16px; }
@@ -199,10 +200,11 @@ body { margin: 0; background: #f5f5f5; }
   textarea.ant-input,
   input[type="search"] { font-size: 16px !important; }
   .main { width: 100%; padding: 12px; }
-  .topbar { align-items: flex-start; margin-bottom: 12px; }
+  .topbar { display: grid; align-items: stretch; grid-template-columns: 1fr; gap: 10px; margin-bottom: 12px; }
+  .topbar-title > div { min-width: 0; }
   .topbar h1 { font-size: 19px; line-height: 1.25; }
   .topbar p { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .topbar-actions { flex: none; }
+  .topbar-actions { width: 100%; justify-content: space-between; padding-left: 44px; }
   .role-switcher { min-width: 0; }
   .dev-persona-switcher { width: 156px; min-width: 0; }
   .role-switcher > svg { display: none; }
@@ -224,12 +226,14 @@ body { margin: 0; background: #f5f5f5; }
   .vehicle-license-ocr .file-button, .vehicle-license-ocr .file-button .ant-btn { width: 100%; }
   .field-grid, .check-section, .dashboard-grid, .summary-grid, .item-action-grid, .side-panel { grid-template-columns: 1fr; }
   .vehicle-identity-grid { grid-template-columns: 1fr; }
+  .vehicle-identity-section { padding: 12px; }
   .vehicle-test-lookup { grid-template-columns: 1fr; }
   .vehicle-test-license-fields { grid-template-columns: 1fr; }
   .vehicle-test-license > .ant-btn { justify-self: stretch; }
   .identifier-scanner { align-items: stretch; flex-direction: column; }
   .identifier-scanner .image-source-buttons { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
   .identifier-scanner .file-button, .identifier-scanner .ant-btn { width: 100%; }
+  .identifier-scanner .image-source-buttons.emphasized .file-button:first-child .ant-btn { min-width: 0; }
   .field { margin-bottom: 12px; }
   .check-section { gap: 10px; }
   .checklist { padding: 10px; }
@@ -274,7 +278,7 @@ body { margin: 0; background: #f5f5f5; }
   .signature-page { padding: 12px; }
   .signature-panel > .ant-card-body { padding: 16px; }
   .workflow-actions { align-items: stretch; flex-direction: column; padding: 14px; }
-  .workflow-action-buttons { display: grid; grid-template-columns: 1fr 1fr; }
+  .workflow-action-buttons { display: grid; grid-template-columns: 1fr; }
   .workflow-action-buttons > .ant-btn, .workflow-action-buttons > span, .workflow-action-buttons > span .ant-btn { width: 100%; }
 }
 
