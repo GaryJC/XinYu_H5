@@ -331,6 +331,12 @@ export function useWorkbenchController() {
     if (!draft.customer.legacyCode.trim()) {
       errors.push("所属单位尚未确认，请从搜索结果中选择，或新增所属单位并确认编码");
     }
+    const hasVehicleLicense = Boolean(
+      vehicleLicenseFileId || selectedOrder?.files?.some((file) => file.kind === "vehicle_license")
+    );
+    if (vehicleHistory?.status === "new" && !hasVehicleLicense) {
+      errors.push("公司系统中未找到该车辆，新车必须上传行驶证照片");
+    }
     return errors;
   }
 
@@ -362,6 +368,7 @@ export function useWorkbenchController() {
     setSearchTerm,
     syncLabel,
     vehicleLicenseOcr,
+    vehicleLicenseFileId,
     identifierRecognition,
     vehicleHistory,
     vehicleHistoryLoading,

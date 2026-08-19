@@ -8,11 +8,12 @@ type Props = {
   state: OcrFieldState;
   result?: VehicleLicenseOcrResult;
   disabled?: boolean;
+  requirement?: "required" | "optional" | "pending";
   onScan: (file: File) => Promise<void>;
   onConfirm: () => void | Promise<void>;
 };
 
-export function VehicleLicenseOcrControl({ state, result, disabled, onScan, onConfirm }: Props) {
+export function VehicleLicenseOcrControl({ state, result, disabled, requirement = "pending", onScan, onConfirm }: Props) {
   const resultFields = result
     ? [
         ["车牌", result.plate],
@@ -27,7 +28,11 @@ export function VehicleLicenseOcrControl({ state, result, disabled, onScan, onCo
   return (
     <div className="ocr-strip compact-ocr vehicle-license-ocr">
       <div className="ocr-main">
-        <strong>扫描行驶证（选填）</strong>
+        <strong>{requirement === "required"
+          ? "扫描行驶证（新车必填）"
+          : requirement === "optional"
+            ? "扫描行驶证（选填）"
+            : "扫描行驶证（请先查询车辆）"}</strong>
         <span>{state.source} · {state.status}{state.value ? ` · ${state.value}` : ""}</span>
         {state.error ? <em>{state.error}</em> : null}
         {resultFields.length ? (

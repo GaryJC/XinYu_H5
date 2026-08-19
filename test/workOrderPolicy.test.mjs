@@ -7,6 +7,7 @@ import {
   assertRepairItemAction,
   assertSettlementAllowed,
   assertStatusTransition,
+  assertVehicleLicenseRequirement,
   sanitizeTransitionPatch
 } from "../server/domain/workOrderPolicy.mjs";
 import { HttpError } from "../server/http/HttpError.mjs";
@@ -69,6 +70,15 @@ test("signing requires the legacy model and organization codes used by Runfeng",
       && error.status === 400
       && /车型编码/.test(error.message)
       && /所属单位编码/.test(error.message)
+  );
+});
+
+test("only new vehicles require an uploaded vehicle license before signing", () => {
+  assert.doesNotThrow(() => assertVehicleLicenseRequirement("found", false));
+  assert.doesNotThrow(() => assertVehicleLicenseRequirement("new", true));
+  assert.throws(
+    () => assertVehicleLicenseRequirement("new", false),
+    (error) => error instanceof HttpError && error.status === 400 && /新车必须上传行驶证/.test(error.message)
   );
 });
 

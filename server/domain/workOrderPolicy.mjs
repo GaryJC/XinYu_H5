@@ -41,6 +41,12 @@ export function assertOrderReadyForSignature(order) {
   if (missing.length) throw new HttpError(400, `请完善必填项：${missing.join("、")}`);
 }
 
+export function assertVehicleLicenseRequirement(vehicleLookupStatus, hasVehicleLicense) {
+  if (vehicleLookupStatus === "new" && !hasVehicleLicense) {
+    throw new HttpError(400, "公司系统中未找到该车辆，新车必须上传行驶证照片后再发起签字");
+  }
+}
+
 export function assertStatusTransition(currentStatus, targetStatus) {
   if (nextStatus.get(currentStatus) !== targetStatus) {
     throw new HttpError(409, `不能从“${currentStatus}”直接变更为“${targetStatus}”`);

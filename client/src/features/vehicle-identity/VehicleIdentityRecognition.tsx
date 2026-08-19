@@ -25,8 +25,8 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
   return (
     <div className="vehicle-identity-section">
       <div className="vehicle-identity-heading">
-        <strong>快速识别车辆</strong>
-        <span>拍摄车牌或车架上的 VIN 码，识别后自动查询公司系统车辆档案。</span>
+        <strong>第一步：扫描车牌查询车辆</strong>
+        <span>优先拍摄车牌并查询公司系统；未找到车辆时，下一步必须上传行驶证。</span>
       </div>
       <div className="vehicle-identity-grid">
         <IdentifierScanner kind="plate" title="识别车牌号" hint="请将完整车牌置于画面中央" disabled={disabled} state={recognition.plate} onScan={onScan} />

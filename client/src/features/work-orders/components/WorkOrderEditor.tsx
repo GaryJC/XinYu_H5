@@ -29,7 +29,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const isMobile = !screens.md;
   const {
     selectedOrder, startNewOrder, canEditForm, saveDraft, role, sendSignature,
-    formErrors, vehicleLicenseOcr, ocrState, scanVehicleLicense,
+    formErrors, vehicleLicenseOcr, vehicleLicenseFileId, ocrState, scanVehicleLicense,
     confirmVehicleLicenseOcr, draft, updateDraft, updateVehicle, updateCustomer,
     toggleArrayField, setDraft, totalLabor, updateRepairItem,
     syncPlatform, actionLoading, completeSignature, identifierRecognition,
@@ -45,6 +45,13 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const signatureDisabled = !canResumeSignature && (!canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder)));
   const signatureDisabledReason = selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) ? `当前状态“${selectedOrder.status}”不能再次发起签字` : "";
   const signatureCompleted = signatureResult.includes("已保存");
+  const vehicleLicenseRequirement = vehicleHistory?.status === "new"
+    ? "required"
+    : vehicleHistory?.status === "found"
+      ? "optional"
+      : "pending";
+  const vehicleLicenseRequired = vehicleLicenseRequirement === "required";
+  const hasVehicleLicense = Boolean(vehicleLicenseFileId || selectedOrder?.files?.some((file) => file.kind === "vehicle_license"));
 
   useEffect(() => {
     if (!landscapeSignature) return;
@@ -101,7 +108,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             <div className="panel-header">
               <div>
                 <h2>{selectedOrder ? `委托单 ${selectedOrder.id}` : "新建委托开单"}</h2>
-                <p>先保存草稿，再由客户在弹窗内核对并签字；行驶证照片和 OCR 确认均为选填。</p>
+                <p>请先扫描车牌查询车辆档案；新车必须上传行驶证，OCR 确认仍为选填。</p>
               </div>
               <div className="button-row">
                 <Button type="primary" size="large" icon={<Plus size={16} />} onClick={startNewOrder} disabled={!canCreateOrder(role)}>新建委托</Button>
@@ -140,23 +147,6 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               </div>
             ) : null}
 
-            <Form.Item
-              className="ocr-form-item"
-              label="行驶证照片（选填）"
-              validateStatus={fieldError("行驶证") ? "error" : undefined}
-              help={fieldError("行驶证")}
-            >
-              <div className="ocr-grid">
-                <VehicleLicenseOcrControl
-                  disabled={!canEditForm}
-                  result={vehicleLicenseOcr}
-                  state={ocrState.vehicleLicense}
-                  onScan={scanVehicleLicense}
-                  onConfirm={confirmVehicleLicenseOcr}
-                />
-              </div>
-            </Form.Item>
-
             <VehicleIdentityRecognition
               disabled={!canEditForm}
               recognition={identifierRecognition}
@@ -166,6 +156,29 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               onScan={scanVehicleIdentifier}
               onManualLicenseLookup={lookupVehicleLicenseForDevelopment}
             />
+
+            <Form.Item
+              className="ocr-form-item"
+              label={vehicleLicenseRequirement === "required"
+                ? "行驶证照片（新车必填）"
+                : vehicleLicenseRequirement === "optional"
+                  ? "行驶证照片（已有车辆选填）"
+                  : "行驶证照片（请先查询车辆）"}
+              required={vehicleLicenseRequired}
+              validateStatus={fieldError("行驶证") ? "error" : undefined}
+              help={fieldError("行驶证") || (vehicleLicenseRequired && !hasVehicleLicense ? "公司系统未找到该车辆，请上传行驶证照片" : undefined)}
+            >
+              <div className="ocr-grid">
+                <VehicleLicenseOcrControl
+                  disabled={!canEditForm}
+                  requirement={vehicleLicenseRequirement}
+                  result={vehicleLicenseOcr}
+                  state={ocrState.vehicleLicense}
+                  onScan={scanVehicleLicense}
+                  onConfirm={confirmVehicleLicenseOcr}
+                />
+              </div>
+            </Form.Item>
 
             <div className="field-grid">
               <Field

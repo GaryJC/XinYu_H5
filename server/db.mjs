@@ -20,8 +20,10 @@ import {
   assertRepairItemAction,
   assertSettlementAllowed,
   assertStatusTransition,
+  assertVehicleLicenseRequirement,
   sanitizeTransitionPatch
 } from "./domain/workOrderPolicy.mjs";
+import { lookupVehicleInCompanySystem } from "./integrations/company/vehicleLookup.mjs";
 import { enqueueLegacySyncEvent } from "./repositories/legacySyncOutboxRepository.mjs";
 
 const validRoles = new Set(["advisor", "dispatcher", "technician", "inspector", "manager"]);
@@ -140,6 +142,23 @@ export async function createSignatureTokenForOrder(id, actor) {
     if (!order) throw new HttpError(404, "委托单不存在");
     if (order.status !== "草稿") throw new HttpError(409, `当前状态“${order.status}”不能发起签字`);
     assertOrderReadyForSignature(order);
+    const vehicleLookup = await lookupVehicleInCompanySystem({
+      plate: order.vehicle.plate,
+      vin: order.vehicle.vin
+    });
+    if (vehicleLookup.status === "new") {
+      const vehicleLicense = await client.query(
+        `
+          select id
+          from files
+          where order_id = $1 and kind = 'vehicle_license'
+          order by created_at desc
+          limit 1
+        `,
+        [id]
+      );
+      assertVehicleLicenseRequirement(vehicleLookup.status, Boolean(vehicleLicense.rows[0]));
+    }
     const token = createSignatureToken(id);
     await upsertWorkOrder(client, { ...order, status: "待客户签字", updatedAt: nowString() });
     await client.query(
