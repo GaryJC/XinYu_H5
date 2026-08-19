@@ -36,10 +36,11 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     vehicleHistory, vehicleHistoryLoading, vehicleHistoryError, scanVehicleIdentifier,
     lookupVehicleLicenseForDevelopment, selectVehicleReference, departments, departmentError
   } = controller;
-  const canSyncPlatform = Boolean(selectedOrder && !selectedOrder.platformOrderNo && !["草稿", "待客户签字"].includes(selectedOrder.status) && (role === "advisor" || role === "manager"));
+  const customerHasSigned = Boolean(selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status));
+  const canSyncPlatform = Boolean(selectedOrder?.dispatchNo?.trim() && !selectedOrder.platformOrderNo && customerHasSigned && (role === "advisor" || role === "manager"));
   const showLegacySyncStatus = Boolean(selectedOrder && selectedOrder.status !== "草稿");
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
-  const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "行驶证", "编码", "选择已有"].some((phrase) => error.includes(phrase)));
+  const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "编码", "选择已有"].some((phrase) => error.includes(phrase)));
   const canResumeSignature = Boolean(selectedOrder?.status === "待客户签字" && selectedOrder.signatureToken && !selectedOrder.signatureTokenUsed);
   const signatureDisabled = !canResumeSignature && (!canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder)));
   const signatureDisabledReason = selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) ? `当前状态“${selectedOrder.status}”不能再次发起签字` : "";
@@ -100,7 +101,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             <div className="panel-header">
               <div>
                 <h2>{selectedOrder ? `委托单 ${selectedOrder.id}` : "新建委托开单"}</h2>
-                <p>先保存草稿，再由客户在弹窗内核对并签字；OCR 结果必须人工确认。</p>
+                <p>先保存草稿，再由客户在弹窗内核对并签字；行驶证照片和 OCR 确认均为选填。</p>
               </div>
               <div className="button-row">
                 <Button type="primary" size="large" icon={<Plus size={16} />} onClick={startNewOrder} disabled={!canCreateOrder(role)}>新建委托</Button>
@@ -141,8 +142,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
 
             <Form.Item
               className="ocr-form-item"
-              label="行驶证照片"
-              required
+              label="行驶证照片（选填）"
               validateStatus={fieldError("行驶证") ? "error" : undefined}
               help={fieldError("行驶证")}
             >
@@ -365,7 +365,11 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             <div className="workflow-actions">
               <div>
                 <strong>完成开单流程</strong>
-                <span>{canSyncPlatform ? "客户已签字，可以同步维修平台。" : "请先完成客户签字，再同步维修平台。"}</span>
+                <span>{canSyncPlatform
+                  ? "派工号已回填，可以同步维修平台。"
+                  : customerHasSigned && !selectedOrder?.dispatchNo
+                    ? "客户已签字，正在等待润丰回填派工号。"
+                    : "请先完成客户签字，再同步维修平台。"}</span>
                 {showSignatureValidation && formErrors.length ? (
                   <Alert
                     className="signature-validation-summary"

@@ -140,22 +140,6 @@ export async function createSignatureTokenForOrder(id, actor) {
     if (!order) throw new HttpError(404, "委托单不存在");
     if (order.status !== "草稿") throw new HttpError(409, `当前状态“${order.status}”不能发起签字`);
     assertOrderReadyForSignature(order);
-    const confirmedLicense = await client.query(
-      `
-        select ocr.id
-        from ocr_records ocr
-        join files f on f.id = ocr.file_id
-        where ocr.order_id = $1
-          and ocr.field = 'vehicleLicense'
-          and ocr.status = '已确认'
-          and f.kind = 'vehicle_license'
-          and f.order_id = ocr.order_id
-        order by ocr.confirmed_at desc
-        limit 1
-      `,
-      [id]
-    );
-    if (!confirmedLicense.rows[0]) throw new HttpError(400, "请上传并确认行驶证照片后再发起签字");
     const token = createSignatureToken(id);
     await upsertWorkOrder(client, { ...order, status: "待客户签字", updatedAt: nowString() });
     await client.query(
@@ -236,9 +220,6 @@ export async function syncWorkOrderToPlatform(id, actor) {
     if (!order) throw new HttpError(404, "委托单不存在");
     assertPlatformSyncAllowed(order);
     const platformOrderNo = order.platformOrderNo || createId("PLAT");
-    if (!order.dispatchNo) {
-      throw new HttpError(400, "未从公司系统取得派工号，请先确认车辆在 SQL Server 中已有维修派工记录");
-    }
     const dispatchNo = order.dispatchNo;
     const syncId = createId("sync");
     const nextItems = (order.repairItems || []).map((item) => ({

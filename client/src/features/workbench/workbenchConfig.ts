@@ -15,7 +15,7 @@ export const roleFocus: Record<RoleKey, { title: string; dataScope: string; prim
   advisor: {
     title: "服务顾问工作区",
     dataScope: "只显示本人创建或负责签字的委托单",
-    primary: "开单、维护客户车辆信息、确认行驶证、发起客户签字、同步维修平台",
+    primary: "开单、维护客户车辆信息、可选行驶证识别、发起客户签字、同步维修平台",
     blocked: ["不能配置门店权限", "不能查看其他顾问工单"]
   },
   dispatcher: {

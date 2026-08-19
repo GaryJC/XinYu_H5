@@ -84,7 +84,12 @@ test("settlement and platform sync enforce their prerequisites", () => {
   assert.throws(() => assertSettlementAllowed("草稿"), (error) => error.status === 409);
   assert.throws(() => assertPlatformSyncAllowed({ status: "待客户签字" }), (error) => error.status === 409);
   assert.throws(
-    () => assertPlatformSyncAllowed({ status: "已委托", platformOrderNo: "PLAT-1" }),
+    () => assertPlatformSyncAllowed({ status: "已委托", platformOrderNo: "PLAT-1", dispatchNo: "A12345" }),
     (error) => error.status === 409
   );
+  assert.throws(
+    () => assertPlatformSyncAllowed({ status: "已委托", dispatchNo: "" }),
+    (error) => error instanceof HttpError && error.status === 409 && /润丰尚未回填派工号/.test(error.message)
+  );
+  assert.doesNotThrow(() => assertPlatformSyncAllowed({ status: "已委托", dispatchNo: "A12345" }));
 });

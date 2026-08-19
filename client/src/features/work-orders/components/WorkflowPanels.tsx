@@ -4,7 +4,7 @@ import { RoleKey, WorkOrder } from "../../../../../shared/types";
 import { canCompleteRepair, canDispatch, canSettle, canSubmitDispatch } from "../domain/permissions";
 
 export function PlatformPanel({ order, role, onSync }: { order?: WorkOrder; role: RoleKey; onSync: () => void }) {
-  const canSync = Boolean(order && !order.platformOrderNo && (role === "advisor" || role === "manager") && !["草稿", "待客户签字"].includes(order.status));
+  const canSync = Boolean(order?.dispatchNo?.trim() && !order.platformOrderNo && (role === "advisor" || role === "manager") && !["草稿", "待客户签字"].includes(order.status));
   return (
     <div className="permission-card">
       <div className="permission-head">
@@ -13,7 +13,7 @@ export function PlatformPanel({ order, role, onSync }: { order?: WorkOrder; role
       </div>
       {!order ? <p>选择委托单后可同步维修业务平台。</p> : (
         <>
-          <p>平台工单：{order.platformOrderNo || "未同步"}；派工号：{order.dispatchNo || "待生成"}</p>
+          <p>平台工单：{order.platformOrderNo || "未同步"}；派工号：{order.dispatchNo || "待润丰回填"}</p>
           <Button block disabled={!canSync} onClick={onSync}>同步并生成出库单</Button>
           <div className="mini-list">
             {order.platformSyncRecords.map((item) => (

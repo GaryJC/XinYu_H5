@@ -331,9 +331,6 @@ export function useWorkbenchController() {
     if (!draft.customer.legacyCode.trim()) {
       errors.push("所属单位尚未确认，请从搜索结果中选择，或新增所属单位并确认编码");
     }
-    if (ocrState.vehicleLicense.status === "未识别") errors.push("请拍照识别并确认行驶证");
-    if (ocrState.vehicleLicense.status === "识别中") errors.push("行驶证正在识别，请稍候");
-    if (ocrState.vehicleLicense.status === "待确认") errors.push("请确认行驶证 OCR 结果");
     return errors;
   }
 

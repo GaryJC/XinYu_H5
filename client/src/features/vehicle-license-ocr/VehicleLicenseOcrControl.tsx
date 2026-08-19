@@ -27,7 +27,7 @@ export function VehicleLicenseOcrControl({ state, result, disabled, onScan, onCo
   return (
     <div className="ocr-strip compact-ocr vehicle-license-ocr">
       <div className="ocr-main">
-        <strong>扫描行驶证</strong>
+        <strong>扫描行驶证（选填）</strong>
         <span>{state.source} · {state.status}{state.value ? ` · ${state.value}` : ""}</span>
         {state.error ? <em>{state.error}</em> : null}
         {resultFields.length ? (

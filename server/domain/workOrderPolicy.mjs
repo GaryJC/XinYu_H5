@@ -86,4 +86,7 @@ export function assertPlatformSyncAllowed(order) {
     throw new HttpError(409, "客户完成签字后才能同步维修平台");
   }
   if (order.platformOrderNo) throw new HttpError(409, `委托单已同步维修平台：${order.platformOrderNo}`);
+  if (!order.dispatchNo?.trim()) {
+    throw new HttpError(409, "润丰尚未回填派工号，请等待润丰同步完成后再同步维修平台");
+  }
 }
