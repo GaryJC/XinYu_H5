@@ -15,7 +15,7 @@ type Props = {
 };
 
 type CheckState = {
-  status: "idle" | "checking" | "available" | "duplicate" | "error";
+  status: "idle" | "checking" | "available" | "duplicate" | "unverified" | "error";
   message: string;
 };
 
@@ -32,12 +32,11 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
 
   useEffect(() => {
     if (!open) return;
-    if (!codeEdited) setCode(generateLegacyReferenceCode(name, kind));
-  }, [name, kind, open, codeEdited]);
-
-  useEffect(() => {
-    if (!open) return;
     const sequence = ++requestSequence.current;
+    if (!name.trim() && !code.trim()) {
+      setCheck({ status: "idle", message: "" });
+      return;
+    }
     const localError = validateCode(code, maxLength);
     if (localError) {
       setCheck({ status: "error", message: localError });
@@ -57,12 +56,12 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
             });
       } catch (error) {
         if (sequence === requestSequence.current) {
-          setCheck({ status: "error", message: error instanceof Error ? error.message : "编码查询失败" });
+          setCheck({ status: "unverified", message: "暂时无法预校验编码，提交时会由润丰再次检查" });
         }
       }
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [code, kind, maxLength, open]);
+  }, [code, kind, maxLength, name, open]);
 
   useEffect(() => {
     if (openRequest) showModal(openRequest.name);
@@ -100,6 +99,11 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
     }
   }
 
+  const submitDisabled = !name.trim()
+    || Boolean(validateCode(code, maxLength))
+    || check.status === "checking"
+    || check.status === "duplicate";
+
   return (
     <div className="vehicle-reference-create">
       <Button type="link" icon={<Plus size={15} />} disabled={disabled} onClick={() => showModal()}>
@@ -112,7 +116,7 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
         okText="写入润丰并使用"
         cancelText="取消"
         confirmLoading={submitting}
-        okButtonProps={{ disabled: check.status !== "available" }}
+        okButtonProps={{ disabled: submitDisabled }}
         onOk={submit}
         onCancel={() => setOpen(false)}
         destroyOnHidden
@@ -126,12 +130,28 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
         />
         <Form layout="vertical">
           <Form.Item label={`${label}名称`} required>
-            <Input value={name} maxLength={kind === "model" ? 100 : 150} onChange={(event) => setName(event.target.value)} />
+            <Input
+              value={name}
+              maxLength={kind === "model" ? 100 : 150}
+              onChange={(event) => {
+                const nextName = event.target.value;
+                setName(nextName);
+                if (!codeEdited) setCode(generateLegacyReferenceCode(nextName, kind));
+              }}
+            />
           </Form.Item>
           <Form.Item
             label="润丰编码"
             required
-            validateStatus={check.status === "duplicate" || check.status === "error" ? "error" : check.status === "available" ? "success" : "validating"}
+            validateStatus={check.status === "duplicate" || check.status === "error"
+              ? "error"
+              : check.status === "available"
+                ? "success"
+                : check.status === "unverified"
+                  ? "warning"
+                  : check.status === "checking"
+                    ? "validating"
+                    : undefined}
             help={check.message || `最多 ${maxLength} 个字符，只能使用英文字母和数字`}
           >
             <Input
