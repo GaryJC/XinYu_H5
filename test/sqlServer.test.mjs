@@ -183,22 +183,31 @@ test("legacy model and organization candidate queries are normalized and paramet
   const models = await findLegacyModelCandidates("AUDIA6", execute((query) => {
     assert.equal(query, FIND_LEGACY_MODEL_CANDIDATES_QUERY);
     assert.match(query, /dbo\.cxb/i);
-    assert.match(query, /having count\(vehicle\.reid\) > 0/i);
-    return [{ value: "Audi A6", code: "ADA6", usage_count: 8 }];
+    assert.doesNotMatch(query, /having count\(vehicle\.reid\) > 0/i);
+    return [
+      { value: "Audi A6", code: "ADA6", usage_count: 8 },
+      { value: "Audi A6", code: "ADA6-ERROR", usage_count: 0 }
+    ];
   }));
   const organizations = await findLegacyOrganizationCandidates("青岛地铁运营有限公司", execute((query) => {
     assert.equal(query, FIND_LEGACY_ORGANIZATION_CANDIDATES_QUERY);
     assert.match(query, /dbo\.khxxb/i);
     assert.match(query, /dbo\.qxclxxb/i);
-    assert.match(query, /having count\(vehicle\.reid\) > 0/i);
+    assert.doesNotMatch(query, /having count\(vehicle\.reid\) > 0/i);
     return [
       { value: "青岛地铁运营有限公司", code: "QDDT", usage_count: 10 },
       { value: "青岛地铁运营有限公司", code: "QDDT-ERROR", usage_count: 0 }
     ];
   }));
 
-  assert.deepEqual(models, [{ value: "Audi A6", code: "ADA6", usageCount: 8 }]);
-  assert.deepEqual(organizations, [{ value: "青岛地铁运营有限公司", code: "QDDT", usageCount: 10 }]);
+  assert.deepEqual(models, [
+    { value: "Audi A6", code: "ADA6", usageCount: 8 },
+    { value: "Audi A6", code: "ADA6-ERROR", usageCount: 0 }
+  ]);
+  assert.deepEqual(organizations, [
+    { value: "青岛地铁运营有限公司", code: "QDDT", usageCount: 10 },
+    { value: "青岛地铁运营有限公司", code: "QDDT-ERROR", usageCount: 0 }
+  ]);
   assert.deepEqual(inputs, [
     { name: "model", type: { type: "VarChar", length: 200 }, value: "AUDIA6" },
     { name: "model_pattern", type: { type: "VarChar", length: 500 }, value: "%A%U%D%I%A%6%" },

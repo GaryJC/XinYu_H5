@@ -66,7 +66,6 @@ export const FIND_LEGACY_MODEL_CANDIDATES_QUERY = `
       or UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(model_ref.qc)), ' ', ''), '　', ''), '-', ''), '_', ''), '－', '')) like @model_pattern
     )
   group by RTRIM(model_ref.bh), COALESCE(NULLIF(RTRIM(model_ref.qc), ''), RTRIM(model_ref.mc))
-  having count(vehicle.reid) > 0
   order by count(vehicle.reid) desc, RTRIM(model_ref.bh)
 `;
 
@@ -81,7 +80,6 @@ export const FIND_LEGACY_ORGANIZATION_CANDIDATES_QUERY = `
     @organization <> ''
     and UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(customer.mc)), ' ', ''), '　', ''), '-', ''), '_', ''), '－', '')) like @organization_pattern
   group by RTRIM(customer.bm), RTRIM(customer.mc)
-  having count(vehicle.reid) > 0
   order by count(vehicle.reid) desc, RTRIM(customer.bm)
 `;
 
@@ -155,7 +153,7 @@ export async function findLegacyModelCandidates(model, execute = executeSqlServe
     value: row.value || "",
     code: row.code || "",
     usageCount: Number(row.usage_count || 0)
-  })).filter((candidate) => candidate.usageCount > 0);
+  }));
 }
 
 export async function findLegacyOrganizationCandidates(organization, execute = executeSqlServerQuery) {
@@ -168,8 +166,7 @@ export async function findLegacyOrganizationCandidates(organization, execute = e
       value: row.value || "",
       code: row.code || "",
       usageCount: Number(row.usage_count || 0)
-    }))
-    .filter((candidate) => candidate.usageCount > 0);
+    }));
 }
 
 export async function findLegacyReferenceByCode(kind, code, execute = executeSqlServerQuery) {
