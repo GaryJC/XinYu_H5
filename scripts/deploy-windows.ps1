@@ -1,12 +1,14 @@
 param(
     [string]$AppPath = "C:\apps\XinYu_H5",
     [string]$ProcessName = "xinyu-h5",
-    [int]$Port = 8787
+    [int]$Port = 8787,
+    [switch]$SkipSqlServerCheck
 )
 
 $ErrorActionPreference = "Stop"
 Set-Location $AppPath
 $env:PM2_HOME = Join-Path $AppPath ".pm2"
+$env:PM2_PROCESS_NAME = $ProcessName
 New-Item $env:PM2_HOME -ItemType Directory -Force | Out-Null
 
 function Invoke-Native {
@@ -27,12 +29,14 @@ Invoke-Native { npm.cmd ci --include=dev --no-audit --no-fund } "npm ci failed"
 Invoke-Native { npm.cmd run check } "Application check or build failed"
 Invoke-Native { npm.cmd run migrate } "PostgreSQL migration failed"
 
-$env:SQLSERVER_CHECK_LIST_TABLES = "false"
-try {
-    Invoke-Native { npm.cmd run sqlserver:check } "SQL Server connection check failed"
-}
-finally {
-    Remove-Item Env:SQLSERVER_CHECK_LIST_TABLES -ErrorAction SilentlyContinue
+if (-not $SkipSqlServerCheck) {
+    $env:SQLSERVER_CHECK_LIST_TABLES = "false"
+    try {
+        Invoke-Native { npm.cmd run sqlserver:check } "SQL Server connection check failed"
+    }
+    finally {
+        Remove-Item Env:SQLSERVER_CHECK_LIST_TABLES -ErrorAction SilentlyContinue
+    }
 }
 
 $pm2Command = Join-Path $AppPath "node_modules\.bin\pm2.cmd"

@@ -132,6 +132,18 @@ pm2 startOrReload ecosystem.config.cjs --only xinyu-h5
 pm2 save
 ```
 
+同一台 Windows ECS 上的独立测试实例可使用不同目录、进程名和端口：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\apps\Xinyu_H5_test\scripts\deploy-windows.ps1 `
+  -AppPath C:\apps\Xinyu_H5_test `
+  -ProcessName xinyu-h5-test `
+  -Port 8788 `
+  -SkipSqlServerCheck
+```
+
+`-SkipSqlServerCheck` 仅用于未配置润丰 SQL Server 的隔离测试环境；正式环境不应使用该开关。
+
 `ecosystem.config.cjs` 会以项目目录为工作目录，并让 Node 每次启动时读取 `.env.production`。
 云效的 Windows PowerShell 部署步骤应在解压部署包后调用：
 
