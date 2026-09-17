@@ -1,5 +1,5 @@
-export type RoleKey = "advisor" | "dispatcher" | "technician" | "inspector" | "manager";
-export type DevelopmentPersonaKey = "advisor" | "manager" | "unassigned" | "disabled";
+export type RoleKey = "advisor" | "technician" | "inspector" | "manager";
+export type DevelopmentPersonaKey = RoleKey | "unassigned" | "disabled";
 
 export type WorkOrderStatus =
   | "草稿"
@@ -256,7 +256,20 @@ export type DashboardSummary = {
   employeeRanking: Record<string, number>;
 };
 
+export type WorkOrderDispatchPlan = DispatchExecution & {
+  technicianIds?: string[];
+  technicianId?: string;
+  technicianName?: string;
+  dueAt: string;
+  urgent: boolean;
+  note: string;
+  activationError?: string;
+  activatedAt?: string;
+};
+
 export type WorkOrder = {
+  dispatchStage?: DispatchStage;
+  dispatchPlan?: WorkOrderDispatchPlan | null;
   id: string;
   dispatchNo: string;
   arrivalDate: string;
@@ -327,3 +340,65 @@ export type AuditLogEntry = {
 };
 
 export type WorkOrderDraft = Omit<WorkOrder, "id" | "createdAt" | "updatedAt" | "auditLog">;
+
+export type DispatchExecution = {
+  executionMode?: "internal" | "field" | "outsourced";
+  serviceUnit?: string;
+  serviceAddress?: string;
+  serviceContact?: string;
+  departureAt?: string;
+  expectedReturnAt?: string;
+  returnedAt?: string;
+  contractor?: string;
+  outsourcingMode?: "onsite" | "offsite";
+  agreedFee?: number | null;
+  handedOverAt?: string;
+  receivedAt?: string;
+};
+export type DispatchStage = "草稿" | "待客户签字" | "待派工" | "待接单" | "待开工" | "维修中" | "暂停" | "待检验" | "维修完成";
+export type DispatchItem = {
+  id: number; name: string; status: RepairItemStatus;
+  startAt?: string; finishAt?: string; startedBy?: string; finishedBy?: string;
+  inspectorName?: string; inspectedBy?: string; inspectedAt?: string; pickedAt?: string;
+};
+export type DispatchTask = DispatchExecution & {
+  workHours?: number; workHoursRecordedBy?: string; workHoursRecordedName?: string; workHoursRecordedAt?: string;
+  technicianIds?: string[]; participantIds?: string[];
+  orderId: string; shopId: string; version: number; stage: DispatchStage;
+  technicianId?: string; technicianName?: string; inspectorId?: string; inspectorName?: string;
+  assignedBy?: string; assignedAt?: string; acceptedAt?: string; firstStartedAt?: string;
+  submittedAt?: string; completedAt?: string; completedBy?: string;
+  dueAt?: string; urgent?: boolean; note?: string; feedback?: string;
+  pauseReason?: string; pauseNote?: string; pausedAt?: string; resumeStage?: DispatchStage;
+  submissionNote?: string; rework?: boolean; reworkCount?: number; needsReview?: boolean; legacy?: boolean; startHistoryUnknown?: boolean;
+  items: DispatchItem[];
+  plate: string; dispatchNo: string; arrivalDate: string; orderStatus: WorkOrderStatus;
+  faultDescription: string; overdue: boolean;
+};
+export type DispatchActionName = "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
+export type DispatchActionRequest = DispatchExecution & {
+  workHours?: number;
+  technicianIds?: string[];
+  action: DispatchActionName; expectedVersion: number; requestId: string;
+  technicianId?: string; inspectorId?: string; itemId?: number; rejectedItemIds?: number[];
+  dueAt?: string; urgent?: boolean; note?: string; reason?: string; pauseReason?: string;
+  notificationId?: string;
+};
+export type DispatchMetric = "pendingAccept" | "unstarted" | "working" | "paused" | "inspection" | "completed" | "overdue" | "rework";
+export type TechnicianSummary = {
+  id: string; name: string; active: boolean; current: number;
+} & Record<DispatchMetric, number>;
+export type DispatchNotification = {
+  id: string; recipientName: string; kind: string;
+  status: "pending" | "accepted" | "sent" | "failed" | "unknown";
+  error: string; createdAt: string; attempts: number; taskId?: string;
+};
+export type DispatchEvent = {
+  id: string; actorName: string; action: string; at: string;
+  detail: { workHours?: number; previousWorkHours?: number; note?: string; reason?: string; technicianName?: string; previousTechnicianName?: string; dueAt?: string; previousDueAt?: string; urgent?: boolean; stage: DispatchStage; itemId?: number; rejectedItemIds?: number[]; pauseReason?: string };
+};
+export type DispatchDetail = {
+  task: DispatchTask; events: DispatchEvent[]; notifications: DispatchNotification[];
+  files: Array<Pick<StoredFile,"id"|"orderId"|"kind"|"originalName"|"mimeType"|"sizeBytes"|"createdAt">>;
+};
+export type DispatchPeople = { technicians: UserProfile[]; inspectors: UserProfile[] };

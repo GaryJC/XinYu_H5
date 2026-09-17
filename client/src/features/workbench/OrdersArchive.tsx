@@ -1,3 +1,5 @@
+import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
+import { QuickDispatchDialog } from "../dispatch/QuickDispatchDialog";
 import { useState, type ReactNode } from "react";
 import { Alert, Button, Card, Collapse, Descriptions, Empty, Grid, Image, Input, Modal, Popconfirm, Table } from "antd";
 import { ChevronRight, PencilLine, Trash2 } from "lucide-react";
@@ -12,6 +14,8 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
     role, currentUser, deleteDraft, actionLoading
   } = controller;
   const [detailOrder, setDetailOrder] = useState<WorkOrder>();
+  const [dispatchOrder, setDispatchOrder] = useState<WorkOrder>();
+  const canAssign = (order: WorkOrder) => ["advisor","manager"].includes(role) && workOrderDisplayStatus(order) === "待派工" && (!order.technician || order.technician === "待派工");
   const [deleteError, setDeleteError] = useState("");
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
@@ -61,7 +65,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
                 <div className="archive-order-card-title">
                   <strong>{order.vehicle.plate || "未登记车牌"}</strong>
                   <span className="archive-order-statuses">
-                    <StatusChip status={order.status} />
+                    <StatusChip status={workOrderDisplayStatus(order)} />
                     <OrderLegacySyncStatus order={order} />
                   </span>
                 </div>
@@ -92,7 +96,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
             { title: "车主", render: (_, order) => order.customer.name || "-" },
             { title: "服务顾问", dataIndex: "advisor" },
             { title: "维修技师", dataIndex: "technician" },
-            { title: "业务状态", render: (_, order) => <StatusChip status={order.status} /> },
+            { title: "业务状态", render: (_, order) => <StatusChip status={workOrderDisplayStatus(order)} /> },
             { title: "润丰同步", render: (_, order) => <OrderLegacySyncStatus order={order} /> },
             { title: "金额", render: (_, order) => order.settlementAmount || order.estimatedFee ? `¥${order.settlementAmount || order.estimatedFee}` : "-" },
             { title: "更新时间", dataIndex: "updatedAt", width: 145 }
@@ -124,6 +128,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
             {canManageDraft && detailOrder ? (
               <Button type="primary" icon={<PencilLine size={16} />} onClick={() => resumeDraft(detailOrder)}>继续编辑草稿</Button>
             ) : null}
+            {detailOrder && canAssign(detailOrder) && <Button type="primary" onClick={() => { setDispatchOrder(detailOrder); setDetailOrder(undefined); }}>派工</Button>}
             <Button onClick={() => setDetailOrder(undefined)}>关闭</Button>
           </div>
         )}
@@ -132,6 +137,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
         {deleteError ? <Alert type="error" showIcon title="删除草稿失败" description={deleteError} style={{ marginBottom: 12 }} /> : null}
         {detailOrder ? <OrderDetail order={detailOrder} isMobile={isMobile} /> : null}
       </Modal>
+      {dispatchOrder && currentUser && <QuickDispatchDialog key={dispatchOrder.id} orderId={dispatchOrder.id} user={currentUser} onClose={() => { setDispatchOrder(undefined); void controller.refreshWorkbench(); }} />}
     </Card>
   );
 }
@@ -142,7 +148,7 @@ function OrderDetail({ order, isMobile }: { order: WorkOrder; isMobile: boolean 
   const signatureFiles = (order.files ?? []).filter((file) => file.kind === "signature_image");
   const descriptions = [
     { key: "id", label: "委托单号", children: order.id },
-    { key: "status", label: "状态", children: <StatusChip status={order.status} /> },
+    { key: "status", label: "状态", children: <StatusChip status={workOrderDisplayStatus(order)} /> },
     { key: "legacySyncStatus", label: "润丰同步", children: <OrderLegacySyncStatus order={order} /> },
     { key: "advisor", label: "服务顾问", children: order.advisor || "-" },
     { key: "dispatch", label: "派工号", children: order.dispatchNo || "-" },

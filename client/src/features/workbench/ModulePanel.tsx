@@ -1,3 +1,4 @@
+import { DingTalkRoleMappings } from "../access/DingTalkRoleMappings";
 import { DashboardSummary, UserProfile, WorkOrder } from "../../../../shared/types";
 import { Card, Tag } from "antd";
 import { roles } from "../work-orders/domain/workOrderDomain";
@@ -63,19 +64,20 @@ function UsersPanel({ users }: { users: UserProfile[] }) {
       <div className="panel-header">
         <div>
           <h2>权限设置</h2>
-          <p>员工权限按照钉钉角色名称自动同步，无需在 H5 中逐个配置。</p>
+          <p>员工登录时同步岗位权限；维修工和检验员登录一次后出现在派工名单。</p>
         </div>
       </div>
       <div className="dingtalk-mapping-panel" aria-label="钉钉自动映射规则">
         <div className="mapping-intro">
           <strong>自动映射规则</strong>
-          <span>钉钉角色名称必须完全一致；当前 MVP1 的员工默认归属抚顺路店。</span>
+          <span>服务顾问和门店管理员保留按名称映射；其他岗位请配置下方角色映射。</span>
         </div>
         <div className="mapping-list">
           <Tag color="blue">服务顾问 → 服务顾问权限 → 委托开单</Tag>
           <Tag color="purple">门店管理员 → 管理员权限 → 工作台</Tag>
         </div>
       </div>
+      <DingTalkRoleMappings/>
       <div className="compact-grid">
         {users.map((user) => (
           <div className="mini-card" key={user.id}>

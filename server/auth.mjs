@@ -1,3 +1,4 @@
+import { getDingTalkAccessToken } from "./integrations/dingtalk/accessToken.mjs";
 import crypto from "node:crypto";
 import { HttpError } from "./http/HttpError.mjs";
 import {
@@ -13,11 +14,11 @@ import {
 } from "./repositories/userRepository.mjs";
 import { getDingTalkUserProfile, resolveDingTalkOrganizationMapping } from "./integrations/dingtalk/organization.mjs";
 
-const DINGTALK_ACCESS_TOKEN_TTL_MS = 90 * 60 * 1000;
+
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-let dingTalkAccessToken = "";
-let dingTalkAccessTokenExpiresAt = 0;
+
+
 
 export async function loginWithDingTalk(authCode, context = {}) {
   if (!authCode || typeof authCode !== "string") throw new HttpError(400, "缺少钉钉 authCode");
@@ -30,7 +31,7 @@ export async function loginWithDingTalk(authCode, context = {}) {
   const user = await upsertUserFromDingTalk({ profile, mapping, existingUser });
   if (!user) {
     console.warn(`[auth] Unmapped DingTalk user: ${dingUserId}`);
-    throw new HttpError(403, "当前钉钉账号未分配“服务顾问”或“门店管理员”角色，请联系钉钉管理员");
+    throw new HttpError(403, "当前钉钉账号未分配有效应用角色（服务顾问、维修工、检验员、门店管理员），请联系钉钉管理员");
   }
   if (!user.active) throw new HttpError(403, "当前员工账号已停用");
 
@@ -57,7 +58,9 @@ function developmentPersona(persona) {
   const definitions = {
     advisor: { id: "u_dev_advisor", name: "张三（测试）", role: "advisor", active: true, shopId: "shop-hq", homeRoute: "order-create" },
     manager: { id: "u_dev_manager", name: "Gary（测试）", role: "manager", active: true, shopId: "shop-hq", homeRoute: "workbench" },
-    unassigned: { deniedReason: "当前钉钉账号未分配“服务顾问”或“门店管理员”角色，请联系钉钉管理员" },
+    technician: { id: "u_dev_technician", name: "维修工（测试）", role: "technician", active: true, shopId: "shop-hq", homeRoute: "workbench" },
+    inspector: { id: "u_dev_inspector", name: "检验员（测试）", role: "inspector", active: true, shopId: "shop-hq", homeRoute: "workbench" },
+    unassigned: { deniedReason: "当前钉钉账号未分配有效应用角色（服务顾问、维修工、检验员、门店管理员），请联系钉钉管理员" },
     disabled: { id: "u_dev_disabled", name: "停用员工（测试）", role: "advisor", active: false, shopId: "shop-hq", homeRoute: "order-create" }
   };
   const definition = definitions[persona];
@@ -140,27 +143,6 @@ async function getDingTalkUserId(authCode) {
   return userId;
 }
 
-async function getDingTalkAccessToken() {
-  const now = Date.now();
-  if (dingTalkAccessToken && now < dingTalkAccessTokenExpiresAt) return dingTalkAccessToken;
-
-  const appKey = process.env.DINGTALK_APP_KEY;
-  const appSecret = process.env.DINGTALK_APP_SECRET;
-  if (!appKey || !appSecret) throw new HttpError(500, "未配置 DINGTALK_APP_KEY / DINGTALK_APP_SECRET");
-
-  const url = new URL("https://oapi.dingtalk.com/gettoken");
-  url.searchParams.set("appkey", appKey);
-  url.searchParams.set("appsecret", appSecret);
-  const response = await fetch(url);
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || payload?.errcode) {
-    throw new HttpError(502, `获取钉钉 access_token 失败：${payload?.errmsg || response.status}`);
-  }
-  if (!payload?.access_token) throw new HttpError(502, "钉钉未返回 access_token");
-  dingTalkAccessToken = payload.access_token;
-  dingTalkAccessTokenExpiresAt = now + Math.max(Number(payload.expires_in || 7200) * 1000 - DINGTALK_ACCESS_TOKEN_TTL_MS, 60 * 1000);
-  return dingTalkAccessToken;
-}
 
 export function createTokenForUser(userId) {
   const sessionId = crypto.randomUUID();

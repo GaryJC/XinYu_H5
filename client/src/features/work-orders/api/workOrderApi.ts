@@ -1,5 +1,6 @@
 import {
   AuthResult,
+  DispatchTask,
   DashboardSummary,
   DevelopmentPersonaKey,
   DingTalkDepartmentMapping,
@@ -74,8 +75,13 @@ export const workOrderApi: WorkOrderApi = {
   me() {
     return request("/api/auth/me");
   },
-  list(_role) {
-    return request("/api/work-orders");
+  async list(_role) {
+    const [orders, tasks] = await Promise.all([
+      request<WorkOrder[]>("/api/work-orders"),
+      request<DispatchTask[]>("/api/dispatch/tasks")
+    ]);
+    const stages = new Map(tasks.map(task => [task.orderId, task.stage]));
+    return orders.map(order => ({ ...order, dispatchStage: stages.get(order.id) }));
   },
   create(draft, actor) {
     return request("/api/work-orders", { method: "POST", body: { draft, actor } });

@@ -5,8 +5,8 @@ import { HttpError } from "../server/http/HttpError.mjs";
 process.env.DATABASE_URL ||= "postgresql://test:test@127.0.0.1:5432/test";
 const { deleteDraftWorkOrder, roleFilter, sanitizeVisibleOrders } = await import("../server/db.mjs");
 
-test("service advisors list all work orders", () => {
-  assert.deepEqual(roleFilter("advisor", { name: "张三" }), { where: "", params: [] });
+test("service advisors list all work orders within their shop", () => {
+  assert.deepEqual(roleFilter("advisor", { name: "张三", shopId: "shop-hq" }), { where: "where wo.shop_id = $1", params: ["shop-hq"] });
 });
 
 test("other advisors' signature session tokens are not exposed in the shared list", () => {

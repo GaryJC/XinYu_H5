@@ -1,3 +1,6 @@
+import { assertWorkHoursRecorded } from './repositories/dispatchRepository.mjs';
+import { saveDispatchPlan, readDispatchPlans } from './repositories/dispatchPlanRepository.mjs';
+import { activateDispatchPlan } from './services/dispatchPlanService.mjs';
 import { pool, transaction } from "./database/pool.mjs";
 import { HttpError } from "./http/HttpError.mjs";
 import {
@@ -26,7 +29,7 @@ import {
 import { lookupVehicleInCompanySystem } from "./integrations/company/vehicleLookup.mjs";
 import { enqueueLegacySyncEvent } from "./repositories/legacySyncOutboxRepository.mjs";
 
-const validRoles = new Set(["advisor", "dispatcher", "technician", "inspector", "manager"]);
+const validRoles = new Set(["advisor", "technician", "inspector", "manager"]);
 
 export async function healthCheck() {
   await pool.query("select 1");
@@ -56,13 +59,14 @@ export async function listWorkOrders(role = "manager", user) {
 }
 
 export function sanitizeVisibleOrders(orders, role, user) {
-  if (role !== "advisor") return orders;
+  if (role === "manager") return orders;
+  if (role !== "advisor") return orders.map(order => ({ ...order, signatureToken: undefined, signatureTokenUsed: undefined }));
   return orders.map((order) => order.advisor === user?.name
     ? order
     : { ...order, signatureToken: undefined, signatureTokenUsed: undefined });
 }
 
-export async function createWorkOrder(draft, actor) {
+export async function createWorkOrder(draft, actor, actorUser) {
   if (!draft || typeof draft !== "object" || Array.isArray(draft)) {
     throw new HttpError(400, "缺少有效的委托单草稿");
   }
@@ -72,12 +76,13 @@ export async function createWorkOrder(draft, actor) {
       dispatchNo: ""
     };
     await upsertWorkOrder(client, order);
+    await saveDispatchPlan(client, order, actorUser, draft.dispatchPlan);
     await addAudit(client, order.id, actor, "创建委托单草稿");
     return findWorkOrderById(client, order.id);
   });
 }
 
-export async function updateWorkOrder(order, actor, action) {
+export async function updateWorkOrder(order, actor, action, actorUser) {
   return transaction(async (client) => {
     const existing = await findWorkOrderById(client, order.id, true);
     if (!existing) throw new HttpError(404, "委托单不存在");
@@ -88,6 +93,7 @@ export async function updateWorkOrder(order, actor, action) {
       id: existing.id,
       createdAt: existing.createdAt,
       advisor: existing.advisor,
+      shop: existing.shop,
       technician: existing.technician,
       inspector: existing.inspector,
       dispatchNo: existing.dispatchNo,
@@ -98,6 +104,7 @@ export async function updateWorkOrder(order, actor, action) {
       updatedAt: nowString()
     };
     await upsertWorkOrder(client, next);
+    await saveDispatchPlan(client, next, actorUser, next.dispatchPlan);
     await addAudit(client, next.id, actor, action);
     return findWorkOrderById(client, next.id);
   });
@@ -121,7 +128,9 @@ export async function transitionWorkOrder(id, status, actor, action, patch = {})
   return transaction(async (client) => {
     const order = await findWorkOrderById(client, id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
+    if (["维修中", "待结算"].includes(status)) throw new HttpError(409, "请使用派工流程操作");
     assertStatusTransition(order.status, status);
+    if(status==="完成") await assertWorkHoursRecorded(client,id);
     const safePatch = sanitizeTransitionPatch(status, patch);
     const repairItems = status === "维修中"
       ? order.repairItems.map((item) => ({
@@ -205,6 +214,7 @@ export async function signWorkOrderByToken(token, signature, signatureFileId) {
 
     const order = await findWorkOrderById(client, tokenRow.order_id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
+    if (order.status !== "待客户签字") throw new HttpError(409, "当前委托单已签字或不能签字");
     if (!signatureFileId) throw new HttpError(400, "请完成手写签名");
     const signatureFile = await client.query(
       "select id from files where id = $1 and order_id = $2 and kind = 'signature_image'",
@@ -228,7 +238,8 @@ export async function signWorkOrderByToken(token, signature, signatureFileId) {
     );
     await client.query("update signature_tokens set used = true, used_at = now() where token = $1", [token]);
     await addAudit(client, order.id, order.customer.name || "车主", "客户完成电子签名");
-    await enqueueLegacySyncEvent(client, next, "created");
+    await activateDispatchPlan(client, next);
+    await enqueueLegacySyncEvent(client, await findWorkOrderById(client, order.id), "created");
     return findWorkOrderById(client, order.id);
   });
 }
@@ -241,10 +252,7 @@ export async function syncWorkOrderToPlatform(id, actor) {
     const platformOrderNo = order.platformOrderNo || createId("PLAT");
     const dispatchNo = order.dispatchNo;
     const syncId = createId("sync");
-    const nextItems = (order.repairItems || []).map((item) => ({
-      ...item,
-      status: item.status === "待派工" ? "待领料" : item.status
-    }));
+    const nextItems = order.repairItems || [];
     await upsertWorkOrder(client, {
       ...order,
       platformOrderNo,
@@ -265,29 +273,8 @@ export async function syncWorkOrderToPlatform(id, actor) {
   });
 }
 
-export async function repairItemAction(orderId, itemId, action, actor, patch = {}) {
-  return transaction(async (client) => {
-    const order = await findWorkOrderById(client, orderId, true);
-    if (!order) throw new HttpError(404, "委托单不存在");
-    const targetItem = order.repairItems.find((item) => Number(item.id) === Number(itemId));
-    assertRepairItemAction(targetItem, action);
-    const now = nowString();
-    const nextItems = order.repairItems.map((item) => {
-      if (Number(item.id) !== Number(itemId)) return item;
-      if (action === "assign") return { ...item, owner: patch.technician || item.owner, status: "待领料" };
-      if (action === "pick") return { ...item, status: "待开工" };
-      if (action === "start") return { ...item, status: "维修中", startAt: item.startAt || now };
-      if (action === "finish") return { ...item, status: "待检验", finishAt: item.finishAt || now };
-      if (action === "inspect") return { ...item, status: "已完工", inspector: patch.inspector || actor || item.inspector };
-      return { ...item, ...patch };
-    });
-    const allFinished = nextItems.length > 0 && nextItems.every((item) => item.status === "已完工");
-    const nextStatus = allFinished ? "待结算" : order.status === "待派工" ? "维修中" : order.status;
-    await upsertWorkOrder(client, { ...order, repairItems: nextItems, status: nextStatus, updatedAt: now });
-    await refreshOutboundPickedState(client, orderId, nextItems);
-    await addAudit(client, orderId, actor, repairActionText(action));
-    return findWorkOrderById(client, orderId);
-  });
+export async function repairItemAction() {
+  throw new HttpError(409, "请使用派工模块；维修项目操作必须携带当前员工身份和任务版本");
 }
 
 export async function createSettlementForOrder(orderId, actor) {
@@ -440,6 +427,7 @@ async function hydrateOrders(rows, client = pool) {
     [ids]
   );
 
+  const dispatchPlans = await readDispatchPlans(client, ids);
   const itemsByOrder = groupBy(repairItems.rows, "order_id");
   const signaturesByOrder = groupBy(signatures.rows, "order_id");
   const auditByOrder = groupBy(auditLogs.rows, "order_id");
@@ -449,8 +437,8 @@ async function hydrateOrders(rows, client = pool) {
   const settlementByOrder = groupBy(settlements.rows, "order_id");
   const filesByOrder = groupBy(files.rows, "order_id");
 
-  return rows.map((row) =>
-    rowToWorkOrder(
+  return rows.map((row) => ({
+    ...rowToWorkOrder(
       row,
       itemsByOrder.get(row.id) || [],
       signaturesByOrder.get(row.id) || [],
@@ -460,8 +448,9 @@ async function hydrateOrders(rows, client = pool) {
       outboundByOrder.get(row.id) || [],
       settlementByOrder.get(row.id) || [],
       filesByOrder.get(row.id) || []
-    )
-  );
+    ),
+    dispatchPlan: dispatchPlans.get(row.id)
+  }));
 }
 
 async function upsertWorkOrder(client, order) {
@@ -592,12 +581,11 @@ async function addAudit(client, orderId, actor, action) {
 }
 
 export function roleFilter(role, user) {
-  if (!validRoles.has(role)) return { where: "", params: [] };
-  if (role === "technician") return { where: "where wo.technician = $1", params: [user?.name || "陈立"] };
-  if (role === "dispatcher") return { where: "where wo.status = any($1::text[])", params: [["待派工", "维修中"]] };
-  if (role === "advisor") return { where: "", params: [] };
-  if (role === "inspector") return { where: "where wo.status = any($1::text[])", params: [["维修中", "待结算"]] };
-  return { where: "", params: [] };
+  if (!validRoles.has(role) || !user?.shopId) return { where: "where false", params: [] };
+  const base = "where wo.shop_id = $1";
+  if (role === "technician") return { where: `${base} and exists (select 1 from dispatch_tasks dt where dt.order_id=wo.id and (dt.technician_id=$2 or dt.data->'technicianIds' ? $2))`, params: [user.shopId,user.id] };
+  if (role === "inspector") return { where: `${base} and exists (select 1 from dispatch_tasks dt where dt.order_id=wo.id and dt.inspector_id=$2)`, params: [user.shopId,user.id] };
+  return { where: base, params: [user.shopId] };
 }
 
 async function upsertOutboundOrder(client, orderId, dispatchNo, platformOrderNo, repairItems, technician) {

@@ -47,8 +47,8 @@ test("attaching a file and its OCR records uses one transaction client", async (
 });
 
 test("advisors can view files from every work order but cannot modify another advisor's files", async () => {
-  const database = { query: async () => ({ rows: [{ uploaded_by: "user-1", advisor: "张三" }] }) };
-  const advisor = { id: "user-2", role: "advisor", name: "李四" };
+  const database = { query: async () => ({ rows: [{ uploaded_by: "user-1", advisor: "张三", shop_id: "shop-hq" }] }) };
+  const advisor = { id: "user-2", role: "advisor", shopId: "shop-hq", name: "李四" };
   await assert.doesNotReject(() => assertFileReadAccess("file-1", advisor, database));
   await assert.rejects(
     () => assertFileAccess("file-1", advisor, database),

@@ -1,3 +1,4 @@
+import { DraftDispatchFields } from "../../dispatch/DraftDispatchFields";
 import { FileSignature, LockKeyhole, Maximize2, Minimize2, Plus, Save, Send, Trash2 } from "lucide-react";
 import { Alert, Button, Card, DatePicker, Form, Grid, Input, Modal, Select, Tooltip } from "antd";
 import dayjs from "dayjs";
@@ -373,6 +374,11 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 </div>
               ))}
             </div>
+
+            <DraftDispatchFields plan={draft.dispatchPlan} users={controller.users} shopId={controller.currentUser?.shopId}
+              disabled={!canEditForm} signed={Boolean(selectedOrder && !["草稿","待客户签字"].includes(selectedOrder.status))}
+              technician={selectedOrder?.technician} onChange={dispatchPlan=>updateDraft({dispatchPlan})}
+              onOpen={()=>controller.openDispatch(selectedOrder!.id)}/>
 
             <div className="field-grid settlement-grid">
               <Field disabled={!canEditForm} label="预计修理费" value={String(draft.estimatedFee)} suffix="元" onChange={(value) => updateDraft({ estimatedFee: Number(value) })} />

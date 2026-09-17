@@ -1,3 +1,4 @@
+import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DashboardSummary,
@@ -77,8 +78,8 @@ export function useWorkbenchController() {
   const counters = useMemo(() => {
     return [
       { label: "待客户签字", value: orders.filter((item) => item.status === "待客户签字").length },
-      { label: "待派工", value: orders.filter((item) => item.status === "待派工").length },
-      { label: "维修中", value: orders.filter((item) => item.status === "维修中").length },
+      { label: "待派工", value: orders.filter((item) => workOrderDisplayStatus(item) === "待派工").length },
+      { label: "维修中", value: orders.filter((item) => workOrderDisplayStatus(item) === "维修中").length },
       { label: "待结算", value: orders.filter((item) => item.status === "待结算").length }
     ];
   }, [orders]);
@@ -100,7 +101,7 @@ export function useWorkbenchController() {
     void loadOrders(currentUser.role, selectedId, generation);
     void loadDashboard(currentUser.role, generation);
     void loadUsers(generation);
-    void loadDepartments(generation);
+    if (["advisor", "manager"].includes(currentUser.role)) void loadDepartments(generation);
     return () => {
       if (sessionGeneration.current === generation) sessionGeneration.current += 1;
     };
@@ -108,7 +109,7 @@ export function useWorkbenchController() {
 
   useEffect(() => {
     if (!visibleNavItems.some((item) => item.label === activeNav)) {
-      setActiveNav("工作台");
+      setActiveNav(visibleNavItems[0]?.label || "工作台");
     }
   }, [activeNav, visibleNavItems]);
 
@@ -212,9 +213,11 @@ export function useWorkbenchController() {
   }
 
   function applyAuthenticatedUser(user: UserProfile) {
-    const nextRole = user.role === "manager" ? "manager" : "advisor";
+    const nextRole = user.role;
     setRole(nextRole);
-    setActiveNav(user.homeRoute === "order-create" ? "委托开单" : "工作台");
+    const dispatchLink = new URLSearchParams(location.search).has("dispatchOrder");
+    const landing = nextRole === "technician" ? "我的维修" : nextRole === "inspector" ? "检验任务" : (dispatchLink && ["advisor", "manager"].includes(nextRole)) ? "派工台" : user.homeRoute === "order-create" ? "委托开单" : "工作台";
+    setActiveNav(landing);
     setDraft((current) => ({ ...current, advisor: user.name }));
   }
 
@@ -352,7 +355,14 @@ export function useWorkbenchController() {
     loadDashboard
   });
 
+  function openDispatch(orderId: string) {
+    const url=new URL(location.href);url.searchParams.set('dispatchOrder',orderId);
+    history.replaceState(null,'',url);setActiveNav('派工台');
+  }
+
   return {
+    refreshWorkbench: async () => { await Promise.all([loadOrders(), loadDashboard()]); },
+    openDispatch,
     activeNav,
     setActiveNav,
     role,

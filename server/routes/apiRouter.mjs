@@ -1,3 +1,5 @@
+import { handleDispatchRequest } from "./dispatchRouter.mjs";
+import { executeDispatchAction } from "../services/dispatchService.mjs";
 import { authenticateRequest, loginForDevelopment, loginWithDingTalk } from "../auth.mjs";
 import {
   createSignatureTokenForOrder,
@@ -8,7 +10,6 @@ import {
   findWorkOrderByToken,
   healthCheck,
   listWorkOrders,
-  repairItemAction,
   signWorkOrderByToken,
   syncWorkOrderToPlatform,
   transitionWorkOrder,
@@ -58,6 +59,7 @@ export async function handleApiRequest(req, res, url) {
 
   if (!url.pathname.startsWith("/api/")) return false;
   const currentUser = requireAuthenticatedUser(await authenticateRequest(req));
+  if (await handleDispatchRequest(req, res, url, currentUser)) return true;
 
   if (req.method === "GET" && url.pathname === "/api/auth/me") {
     sendJson(res, 200, currentUser);
@@ -70,7 +72,7 @@ export async function handleApiRequest(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/users") {
-    sendJson(res, 200, await listUsers());
+    sendJson(res, 200, await listUsers(currentUser.shopId));
     return true;
   }
 
@@ -190,7 +192,7 @@ export async function handleApiRequest(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/work-orders") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     const { draft, actor } = await readJson(req);
-    sendJson(res, 201, await createWorkOrder({ ...draft, advisor: currentUser.name }, currentUser.name || actor));
+    sendJson(res, 201, await createWorkOrder({ ...draft, shop: { ...draft?.shop, id: currentUser.shopId }, advisor: currentUser.name }, currentUser.name || actor, currentUser));
     return true;
   }
 
@@ -203,7 +205,7 @@ export async function handleApiRequest(req, res, url) {
       return true;
     }
     await assertWorkOrderAccess(workOrderMatch[1], currentUser);
-    sendJson(res, 200, await updateWorkOrder(order, currentUser.name || actor, action));
+    sendJson(res, 200, await updateWorkOrder(order, currentUser.name || actor, action, currentUser));
     return true;
   }
 
@@ -217,6 +219,9 @@ export async function handleApiRequest(req, res, url) {
   const transitionMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/transition$/);
   if (transitionMatch && req.method === "POST") {
     const { status, actor, action, patch = {} } = await readJson(req);
+    if (["维修中", "待结算"].includes(status)) {
+      throw new HttpError(409, "请在派工模块完成接单、开工和检验，不能直接跳转维修状态");
+    }
     requireTransitionRole(currentUser, status);
     await assertWorkOrderAccess(transitionMatch[1], currentUser);
     sendJson(res, 200, await transitionWorkOrder(transitionMatch[1], status, currentUser.name || actor, action, patch));
@@ -263,10 +268,12 @@ export async function handleApiRequest(req, res, url) {
 
   const itemActionMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/repair-items\/([^/]+)\/action$/);
   if (itemActionMatch && req.method === "POST") {
-    requireAnyRole(currentUser, ["manager"], "MVP1 仅门店管理员可以操作维修项目流程");
-    await assertWorkOrderAccess(itemActionMatch[1], currentUser);
-    const { action, actor, patch } = await readJson(req);
-    sendJson(res, 200, await repairItemAction(itemActionMatch[1], itemActionMatch[2], action, currentUser.name || actor, patch));
+    const body = await readJson(req);
+    if (!["pick", "start", "finish", "inspect"].includes(body.action)) throw new HttpError(409, "请在派工模块整单派工");
+    if (body.action === "inspect") throw new HttpError(409, "请在派工模块完成整单检验");
+    sendJson(res, 200, await executeDispatchAction(currentUser, itemActionMatch[1], {
+      action: body.action, itemId: Number(itemActionMatch[2]), expectedVersion: body.expectedVersion, requestId: body.requestId
+    }));
     return true;
   }
 

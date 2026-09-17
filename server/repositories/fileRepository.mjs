@@ -73,13 +73,19 @@ export async function attachFileToOrder(fileId, orderId, runTransaction = transa
 
 export async function assertFileReadAccess(fileId, user, database = pool) {
   const file = await findFileAccess(fileId, database);
+  if (!user.shopId || file.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店文件");
   if (user.role === "manager") return;
   if (user.role === "advisor" && (file.uploaded_by === user.id || file.advisor)) return;
+  if (["repair_order_photo", "damage_photo", "other"].includes(file.kind)) {
+    if (user.role === "technician" && (file.technician_id === user.id || file.technician_ids?.includes(user.id))) return;
+    if (user.role === "inspector" && file.inspector_id === user.id) return;
+  }
   throw new HttpError(403, "无权查看该文件");
 }
 
 export async function assertFileAccess(fileId, user, database = pool) {
   const file = await findFileAccess(fileId, database);
+  if (!user.shopId || file.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店文件");
   if (user.role === "manager") return;
   if (user.role === "advisor" && (file.uploaded_by === user.id || file.advisor === user.name)) return;
   throw new HttpError(403, "无权访问该文件");
@@ -88,9 +94,11 @@ export async function assertFileAccess(fileId, user, database = pool) {
 async function findFileAccess(fileId, database) {
   const { rows } = await database.query(
     `
-      select f.uploaded_by, wo.advisor
+      select f.uploaded_by, f.order_id, f.kind, wo.advisor, wo.status, coalesce(wo.shop_id,u.shop_id) as shop_id, dt.technician_id, dt.data->'technicianIds' as technician_ids, dt.inspector_id
       from files f
       left join work_orders wo on wo.id = f.order_id
+      left join users u on u.id=f.uploaded_by
+      left join dispatch_tasks dt on dt.order_id=wo.id
       where f.id = $1
     `,
     [fileId]

@@ -33,7 +33,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(payload?.error ?? `API request failed: ${response.status}`);
+    throw Object.assign(new Error(payload?.error ?? `API request failed: ${response.status}`), { status: response.status });
   }
   return payload as T;
 }
@@ -46,7 +46,7 @@ export async function requestBlob(path: string): Promise<Blob> {
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(payload?.error ?? `API request failed: ${response.status}`);
+    throw Object.assign(new Error(payload?.error ?? `API request failed: ${response.status}`), { status: response.status });
   }
   return response.blob();
 }
