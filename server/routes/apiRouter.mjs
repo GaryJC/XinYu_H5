@@ -27,6 +27,7 @@ import {
   getDingTalkIdentitySnapshot,
   listDingTalkMappings,
   listUsers,
+  listAccessUsers,
   upsertDingTalkDepartmentMapping,
   upsertDingTalkRoleMapping
 } from "../repositories/userRepository.mjs";
@@ -79,6 +80,12 @@ export async function handleApiRequest(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/company-system/departments") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     sendJson(res, 200, await listLegacyDepartments());
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/access-users") {
+    requireManager(currentUser);
+    sendJson(res,200,await listAccessUsers(currentUser.shopId));
     return true;
   }
 

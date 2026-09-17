@@ -8,6 +8,11 @@ export async function listUsers(shopId) {
   return rows.map(rowToUser);
 }
 
+export async function listAccessUsers(shopId, database=pool) {
+  const {rows}=await database.query('select id,name,role,active,shop_id,dingtalk_user_id,last_login_at from users where shop_id=$1 order by role,name',[shopId]);
+  return rows.map(row=>({...rowToUser(row),lastLoginAt:row.last_login_at?new Date(row.last_login_at).toISOString():undefined}));
+}
+
 export async function findUserById(id) {
   const { rows } = await pool.query(
     "select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at from users where id = $1",

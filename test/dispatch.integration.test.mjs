@@ -187,6 +187,15 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal((await call('/api/work-orders/new/repair-items/1/action',{action:'assign'})).status,409);
       assert.equal((await call('/api/dispatch/tasks/absent')).status,404);
       assert.equal((await call('/api/dispatch/tasks/new')).status,200);
+      const accessResponse=await call('/api/admin/access-users');
+      assert.equal(accessResponse.status,200);
+      const accessUsers=await accessResponse.json();
+      assert.ok(accessUsers.some(user=>user.id==='tech'));
+      assert.ok(accessUsers.every(user=>user.shopId===manager.shopId && !('phone' in user)));
+      assert.equal((await fetch(base+'/api/admin/access-users')).status,401);
+      const advisorToken=createTokenForUser(advisor.id);await createAuthSession({token:advisorToken,userId:advisor.id,expiresAt:new Date(Date.now()+3600000)});
+      assert.equal((await fetch(base+'/api/admin/access-users',{headers:{Authorization:`Bearer ${advisorToken}`}})).status,403);
+
       await pool.query("update users set active=false where id='manager'");
       assert.equal((await call('/api/dispatch/tasks')).status,401);
       await pool.query("update users set active=true where id='manager'");

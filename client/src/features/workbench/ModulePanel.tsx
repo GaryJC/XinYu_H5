@@ -1,7 +1,6 @@
-import { DingTalkRoleMappings } from "../access/DingTalkRoleMappings";
+import { AccessSettingsPage } from "../access/AccessSettingsPage";
 import { DashboardSummary, UserProfile, WorkOrder } from "../../../../shared/types";
-import { Card, Tag } from "antd";
-import { roles } from "../work-orders/domain/workOrderDomain";
+import { Card } from "antd";
 
 export function ModulePanel({
   activeNav,
@@ -15,7 +14,7 @@ export function ModulePanel({
   users: UserProfile[];
 }) {
   if (activeNav === "数据看板") return <DashboardPanel dashboard={dashboard} />;
-  if (activeNav === "权限设置") return <UsersPanel users={users} />;
+  if (activeNav === "权限设置") return <AccessSettingsPage users={users} />;
   if (activeNav === "结算清单") return <SettlementList orders={orders} />;
   if (activeNav === "派工管理") return <OutboundList orders={orders} />;
   if (activeNav === "维修进度") return <TechnicianTaskList orders={orders} />;
@@ -55,38 +54,6 @@ function ChartBlock({ title, data }: { title: string; data: Record<string, numbe
         </div>
       ))}
     </div>
-  );
-}
-
-function UsersPanel({ users }: { users: UserProfile[] }) {
-  return (
-    <Card className="panel module-panel">
-      <div className="panel-header">
-        <div>
-          <h2>权限设置</h2>
-          <p>员工登录时同步岗位权限；维修工和检验员登录一次后出现在派工名单。</p>
-        </div>
-      </div>
-      <div className="dingtalk-mapping-panel" aria-label="钉钉自动映射规则">
-        <div className="mapping-intro">
-          <strong>自动映射规则</strong>
-          <span>服务顾问和门店管理员保留按名称映射；其他岗位请配置下方角色映射。</span>
-        </div>
-        <div className="mapping-list">
-          <Tag color="blue">服务顾问 → 服务顾问权限 → 委托开单</Tag>
-          <Tag color="purple">门店管理员 → 管理员权限 → 工作台</Tag>
-        </div>
-      </div>
-      <DingTalkRoleMappings/>
-      <div className="compact-grid">
-        {users.map((user) => (
-          <div className="mini-card" key={user.id}>
-            <strong>{user.name}</strong>
-            <span>{roles[user.role].name} · {user.active ? "启用" : "停用"}</span>
-          </div>
-        ))}
-      </div>
-    </Card>
   );
 }
 

@@ -1,0 +1,35 @@
+.access-page{display:flex;flex-direction:column;gap:20px;min-width:0}
+.access-heading,.access-section-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.access-heading h2,.access-section-heading h3{margin:0;color:#192639}
+.access-heading p,.access-section-heading p{margin:6px 0 0;font-size:13px;line-height:1.65;color:#697586}
+.access-heading>.ant-btn,.access-section-heading>.ant-btn{flex-shrink:0}
+.access-main-card>.ant-card-body{padding:4px 24px 24px!important}
+.access-main-card .ant-tabs-nav{margin-bottom:24px}
+.access-section{display:flex;flex-direction:column;gap:20px;min-width:0}
+.access-filter-bar{display:grid;grid-template-columns:minmax(200px,1fr) 190px 150px auto;gap:16px;align-items:end;padding:16px;background:#f7f9fc;border:1px solid #edf0f4;border-radius:10px}
+.access-filter-bar label{display:flex;flex-direction:column;gap:7px;min-width:0;font-size:13px;color:#526174}
+.access-filter-bar .ant-select{width:100%}
+.access-count{display:inline-block;font-size:13px;color:#697586;font-weight:400;margin-left:6px}
+.access-page .access-caption,.access-caption{color:#7a8493;font-size:12px;line-height:1.6;margin:4px 0 0;overflow-wrap:anywhere}
+.access-role-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.access-role-grid .ant-card-body,.access-employee-cards .ant-card-body{padding:16px!important}
+.access-section dl{margin:0}.access-section dt{font-size:12px;color:#7a8493;margin-bottom:4px}.access-section dd{margin:0 0 16px;line-height:1.7}.access-section dd:last-child{margin-bottom:0}
+.access-employee-cards{display:grid;gap:12px}
+.access-page .ant-tag{margin:0}
+.access-rule-section{border:1px solid #e9edf2;border-radius:12px;padding:20px;min-width:0}
+.access-rule-section .access-section-heading{margin-bottom:20px}
+.access-rule-form{padding-top:12px}.access-rule-form>.ant-alert{margin-bottom:16px}
+.access-steps{padding-left:20px;margin:0;line-height:2}
+.access-help{gap:12px;line-height:1.8}.access-help p{margin:0}
+@media(max-width:767px){
+ .access-page{gap:16px}.access-heading,.access-section-heading{align-items:flex-start}
+ .access-heading h2{font-size:20px}.access-heading p{font-size:12px}
+ .access-main-card>.ant-card-body{padding:0 16px 16px!important}
+ .access-main-card .ant-tabs-nav{margin-bottom:16px}
+ .access-filter-bar{grid-template-columns:repeat(2,minmax(0,1fr));padding:12px;gap:12px}
+ .access-filter-bar>label:first-child{grid-column:1/-1}.access-filter-bar>.ant-btn{grid-column:1/-1;justify-self:end}
+ .access-role-grid{grid-template-columns:1fr}.access-rule-section{padding:16px}
+ .access-rule-section .access-section-heading{flex-direction:column;gap:12px}
+ .access-rule-section .access-section-heading>.ant-btn{width:100%}
+ .access-section{gap:16px}.access-page .ant-input,.access-page .ant-select,.access-page .ant-btn{min-height:36px}
+}
