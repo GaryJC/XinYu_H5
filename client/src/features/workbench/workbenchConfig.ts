@@ -26,7 +26,7 @@ export const roleFocus: Record<RoleKey, { title: string; dataScope: string; prim
     title: "维修技师工作区",
     dataScope: "只显示派给本人的维修单",
     primary: "查看自己的维修任务、确认领料、提报维修完成",
-    blocked: ["不能看全店工单", "不能派工", "不能查看权限配置"]
+    blocked: ["不能看全店工单", "不能派工", "不能查看权限说明"]
   },
   inspector: {
     title: "检验员工作区",
@@ -37,7 +37,7 @@ export const roleFocus: Record<RoleKey, { title: string; dataScope: string; prim
   manager: {
     title: "管理员工作区",
     dataScope: "显示全量门店数据",
-    primary: "查看全量数据、处理异常、协助签字与平台同步、配置权限",
+    primary: "查看全量数据、处理异常、协助签字与平台同步、查看员工权限",
     blocked: ["调度与检验操作全程留痕"]
   }
 };

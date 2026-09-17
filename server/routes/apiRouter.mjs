@@ -25,13 +25,9 @@ import {
 } from "../integrations/company/vehicleLookup.mjs";
 import {
   getDingTalkIdentitySnapshot,
-  listDingTalkMappings,
   listUsers,
-  listAccessUsers,
-  upsertDingTalkDepartmentMapping,
-  upsertDingTalkRoleMapping
+  listAccessUsers
 } from "../repositories/userRepository.mjs";
-import { validateDepartmentMapping, validateRoleMapping } from "../integrations/dingtalk/organization.mjs";
 import { HttpError } from "../http/HttpError.mjs";
 import { readStoredFile, saveUploadedFile } from "../storage.mjs";
 import { requireAnyRole, requireAuthenticatedUser, requireTransitionRole } from "../domain/accessPolicy.mjs";
@@ -91,8 +87,7 @@ export async function handleApiRequest(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/admin/dingtalk-mappings") {
     requireManager(currentUser);
-    sendJson(res, 200, await listDingTalkMappings());
-    return true;
+    throw new HttpError(410, "已取消对接规则，请直接在钉钉分配页面与权限中列出的角色");
   }
 
   if (req.method === "GET" && url.pathname === "/api/admin/dingtalk-identity") {
@@ -103,14 +98,12 @@ export async function handleApiRequest(req, res, url) {
 
   if (req.method === "PUT" && url.pathname === "/api/admin/dingtalk-role-mappings") {
     requireManager(currentUser);
-    sendJson(res, 200, await upsertDingTalkRoleMapping(validateRoleMapping(await readJson(req))));
-    return true;
+    throw new HttpError(410, "无需配置角色 ID 或部门映射，请直接在钉钉分配角色");
   }
 
   if (req.method === "PUT" && url.pathname === "/api/admin/dingtalk-department-mappings") {
     requireManager(currentUser);
-    sendJson(res, 200, await upsertDingTalkDepartmentMapping(validateDepartmentMapping(await readJson(req))));
-    return true;
+    throw new HttpError(410, "无需配置角色 ID 或部门映射，请直接在钉钉分配角色");
   }
 
   if (req.method === "GET" && url.pathname === "/api/dashboard") {

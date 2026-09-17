@@ -1,156 +1,63 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  normalizeDingTalkUserProfile,
-  resolveDingTalkOrganizationMapping,
-  validateRoleMapping
-} from "../server/integrations/dingtalk/organization.mjs";
-import { HttpError } from "../server/http/HttpError.mjs";
+import definitions from "../shared/dingtalkRoles.json" with { type: "json" };
+import { normalizeDingTalkUserProfile, resolveDingTalkOrganizationMapping as resolve } from "../server/integrations/dingtalk/organization.mjs";
 
-test("normalizes DingTalk department and role data from the employee detail response", () => {
-  const profile = normalizeDingTalkUserProfile({
-    userid: "ding-user-1",
-    name: "李顾问",
-    mobile: "13800000000",
-    active: true,
-    dept_id_list: [1001],
-    role_list: [{ id: 2001, name: "服务顾问" }]
-  }, "fallback-user");
+const profile = (names) => normalizeDingTalkUserProfile({
+  userid: "employee", name: "员工", active: true, dept_id_list: [123],
+  role_list: names.map((name, index) => ({ id: index + 1, name }))
+}, "fallback");
 
-  assert.deepEqual(profile, {
-    userId: "ding-user-1",
-    name: "李顾问",
-    phone: "13800000000",
-    active: true,
-    departmentIds: ["1001"],
-    roles: [{ id: "2001", name: "服务顾问" }]
-  });
+test("normalizes DingTalk identity, department and role IDs", () => {
+  const user = profile(["维修工"]);
+  assert.equal(user.userId, "employee");
+  assert.deepEqual(user.departmentIds, ["123"]);
+  assert.deepEqual(user.roles, [{ id: "1", name: "维修工" }]);
 });
 
-test("role mapping chooses the app role while department mapping chooses the shop", () => {
-  const mapping = resolveDingTalkOrganizationMapping(
-    {
-      userId: "ding-user-1",
-      name: "李顾问",
-      active: true,
-      departmentIds: ["1001"],
-      roles: [{ id: "2001", name: "服务顾问" }]
-    },
-    {
-      roleMappings: [{
-        dingtalkRoleId: "2001",
-        dingtalkRoleName: "服务顾问",
-        appRole: "advisor",
-        homeRoute: "order-create",
-        enabled: true
-      }],
-      departmentMappings: [{
-        dingtalkDepartmentId: "1001",
-        dingtalkDepartmentName: "抚顺路店",
-        shopId: "shop-hq",
-        enabled: true
-      }]
+test("every documented role name enters its designated workflow without configuration", () => {
+  for (const definition of definitions) {
+    for (const name of definition.names) {
+      const result = resolve(profile([name]));
+      assert.equal(result.role, definition.role, name);
+      assert.equal(result.homeRoute, definition.homeRoute, name);
+      assert.equal(result.shopId, "shop-hq");
     }
-  );
-
-  assert.deepEqual(mapping, {
-    role: "advisor",
-    shopId: "shop-hq",
-    homeRoute: "order-create",
-    source: { dingtalkRoleId: "2001", dingtalkDepartmentId: "1001" }
-  });
-});
-
-test("does not resolve an employee when there is no enabled role mapping", () => {
-  const mapping = resolveDingTalkOrganizationMapping(
-    { userId: "ding-user-1", name: "李顾问", active: true, departmentIds: ["1001"], roles: [] },
-    { roleMappings: [], departmentMappings: [] }
-  );
-  assert.equal(mapping, undefined);
-});
-
-test("does not grant access for a job title or an unknown DingTalk role name", () => {
-  const mapping = resolveDingTalkOrganizationMapping(
-    {
-      userId: "ding-user-unknown",
-      name: "未授权员工",
-      active: true,
-      departmentIds: ["1001"],
-      roles: [{ id: "role-other", name: "维修技师" }]
-    },
-    { roleMappings: [], departmentMappings: [] }
-  );
-  assert.equal(mapping, undefined);
-});
-
-test("explicit workflow role mappings are available after configuration", () => {
-  for (const appRole of ["advisor", "technician", "inspector"]) {
-    const mapping = validateRoleMapping({dingtalkRoleId:"role-1",dingtalkRoleName:"业务岗位",appRole,homeRoute:"workbench"});
-    assert.equal(resolveDingTalkOrganizationMapping({departmentIds:[],roles:[{id:"role-1",name:"业务岗位"}]},{roleMappings:[mapping]}).role,appRole);
   }
-  assert.throws(()=>validateRoleMapping({dingtalkRoleId:"x",dingtalkRoleName:"x",appRole:"root",homeRoute:"workbench"}),error=>error.status===400);
 });
 
-test("maps the built-in DingTalk role names without administrator configuration", () => {
-  const advisor = resolveDingTalkOrganizationMapping(
-    {
-      userId: "ding-user-2",
-      name: "张三",
-      active: true,
-      departmentIds: ["1001"],
-      roles: [{ id: "role-advisor", name: "服务顾问" }]
-    },
-    { roleMappings: [], departmentMappings: [] }
-  );
-  const manager = resolveDingTalkOrganizationMapping(
-    {
-      userId: "ding-user-3",
-      name: "Gary",
-      active: true,
-      departmentIds: ["1001"],
-      roles: [{ id: "role-manager", name: "门店管理员" }]
-    },
-    { roleMappings: [], departmentMappings: [] }
-  );
-
-  assert.deepEqual(advisor, {
-    role: "advisor",
-    shopId: "shop-hq",
-    homeRoute: "order-create",
-    source: { dingtalkRoleId: "role-advisor", dingtalkDepartmentId: undefined }
+test("old ID and department rules cannot deny or override a named role", () => {
+  const result = resolve(profile(["维修工"]), {
+    roleMappings: [{ dingtalkRoleId: "1", appRole: "manager", enabled: false }],
+    departmentMappings: [{ dingtalkDepartmentId: "123", shopId: "other", enabled: true }]
   });
-  assert.deepEqual(manager, {
-    role: "manager",
-    shopId: "shop-hq",
-    homeRoute: "workbench",
-    source: { dingtalkRoleId: "role-manager", dingtalkDepartmentId: undefined }
-  });
+  assert.equal(result.role, "technician");
+  assert.equal(result.shopId, "shop-hq");
+  assert.equal(resolve(profile(["自定义员工"]), {
+    roleMappings: [{ dingtalkRoleId: "1", appRole: "manager", enabled: true }]
+  }), undefined);
 });
 
-test("manager wins deterministically when an employee has both MVP roles", () => {
-  const mapping = resolveDingTalkOrganizationMapping(
-    {
-      userId: "ding-user-both",
-      name: "双角色员工",
-      active: true,
-      departmentIds: ["1001"],
-      roles: [
-        { id: "role-advisor", name: "服务顾问" },
-        { id: "role-manager", name: "门店管理员" }
-      ]
-    },
-    { roleMappings: [], departmentMappings: [] }
-  );
-  assert.equal(mapping?.role, "manager");
-  assert.equal(mapping?.homeRoute, "workbench");
+test("missing roles, job titles and role group names do not grant access", () => {
+  assert.equal(resolve(profile([])), undefined);
+  assert.equal(resolve(profile(["普通员工"])), undefined);
+  const user = normalizeDingTalkUserProfile({
+    title: "门店管理员",
+    role_list: [{ id: 1, group_name: "门店管理员" }]
+  }, "employee");
+  assert.equal(resolve(user), undefined);
 });
 
-test('role priority includes all workflow roles and a disabled explicit mapping cannot use name fallback',()=>{
-  const roles=['technician','inspector','advisor','manager'];
-  for(let end=1;end<=roles.length;end++) {
-    const selected=roles.slice(0,end);
-    const mapping=resolveDingTalkOrganizationMapping({departmentIds:[],roles:selected.map(id=>({id,name:id}))},{roleMappings:selected.map(appRole=>({dingtalkRoleId:appRole,appRole,enabled:true,homeRoute:'workbench'}))});
-    assert.equal(mapping.role,selected.at(-1));
+test("preserves existing store ownership regardless of department or role changes", () => {
+  assert.equal(resolve(profile(["门店管理员"]), { shopId: "existing-shop" }).shopId, "existing-shop");
+});
+
+test("multiple roles resolve by explicit priority independent of response order", () => {
+  const names = ["维修技师", "检验员", "调度员", "门店管理员"];
+  const roles = ["technician", "inspector", "advisor", "manager"];
+  for (let i = 1; i <= names.length; i++) {
+    assert.equal(resolve(profile(names.slice(0, i))).role, roles[i - 1]);
+    assert.equal(resolve(profile(names.slice(0, i).reverse())).role, roles[i - 1]);
   }
-  assert.equal(resolveDingTalkOrganizationMapping({departmentIds:[],roles:[{id:'manager',name:'门店管理员'}]},{roleMappings:[{dingtalkRoleId:'manager',appRole:'manager',enabled:false}]}),undefined);
+  assert.equal(resolve(profile([" 维修工 "])).role, "technician");
 });

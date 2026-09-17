@@ -187,6 +187,13 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal((await call('/api/work-orders/new/repair-items/1/action',{action:'assign'})).status,409);
       assert.equal((await call('/api/dispatch/tasks/absent')).status,404);
       assert.equal((await call('/api/dispatch/tasks/new')).status,200);
+      for (const [path, method] of [
+        ['/api/admin/dingtalk-mappings', 'GET'],
+        ['/api/admin/dingtalk-role-mappings', 'PUT'],
+        ['/api/admin/dingtalk-department-mappings', 'PUT']
+      ]) {
+        assert.equal((await fetch(base + path, {method, headers: {Authorization: `Bearer ${token}`}})).status, 410);
+      }
       const accessResponse=await call('/api/admin/access-users');
       assert.equal(accessResponse.status,200);
       const accessUsers=await accessResponse.json();

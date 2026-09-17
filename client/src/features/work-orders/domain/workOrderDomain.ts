@@ -27,8 +27,8 @@ export const roles: Record<RoleKey, { name: string; scope: string; permissions: 
   },
   manager: {
     name: "门店管理员",
-    scope: "可查看全量数据、看板、权限配置与审计日志",
-    permissions: ["全量数据", "结算确认", "权限配置"]
+    scope: "可查看全量数据、看板、权限说明与审计日志",
+    permissions: ["全量数据", "结算确认", "权限说明"]
   }
 };
 

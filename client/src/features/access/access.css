@@ -16,11 +16,7 @@
 .access-section dl{margin:0}.access-section dt{font-size:12px;color:#7a8493;margin-bottom:4px}.access-section dd{margin:0 0 16px;line-height:1.7}.access-section dd:last-child{margin-bottom:0}
 .access-employee-cards{display:grid;gap:12px}
 .access-page .ant-tag{margin:0}
-.access-rule-section{border:1px solid #e9edf2;border-radius:12px;padding:20px;min-width:0}
-.access-rule-section .access-section-heading{margin-bottom:20px}
-.access-rule-form{padding-top:12px}.access-rule-form>.ant-alert{margin-bottom:16px}
 .access-steps{padding-left:20px;margin:0;line-height:2}
-.access-help{gap:12px;line-height:1.8}.access-help p{margin:0}
 @media(max-width:767px){
  .access-page{gap:16px}.access-heading,.access-section-heading{align-items:flex-start}
  .access-heading h2{font-size:20px}.access-heading p{font-size:12px}
@@ -28,8 +24,6 @@
  .access-main-card .ant-tabs-nav{margin-bottom:16px}
  .access-filter-bar{grid-template-columns:repeat(2,minmax(0,1fr));padding:12px;gap:12px}
  .access-filter-bar>label:first-child{grid-column:1/-1}.access-filter-bar>.ant-btn{grid-column:1/-1;justify-self:end}
- .access-role-grid{grid-template-columns:1fr}.access-rule-section{padding:16px}
- .access-rule-section .access-section-heading{flex-direction:column;gap:12px}
- .access-rule-section .access-section-heading>.ant-btn{width:100%}
+ .access-role-grid{grid-template-columns:1fr}
  .access-section{gap:16px}.access-page .ant-input,.access-page .ant-select,.access-page .ant-btn{min-height:36px}
 }

@@ -3,10 +3,7 @@ import {
   DispatchTask,
   DashboardSummary,
   DevelopmentPersonaKey,
-  DingTalkDepartmentMapping,
   DingTalkIdentitySnapshot,
-  DingTalkMappings,
-  DingTalkRoleMapping,
   LegacyDepartment,
   OcrFieldKey,
   OcrRecord,
@@ -55,10 +52,7 @@ export type WorkOrderApi = {
   dashboard(role: RoleKey): Promise<DashboardSummary>;
   users(): Promise<UserProfile[]>;
   departments(): Promise<LegacyDepartment[]>;
-  dingTalkMappings(): Promise<DingTalkMappings>;
   dingTalkIdentity(): Promise<DingTalkIdentitySnapshot | undefined>;
-  saveDingTalkRoleMapping(mapping: DingTalkRoleMapping): Promise<DingTalkRoleMapping>;
-  saveDingTalkDepartmentMapping(mapping: DingTalkDepartmentMapping): Promise<DingTalkDepartmentMapping>;
 };
 
 export const workOrderApi: WorkOrderApi = {
@@ -159,16 +153,7 @@ export const workOrderApi: WorkOrderApi = {
   departments() {
     return request("/api/company-system/departments");
   },
-  dingTalkMappings() {
-    return request("/api/admin/dingtalk-mappings");
-  },
   dingTalkIdentity() {
     return request("/api/admin/dingtalk-identity");
   },
-  saveDingTalkRoleMapping(mapping) {
-    return request("/api/admin/dingtalk-role-mappings", { method: "PUT", body: mapping });
-  },
-  saveDingTalkDepartmentMapping(mapping) {
-    return request("/api/admin/dingtalk-department-mappings", { method: "PUT", body: mapping });
-  }
 };

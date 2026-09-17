@@ -1,0 +1,41 @@
+[
+  {
+    "role": "manager",
+    "names": [
+      "门店管理员"
+    ],
+    "homeRoute": "workbench",
+    "page": "工作台",
+    "priority": 100
+  },
+  {
+    "role": "advisor",
+    "names": [
+      "服务顾问",
+      "派单员",
+      "调度员"
+    ],
+    "homeRoute": "order-create",
+    "page": "委托开单（可进入派工台）",
+    "priority": 80
+  },
+  {
+    "role": "technician",
+    "names": [
+      "维修工",
+      "维修技师"
+    ],
+    "homeRoute": "workbench",
+    "page": "我的维修",
+    "priority": 20
+  },
+  {
+    "role": "inspector",
+    "names": [
+      "检验员"
+    ],
+    "homeRoute": "workbench",
+    "page": "检验任务",
+    "priority": 40
+  }
+]
