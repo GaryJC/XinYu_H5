@@ -15,6 +15,7 @@ import {
   VehicleHistoryLookupResult,
   VehicleIdentifierOcrResult,
   VehicleLicenseOcrResult,
+  VehicleLicenseOcrInput,
   VehicleLookupInput,
   VehicleReferenceKind,
   VehicleReferenceCodeCheckResult,
@@ -38,7 +39,7 @@ export type WorkOrderApi = {
   createSignatureToken(id: string, actor: string): Promise<WorkOrder>;
   signByToken(token: string, signature: string, signatureFileId: string): Promise<WorkOrder>;
   findByToken(token: string): Promise<WorkOrder | undefined>;
-  recognizeVehicleLicense(imageBase64: string): Promise<VehicleLicenseOcrResult>;
+  recognizeVehicleLicense(input: VehicleLicenseOcrInput | string): Promise<VehicleLicenseOcrResult>;
   recognizeLicensePlate(imageBase64: string): Promise<VehicleIdentifierOcrResult>;
   recognizeVin(imageBase64: string): Promise<VehicleIdentifierOcrResult>;
   lookupVehicle(identifier: VehicleLookupInput): Promise<VehicleHistoryLookupResult>;
@@ -102,8 +103,8 @@ export const workOrderApi: WorkOrderApi = {
       return undefined;
     }
   },
-  recognizeVehicleLicense(imageBase64) {
-    return request("/api/ocr/vehicle-license", { method: "POST", body: { imageBase64 } });
+  recognizeVehicleLicense(input) {
+    return request("/api/ocr/vehicle-license", { method: "POST", body: typeof input === "string" ? { imageBase64: input } : input });
   },
   recognizeLicensePlate(imageBase64) {
     return request("/api/ocr/license-plate", { method: "POST", body: { imageBase64 } });

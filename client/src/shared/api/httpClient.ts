@@ -1,4 +1,5 @@
 const authTokenKey = "repair-h5-auth-token";
+const measuredPaths = /^\/api\/(?:ocr\/(?:vehicle-license|license-plate|vin)|files|company-system\/vehicles\/lookup|work-orders\/[^/]+\/ocr-records)$/;
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "DELETE";
@@ -19,23 +20,37 @@ export function clearAuthToken() {
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (options.body !== undefined) headers["Content-Type"] = "application/json";
+  const started = performance.now();
+  const measured = options.method === "POST" && measuredPaths.test(path);
+  let response: Response | undefined;
+  let succeeded = false;
+  try {
+    const headers: Record<string, string> = {};
+    if (options.body !== undefined) headers["Content-Type"] = "application/json";
 
-  const token = options.skipAuth ? "" : getAuthToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
+    const token = options.skipAuth ? "" : getAuthToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
 
-  const response = await fetch(path, {
-    method: options.method ?? "GET",
-    headers: Object.keys(headers).length ? headers : undefined,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined
-  });
+    response = await fetch(path, {
+      method: options.method ?? "GET",
+      headers: Object.keys(headers).length ? headers : undefined,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined
+    });
 
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(payload?.error ?? `API request failed: ${response.status}`);
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.error ?? `API request failed: ${response.status}`);
+    }
+    succeeded = true;
+    return payload as T;
+  } finally {
+    if (measured) console.info("[ocr-request]", {
+      path, durationMs: Math.round(performance.now() - started),
+      status: response?.status, succeeded,
+      requestId: response?.headers.get("X-Request-Id"),
+      serverTiming: response?.headers.get("Server-Timing")
+    });
   }
-  return payload as T;
 }
 
 export async function requestBlob(path: string): Promise<Blob> {

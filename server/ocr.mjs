@@ -3,6 +3,7 @@ import * as OpenApiClient from "@alicloud/openapi-client";
 import * as OcrApi from "@alicloud/ocr-api20210707";
 import { RuntimeOptions } from "@darabonba/typescript";
 import { HttpError } from "./http/HttpError.mjs";
+import { measureStage } from "./http/requestTiming.mjs";
 
 const DEFAULT_ALIYUN_OCR_ENDPOINT = "ocr-api.cn-hangzhou.aliyuncs.com";
 const LICENSE_PLATE_KEYS = ["plateNumber", "licensePlateNumber", "plateNo", "carNumber", "number", "车牌", "车牌号", "data", "rawText"];
@@ -10,10 +11,16 @@ const VIN_KEYS = ["vinCode", "vin", "vehicleIdentificationCode", "vin码", "vin 
 
 let aliyunClient;
 
-export async function recognizeVehicleLicense(imageBase64) {
-  assertOcrInput(imageBase64, "行驶证");
-
-  return recognizeVehicleLicenseWithAliyun(stripDataUrlPrefix(imageBase64));
+export async function recognizeVehicleLicense(imageBase64, url) {
+  assertOcrInput(url || imageBase64, "行驶证");
+  const body = await callAliyunImageOcr({
+    imageBase64,
+    url,
+    request: (image) => new OcrApi.RecognizeVehicleLicenseRequest(url ? { url } : { body: Readable.from(image) }),
+    invoke: (client, request, runtime) => client.recognizeVehicleLicenseWithOptions(request, runtime),
+    label: "行驶证"
+  });
+  return normalizeAliyunVehicleLicense(body.data);
 }
 
 export async function recognizeLicensePlate(imageBase64) {
@@ -46,40 +53,13 @@ export function normalizeVinOcr(data) {
   return normalizeIdentifierResult(data, VIN_KEYS);
 }
 
-async function recognizeVehicleLicenseWithAliyun(imageBase64) {
-  const image = Buffer.from(imageBase64, "base64");
-  if (!image.length) throw new HttpError(400, "行驶证照片内容为空");
-
-  const request = new OcrApi.RecognizeVehicleLicenseRequest({
-    body: Readable.from(image)
-  });
+async function callAliyunImageOcr({ imageBase64, url, request, invoke, label }) {
+  const image = url ? undefined : Buffer.from(stripDataUrlPrefix(imageBase64), "base64");
+  if (!url && !image?.length) throw new HttpError(400, `${label}照片内容为空`);
 
   let response;
   try {
-    response = await getAliyunClient().recognizeVehicleLicenseWithOptions(request, new RuntimeOptions({
-      connectTimeout: Number(process.env.ALIYUN_OCR_CONNECT_TIMEOUT_MS || 10000),
-      readTimeout: Number(process.env.ALIYUN_OCR_READ_TIMEOUT_MS || 30000)
-    }));
-  } catch (error) {
-    if (error instanceof HttpError) throw error;
-    throw new HttpError(502, `阿里云行驶证识别失败：${formatSdkError(error)}`);
-  }
-
-  const body = response?.body;
-  if (!body || (body.code && body.code !== "200")) {
-    throw new HttpError(502, `阿里云行驶证识别失败：${body?.message || body?.code || "无返回内容"}`);
-  }
-
-  return normalizeAliyunVehicleLicense(body.data);
-}
-
-async function callAliyunImageOcr({ imageBase64, request, invoke, label }) {
-  const image = Buffer.from(stripDataUrlPrefix(imageBase64), "base64");
-  if (!image.length) throw new HttpError(400, `${label}照片内容为空`);
-
-  let response;
-  try {
-    response = await invoke(getAliyunClient(), request(image), runtimeOptions());
+    response = await measureStage("aliyun_ocr", () => invoke(getAliyunClient(), request(image), runtimeOptions()));
   } catch (error) {
     if (error instanceof HttpError) throw error;
     throw new HttpError(502, `阿里云${label}识别失败：${formatSdkError(error)}`);

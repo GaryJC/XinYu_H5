@@ -1,8 +1,13 @@
 import { HttpError } from "./HttpError.mjs";
+import { measureStage, writeTimingHeaders } from "./requestTiming.mjs";
 
 const maxBodyBytes = Number(process.env.MAX_REQUEST_BODY_BYTES || 16 * 1024 * 1024);
 
 export async function readJson(req) {
+  return measureStage("body_read", () => parseJson(req));
+}
+
+async function parseJson(req) {
   const chunks = [];
   let size = 0;
 
@@ -21,6 +26,7 @@ export async function readJson(req) {
 }
 
 export function sendJson(res, status, body) {
+  writeTimingHeaders(res);
   res.statusCode = status;
   res.setHeader("Access-Control-Allow-Origin", process.env.CORS_ORIGIN || "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");

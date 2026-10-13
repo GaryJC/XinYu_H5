@@ -3,6 +3,7 @@ import path from "node:path";
 import OSS from "ali-oss";
 import { HttpError } from "./http/HttpError.mjs";
 import { createFileRecord, findFileRecord } from "./repositories/fileRepository.mjs";
+import { measureStage } from "./http/requestTiming.mjs";
 
 let ossClient;
 
@@ -27,9 +28,9 @@ export async function saveUploadedFile({ orderId, kind, fileName, mimeType, imag
 
   const safeName = sanitizeFileName(fileName || `upload-${Date.now()}.jpg`);
   const objectKey = buildObjectKey({ orderId, kind, fileName: safeName });
-  const storage = await putObject(objectKey, buffer, mimeType || "application/octet-stream");
+  const storage = await measureStage("image_store", () => putObject(objectKey, buffer, mimeType || "application/octet-stream"));
 
-  return createFileRecord({
+  return measureStage("file_record", () => createFileRecord({
     orderId: orderId || null,
     kind,
     storageProvider: storage.provider,
@@ -39,7 +40,21 @@ export async function saveUploadedFile({ orderId, kind, fileName, mimeType, imag
     mimeType: mimeType || "application/octet-stream",
     sizeBytes: buffer.length,
     uploadedBy: uploadedBy || null
-  });
+  }));
+}
+
+export async function getStoredOcrSource(fileId) {
+  const record = await findFileRecord(fileId);
+  if (record.kind !== "vehicle_license") throw new HttpError(400, "请选择行驶证照片进行识别");
+  if (record.storageProvider === "oss") {
+    if (record.bucket !== process.env.OSS_BUCKET) throw new HttpError(500, "行驶证照片存储桶与当前配置不一致");
+    // Private OSS images remain private; only the OCR service gets a short-lived URL.
+    const url = getOssClient().signatureUrl(record.objectKey, { expires: 300, method: "GET" });
+    return { url };
+  }
+  if (record.storageProvider !== "local") throw new HttpError(500, "不支持的图片存储服务");
+  const { body } = await readStoredFile(fileId);
+  return { imageBase64: body.toString("base64") };
 }
 
 export function validateUploadedImageMetadata(kind, mimeType) {

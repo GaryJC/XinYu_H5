@@ -1,7 +1,8 @@
 import { type Dispatch, type SetStateAction, useState } from "react";
 import { OcrFieldKey, OcrFieldState, OcrRecord, VehicleLicenseOcrResult, WorkOrderDraft } from "../../../../shared/types";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
-import { fileToBase64, formatVehicleLicenseSummary, normalizeOcrDate } from "./ocrUtils";
+import { formatVehicleLicenseSummary, normalizeOcrDate } from "./ocrUtils";
+import { prepareOcrImage } from "../../shared/images/prepareOcrImage";
 
 const initialOcrState: Record<OcrFieldKey, OcrFieldState> = {
   vehicleLicense: { source: "行驶证照片", status: "未识别", value: "" }
@@ -51,16 +52,14 @@ export function useVehicleLicenseOcr({ orderId, actor, setDraft, onRecognized }:
     setVehicleLicenseOcr(undefined);
 
     try {
-      const imageBase64 = await fileToBase64(file);
+      const image = await prepareOcrImage(file);
       const uploadedFile = await workOrderApi.uploadFile({
         orderId,
         kind: "vehicle_license",
-        fileName: file.name || "vehicle-license.jpg",
-        mimeType: file.type || "image/jpeg",
-        imageBase64
+        ...image
       });
       setVehicleLicenseFileId(uploadedFile.id);
-      const result = await workOrderApi.recognizeVehicleLicense(imageBase64);
+      const result = await workOrderApi.recognizeVehicleLicense({ fileId: uploadedFile.id });
       const record = await workOrderApi.createOcrRecord(
         orderId,
         "vehicleLicense",

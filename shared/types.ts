@@ -22,6 +22,8 @@ export type OcrFieldState = {
   error?: string;
 };
 
+export type VehicleLicenseOcrInput = { imageBase64: string; fileId?: never } | { fileId: string; imageBase64?: never };
+
 export type VehicleLicenseOcrResult = {
   plate: string;
   vehicleType: string;

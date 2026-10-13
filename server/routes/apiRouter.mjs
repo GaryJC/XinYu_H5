@@ -15,7 +15,9 @@ import {
   updateWorkOrder
 } from "../db.mjs";
 import { readJson, requestContext, sendJson } from "../http/response.mjs";
-import { recognizeLicensePlate, recognizeVehicleLicense, recognizeVin } from "../ocr.mjs";
+import { recognizeLicensePlate, recognizeVin } from "../ocr.mjs";
+import { recognizeVehicleLicenseInput } from "../services/vehicleLicenseOcr.mjs";
+import { measureStage } from "../http/requestTiming.mjs";
 import {
   checkCompanyVehicleReferenceCode,
   createCompanyVehicleReference,
@@ -111,8 +113,8 @@ export async function handleApiRequest(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/ocr/vehicle-license") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
-    const { imageBase64 } = await readJson(req);
-    sendJson(res, 200, await recognizeVehicleLicense(imageBase64));
+    const input = await readJson(req);
+    sendJson(res, 200, await recognizeVehicleLicenseInput(input, currentUser));
     return true;
   }
 
@@ -132,7 +134,8 @@ export async function handleApiRequest(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/company-system/vehicles/lookup") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
-    sendJson(res, 200, await lookupVehicleInCompanySystem(await readJson(req)));
+    const input = await readJson(req);
+    sendJson(res, 200, await measureStage("vehicle_lookup", () => lookupVehicleInCompanySystem(input)));
     return true;
   }
 
@@ -239,7 +242,7 @@ export async function handleApiRequest(req, res, url) {
     const body = await readJson(req);
     if (!body.fileId || typeof body.fileId !== "string") throw new HttpError(400, "OCR 记录缺少有效文件");
     await assertFileAccess(body.fileId, currentUser);
-    sendJson(res, 201, await createOcrRecord({ ...body, orderId: ocrMatch[1] === "draft" ? null : ocrMatch[1] }));
+    sendJson(res, 201, await measureStage("ocr_record", () => createOcrRecord({ ...body, orderId: ocrMatch[1] === "draft" ? null : ocrMatch[1] })));
     return true;
   }
 

@@ -1,21 +1,5 @@
 import { VehicleLicenseOcrResult } from "../../../../shared/types";
 
-export function fileToBase64(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result !== "string") {
-        reject(new Error("图片读取失败"));
-        return;
-      }
-      resolve(result);
-    };
-    reader.onerror = () => reject(new Error("图片读取失败"));
-    reader.readAsDataURL(file);
-  });
-}
-
 export function formatVehicleLicenseSummary(result: VehicleLicenseOcrResult) {
   const items = [
     result.plate && `车牌 ${result.plate}`,

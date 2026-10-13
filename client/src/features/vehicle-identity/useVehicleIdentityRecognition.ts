@@ -7,7 +7,7 @@ import {
   WorkOrderDraft
 } from "../../../../shared/types";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
-import { fileToBase64 } from "../vehicle-license-ocr/ocrUtils";
+import { prepareOcrImage } from "../../shared/images/prepareOcrImage";
 
 export type IdentifierKind = "plate" | "vin";
 export type IdentifierRecognitionState = {
@@ -48,7 +48,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
 
     let value: string;
     try {
-      const imageBase64 = await fileToBase64(file);
+      const { imageBase64 } = await prepareOcrImage(file);
       const result = kind === "plate"
         ? await workOrderApi.recognizeLicensePlate(imageBase64)
         : await workOrderApi.recognizeVin(imageBase64);
