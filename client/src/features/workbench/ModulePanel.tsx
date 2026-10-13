@@ -1,6 +1,6 @@
+import { AccessSettingsPage } from "../access/AccessSettingsPage";
 import { DashboardSummary, UserProfile, WorkOrder } from "../../../../shared/types";
-import { Card, Tag } from "antd";
-import { roles } from "../work-orders/domain/workOrderDomain";
+import { Card } from "antd";
 
 export function ModulePanel({
   activeNav,
@@ -14,7 +14,7 @@ export function ModulePanel({
   users: UserProfile[];
 }) {
   if (activeNav === "数据看板") return <DashboardPanel dashboard={dashboard} />;
-  if (activeNav === "权限设置") return <UsersPanel users={users} />;
+  if (activeNav === "权限设置") return <AccessSettingsPage users={users} />;
   if (activeNav === "结算清单") return <SettlementList orders={orders} />;
   if (activeNav === "派工管理") return <OutboundList orders={orders} />;
   if (activeNav === "维修进度") return <TechnicianTaskList orders={orders} />;
@@ -54,37 +54,6 @@ function ChartBlock({ title, data }: { title: string; data: Record<string, numbe
         </div>
       ))}
     </div>
-  );
-}
-
-function UsersPanel({ users }: { users: UserProfile[] }) {
-  return (
-    <Card className="panel module-panel">
-      <div className="panel-header">
-        <div>
-          <h2>权限设置</h2>
-          <p>员工权限按照钉钉角色名称自动同步，无需在 H5 中逐个配置。</p>
-        </div>
-      </div>
-      <div className="dingtalk-mapping-panel" aria-label="钉钉自动映射规则">
-        <div className="mapping-intro">
-          <strong>自动映射规则</strong>
-          <span>钉钉角色名称必须完全一致；当前 MVP1 的员工默认归属抚顺路店。</span>
-        </div>
-        <div className="mapping-list">
-          <Tag color="blue">服务顾问 → 服务顾问权限 → 委托开单</Tag>
-          <Tag color="purple">门店管理员 → 管理员权限 → 工作台</Tag>
-        </div>
-      </div>
-      <div className="compact-grid">
-        {users.map((user) => (
-          <div className="mini-card" key={user.id}>
-            <strong>{user.name}</strong>
-            <span>{roles[user.role].name} · {user.active ? "启用" : "停用"}</span>
-          </div>
-        ))}
-      </div>
-    </Card>
   );
 }
 

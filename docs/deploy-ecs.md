@@ -132,6 +132,18 @@ pm2 startOrReload ecosystem.config.cjs --only xinyu-h5
 pm2 save
 ```
 
+同一台 Windows ECS 上的独立测试实例可使用不同目录、进程名和端口：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\apps\Xinyu_H5_test\scripts\deploy-windows.ps1 `
+  -AppPath C:\apps\Xinyu_H5_test `
+  -ProcessName xinyu-h5-test `
+  -Port 8788 `
+  -SkipSqlServerCheck
+```
+
+`-SkipSqlServerCheck` 仅用于未配置润丰 SQL Server 的隔离测试环境；正式环境不应使用该开关。
+
 `ecosystem.config.cjs` 会以项目目录为工作目录，并让 Node 每次启动时读取 `.env.production`。
 云效的 Windows PowerShell 部署步骤应在解压部署包后调用：
 
@@ -250,3 +262,7 @@ where name = '员工姓名';
 ```
 
 后续应做一个管理员页面维护员工和钉钉 userid。
+
+### 历史覆盖部署的兼容清理
+
+Windows 部署在安装依赖前运行 `scripts/clean-obsolete-deployment-files.mjs`，只移除已在提交 d3728bf 删除的 `DingTalkRoleMappings.tsx` 与 `MappingEditor.tsx`。旧部署直接解压覆盖时，这两个文件可能残留并触发类型检查错误。清理不会扫描或删除环境配置、上传照片、PM2 状态和其他源文件。长期应使用独立版本目录部署，避免覆盖解压留下历史源码。

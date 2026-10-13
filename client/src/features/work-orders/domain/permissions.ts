@@ -13,7 +13,7 @@ export function canSubmitDispatch(role: RoleKey, order?: WorkOrder) {
 }
 
 export function canDispatch(role: RoleKey, order?: WorkOrder) {
-  return Boolean(order && (role === "dispatcher" || role === "manager") && order.status === "待派工");
+  return Boolean(order && (role === "advisor" || role === "manager") && order.status === "待派工");
 }
 
 export function canCompleteRepair(role: RoleKey, order?: WorkOrder) {

@@ -1,11 +1,9 @@
 import {
   AuthResult,
+  DispatchTask,
   DashboardSummary,
   DevelopmentPersonaKey,
-  DingTalkDepartmentMapping,
   DingTalkIdentitySnapshot,
-  DingTalkMappings,
-  DingTalkRoleMapping,
   LegacyDepartment,
   OcrFieldKey,
   OcrRecord,
@@ -26,6 +24,7 @@ import {
   WorkOrderStatus
 } from "../../../../../shared/types";
 import { request, setAuthToken } from "../../../shared/api/httpClient";
+import { dispatchEnabled } from "../../dispatch/dispatchAvailability";
 
 export type WorkOrderApi = {
   loginWithDingTalk(authCode: string): Promise<AuthResult>;
@@ -55,10 +54,7 @@ export type WorkOrderApi = {
   dashboard(role: RoleKey): Promise<DashboardSummary>;
   users(): Promise<UserProfile[]>;
   departments(): Promise<LegacyDepartment[]>;
-  dingTalkMappings(): Promise<DingTalkMappings>;
   dingTalkIdentity(): Promise<DingTalkIdentitySnapshot | undefined>;
-  saveDingTalkRoleMapping(mapping: DingTalkRoleMapping): Promise<DingTalkRoleMapping>;
-  saveDingTalkDepartmentMapping(mapping: DingTalkDepartmentMapping): Promise<DingTalkDepartmentMapping>;
 };
 
 export const workOrderApi: WorkOrderApi = {
@@ -75,8 +71,14 @@ export const workOrderApi: WorkOrderApi = {
   me() {
     return request("/api/auth/me");
   },
-  list(_role) {
-    return request("/api/work-orders");
+  async list(_role) {
+    if (!dispatchEnabled) return request<WorkOrder[]>("/api/work-orders");
+    const [orders, tasks] = await Promise.all([
+      request<WorkOrder[]>("/api/work-orders"),
+      request<DispatchTask[]>("/api/dispatch/tasks")
+    ]);
+    const stages = new Map(tasks.map(task => [task.orderId, task.stage]));
+    return orders.map(order => ({ ...order, dispatchStage: stages.get(order.id) }));
   },
   create(draft, actor) {
     return request("/api/work-orders", { method: "POST", body: { draft, actor } });
@@ -154,16 +156,7 @@ export const workOrderApi: WorkOrderApi = {
   departments() {
     return request("/api/company-system/departments");
   },
-  dingTalkMappings() {
-    return request("/api/admin/dingtalk-mappings");
-  },
   dingTalkIdentity() {
     return request("/api/admin/dingtalk-identity");
   },
-  saveDingTalkRoleMapping(mapping) {
-    return request("/api/admin/dingtalk-role-mappings", { method: "PUT", body: mapping });
-  },
-  saveDingTalkDepartmentMapping(mapping) {
-    return request("/api/admin/dingtalk-department-mappings", { method: "PUT", body: mapping });
-  }
 };

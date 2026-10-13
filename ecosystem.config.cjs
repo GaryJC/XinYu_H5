@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: "xinyu-h5",
+      name: process.env.PM2_PROCESS_NAME || "xinyu-h5",
       cwd: __dirname,
       script: "server/server.mjs",
       interpreter: "node",

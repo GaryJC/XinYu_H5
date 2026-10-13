@@ -1,11 +1,16 @@
 import crypto from "node:crypto";
 import { pool } from "../database/pool.mjs";
 
-export async function listUsers() {
+export async function listUsers(shopId) {
   const { rows } = await pool.query(
-    "select id, name, role, active, shop_id from users order by role, name"
+    "select id, name, role, active, shop_id from users where shop_id = $1 order by role, name", [shopId]
   );
   return rows.map(rowToUser);
+}
+
+export async function listAccessUsers(shopId, database=pool) {
+  const {rows}=await database.query('select id,name,role,active,shop_id,dingtalk_user_id,last_login_at from users where shop_id=$1 order by role,name',[shopId]);
+  return rows.map(row=>({...rowToUser(row),lastLoginAt:row.last_login_at?new Date(row.last_login_at).toISOString():undefined}));
 }
 
 export async function findUserById(id) {

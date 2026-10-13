@@ -1,3 +1,4 @@
+import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
 import { lazy, Suspense, useState } from "react";
 import { ClipboardCheck, LockKeyhole, Menu, RefreshCcw, UserRound } from "lucide-react";
 import { Alert, Button, Drawer, Grid, Layout, Select, Space } from "antd";
@@ -6,7 +7,10 @@ import { MetricCard } from "../../shared/ui/Status";
 import { roles } from "../work-orders/domain/workOrderDomain";
 import { OrdersArchive } from "./OrdersArchive";
 import { roleFocus } from "./workbenchConfig";
+import { dispatchEnabled, isDispatchNavigation } from "../dispatch/dispatchAvailability";
 import { useWorkbenchController } from "./useWorkbenchController";
+
+const DispatchPage = lazy(() => import("../dispatch/DispatchPage").then(module => ({ default: module.DispatchPage })));
 
 const WorkOrderEditor = lazy(() =>
   import("../work-orders/components/WorkOrderEditor").then((module) => ({ default: module.WorkOrderEditor }))
@@ -52,7 +56,7 @@ export function WorkbenchPage() {
           );
         })}
       </nav>
-      <div className="sidebar-note"><LockKeyhole size={16} /><p>MVP1 仅开放服务顾问与门店管理员功能。</p></div>
+      <div className="sidebar-note"><LockKeyhole size={16} /><p>按门店与岗位权限使用委托开单、签字与归档功能。</p></div>
     </div>
   );
 
@@ -69,7 +73,7 @@ export function WorkbenchPage() {
             {isMobile ? <Button aria-label="打开菜单" icon={<Menu size={19} />} onClick={() => setMenuOpen(true)} /> : null}
             <div>
               <h1>{isMobile ? "修理委托工作台" : "机动车修理委托书数字化工作台"}</h1>
-              <p>{orders.length} 张委托单 · 抚顺路店 · {selectedOrder?.status ?? "新建草稿"}</p>
+              <p>{orders.length} 张委托单 · 抚顺路店 · {selectedOrder ? workOrderDisplayStatus(selectedOrder) : "新建草稿"}</p>
             </div>
           </div>
           <div className="topbar-actions">
@@ -88,6 +92,10 @@ export function WorkbenchPage() {
                 options={[
                   { value: "advisor", label: "张三｜服务顾问" },
                   { value: "manager", label: "Gary｜门店管理员" },
+                  ...(dispatchEnabled ? [
+                    { value: "technician", label: "维修工｜测试" },
+                    { value: "inspector", label: "检验员｜测试" }
+                  ] : []),
                   { value: "unassigned", label: "未分配角色员工" },
                   { value: "disabled", label: "已停用员工" }
                 ]}
@@ -102,7 +110,9 @@ export function WorkbenchPage() {
 
         {apiError ? <Alert className="error-box" type="warning" showIcon title="无法完成登录或加载数据" description={apiError} /> : null}
 
-        {activeNav === "工作台" ? (
+        {!dispatchEnabled && ["technician", "inspector"].includes(role) ? <Alert type="info" showIcon title="维修与检验功能暂未开放" /> : null}
+
+        {activeNav === "工作台" && (dispatchEnabled || !["technician", "inspector"].includes(role)) ? (
           <>
             <section className="metric-grid" aria-label="待办统计">
               {counters.map((counter) => <MetricCard key={counter.label} label={counter.label} value={counter.value} />)}
@@ -119,6 +129,12 @@ export function WorkbenchPage() {
         {activeNav === "委托开单" ? (
           <Suspense fallback={<div role="status">正在加载委托开单…</div>}>
             <WorkOrderEditor controller={controller} />
+          </Suspense>
+        ) : null}
+
+        {dispatchEnabled && currentUser && isDispatchNavigation(activeNav) ? (
+          <Suspense fallback={<div role="status">正在加载派工模块…</div>}>
+            <DispatchPage key={`${currentUser.id}-${activeNav}`} user={currentUser} view={activeNav}/>
           </Suspense>
         ) : null}
 

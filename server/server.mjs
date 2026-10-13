@@ -1,3 +1,4 @@
+import { startDispatchNotifications } from "./workers/dispatchNotifications.mjs";
 import path from "node:path";
 import { createServer } from "node:http";
 import { serverConfig } from "./config/env.mjs";
@@ -10,6 +11,7 @@ import { handleApiRequest } from "./routes/apiRouter.mjs";
 import { withRequestTiming } from "./http/requestTiming.mjs";
 
 const config = serverConfig();
+const stopNotifications = startDispatchNotifications();
 const distDir = path.resolve(config.distDir);
 
 const server = createServer(async (req, res) => {
@@ -44,6 +46,7 @@ server.listen(config.port, "0.0.0.0", () => {
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {
     server.close(async () => {
+      await stopNotifications();
       await Promise.all([closePool(), closeSqlServerPool()]);
       process.exit(0);
     });

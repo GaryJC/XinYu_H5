@@ -1,0 +1,39 @@
+.dispatch-page,.dispatch-detail{display:flex;flex-direction:column;gap:16px;min-width:0}.dispatch-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.dispatch-heading h2,.dispatch-heading h3{margin:0}.dispatch-heading p,.dispatch-muted{color:#657085;font-size:13px;line-height:1.6}.dispatch-filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap}.dispatch-filters>label:not(.ant-checkbox-wrapper),.dispatch-form label{display:flex;flex-direction:column;gap:6px;font-size:13px;min-width:150px}.dispatch-filters>label:not(.ant-checkbox-wrapper):first-child{flex:1;min-width:240px}.dispatch-form{display:flex;flex-direction:column;gap:16px;padding-top:12px}.dispatch-form .ant-select{width:100%}.dispatch-summary{max-width:260px;white-space:normal}.dispatch-detail h3{font-size:16px;margin:8px 0 0}.dispatch-detail p{white-space:pre-wrap;overflow-wrap:anywhere}.dispatch-item-times{display:flex;flex-direction:column;color:#657085;font-size:13px;gap:4px;margin-bottom:12px}.dispatch-notification{display:flex;align-items:start;flex-wrap:wrap;gap:8px;padding:12px;border:1px solid #e5e9ef;border-radius:8px}.dispatch-notification>span:not(.ant-tag){font-size:12px;color:#657085;width:100%;overflow-wrap:anywhere}.dispatch-task-cards,.dispatch-person-cards{display:grid;gap:12px}.dispatch-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.dispatch-people .ant-table-cell{white-space:nowrap}@media(max-width:767px){.dispatch-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.dispatch-filters>label:not(.ant-checkbox-wrapper){min-width:0}.dispatch-filters>label:not(.ant-checkbox-wrapper):first-child{grid-column:1/-1;min-width:0}.dispatch-form .ant-checkbox-group{display:flex;flex-direction:column;gap:10px}.dispatch-task-cards p{overflow-wrap:anywhere}.dispatch-heading{align-items:start}.dispatch-detail .ant-btn{min-height:36px}}
+
+
+.dispatch-filters .ant-select{width:100%;min-width:160px}@media(max-width:767px){.dispatch-filters .ant-select{min-width:0}}
+
+.dispatch-filter-card>.ant-card-body{padding:16px!important}
+.dispatch-filter-actions{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px;padding-top:12px;border-top:1px solid #eef0f4}
+.dispatch-filter-toggles{display:flex;align-items:center;flex-wrap:wrap;gap:16px}
+.dispatch-filter-actions>.ant-btn{flex:none}
+.dispatch-date-filter{margin-top:12px;color:#657085;font-size:13px}
+.dispatch-date-filter summary{cursor:pointer;padding:4px 0}
+.dispatch-date-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+.dispatch-date-fields label{display:flex;flex-direction:column;gap:6px;min-width:0}
+.dispatch-filter-hint{font-size:12px;color:#657085;margin:8px 0 0;line-height:1.5}
+.dispatch-task-card>.ant-card-head{padding:0 16px;min-height:52px}
+.dispatch-task-card>.ant-card-body{padding:16px!important}
+.dispatch-badges .ant-tag{margin:0;padding:3px 8px;line-height:20px}
+.dispatch-task-card .dispatch-order-number{font-size:12px;color:#7b8493;margin:10px 0 16px;line-height:1.5;overflow-wrap:anywhere}
+.dispatch-task-info{display:flex;flex-direction:column;gap:12px;font-size:13px;line-height:1.6}
+.dispatch-task-info>div{display:grid;grid-template-columns:64px minmax(0,1fr);gap:12px}
+.dispatch-task-info>div>span:first-child{color:#7b8493}
+.dispatch-task-info strong{font-weight:500}
+.dispatch-task-info>div>:last-child{overflow-wrap:anywhere}
+.dispatch-task-progress{display:flex;justify-content:space-between;margin-top:16px;padding-top:12px;border-top:1px solid #eef0f4;font-size:13px;color:#657085}
+.dispatch-task-progress strong{color:#263247}
+.dispatch-workload .ant-collapse-content-box{padding:0!important}
+.dispatch-people>.ant-card-body{padding:16px!important}
+.dispatch-people .dispatch-muted{margin-top:0}
+.dispatch-metrics{gap:4px}
+@media(max-width:767px){
+ .dispatch-page{gap:16px}
+ .dispatch-heading p{margin:6px 0 0;font-size:12px}
+ .dispatch-filter-actions{gap:8px}
+ .dispatch-filter-toggles{gap:12px}
+ .dispatch-filters{row-gap:14px;column-gap:12px}
+ .dispatch-filters .ant-select,.dispatch-filters .ant-input-affix-wrapper{min-height:36px}
+ .dispatch-workload .ant-collapse-header{padding:14px 16px!important}
+ .dispatch-task-card .ant-card-extra .ant-btn{padding-inline:0}
+}

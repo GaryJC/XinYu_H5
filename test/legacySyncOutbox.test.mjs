@@ -85,7 +85,7 @@ test("only a completed customer signature enqueues the initial legacy sync event
   assert.doesNotMatch(createSource, /enqueueLegacySyncEvent/);
   assert.match(
     signSource,
-    /status: "已委托"[\s\S]*?await enqueueLegacySyncEvent\(client, next, "created"\)/
+    /status: "已委托"[\s\S]*?await enqueueLegacySyncEvent\(client, await findWorkOrderById\(client, order.id\), "created"\)/
   );
   assert.doesNotMatch(
     source,

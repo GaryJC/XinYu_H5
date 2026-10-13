@@ -1,11 +1,16 @@
-import { LegacySyncStatus, WorkOrderStatus } from "../../../../shared/types";
+import { DispatchStage, LegacySyncStatus, WorkOrderStatus } from "../../../../shared/types";
 import { Card, Statistic, Tag } from "antd";
 
-const statusColor: Record<WorkOrderStatus, string> = {
+const statusColor: Record<WorkOrderStatus | DispatchStage, string> = {
   草稿: "default",
   待客户签字: "gold",
   已委托: "cyan",
   待派工: "blue",
+  待接单: "gold",
+  待开工: "cyan",
+  暂停: "orange",
+  待检验: "purple",
+  维修完成: "success",
   维修中: "green",
   待结算: "purple",
   完成: "success"
@@ -27,7 +32,7 @@ export function MetricCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-export function StatusChip({ status }: { status: WorkOrderStatus }) {
+export function StatusChip({ status }: { status: WorkOrderStatus | DispatchStage }) {
   return <Tag color={statusColor[status]}>{status}</Tag>;
 }
 

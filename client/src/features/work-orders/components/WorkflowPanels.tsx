@@ -1,5 +1,6 @@
 import { FileSignature, LockKeyhole, ReceiptText } from "lucide-react";
 import { Button } from "antd";
+import { dispatchEnabled } from "../../dispatch/dispatchAvailability";
 import { RoleKey, WorkOrder } from "../../../../../shared/types";
 import { canCompleteRepair, canDispatch, canSettle, canSubmitDispatch } from "../domain/permissions";
 
@@ -49,25 +50,8 @@ export function ActionPanel({
         <strong>下一步操作</strong>
       </div>
       {!order ? <p>请先保存或选择一张委托单。</p> : null}
-      {canSubmitDispatch(role, order) ? <Button type="primary" block onClick={onSubmitDispatch}>提交派工池</Button> : null}
-      {canDispatch(role, order) ? (
-        <div className="stacked-actions">
-          {technicians.length ? (
-            technicians.map((name) => (
-              <Button key={name} onClick={() => onDispatch(name)}>
-                指派给{name}
-              </Button>
-            ))
-          ) : (
-            <p>暂无可派技师，请先在权限设置中维护维修技师角色。</p>
-          )}
-        </div>
-      ) : null}
-      {(canCompleteRepair(role, order) || (role === "inspector" && order?.status === "维修中")) ? (
-        <Button type="primary" block onClick={onCompleteRepair}>
-          {role === "inspector" ? "检验通过" : "维修完成提报"}
-        </Button>
-      ) : null}
+      {dispatchEnabled && canSubmitDispatch(role, order) ? <Button type="primary" block onClick={onSubmitDispatch}>提交派工池</Button> : null}
+      {dispatchEnabled && order && ["已委托","待派工","维修中"].includes(order.status) ? <p>客户签字后自动进入派工列表。请从左侧“派工台”“我的维修”或“检验任务”完成后续操作。</p> : null}
       {canSettle(role, order) ? <Button type="primary" block onClick={onSettle}>确认结算归档</Button> : null}
       {order ? (
         <div className="locked-actions">
@@ -77,7 +61,7 @@ export function ActionPanel({
             [role === "inspector" ? "检验通过" : "维修完成提报", canCompleteRepair(role, order) || (role === "inspector" && order.status === "维修中")],
             ["确认结算归档", canSettle(role, order)]
           ]
-            .filter(([, allowed]) => !allowed)
+            .filter(([label, allowed]) => !allowed && (dispatchEnabled || label === "确认结算归档"))
             .map(([label]) => (
               <span key={String(label)}>
                 <LockKeyhole size={13} />

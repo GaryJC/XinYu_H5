@@ -1,4 +1,5 @@
-import { RepairItem, RoleKey, WorkOrderDraft, WorkOrderStatus } from "../../../../../shared/types";
+import { RepairItem, RoleKey, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "../../../../../shared/types";
+import { dispatchEnabled } from "../../dispatch/dispatchAvailability";
 
 const shopProfile = {
   id: "shop-hq",
@@ -12,13 +13,8 @@ export const workflow: WorkOrderStatus[] = ["草稿", "待客户签字", "已委
 export const roles: Record<RoleKey, { name: string; scope: string; permissions: string[] }> = {
   advisor: {
     name: "服务顾问",
-    scope: "可创建委托单、发起客户签字、查看本人开单",
-    permissions: ["开单", "客户签字", "提交派工"]
-  },
-  dispatcher: {
-    name: "派单员",
-    scope: "可查看待派工单、指派技师、改派维修任务",
-    permissions: ["待派工池", "指派/改派", "出库单占位"]
+    scope: "可创建委托单、发起客户签字、查看本店工单并安排维修",
+    permissions: ["开单", "客户签字", "指派/改派", "维修工负荷"]
   },
   technician: {
     name: "维修技师",
@@ -32,8 +28,8 @@ export const roles: Record<RoleKey, { name: string; scope: string; permissions: 
   },
   manager: {
     name: "门店管理员",
-    scope: "可查看全量数据、看板、权限配置与审计日志",
-    permissions: ["全量数据", "结算确认", "权限配置"]
+    scope: "可查看全量数据、看板、权限说明与审计日志",
+    permissions: ["全量数据", "结算确认", "权限说明"]
   }
 };
 
@@ -99,4 +95,10 @@ export function validateWorkOrderDraft(draft: WorkOrderDraft) {
   if (!draft.customer.phone.trim()) errors.push("联系电话必填");
   if (!draft.repairItems.length || draft.repairItems.some((item) => !item.name.trim())) errors.push("维修项目不能为空");
   return errors;
+}
+
+export function workOrderDisplayStatus(order: WorkOrder) {
+  if (!dispatchEnabled) return order.status;
+  if (["草稿", "待客户签字", "待结算", "完成"].includes(order.status)) return order.status;
+  return order.dispatchStage || (order.status === "已委托" ? "待派工" : order.status);
 }
