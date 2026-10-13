@@ -19,6 +19,17 @@ test('notification links use internal order ID and never expose credentials',()=
   assert.throws(()=>notificationConfiguration({...env,DISPATCH_APP_URL:'ftp://120.26.195.38/'}));
   assert.throws(()=>notificationConfiguration({...env,DISPATCH_APP_URL:'http://user:password@120.26.195.38/'}));
 });
+test('notification entry preserves enterprise context and task across HTTP IP links',()=>{
+  const linkFor=config=>new URL(messageBody(notification,'worker',config).msg.markdown.text.match(/\[查看维修任务\]\(([^)]+)\)/)[1]);
+  const config={...env,DISPATCH_APP_URL:'http://120.26.195.38:8788/?corpid=$CORPID$&source=notification',DINGTALK_CORP_ID:'ding-enterprise'};
+  const link=linkFor(config);
+  assert.equal(link.origin,'http://120.26.195.38:8788');
+  assert.equal(link.searchParams.get('corpid'),'ding-enterprise');
+  assert.equal(link.searchParams.get('dispatchOrder'),'WT-1');
+  assert.equal(link.searchParams.get('source'),'notification');
+  assert.equal(linkFor({...config,DINGTALK_CORP_ID:undefined,VITE_DINGTALK_CORP_ID:'ding-fallback'}).searchParams.get('corpid'),'ding-fallback');
+  assert.equal(linkFor({...env,DISPATCH_APP_URL:'https://repair.example/?corpid=ding-explicit'}).searchParams.get('corpid'),'ding-explicit');
+});
 test('async acceptance is distinct from successful sending and worker acceptance',async()=>{
   const result=await sendWorkNotification(notification,'worker',options(async()=>response({errcode:0,task_id:99})));
   assert.deepEqual(result,{status:'accepted',taskId:'99'});

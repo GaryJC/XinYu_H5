@@ -14,6 +14,8 @@ export function notificationConfiguration(env=process.env) {
 export function messageBody(notification, recipient, env=process.env) {
   const data=notification.payload;
   const url=new URL(env.DISPATCH_APP_URL);
+  const corpId=env.DINGTALK_CORP_ID?.trim() || env.VITE_DINGTALK_CORP_ID?.trim();
+  if(corpId) url.searchParams.set('corpid',corpId);
   url.searchParams.set('dispatchOrder',data.orderId);
   const due=data.dueAt?new Date(data.dueAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'未设置';
   const escape=value=>String(value||'').replace(/[\\`*_{}\[\]<>#|]/g,' ');
