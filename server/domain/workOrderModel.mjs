@@ -163,7 +163,8 @@ function normalizeInspection(value) {
   return {
     belongings: Array.isArray(inspection.belongings) ? inspection.belongings : [],
     fuelLevel: inspection.fuelLevel || "1/2",
-    exteriorIssues: Array.isArray(inspection.exteriorIssues) ? inspection.exteriorIssues : []
+    exteriorIssues: Array.isArray(inspection.exteriorIssues) ? inspection.exteriorIssues : [],
+    preRepairPhotos: inspection.preRepairPhotos || {}
   };
 }
 

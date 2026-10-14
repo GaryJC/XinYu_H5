@@ -195,6 +195,13 @@ export type OcrRecord = {
   confirmedAt?: string;
 };
 
+export type PreRepairPhotos = {
+  front45?: string;
+  rear45?: string;
+  mileage?: string;
+  extra?: string[];
+};
+
 export type StoredFile = {
   id: string;
   orderId?: string;
@@ -305,6 +312,7 @@ export type WorkOrder = {
     belongings: string[];
     fuelLevel: "空" | "1/4" | "1/2" | "3/4" | "满";
     exteriorIssues: string[];
+    preRepairPhotos?: PreRepairPhotos;
   };
   faultDescription: string;
   repairItems: RepairItem[];

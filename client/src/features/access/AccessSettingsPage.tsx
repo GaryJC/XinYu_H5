@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert,Button,Card,Collapse,Descriptions,Drawer,Empty,Grid,Input,Select,Space,Table,Tabs,Tag } from 'antd';
+import { Alert,Button,Card,Collapse,Descriptions,Drawer,Empty,Form,Grid,Input,Select,Space,Table,Tabs,Tag } from 'antd';
 import type { UserProfile,RoleKey } from '../../../../shared/types';
 import { roleDefinitions,roleLabels,roleOptions,roleDescriptions,roleLandingPage,displayLogin } from './accessConfig';
 import { useAccessSettings } from './useAccessSettings';
@@ -13,12 +13,12 @@ export function AccessSettingsPage({users}:{users:UserProfile[]}){
   const rolesPanel=<div className="access-role-grid">{roleOptions.map(({value,label})=>{const info=roleDescriptions[value as RoleKey];const definition=roleDefinitions.find(item=>item.role===value)!;return <Card key={value} size="small" title={label}><dl><dt>钉钉角色名称（任选其一）</dt><dd><Space wrap>{definition.names.map(name=><Tag key={name} color="blue">{name}</Tag>)}</Space></dd><dt>进入页面</dt><dd>{roleLandingPage(value as RoleKey)}</dd><dt>数据范围</dt><dd>{info.scope}</dd><dt>允许操作</dt><dd>{info.abilities}</dd><dt>操作限制</dt><dd>{info.limits}</dd></dl></Card>;})}</div>;
   const employeePanel=<div className="access-section">
     <div className="access-section-heading"><div><h3>本店员工 <span className="access-count">{c.users.length}</span></h3><p>这里仅展示系统识别结果，不在此给员工分配角色。管理员在钉钉调整角色后，员工重新进入应用时自动同步。</p></div></div>
-    <div className="access-filter-bar">
-      <label>搜索员工<Input aria-label="搜索员工" placeholder="姓名 / 员工编号" allowClear value={search} onChange={e=>setSearch(e.target.value)}/></label>
-      <label>应用角色<Select aria-label="筛选员工角色" allowClear placeholder="全部角色" value={role} options={roleOptions} onChange={setRole}/></label>
-      <label>账号状态<Select aria-label="筛选员工状态" allowClear placeholder="全部状态" value={status} options={[{value:'active',label:'启用'},{value:'inactive',label:'停用'}]} onChange={setStatus}/></label>
-      <Button onClick={()=>{setSearch('');setRole(undefined);setStatus(undefined);}}>重置筛选</Button>
-    </div>
+    <Form layout="vertical" className="access-filter-bar">
+      <Form.Item label="搜索员工"><Input aria-label="搜索员工" placeholder="姓名 / 员工编号" allowClear value={search} onChange={e=>setSearch(e.target.value)}/></Form.Item>
+      <Form.Item label="应用角色"><Select aria-label="筛选员工角色" allowClear placeholder="全部角色" value={role} options={roleOptions} onChange={setRole}/></Form.Item>
+      <Form.Item label="账号状态"><Select aria-label="筛选员工状态" allowClear placeholder="全部状态" value={status} options={[{value:'active',label:'启用'},{value:'inactive',label:'停用'}]} onChange={setStatus}/></Form.Item>
+      <Button type="text" onClick={()=>{setSearch('');setRole(undefined);setStatus(undefined);}}>重置筛选</Button>
+    </Form>
     <p className="access-caption">找到 {filtered.length} 位员工 · 查看详情了解当前权限及进入记录</p>
     {mobile?<div className="access-employee-cards">{filtered.length?filtered.map(user=><Card size="small" key={user.id} title={user.name} extra={<Button type="link" onClick={()=>setSelected(user.id)}>查看权限</Button>}><Space size={[8,8]} wrap><Tag color="blue">{roleLabels[user.role]}</Tag>{statusTag(user)}</Space><p className="access-caption">门店：{user.shopId||'未分配'}</p><p className="access-caption">最近进入：{displayLogin(user.lastLoginAt)}</p></Card>):<Empty description="没有符合条件的员工"/>}</div>:<Table rowKey="id" size="middle" loading={c.loading} dataSource={filtered} pagination={{pageSize:10,showSizeChanger:false,hideOnSinglePage:true}} scroll={{x:760}} locale={{emptyText:<Empty description="没有符合条件的员工"/>}} columns={[
       {title:'员工',dataIndex:'name',render:(name:string,user:UserProfile)=><div><strong>{name}</strong><div className="access-caption">{user.id}</div></div>},

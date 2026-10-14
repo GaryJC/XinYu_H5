@@ -1,0 +1,31 @@
+.pre-repair-photos { margin: 24px 0; }
+.pre-repair-photos-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pre-repair-photos-heading h3 { margin: 0; font-size: 16px; }
+.pre-repair-photos-heading > span { color: #63748a; font-size: 12px; }
+.pre-repair-photos > p, .pre-repair-photo-card > p { color: #63748a; font-size: 12px; line-height: 1.6; margin: 8px 0 12px; }
+.pre-repair-photo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.pre-repair-photo-card { min-width: 0; padding: 12px; border: 1px solid #e0e5eb; border-radius: 12px; background: #fff; }
+.pre-repair-photo-label { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 13px; font-weight: 500; margin-bottom: 10px; }
+.pre-repair-photo-label b, .pre-repair-photo-error { color: #d43838; }
+.pre-repair-photo-label small { color: #63748a; font-size: 11px; font-weight: 400; white-space: nowrap; }
+.pre-repair-photo-cover { overflow: hidden; border-radius: 8px; background: #f3f5f7; }
+.pre-repair-photo-cover { height: 160px; }
+.pre-repair-photo-cover .ant-image, .pre-repair-photo-cover .ant-image-img { height: 100% !important; }
+.pre-repair-guide { position: relative; }
+.pre-repair-guide img { display: block; width: 100%; height: 160px; object-fit: contain; }
+.pre-repair-guide > span { position: absolute; bottom: 6px; left: 6px; border-radius: 4px; background: rgba(0,0,0,.6); color: white; font-size: 11px; padding: 2px 6px; }
+.pre-repair-photo-cover .ant-image { display: block; }
+.pre-repair-photo-cover .ant-image-img { object-fit: cover; }
+.pre-repair-photo-card .image-source-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.pre-repair-photo-card .ant-btn { font-size: 12px; padding-inline: 8px; }
+.pre-repair-photo-error { margin-top: 8px; font-size: 12px; }
+.pre-repair-photo-card.has-error { border-color: #d43838; }
+.pre-repair-extra-icon { height: 160px; display: flex; align-items: center; justify-content: center; color: #9aa7b7; font-size: 48px; background: #f3f5f7; border-radius: 8px; }
+@media (max-width: 767px) {
+  .pre-repair-photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .pre-repair-photo-card { padding: 10px; }
+  .pre-repair-guide img, .pre-repair-extra-icon, .pre-repair-photo-cover { height: 130px; }
+  .pre-repair-photo-card .image-source-buttons { display: grid; grid-template-columns: 1fr; gap: 4px; }
+  .pre-repair-photo-card .file-button, .pre-repair-photo-card .file-button .ant-btn { width: 100%; }
+  .pre-repair-photo-card .ant-btn { min-height: 44px; font-size: 13px; }
+}

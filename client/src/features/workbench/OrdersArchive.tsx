@@ -1,3 +1,4 @@
+import { PreRepairPhotos } from "../pre-repair-photos/PreRepairPhotos";
 import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
 import { QuickDispatchDialog } from "../dispatch/QuickDispatchDialog";
 import { dispatchEnabled } from "../dispatch/dispatchAvailability";
@@ -182,6 +183,7 @@ function OrderDetail({ order, isMobile }: { order: WorkOrder; isMobile: boolean 
   return (
     <>
       <Descriptions className="archive-descriptions" bordered size="small" column={isMobile ? 1 : 3} items={descriptions} />
+      <PreRepairPhotos photos={order.inspection.preRepairPhotos} disabled />
       <FileGallery title="行驶证照片" files={vehicleLicenseFiles} mobile={isMobile} />
       <FileGallery title="客户签名" files={signatureFiles} mobile={isMobile} />
       {isMobile ? <MobileOrderRecords order={order} /> : <DesktopOrderRecords order={order} />}

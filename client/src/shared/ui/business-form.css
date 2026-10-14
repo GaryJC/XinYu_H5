@@ -1,0 +1,36 @@
+.business-form-surface { min-width: 0; }
+.business-form-surface > .ant-card-body { padding: 24px; }
+.business-form-section { min-width: 0; margin-top: 24px; padding-top: 24px; border-top: 1px solid #edf0f4; }
+.business-form-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.business-form-section-heading h3 { margin: 0; font-size: 17px; font-weight: 600; color: #243247; }
+.business-form-section-heading p { margin: 4px 0 0; color: #657085; font-size: 13px; line-height: 1.6; }
+.business-form-section-heading > div { min-width: 0; }
+.business-form-action-bar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 24px; }
+.business-form-action-bar > span { display: inline-flex; }
+.business-form-modal .ant-modal-body { overscroll-behavior: contain; }
+.business-form-modal .ant-form-item:last-child { margin-bottom: 0; }
+.business-form-modal .ant-input-number, .business-form-modal .ant-select { width: 100%; }
+.business-form-modal .ant-modal-footer { padding-top: 16px; border-top: 1px solid #edf0f4; }
+.signature-confirm-modal .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.signature-confirm-modal .summary-grid > div { min-width: 0; background: #f7f9fc; border: 0; border-radius: 8px; }
+.signature-confirm-modal .summary-grid > div:first-child { grid-column: 1 / -1; }
+.signature-confirm-modal .summary-grid strong, .signature-confirm-modal .public-items span { overflow-wrap: anywhere; }
+.signature-confirm-modal .public-items div { gap: 12px; }
+.signature-confirm-modal .public-items strong { flex-shrink: 0; }
+.signature-confirm-modal .signature-pad-wrap, .signature-landscape-overlay .signature-pad-wrap { border: 1px solid #dce2ea; border-radius: 8px; }
+.signature-confirm-modal .signature-field-label { width: 100%; justify-content: space-between; }
+.file-button:focus-within { outline: 2px solid #1677ff; outline-offset: 3px; border-radius: 8px; }
+@media (max-width: 767px) {
+  .business-form-surface > .ant-card-body { padding: 16px; }
+  .business-form-section { margin-top: 24px; padding-top: 24px; }
+  .business-form-section-heading h3 { font-size: 17px; }
+  .business-form-action-bar { position: fixed; z-index: 90; bottom: 0; left: 0; right: 0; padding: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); margin: 0; border-top: 1px solid #e8edf3; background: #fff; box-shadow: 0 -4px 16px rgba(36, 50, 71, .04); display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .business-form-action-bar .ant-btn, .business-form-action-bar > span { width: 100%; min-height: 44px; }
+  .business-form-action-bar.keyboard-open { visibility: hidden; pointer-events: none; }
+  .form-panel { margin-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+  .business-form-modal .ant-modal-container { padding: 16px; }
+  .business-form-modal .ant-modal-body { max-height: calc(100vh - 172px); max-height: calc(100dvh - 172px); }
+  .business-form-modal .ant-modal-footer { display: flex; gap: 12px; }
+  .business-form-modal .ant-modal-footer > .ant-btn { flex: 1; margin-inline-start: 0; min-height: 44px; }
+  .business-form-modal .ant-modal-title { padding-right: 24px; }
+}

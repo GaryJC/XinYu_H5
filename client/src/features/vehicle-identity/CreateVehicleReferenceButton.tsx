@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Form, Input, Modal } from "antd";
+import { Alert, Button, Form, Input } from "antd";
+import { FormDialog } from "../../shared/ui/BusinessForm";
 import { Plus } from "lucide-react";
 import { pinyin } from "pinyin-pro";
 import { VehicleReferenceCandidate, VehicleReferenceKind } from "../../../../shared/types";
@@ -110,7 +111,7 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
         新增{label}
       </Button>
       {currentCode ? <span>当前编码：{currentCode}</span> : <span>未选择已有编码时，请新增{label}</span>}
-      <Modal
+      <FormDialog
         open={open}
         title={`新增${label}`}
         okText="写入润丰并使用"
@@ -164,7 +165,7 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
             />
           </Form.Item>
         </Form>
-      </Modal>
+      </FormDialog>
     </div>
   );
 }

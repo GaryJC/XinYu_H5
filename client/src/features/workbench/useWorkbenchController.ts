@@ -1,3 +1,5 @@
+import { usePreRepairPhotos } from "../pre-repair-photos/usePreRepairPhotos";
+import { missingPhotoErrors } from "../pre-repair-photos/photoSlots";
 import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
 import { filterEmptyRepairItems } from "../work-orders/domain/repairItems";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -27,6 +29,7 @@ export function useWorkbenchController() {
   const [orders, setOrders] = useState<WorkOrder[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { draft, setDraft, resetDraft, updateDraft, updateVehicle, updateCustomer, updateRepairItem, toggleArrayField } = useWorkOrderDraft();
+  const preRepairPhotos = usePreRepairPhotos(setDraft);
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [apiError, setApiError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -92,6 +95,7 @@ export function useWorkbenchController() {
 
   useEffect(() => {
     const generation = ++sessionGeneration.current;
+    preRepairPhotos.reset();
     if (!currentUser) {
       setOrders([]);
       setDashboard(undefined);
@@ -130,12 +134,14 @@ export function useWorkbenchController() {
         selectOrder(nextSelected);
       } else {
         setSelectedId(null);
+        preRepairPhotos.reset();
         resetDraft(undefined, currentUser?.name || "");
       }
     } catch (error) {
       if (generation !== sessionGeneration.current) return;
       setOrders([]);
       setSelectedId(null);
+      preRepairPhotos.reset();
       resetDraft(undefined, currentUser?.name || "");
       setApiError(error instanceof Error ? error.message : "后端 API 暂时不可用");
     }
@@ -249,6 +255,7 @@ export function useWorkbenchController() {
     setSelectedId(order.id);
     resetDraft(order);
     setFormErrors([]);
+    preRepairPhotos.reset();
     resetOcr(order.ocrRecords);
     resetVehicleIdentityRecognition();
   }
@@ -257,11 +264,13 @@ export function useWorkbenchController() {
     setSelectedId(null);
     resetDraft(undefined, currentUser?.name || "");
     setFormErrors([]);
+    preRepairPhotos.reset();
     resetOcr();
     resetVehicleIdentityRecognition();
   }
 
   async function saveDraft() {
+    if (preRepairPhotos.isUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
     if (!canCreateOrder(role)) {
       setFormErrors(["当前角色不能创建或编辑委托单"]);
       return;
@@ -294,6 +303,7 @@ export function useWorkbenchController() {
     try {
       await workOrderApi.deleteDraft(order.id);
       setSelectedId(null);
+      preRepairPhotos.reset();
       resetDraft(undefined, currentUser?.name || "");
       await loadOrders(role, null);
       await loadDashboard(role);
@@ -306,6 +316,7 @@ export function useWorkbenchController() {
   }
 
   async function sendSignature() {
+    if (preRepairPhotos.isUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
     const errors = validateBeforeSignature();
     if (errors.length) {
       setFormErrors(errors);
@@ -331,7 +342,7 @@ export function useWorkbenchController() {
   }
 
   function validateBeforeSignature() {
-    const errors = validateWorkOrderDraft(draft);
+    const errors = [...validateWorkOrderDraft(draft), ...missingPhotoErrors(draft.inspection.preRepairPhotos)];
     if (!draft.vehicle.modelLegacyCode.trim()) {
       errors.push("车型尚未确认，请从搜索结果中选择，或新增车型并确认编码");
     }
@@ -378,6 +389,7 @@ export function useWorkbenchController() {
     setDraft,
     ocrState,
     formErrors,
+    preRepairPhotos,
     apiError,
     searchTerm,
     setSearchTerm,

@@ -15,8 +15,8 @@ type FieldProps = {
 export function Field({ label, value, suffix, placeholder, disabled, required, error, onChange }: FieldProps) {
   const id = useId();
   return (
-    <Form.Item className="field" label={label} htmlFor={id} required={required} validateStatus={error ? "error" : undefined} help={error}>
-      <Input id={id} aria-required={required} status={error ? "error" : undefined} value={value} placeholder={placeholder} disabled={disabled} suffix={suffix} onChange={(event) => onChange(event.target.value)} />
+    <Form.Item className="field" label={label} htmlFor={id} required={required} validateStatus={error ? "error" : undefined} help={error ? <span id={`${id}-error`}>{error}</span> : undefined}>
+      <Input id={id} aria-required={required} aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined} status={error ? "error" : undefined} value={value} placeholder={placeholder} disabled={disabled} suffix={suffix} onChange={(event) => onChange(event.target.value)} />
     </Form.Item>
   );
 }
@@ -24,8 +24,8 @@ export function Field({ label, value, suffix, placeholder, disabled, required, e
 export function TextArea({ label, value, disabled, required, error, onChange }: Omit<FieldProps, "suffix">) {
   const id = useId();
   return (
-    <Form.Item className="field textarea-field" label={label} htmlFor={id} required={required} validateStatus={error ? "error" : undefined} help={error}>
-      <Input.TextArea id={id} aria-required={required} status={error ? "error" : undefined} value={value} disabled={disabled} autoSize={{ minRows: 3 }} onChange={(event) => onChange(event.target.value)} />
+    <Form.Item className="field textarea-field" label={label} htmlFor={id} required={required} validateStatus={error ? "error" : undefined} help={error ? <span id={`${id}-error`}>{error}</span> : undefined}>
+      <Input.TextArea id={id} aria-required={required} aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined} status={error ? "error" : undefined} value={value} disabled={disabled} autoSize={{ minRows: 3 }} onChange={(event) => onChange(event.target.value)} />
     </Form.Item>
   );
 }

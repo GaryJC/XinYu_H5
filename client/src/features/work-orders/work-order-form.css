@@ -1,0 +1,64 @@
+.form-panel.business-form-surface > .ant-card-body { padding: 24px; }
+.form-panel .panel-header { align-items: flex-start; }
+.form-panel .panel-header .button-row { display: flex; width: auto; flex-shrink: 0; }
+.form-panel .panel-header h2 { font-size: 22px; }
+.form-panel .panel-header .new-order-button { min-height: 44px; padding-inline: 14px; font-weight: 600; }
+.form-panel .panel-header .new-order-button:not(:disabled) { background: #f0f7ff; }
+.order-form-summary { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 0 0 20px; padding: 12px 0; border-top: 1px solid #edf0f4; border-bottom: 1px solid #edf0f4; }
+.order-form-summary > div { min-width: 0; }
+.order-form-summary dt { color: #657085; font-size: 12px; }
+.order-form-summary dd { margin: 4px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.form-panel .field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+.form-panel .field-grid > * { min-width: 0; }
+.form-panel .field { margin-bottom: 16px; }
+.form-panel > .ant-card-body > .ant-form > .business-form-section:first-of-type { padding-top: 0; border-top: 0; }
+.form-panel .business-form-section .ant-select { width: 100%; }
+.form-panel .vehicle-identity-section { padding: 0; background: transparent; border: 0; gap: 12px; margin-bottom: 20px; }
+.form-panel .identifier-scanner { flex-direction: column; align-items: stretch; gap: 12px; background: #f7f9fc; border: 0; border-radius: 8px; padding: 16px; }
+.form-panel .image-source-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: 100%; }
+.form-panel .image-source-buttons .file-button, .form-panel .image-source-buttons .ant-btn { width: 100%; min-width: 0; }
+.form-panel .image-source-buttons .ant-btn { min-height: 44px; border-radius: 8px; }
+.form-panel .identifier-scanner .file-button .ant-btn { height: 44px; font-size: 16px; border-radius: 8px; }
+.form-panel .image-source-buttons.emphasized .file-button:first-child .ant-btn { min-width: 0; box-shadow: none; }
+.form-panel .vehicle-test-tools { color: #657085; font-size: 13px; }
+.form-panel .vehicle-test-tools summary { cursor: pointer; padding: 8px 0; }
+.form-panel .vehicle-test-license { background: #f7f9fc; border: 1px solid #edf0f4; margin-top: 8px; }
+.form-panel .ocr-strip { background: #f7f9fc; border: 0; padding: 16px; flex-direction: column; }
+.form-panel .ocr-main > strong { font-size: 14px; }
+.form-panel .ocr-result-grid span { overflow-wrap: anywhere; }
+.form-panel .ocr-confirm-button { min-width: 0; }
+.form-panel .vehicle-license-ocr .image-source-buttons { gap: 12px; }
+.form-panel .vehicle-license-ocr .file-button .ant-btn { height: 44px; font-size: 16px; border-radius: 8px; }
+.form-panel .check-section { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.form-panel .checklist { padding: 16px; background: #f7f9fc; border: 0; }
+.form-panel .checklist .ant-checkbox-wrapper { min-height: 32px; align-items: center; }
+.form-panel .section-title-row { margin-top: 0; }
+.form-panel .section-title-form-item .ant-form-item-label > label { font-size: 14px; }
+.form-panel .settlement-grid { margin-top: 20px; }
+.form-panel .workflow-actions { background: transparent; border: 0; border-top: 1px solid #edf0f4; padding: 24px 0 0; margin-top: 24px; }
+.form-panel .draft-dispatch-section > .ant-checkbox-wrapper { margin-bottom: 16px; }
+.form-panel .dispatch-execution-fields .ant-input-number { width: 100%; }
+.form-panel .draft-dispatch-section > .ant-btn { margin-top: 8px; }
+@media (max-width: 767px) {
+  .form-panel.business-form-surface > .ant-card-body { padding: 16px; }
+  .form-panel .panel-header { flex-direction: row; gap: 8px; }
+  .form-panel .panel-header h2 { font-size: 20px; }
+  .form-panel .panel-header p { font-size: 13px; line-height: 1.6; }
+  .form-panel .panel-header .button-row > .ant-btn { width: auto; padding-inline: 12px; font-size: 14px; }
+  .order-form-summary { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  .order-form-summary > div { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+  .order-form-summary dd { margin: 0; }
+  .form-panel .field-grid, .form-panel .check-section { grid-template-columns: 1fr; }
+  .form-panel .identifier-scanner { padding: 12px; }
+  .form-panel .identifier-scanner .image-source-buttons, .form-panel .vehicle-license-ocr .image-source-buttons { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .form-panel .pre-repair-photo-card .image-source-buttons { grid-template-columns: 1fr; gap: 4px; }
+  .form-panel .vehicle-license-ocr .button-row { display: flex; }
+  .form-panel .vehicle-license-ocr .ocr-confirm-button { width: 100%; }
+  .form-panel .checklist .ant-checkbox-wrapper { min-height: 44px; margin: 0; }
+  .form-panel .checklist > div { gap: 0 16px; }
+  .form-panel .repair-row { grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; background: #f7f9fc; border: 0; padding: 12px; }
+  .form-panel .repair-row .ant-btn { min-width: 44px; min-height: 44px; }
+  .form-panel .repair-head { display: none; }
+  .form-panel .section-title-row { gap: 8px; }
+  .form-panel .section-title-row > .ant-btn { padding-inline: 8px; flex-shrink: 0; }
+}

@@ -48,7 +48,6 @@ export function VehicleLicenseOcrControl({ state, result, disabled, requirement 
       </div>
       <Flex className="button-row" gap={8} wrap="wrap">
         <ImageSourcePicker
-          emphasized
           disabled={disabled}
           loading={state.status === "识别中"}
           label="识别行驶证照片"
@@ -58,7 +57,7 @@ export function VehicleLicenseOcrControl({ state, result, disabled, requirement 
         />
         <Button
           className="ocr-confirm-button"
-          type="primary"
+          type={state.status === "待确认" ? "primary" : "default"}
           size="large"
           icon={<CircleCheckBig size={17} />}
           onClick={onConfirm}

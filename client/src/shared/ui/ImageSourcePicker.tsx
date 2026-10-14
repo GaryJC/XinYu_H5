@@ -9,16 +9,19 @@ type Props = {
   emphasized?: boolean;
   primaryActionLabel?: string;
   galleryActionLabel?: string;
+  multiple?: boolean;
+  onSelectMany?: (files: File[]) => void | Promise<void>;
   onSelect: (file: File) => void | Promise<void>;
 };
 
-export function ImageSourcePicker({ disabled, loading, label, emphasized, primaryActionLabel, galleryActionLabel, onSelect }: Props) {
+export function ImageSourcePicker({ disabled, loading, label, emphasized, primaryActionLabel, galleryActionLabel, multiple, onSelectMany, onSelect }: Props) {
   const pickerDisabled = disabled || loading;
 
   async function handleChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
+    const files = Array.from(event.currentTarget.files || []);
     event.currentTarget.value = "";
-    if (file) await onSelect(file);
+    if (files.length && onSelectMany) await onSelectMany(files);
+    else if (files[0]) await onSelect(files[0]);
   }
 
   const resetValue = (event: MouseEvent<HTMLInputElement>) => {
@@ -29,7 +32,7 @@ export function ImageSourcePicker({ disabled, loading, label, emphasized, primar
     <div className={`image-source-buttons${emphasized ? " emphasized" : ""}`}>
       <div className="file-button">
         <Button
-          type={emphasized ? "primary" : "default"}
+          type="primary"
           size={emphasized ? "large" : "middle"}
           icon={loading ? <Sparkles size={16} /> : <Camera size={16} />}
           loading={loading}
@@ -49,10 +52,11 @@ export function ImageSourcePicker({ disabled, loading, label, emphasized, primar
         />
       </div>
       <div className="file-button">
-        <Button size={emphasized ? "large" : "middle"} icon={<Images size={16} />} disabled={pickerDisabled} tabIndex={-1}>{galleryActionLabel || (emphasized ? "从相册选择" : "相册")}</Button>
+        <Button type="default" size={emphasized ? "large" : "middle"} icon={<Images size={16} />} disabled={pickerDisabled} tabIndex={-1}>{galleryActionLabel || (emphasized ? "从相册选择" : "相册")}</Button>
         <input
           type="file"
           accept="image/*"
+          multiple={multiple}
           disabled={pickerDisabled}
           aria-label={`${label}从相册选择`}
           onClick={resetValue}

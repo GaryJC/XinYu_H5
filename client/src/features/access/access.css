@@ -7,7 +7,8 @@
 .access-main-card .ant-tabs-nav{margin-bottom:24px}
 .access-section{display:flex;flex-direction:column;gap:20px;min-width:0}
 .access-filter-bar{display:grid;grid-template-columns:minmax(200px,1fr) 190px 150px auto;gap:16px;align-items:end;padding:16px;background:#f7f9fc;border:1px solid #edf0f4;border-radius:10px}
-.access-filter-bar label{display:flex;flex-direction:column;gap:7px;min-width:0;font-size:13px;color:#526174}
+.access-filter-bar .ant-form-item{margin-bottom:0;min-width:0}
+.access-filter-bar .ant-form-item-label>label{font-size:14px;color:#243247}
 .access-filter-bar .ant-select{width:100%}
 .access-count{display:inline-block;font-size:13px;color:#697586;font-weight:400;margin-left:6px}
 .access-page .access-caption,.access-caption{color:#7a8493;font-size:12px;line-height:1.6;margin:4px 0 0;overflow-wrap:anywhere}
@@ -22,8 +23,11 @@
  .access-heading h2{font-size:20px}.access-heading p{font-size:12px}
  .access-main-card>.ant-card-body{padding:0 16px 16px!important}
  .access-main-card .ant-tabs-nav{margin-bottom:16px}
- .access-filter-bar{grid-template-columns:repeat(2,minmax(0,1fr));padding:12px;gap:12px}
- .access-filter-bar>label:first-child{grid-column:1/-1}.access-filter-bar>.ant-btn{grid-column:1/-1;justify-self:end}
+ .access-filter-bar{grid-template-columns:repeat(2,minmax(0,1fr));padding:16px;gap:16px;background:#f7f9fc;border:0}
+ .access-filter-bar>.ant-form-item:first-child{grid-column:1/-1}.access-filter-bar>.ant-btn{grid-column:1/-1;justify-self:end}
  .access-role-grid{grid-template-columns:1fr}
- .access-section{gap:16px}.access-page .ant-input,.access-page .ant-select,.access-page .ant-btn{min-height:36px}
+ .access-section{gap:24px}.access-page .ant-input,.access-page .ant-select,.access-page .ant-btn{min-height:44px}
+ .access-page .ant-input-affix-wrapper{min-height:44px}
+ .access-page .ant-input-affix-wrapper .ant-input{min-height:0}
+ .access-heading{flex-direction:column;gap:12px}.access-heading>.ant-btn{align-self:flex-end}
 }

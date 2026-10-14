@@ -24,15 +24,13 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
 
   return (
     <div className="vehicle-identity-section">
-      <div className="vehicle-identity-heading">
-        <strong>第一步：扫描车牌查询车辆</strong>
-        <span>优先拍摄车牌并查询公司系统；未找到车辆时，下一步必须上传行驶证。</span>
-      </div>
       <div className="vehicle-identity-grid">
         <IdentifierScanner kind="plate" title="识别车牌号" hint="请将完整车牌置于画面中央" disabled={disabled} state={recognition.plate} onScan={onScan} />
         <IdentifierScanner kind="vin" title="识别 VIN 码" hint="请对准车架上的 17 位识别码" disabled={disabled} state={recognition.vin} onScan={onScan} />
       </div>
       {import.meta.env.DEV ? (
+        <details className="vehicle-test-tools">
+          <summary>开发测试工具</summary>
         <div className="vehicle-test-license">
           <strong>DEV 行驶证匹配测试</strong>
           <span>模拟行驶证 OCR 返回，不上传图片、不创建 OCR 记录。</span>
@@ -70,6 +68,7 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
             模拟识别并匹配
           </Button>
         </div>
+        </details>
       ) : null}
       {historyLoading ? <div className="vehicle-history-loading"><Spin size="small" />正在查询公司系统车辆档案…</div> : null}
       {history ? (
@@ -105,7 +104,6 @@ function IdentifierScanner({ kind, title, hint, disabled, state, onScan }: {
         {state.error ? <em>{state.error}</em> : null}
       </div>
       <ImageSourcePicker
-        emphasized
         disabled={disabled}
         loading={scanning}
         label={title}

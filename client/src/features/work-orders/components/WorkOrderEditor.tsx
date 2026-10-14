@@ -1,7 +1,9 @@
+import "../work-order-form.css";
+import { PreRepairPhotos } from "../../pre-repair-photos/PreRepairPhotos";
 import { DraftDispatchFields } from "../../dispatch/DraftDispatchFields";
 import { dispatchEnabled } from "../../dispatch/dispatchAvailability";
 import { FileSignature, LockKeyhole, Maximize2, Minimize2, Plus, Save, Send, Trash2 } from "lucide-react";
-import { Alert, Button, Card, DatePicker, Form, Grid, Input, Modal, Select, Tooltip } from "antd";
+import { Alert, Button, DatePicker, Form, Grid, Input, Select, Tooltip } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import { WorkOrder, WorkOrderDraft } from "../../../../../shared/types";
@@ -17,6 +19,7 @@ import { WorkbenchController } from "../../workbench/useWorkbenchController";
 import { belongings, exteriorIssues } from "../../workbench/workbenchConfig";
 import { SignaturePad } from "../../signature/SignaturePad";
 import { Summary } from "../../../shared/ui/FormControls";
+import { FormActionBar, FormDialog, FormSection, FormSurface } from "../../../shared/ui/BusinessForm";
 import { sumLabor } from "../domain/workOrderDomain";
 
 export function WorkOrderEditor({ controller }: { controller: WorkbenchController }) {
@@ -43,7 +46,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
   const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "编码", "选择已有"].some((phrase) => error.includes(phrase)));
   const canResumeSignature = Boolean(selectedOrder?.status === "待客户签字" && selectedOrder.signatureToken && !selectedOrder.signatureTokenUsed);
-  const signatureDisabled = !canResumeSignature && (!canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder)));
+  const signatureDisabled = Boolean(controller.preRepairPhotos.uploading) || !canResumeSignature && (!canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder)));
   const signatureDisabledReason = selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) ? `当前状态“${selectedOrder.status}”不能再次发起签字` : "";
   const signatureCompleted = signatureResult.includes("已保存");
   const signatureUploaded = Boolean(selectedOrder?.signatures.customer);
@@ -112,18 +115,23 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   }
 
   return (
-<Card className="panel form-panel">
+<FormSurface className="panel form-panel">
           <Form layout="vertical" requiredMark>
             <div className="panel-header">
               <div>
-                <h2>{selectedOrder ? `委托单 ${selectedOrder.id}` : "新建委托开单"}</h2>
-                <p>请先扫描车牌查询车辆档案；新车必须上传行驶证，OCR 确认仍为选填。</p>
+                <h2>{selectedOrder ? "委托开单" : "新建委托开单"}</h2>
+                <p>先识别车辆，再完善接车与维修信息。</p>
               </div>
               <div className="button-row">
-                <Button type="primary" size="large" icon={<Plus size={16} />} onClick={startNewOrder} disabled={!canCreateOrder(role)}>新建委托</Button>
-                <Button size="large" icon={<Save size={16} />} onClick={saveDraft} loading={actionLoading === "save"} disabled={!canEditForm}>保存草稿</Button>
+                <Button className="new-order-button" color="primary" variant="outlined" icon={<Plus size={16} />} onClick={startNewOrder} disabled={!canCreateOrder(role)}>新建委托</Button>
               </div>
             </div>
+
+            <dl className="order-form-summary" aria-label="委托单摘要">
+              <div><dt>委托单号</dt><dd>{selectedOrder?.id || "新建草稿"}</dd></div>
+              <div><dt>服务顾问</dt><dd>{draft.advisor || "根据钉钉账号自动填写"}</dd></div>
+              <div><dt>派工号</dt><dd>{draft.dispatchNo || "同步成功后自动回填"}</dd></div>
+            </dl>
 
             {selectedOrder?.platformOrderNo ? (
               <Alert className="platform-sync-state" type="success" showIcon title={`已同步平台工单：${selectedOrder.platformOrderNo}`} />
@@ -156,6 +164,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               </div>
             ) : null}
 
+            <FormSection title="车辆识别与资料" description="先查询车辆档案；新车须上传行驶证，OCR 确认选填。">
             <VehicleIdentityRecognition
               disabled={!canEditForm}
               recognition={identifierRecognition}
@@ -190,58 +199,6 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             </Form.Item>
 
             <div className="field-grid">
-              <Field
-                disabled
-                label="派工号"
-                placeholder="润丰同步成功后自动回填"
-                value={draft.dispatchNo}
-                onChange={() => undefined}
-              />
-              <Form.Item className="field" label="进厂日期">
-                <DatePicker
-                  aria-label="进厂日期"
-                  allowClear={false}
-                  disabled={!canEditForm}
-                  format="YYYY-MM-DD"
-                  inputReadOnly={isMobile}
-                  value={draft.arrivalDate ? dayjs(draft.arrivalDate) : null}
-                  onChange={(date) => updateDraft({ arrivalDate: date?.format("YYYY-MM-DD") || "" })}
-                />
-              </Form.Item>
-              <Field
-                disabled
-                label="服务顾问"
-                placeholder="根据当前钉钉账号自动填写"
-                value={draft.advisor}
-                onChange={() => undefined}
-              />
-              <Form.Item
-                className="field"
-                label="部门"
-                required
-                validateStatus={fieldError("部门") || departmentError ? "error" : undefined}
-                help={fieldError("部门") || departmentError}
-              >
-                <Select
-                  aria-label="部门"
-                  disabled={!canEditForm}
-                  placeholder="请选择部门"
-                  value={draft.department.code || undefined}
-                  options={departments.map((item) => ({
-                    value: item.code,
-                    label: `${item.code} ${item.name}`
-                  }))}
-                  onChange={(code) => {
-                    const department = departments.find((item) => item.code === code);
-                    updateDraft({
-                      department: {
-                        code,
-                        name: department?.name || ""
-                      }
-                    });
-                  }}
-                />
-              </Form.Item>
               <Field required error={fieldError("车牌号码")} disabled={!canEditForm} label="车牌号码" value={draft.vehicle.plate} onChange={(value) => updateVehicle("plate", value)} />
               <div style={{ marginBottom: 16 }}>
                 <Field required error={fieldError("VIN")} disabled={!canEditForm} label="VIN/底盘号" value={draft.vehicle.vin} onChange={(value) => updateVehicle("vin", value)} />
@@ -287,6 +244,10 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   onCreate={(candidate) => selectVehicleReference("model", candidate)}
                 />
               </Form.Item>
+            </div>
+            </FormSection>
+            <FormSection title="客户联系信息">
+            <div className="field-grid">
               <Form.Item className="field" label="车主名称/所属单位" required validateStatus={fieldError("车主名称/所属单位") ? "error" : undefined} help={fieldError("车主名称/所属单位")}>
                 <VehicleReferenceAutocomplete
                   kind="organization"
@@ -330,7 +291,51 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             </div>
 
             <Field disabled={!canEditForm} label="车辆地址" value={draft.customer.address} onChange={(value) => updateCustomer("address", value)} />
+            </FormSection>
+            <FormSection title="接车检查与照片">
+            <div className="field-grid">
+              <Form.Item className="field" label="进厂日期">
+                <DatePicker
+                  aria-label="进厂日期"
+                  allowClear={false}
+                  disabled={!canEditForm}
+                  format="YYYY-MM-DD"
+                  inputReadOnly={isMobile}
+                  value={draft.arrivalDate ? dayjs(draft.arrivalDate) : null}
+                  onChange={(date) => updateDraft({ arrivalDate: date?.format("YYYY-MM-DD") || "" })}
+                />
+              </Form.Item>
+              <Form.Item
+                className="field"
+                label="部门"
+                required
+                validateStatus={fieldError("部门") || departmentError ? "error" : undefined}
+                help={fieldError("部门") || departmentError}
+              >
+                <Select
+                  aria-label="部门"
+                  disabled={!canEditForm}
+                  placeholder="请选择部门"
+                  value={draft.department.code || undefined}
+                  options={departments.map((item) => ({
+                    value: item.code,
+                    label: `${item.code} ${item.name}`
+                  }))}
+                  onChange={(code) => {
+                    const department = departments.find((item) => item.code === code);
+                    updateDraft({
+                      department: {
+                        code,
+                        name: department?.name || ""
+                      }
+                    });
+                  }}
+                />
+              </Form.Item>
+            </div>
             <TextArea disabled={!canEditForm} label="故障描述 / 客户诉求" value={draft.faultDescription} onChange={(value) => updateDraft({ faultDescription: value })} />
+
+            <PreRepairPhotos photos={draft.inspection.preRepairPhotos} disabled={!canEditForm || Boolean(actionLoading)} controls={controller.preRepairPhotos} errors={formErrors} />
 
             <div className="check-section">
               <Checklist disabled={!canEditForm} title="随车物品" items={belongings} selected={draft.inspection.belongings} onToggle={(value) => toggleArrayField("belongings", value)} />
@@ -346,6 +351,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               </Form.Item>
             </div>
 
+            </FormSection>
+            <FormSection title="维修项目与费用">
             <div className="section-title-row">
               <Form.Item className="section-title-form-item" label="维修项目明细" required validateStatus={fieldError("维修项目") ? "error" : undefined} help={fieldError("维修项目")}>
                 <span>工时预估合计：¥{totalLabor}</span>
@@ -391,17 +398,18 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               ))}
             </div>
 
-            {dispatchEnabled && <DraftDispatchFields plan={draft.dispatchPlan} users={controller.users} shopId={controller.currentUser?.shopId}
-              disabled={!canEditForm} signed={Boolean(selectedOrder && !["草稿","待客户签字"].includes(selectedOrder.status))}
-              technician={selectedOrder?.technician} onChange={dispatchPlan=>updateDraft({dispatchPlan})}
-              onOpen={()=>controller.openDispatch(selectedOrder!.id)}/>}
-
             <div className="field-grid settlement-grid">
               <Field disabled={!canEditForm} label="预计修理费" value={String(draft.estimatedFee)} suffix="元" onChange={(value) => updateDraft({ estimatedFee: Number(value) })} />
               <Form.Item className="field" label="旧件处置方式"><Select aria-label="旧件处置方式" disabled={!canEditForm} value={draft.oldPartsHandling} onChange={(value) => updateDraft({ oldPartsHandling: value as WorkOrderDraft["oldPartsHandling"] })} options={["客户带走", "门店回收", "环保处理"].map((value) => ({ value }))} /></Form.Item>
               <Field disabled={!(role === "advisor" || role === "manager")} label="结算金额占位" value={String(draft.settlementAmount || draft.estimatedFee || totalLabor)} suffix="元" onChange={(value) => updateDraft({ settlementAmount: Number(value) })} />
             </div>
             <TextArea disabled={!(role === "advisor" || role === "manager")} label="费用备注" value={draft.feeNote} onChange={(value) => updateDraft({ feeNote: value })} />
+
+            </FormSection>
+            {dispatchEnabled && <DraftDispatchFields plan={draft.dispatchPlan} users={controller.users} shopId={controller.currentUser?.shopId}
+              disabled={!canEditForm} signed={Boolean(selectedOrder && !["草稿","待客户签字"].includes(selectedOrder.status))}
+              technician={selectedOrder?.technician} onChange={dispatchPlan=>updateDraft({dispatchPlan})}
+              onOpen={()=>controller.openDispatch(selectedOrder!.id)}/>}
 
             <div className="workflow-actions">
               <div>
@@ -425,20 +433,20 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   />
                 ) : null}
               </div>
-              <div className="workflow-action-buttons">
+            </div>
+              <FormActionBar label="委托开单操作">
+                <Button size="large" icon={<Save size={16} />} onClick={saveDraft} loading={actionLoading === "save"} disabled={!canEditForm || Boolean(controller.preRepairPhotos.uploading)}>保存草稿</Button>
                 <Tooltip title={signatureDisabledReason}>
                   <span><Button size="large" color="blue" variant="solid" icon={<Send size={17} />} onClick={handleSendSignature} loading={actionLoading === "signature"} disabled={signatureDisabled}>{canResumeSignature ? "继续签字" : "发起签字"}</Button></span>
                 </Tooltip>
-              </div>
-            </div>
+              </FormActionBar>
 
           </Form>
-          <Modal
+          <FormDialog
             rootClassName="signature-confirm-modal"
             open={Boolean(signatureSession)}
             title="机动车维修委托确认"
-            width={isMobile ? "calc(100vw - 16px)" : 760}
-            style={isMobile ? { top: 8, paddingBottom: 8 } : undefined}
+            width={isMobile ? "calc(100vw - 24px)" : 760}
             closable={!signatureSubmitting}
             mask={{ closable: false }}
             onCancel={closeSignatureModal}
@@ -448,7 +456,6 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 {signatureCompleted ? "已签字" : "确认签字"}
               </Button>
             ]}
-            styles={{ body: { maxHeight: isMobile ? "calc(100vh - 148px)" : "72vh", overflowY: "auto" } }}
           >
             {signatureSession ? (
               <Form layout="vertical" requiredMark>
@@ -478,7 +485,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 </Form.Item>
               </Form>
             ) : null}
-          </Modal>
+          </FormDialog>
           {landscapeSignature && signatureSession ? (
             <div className="signature-landscape-overlay" role="dialog" aria-modal="true" aria-label="横屏签字">
               <div className="signature-landscape-header">
@@ -491,14 +498,14 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               <SignaturePad landscapeMode value={signatureImage} disabled={signatureSubmitting || signatureCompleted} onChange={setSignatureImage} />
             </div>
           ) : null}
-          </Card>
+          </FormSurface>
   );
 }
 
 function scrollToFirstFormError() {
   requestAnimationFrame(() => requestAnimationFrame(() => {
     const firstError = document.querySelector<HTMLElement>(
-      ".form-panel .ant-form-item-has-error, .form-panel .ant-input-status-error"
+      ".form-panel .ant-form-item-has-error, .form-panel .ant-input-status-error, .form-panel .pre-repair-photo-card.has-error"
     );
     if (!firstError) return;
     firstError.scrollIntoView({ behavior: "smooth", block: "center" });

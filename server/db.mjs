@@ -1,3 +1,5 @@
+import { attachPreRepairPhotos } from "./repositories/preRepairPhotoRepository.mjs";
+import { assertPreRepairPhotosReady } from "./domain/preRepairPhotos.mjs";
 import { assertWorkHoursRecorded } from './repositories/dispatchRepository.mjs';
 import { saveDispatchPlan, readDispatchPlans } from './repositories/dispatchPlanRepository.mjs';
 import { activateDispatchPlan } from './services/dispatchPlanService.mjs';
@@ -76,6 +78,7 @@ export async function createWorkOrder(draft, actor, actorUser) {
       dispatchNo: ""
     };
     await upsertWorkOrder(client, order);
+    await attachPreRepairPhotos(client, order, actorUser?.id);
     await saveDispatchPlan(client, order, actorUser, draft.dispatchPlan);
     await addAudit(client, order.id, actor, "创建委托单草稿");
     return findWorkOrderById(client, order.id);
@@ -104,6 +107,7 @@ export async function updateWorkOrder(order, actor, action, actorUser) {
       updatedAt: nowString()
     };
     await upsertWorkOrder(client, next);
+    await attachPreRepairPhotos(client, next, actorUser?.id);
     await saveDispatchPlan(client, next, actorUser, next.dispatchPlan);
     await addAudit(client, next.id, actor, action);
     return findWorkOrderById(client, next.id);
@@ -151,6 +155,7 @@ export async function createSignatureTokenForOrder(id, actor) {
     if (!order) throw new HttpError(404, "委托单不存在");
     if (order.status !== "草稿") throw new HttpError(409, `当前状态“${order.status}”不能发起签字`);
     assertOrderReadyForSignature(order);
+    assertPreRepairPhotosReady(order);
     const vehicleLookup = await lookupVehicleInCompanySystem({
       plate: order.vehicle.plate,
       vin: order.vehicle.vin
