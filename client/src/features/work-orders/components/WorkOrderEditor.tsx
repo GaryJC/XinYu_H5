@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { WorkOrder, WorkOrderDraft } from "../../../../../shared/types";
 import { canCreateOrder, canSendSignature } from "../domain/permissions";
 import { Checklist, Field, TextArea } from "../../../shared/ui/FormControls";
+import { ImageSourcePicker } from "../../../shared/ui/ImageSourcePicker";
 import { VehicleLicenseOcrControl } from "../../vehicle-license-ocr/VehicleLicenseOcrControl";
 import { VehicleIdentityRecognition } from "../../vehicle-identity/VehicleIdentityRecognition";
 import { VehicleReferenceAutocomplete } from "../../vehicle-identity/VehicleReferenceAutocomplete";
@@ -242,7 +243,21 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 />
               </Form.Item>
               <Field required error={fieldError("车牌号码")} disabled={!canEditForm} label="车牌号码" value={draft.vehicle.plate} onChange={(value) => updateVehicle("plate", value)} />
-              <Field required error={fieldError("VIN")} disabled={!canEditForm} label="VIN/底盘号" value={draft.vehicle.vin} onChange={(value) => updateVehicle("vin", value)} />
+              <div style={{ marginBottom: 16 }}>
+                <Field required error={fieldError("VIN")} disabled={!canEditForm} label="VIN/底盘号" value={draft.vehicle.vin} onChange={(value) => updateVehicle("vin", value)} />
+                <ImageSourcePicker
+                  disabled={!canEditForm || vehicleHistoryLoading}
+                  loading={identifierRecognition.vin.status === "识别中"}
+                  label="VIN 码识别"
+                  primaryActionLabel="拍照识别 VIN"
+                  onSelect={(file) => scanVehicleIdentifier("vin", file)}
+                />
+                <div role="status" style={{ marginTop: 8, color: "rgba(0, 0, 0, .65)", fontSize: 12 }}>
+                  {identifierRecognition.vin.status === "识别中"
+                    ? "正在识别 VIN 码…"
+                    : identifierRecognition.vin.error || "对准完整的 17 位 VIN 码拍照，识别后自动填写。"}
+                </div>
+              </div>
               <Field required error={fieldError("进厂里程")} disabled={!canEditForm} label="进厂里程" value={draft.vehicle.mileage} suffix="km" onChange={(value) => updateVehicle("mileage", value)} />
               <Form.Item className="field" label="车型" required validateStatus={fieldError("车型") ? "error" : undefined} help={fieldError("车型")}>
                 <VehicleReferenceAutocomplete

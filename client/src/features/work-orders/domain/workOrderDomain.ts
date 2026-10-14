@@ -1,5 +1,6 @@
 import { RepairItem, RoleKey, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "../../../../../shared/types";
 import { dispatchEnabled } from "../../dispatch/dispatchAvailability";
+import { filterEmptyRepairItems } from "./repairItems";
 
 const shopProfile = {
   id: "shop-hq",
@@ -93,7 +94,8 @@ export function validateWorkOrderDraft(draft: WorkOrderDraft) {
   if (!draft.vehicle.model.trim()) errors.push("车型必填");
   if (!draft.customer.name.trim()) errors.push("车主名称/所属单位必填");
   if (!draft.customer.phone.trim()) errors.push("联系电话必填");
-  if (!draft.repairItems.length || draft.repairItems.some((item) => !item.name.trim())) errors.push("维修项目不能为空");
+  const repairItems = filterEmptyRepairItems(draft.repairItems);
+  if (!repairItems.length || repairItems.some((item) => !item.name.trim())) errors.push("维修项目不能为空");
   return errors;
 }
 

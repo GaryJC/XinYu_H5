@@ -1,4 +1,5 @@
 import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
+import { filterEmptyRepairItems } from "../work-orders/domain/repairItems";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DashboardSummary,
@@ -269,13 +270,14 @@ export function useWorkbenchController() {
     setActionLoading("save");
     setFormErrors([]);
     try {
+      const cleanedDraft = { ...draft, repairItems: filterEmptyRepairItems(draft.repairItems) };
       if (selectedOrder) {
-        const updated = await workOrderApi.update({ ...selectedOrder, ...draft }, actor, "保存委托单");
+        const updated = await workOrderApi.update({ ...selectedOrder, ...cleanedDraft }, actor, "保存委托单");
         await loadOrders(role, updated.id);
         return;
       }
 
-      const created = await workOrderApi.create(draft, actor);
+      const created = await workOrderApi.create(cleanedDraft, actor);
       if (vehicleLicenseFileId) await workOrderApi.attachFile(vehicleLicenseFileId, created.id);
       await loadOrders(role, created.id);
     } catch (error) {
@@ -313,9 +315,10 @@ export function useWorkbenchController() {
     setActionLoading("signature");
     setFormErrors([]);
     try {
-      const order = selectedOrder ?? (await workOrderApi.create(draft, actor));
+      const cleanedDraft = { ...draft, repairItems: filterEmptyRepairItems(draft.repairItems) };
+      const order = selectedOrder ?? (await workOrderApi.create(cleanedDraft, actor));
       if (!selectedOrder && vehicleLicenseFileId) await workOrderApi.attachFile(vehicleLicenseFileId, order.id);
-      if (selectedOrder) await workOrderApi.update({ ...selectedOrder, ...draft }, actor, "保存签字前委托单");
+      if (selectedOrder) await workOrderApi.update({ ...selectedOrder, ...cleanedDraft }, actor, "保存签字前委托单");
       const withToken = await workOrderApi.createSignatureToken(order.id, actor);
       await loadOrders(role, withToken.id);
       return { token: withToken.signatureToken!, order: withToken };
