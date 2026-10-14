@@ -24,10 +24,10 @@
   .business-form-surface > .ant-card-body { padding: 16px; }
   .business-form-section { margin-top: 24px; padding-top: 24px; }
   .business-form-section-heading h3 { font-size: 17px; }
-  .business-form-action-bar { position: fixed; z-index: 90; bottom: 0; left: 0; right: 0; padding: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); margin: 0; border-top: 1px solid #e8edf3; background: #fff; box-shadow: 0 -4px 16px rgba(36, 50, 71, .04); display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .business-form-action-bar { position: fixed; z-index: 90; bottom: 0; left: 0; right: 0; padding: 12px; padding-bottom: 24px; padding-bottom: calc(24px + constant(safe-area-inset-bottom)); padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); margin: 0; border-top: 1px solid #e8edf3; background: #fff; box-shadow: 0 -4px 16px rgba(36, 50, 71, .04); display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .business-form-action-bar .ant-btn, .business-form-action-bar > span { width: 100%; min-height: 44px; }
   .business-form-action-bar.keyboard-open { visibility: hidden; pointer-events: none; }
-  .form-panel { margin-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+  .form-panel { margin-bottom: 96px; margin-bottom: calc(96px + constant(safe-area-inset-bottom)); margin-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
   .business-form-modal .ant-modal-container { padding: 16px; }
   .business-form-modal .ant-modal-body { max-height: calc(100vh - 172px); max-height: calc(100dvh - 172px); }
   .business-form-modal .ant-modal-footer { display: flex; gap: 12px; }
