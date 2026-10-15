@@ -133,6 +133,7 @@ export type LegacyDepartment = {
 };
 
 export type UserProfile = {
+  inspectorRoleMember?: boolean | null;
   id: string;
   name: string;
   role: RoleKey;
@@ -205,7 +206,7 @@ export type PreRepairPhotos = {
 export type StoredFile = {
   id: string;
   orderId?: string;
-  kind: "vehicle_license" | "repair_order_photo" | "damage_photo" | "signature_image" | "other";
+  kind: "repair_progress_photo" | "vehicle_license" | "repair_order_photo" | "damage_photo" | "signature_image" | "other";
   storageProvider: "oss" | "local";
   bucket: string;
   objectKey: string;
@@ -213,6 +214,7 @@ export type StoredFile = {
   mimeType: string;
   sizeBytes: number;
   uploadedBy?: string;
+  uploadedName?: string;
   createdAt: string;
 };
 
@@ -372,6 +374,7 @@ export type DispatchItem = {
   inspectorName?: string; inspectedBy?: string; inspectedAt?: string; pickedAt?: string;
 };
 export type DispatchTask = DispatchExecution & {
+  reworkReason?: string; rejectedItemIds?: number[]; inspectionClaimedAt?: string;
   workHours?: number; workHoursRecordedBy?: string; workHoursRecordedName?: string; workHoursRecordedAt?: string;
   technicianIds?: string[]; participantIds?: string[];
   orderId: string; shopId: string; version: number; stage: DispatchStage;
@@ -385,7 +388,7 @@ export type DispatchTask = DispatchExecution & {
   plate: string; dispatchNo: string; arrivalDate: string; orderStatus: WorkOrderStatus;
   faultDescription: string; overdue: boolean;
 };
-export type DispatchActionName = "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
+export type DispatchActionName = "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
 export type DispatchActionRequest = DispatchExecution & {
   workHours?: number;
   technicianIds?: string[];
@@ -408,7 +411,8 @@ export type DispatchEvent = {
   detail: { workHours?: number; previousWorkHours?: number; note?: string; reason?: string; technicianName?: string; previousTechnicianName?: string; dueAt?: string; previousDueAt?: string; urgent?: boolean; stage: DispatchStage; itemId?: number; rejectedItemIds?: number[]; pauseReason?: string };
 };
 export type DispatchDetail = {
+  inspectionNotification?: {status: string; error: string};
   task: DispatchTask; events: DispatchEvent[]; notifications: DispatchNotification[];
-  files: Array<Pick<StoredFile,"id"|"orderId"|"kind"|"originalName"|"mimeType"|"sizeBytes"|"createdAt">>;
+  files: Array<Pick<StoredFile,"id"|"orderId"|"kind"|"originalName"|"mimeType"|"sizeBytes"|"createdAt"|"uploadedBy"|"uploadedName">>;
 };
 export type DispatchPeople = { technicians: UserProfile[]; inspectors: UserProfile[] };

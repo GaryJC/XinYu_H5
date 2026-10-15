@@ -15,7 +15,7 @@ export async function listAccessUsers(shopId, database=pool) {
 
 export async function findUserById(id) {
   const { rows } = await pool.query(
-    "select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at from users where id = $1",
+    "select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, inspector_role_member from users where id = $1",
     [id]
   );
   return rows[0] ? rowToUser(rows[0]) : undefined;
@@ -23,7 +23,7 @@ export async function findUserById(id) {
 
 export async function findUserByDingTalkUserId(dingTalkUserId) {
   const { rows } = await pool.query(
-    "select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at from users where dingtalk_user_id = $1",
+    "select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, inspector_role_member from users where dingtalk_user_id = $1",
     [dingTalkUserId]
   );
   return rows[0] ? rowToUser(rows[0]) : undefined;
@@ -234,6 +234,7 @@ export async function isAuthSessionActive(token) {
 
 function rowToUser(row) {
   return {
+    inspectorRoleMember: row.inspector_role_member,
     id: row.id,
     name: row.name,
     role: row.role,

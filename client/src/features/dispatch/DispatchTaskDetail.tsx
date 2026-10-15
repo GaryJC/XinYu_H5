@@ -35,7 +35,11 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     if(task.stage==='暂停') actions.push('resume');
     if(task.stage==='维修中'&&task.items.length&&task.items.every(i=>['待检验','已完工'].includes(i.status))) actions.push('submit');
   }
-  if(inspect&&!unsigned&&!task.needsReview) actions.push('inspect');
+  const independent=!workers.includes(user.id)&&!task.participantIds?.includes(user.id)&&!task.items.some(i=>i.startedBy===user.id||i.finishedBy===user.id);
+  if(task.stage==='待检验'&&!task.inspectorId&&independent&&['inspector','manager'].includes(user.role)&&!task.needsReview) actions.push('claim-inspection');
+  if(task.stage==='待检验'&&task.inspectorId&&user.role==='manager') actions.push('reassign-inspection');
+  if(inspect&&task.inspectorId&&!unsigned&&!task.needsReview) actions.push('inspect');
+  if(controller.manager&&task.stage==='待检验'&&!task.inspectorId&&detail.inspectionNotification?.error) actions.push('retry-inspection-notifications');
   async function openFile(id:string,name:string) {
     try {const blob=await requestBlob(`/api/files/${encodeURIComponent(id)}/content`);const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);}
     catch(e){controller.setError(e instanceof Error?e.message:'附件加载失败');}
@@ -47,9 +51,10 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     {task.needsReview?<Alert type="warning" title="历史任务待核对" description="历史记录未能完整确认人员或进度；管理员核对后才能继续，不补造历史时间。"/>:null}
     {task.feedback?<Alert type="warning" title="无法接单 · 待服务顾问处理" description={task.feedback}/>:null}
     {task.stage==='暂停'?<Alert type="warning" title={`暂停：${task.pauseReason}`} description={`${task.pauseNote||''} · 自 ${displayTime(task.pausedAt)}，已暂停 ${Math.max(0,Math.floor((Date.now()-Date.parse(task.pausedAt||''))/60000))} 分钟`}/>:null}
+    {task.stage==='待检验'?<Alert type="info" title={task.inspectorName?`已由 ${task.inspectorName} 接手检验`:'等待检验员领取'}/>:null}
     {controller.error?<Alert type="error" showIcon title={controller.error}/>:null}
-    <Space wrap>{actions.map(action=><Button key={action} type={['assign','accept','submit','inspect'].includes(action)?'primary':'default'} loading={controller.busy} disabled={controller.busy} onClick={()=>{
-      if(['accept','resume','reoffer','remind'].includes(action)) void controller.act({action});else setDialog(action);
+    <Space wrap>{actions.map(action=><Button key={action} type={['assign','accept','submit','inspect','claim-inspection'].includes(action)?'primary':'default'} loading={controller.busy} disabled={controller.busy} onClick={()=>{
+      if(['accept','resume','reoffer','remind','claim-inspection','retry-inspection-notifications'].includes(action)) void controller.act({action});else setDialog(action);
     }}>{actionLabels[action]}</Button>)}</Space>
     <p className="dispatch-muted">{task.executionMode==='outsourced'?'承包方':'维修员工'}：{task.technicianName||"待指派"} · 预计完工：{displayTime(task.dueAt)}</p>
     <Collapse size="small" items={[{key:"info",label:"任务信息与关键时间",children:<Descriptions column={1} size="small" items={[
@@ -84,6 +89,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     </Card>)}
     <p className="dispatch-muted">领料仅为领取记录，不代表库存扣减；无需配件的维修可直接开工。</p>
     {files.length?<><h3>维修附件</h3><Space wrap>{files.map(file=>file.mimeType.startsWith('image/')?<AuthenticatedImage key={file.id} fileId={file.id} alt={file.originalName} width={140} height={100}/>:<Button key={file.id} onClick={()=>void openFile(file.id,file.originalName)}>{file.originalName}</Button>)}</Space></>:null}
+    {controller.manager&&detail.inspectionNotification&&detail.inspectionNotification.status!=='ready'&&detail.inspectionNotification.status!=='obsolete'?<Alert type={detail.inspectionNotification.error?'warning':'info'} title={detail.inspectionNotification.error||'正在安排检验通知'} description="工单已进入待检验队列，可重试检验通知。"/>:null}
     <h3>通知记录</h3>
     <p className="dispatch-muted">消息发送成功不代表维修工已接单。结果未知时不会自动重发。</p>
     {!notifications.length?<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无通知记录"/>:notifications.map(n=><div className="dispatch-notification" key={n.id}>

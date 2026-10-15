@@ -1,5 +1,8 @@
+import { TechnicianRepairPage } from './TechnicianRepairPage';
+import { useRef } from 'react';
+import { DispatchWorkloadBoard } from './DispatchWorkloadBoard';
 import { executionLabels } from './DispatchExecutionFields';
-import { Alert,Button,Card,Checkbox,Collapse,Drawer,Empty,Grid,Input,Select,Space,Table,Tag } from 'antd';
+import { Alert,Button,Card,Checkbox,Drawer,Empty,Grid,Input,Select,Space,Table,Tag } from 'antd';
 import type { DispatchMetric,DispatchTask,UserProfile } from '../../../../shared/types';
 import { useDispatchController } from './useDispatchController';
 import { DispatchTaskDetail } from './DispatchTaskDetail';
@@ -8,8 +11,10 @@ import './dispatch.css';
 export function DispatchPage({user,view}:{user:UserProfile;view:string}) {
   const c=useDispatchController(user,view), mobile=!Grid.useBreakpoint().md;
   const update=(key:string,value:string|undefined)=>c.setFilters(f=>({...f,[key]:value}));
+  const taskHeading=useRef<HTMLHeadingElement>(null);
   const chosen=c.summaries.find(s=>s.id===c.filters.technicianId);
   function badges(t:DispatchTask) {return <Space className="dispatch-badges" size={[8,8]} wrap><Tag>{executionLabels[t.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(t)}</Tag>{t.urgent?<Tag color="red">加急</Tag>:null}{t.overdue?<Tag color="red">超期</Tag>:null}{t.rework?<Tag color="orange">返工</Tag>:null}{t.feedback?<Tag color="orange">无法接单</Tag>:null}{t.needsReview?<Tag>待核对</Tag>:null}</Space>;}
+  if(view==='我的维修' && user.role==='technician') return <TechnicianRepairPage controller={c} user={user}/>;
   return <section className="dispatch-page" aria-label={view}>
     <div className="dispatch-heading"><div><h2>{view}</h2><p>{c.manager?'默认显示本店全部未完结工单，可按状态筛选并安排维修与检验。':'及时确认任务，记录项目进度。'}{c.updatedAt?` 更新于 ${c.updatedAt}`:''}</p></div><Button onClick={()=>{c.setError('');void c.refresh();}} loading={c.loading}>刷新</Button></div>
     {c.error?<Alert type="error" showIcon closable title={c.error} onClose={()=>c.setError('')}/>:null}
@@ -26,16 +31,11 @@ export function DispatchPage({user,view}:{user:UserProfile;view:string}) {
     </div><details className="dispatch-date-filter"><summary>完成日期范围</summary><div className="dispatch-date-fields">      <label>完成记录起始日期<Input aria-label="完成记录起始日期" type="date" value={c.filters.from||''} onChange={e=>update('from',e.target.value)}/></label>
       <label>完成记录结束日期<Input aria-label="完成记录结束日期" type="date" value={c.filters.to||''} onChange={e=>update('to',e.target.value)}/></label>
 </div><p className="dispatch-muted">仅筛选已完结记录和个人完成量，默认本月。</p></details><p className="dispatch-filter-hint">默认显示全部未完结工单，含待结算。</p></Card>
-    {c.manager?<Collapse className="dispatch-workload" defaultActiveKey={mobile?[]:['people']} items={[{key:'people',label:`维修工负荷 · ${c.summaries.length} 人`,children:<Card size="small" variant="borderless" className="dispatch-people">
-      <p className="dispatch-muted">点击数量查看对应工单。“尚未开工”包含其中的待接单单据；超期和返工是附加标记，各列不可直接相加。多人协作分别计入个人负荷和参与完成量，工单列表每单只计一次，人员完成量不可相加作为整店完成量。</p>
-      {mobile?<div className="dispatch-person-cards">{c.summaries.map(p=><Card key={p.id} size="small" title={`${personDisplayName(p,c.summaries)}${p.active?'':'（停用）'} · 当前 ${p.current} 单`}><div className="dispatch-metrics">{Object.entries(metrics).map(([key,label])=><Button key={key} type="text" onClick={()=>c.setFilters(f=>({from:f.from,to:f.to,technicianId:p.id,metric:key}))}>{label} {p[key as DispatchMetric]}</Button>)}</div></Card>)}</div>:<Table size="small" pagination={false} scroll={{x:850}} rowKey="id" dataSource={c.summaries} columns={[
-        {title:'维修工',dataIndex:'name',render:(name,p)=><span>{personDisplayName(p,c.summaries)}{p.active?'':'（停用）'}</span>},
-        {title:'当前任务',dataIndex:'current',render:(value,p)=><Button type="link" onClick={()=>c.setFilters(f=>({from:f.from,to:f.to,technicianId:p.id,metric:'current'}))}>{value}</Button>},
-        ...Object.entries(metrics).map(([key,label])=>({title:label,key,render:(_:unknown,p:typeof c.summaries[number])=><Button type="link" aria-label={`${personDisplayName(p,c.summaries)}${label}${p[key as DispatchMetric]}单`} onClick={()=>c.setFilters(f=>({from:f.from,to:f.to,technicianId:p.id,metric:key}))}>{p[key as DispatchMetric]}</Button>}))
-      ]}/>}
-      {!c.summaries.length?<Alert type="info" title="暂无维修工，请先配置钉钉角色，并让员工登录一次。"/>:null}
-    </Card>}]} />:null}
-    <div className="dispatch-heading"><h3>{chosen?`${personDisplayName(chosen,c.summaries)} · `:''}{c.filters.metric?(c.filters.metric==='current'?'当前任务':metrics[c.filters.metric as DispatchMetric]):(statusFilters.find(option=>option.value===(c.filters.stage||''))?.label||'维修任务')}（{c.tasks.length}）</h3>{c.filters.metric?<Button onClick={()=>update('metric',undefined)}>清除数量筛选</Button>:null}</div>
+    {c.manager?<DispatchWorkloadBoard summaries={c.summaries} filters={c.filters} onSelect={(technicianId,metric)=>{
+      c.setFilters(f=>({from:f.from,to:f.to,technicianId,metric}));
+      if(mobile) taskHeading.current?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
+    }}/>:null}
+    <div className="dispatch-heading"><h3 ref={taskHeading} className="dispatch-task-heading">{chosen?`${personDisplayName(chosen,c.summaries)} · `:''}{c.filters.metric?(c.filters.metric==='current'?'当前任务':metrics[c.filters.metric as DispatchMetric]):(statusFilters.find(option=>option.value===(c.filters.stage||''))?.label||'维修任务')}（{c.tasks.length}）</h3>{c.filters.metric?<Button onClick={()=>update('metric',undefined)}>清除数量筛选</Button>:null}</div>
     {!c.loading&&!c.tasks.length?<Empty description="没有符合条件的维修任务"/>:mobile?<div className="dispatch-task-cards">{c.tasks.map(t=><Card key={t.orderId} className="dispatch-task-card" size="small" title={t.plate||'未填写车牌'} extra={<Button type="link" onClick={()=>c.select(t.orderId)}>查看任务</Button>}>
       {badges(t)}
       <p className="dispatch-order-number">{t.dispatchNo||t.orderId}</p>

@@ -6,7 +6,6 @@ export const navItems: Array<{ label: string; icon: typeof LayoutDashboard; role
   { label: "工作台", icon: LayoutDashboard, roles: ["advisor", "manager"] },
   { label: "委托开单", icon: ClipboardList, roles: ["advisor", "manager"] },
   { label: "派工台", icon: ClipboardList, roles: ["advisor", "manager"] },
-  { label: "维修工详情", icon: BarChart3, roles: ["advisor", "manager"] },
   { label: "我的维修", icon: ClipboardList, roles: ["technician"] },
   { label: "检验任务", icon: ClipboardList, roles: ["inspector", "manager"] },
   { label: "数据看板", icon: BarChart3, roles: ["manager"] },

@@ -23,8 +23,8 @@ export function DispatchActionDialog({action,task,controller,onClose}:{action:Di
     setError('');
     if(assign && execution.executionMode!=='outsourced' && !technicianIds.length) {setError('请选择维修工');return;}
     if(scheduling && !dueAt) {setError('请填写预计完工时间');return;}
-    if(action==='submit' && !inspectorId) {setError('请选择检验员');return;}
-    if((['decline','cancel','reassign','reconcile'].includes(action)||(action==='inspect' && rejectedItemIds.length)) && !reason.trim()) {setError('请填写原因或交接说明');return;}
+    if(['submit','reassign-inspection'].includes(action) && !inspectorId) {setError('请选择检验员');return;}
+    if((['decline','cancel','reassign','reconcile','reassign-inspection'].includes(action)||(action==='inspect' && rejectedItemIds.length)) && !reason.trim()) {setError('请填写原因或交接说明');return;}
     if(action==='record-hours' && (!workHours || workHours<=0)) {setError('请填写大于 0 的实际工时');return;}
     if(action==='record-hours' && task.workHours!==undefined && !reason.trim()) {setError('修改工时请填写原因');return;}
     const input:ActionInput={action,note};
@@ -32,7 +32,7 @@ export function DispatchActionDialog({action,task,controller,onClose}:{action:Di
     if(assign) input.technicianIds=execution.executionMode==='outsourced'?[]:technicianIds;
     if(assign||action==='update') Object.assign(input,execution);
     if(scheduling) {input.dueAt=new Date(`${dueAt}:00+08:00`).toISOString();input.urgent=urgent;}
-    if(action==='submit') input.inspectorId=inspectorId;
+    if(['submit','reassign-inspection'].includes(action)) input.inspectorId=inspectorId;
     if(reason) input.reason=reason;
     if(action==='pause') input.pauseReason=pauseReason;
     if(action==='inspect') input.rejectedItemIds=rejectedItemIds;
@@ -49,11 +49,11 @@ export function DispatchActionDialog({action,task,controller,onClose}:{action:Di
       {assign?<Alert type="info" title={execution.executionMode==='outsourced'?'外包进度由服务顾问或管理员录入，完工后需独立检验。':'所选员工共同维护工单进度，任一人确认即代表工单接单；每次操作均记录实际操作人。'}/>:null}
       </FormSection>}
       <FormSection title={scheduling ? "时间与备注" : "操作说明"}>
-      {scheduling?<><Form.Item label="预计完工时间（上海时间）" required><Input aria-label="预计完工时间" type="datetime-local" value={dueAt} onChange={e=>setDueAt(e.target.value)}/></Form.Item><Checkbox checked={urgent} onChange={e=>setUrgent(e.target.checked)}>加急任务</Checkbox></>:null}
-      {action==='submit'?<Form.Item label="指定检验员" required><Select aria-label="指定检验员" placeholder="选择检验员或管理员" value={inspectorId} onChange={setInspectorId} options={controller.people.inspectors.filter(p=>!(task.technicianIds??[task.technicianId]).includes(p.id) && !task.participantIds?.includes(p.id) && !task.items.some(i=>i.startedBy===p.id||i.finishedBy===p.id)).map(p=>({value:p.id,label:personDisplayName(p,controller.people.inspectors)}))}/></Form.Item>:null}
+      {scheduling?<><Form.Item label="预计完工时间" required><Input aria-label="预计完工时间" type="datetime-local" value={dueAt} onChange={e=>setDueAt(e.target.value)}/></Form.Item><Checkbox checked={urgent} onChange={e=>setUrgent(e.target.checked)}>加急任务</Checkbox></>:null}
+      {['submit','reassign-inspection'].includes(action)?<Form.Item label="指定检验员" required><Select aria-label="指定检验员" placeholder="选择检验员或管理员" value={inspectorId} onChange={setInspectorId} options={controller.people.inspectors.filter(p=>!(task.technicianIds??[task.technicianId]).includes(p.id) && !task.participantIds?.includes(p.id) && !task.items.some(i=>i.startedBy===p.id||i.finishedBy===p.id)).map(p=>({value:p.id,label:personDisplayName(p,controller.people.inspectors)}))}/></Form.Item>:null}
       {action==='pause'?<Form.Item label="暂停原因"><Select aria-label="暂停原因" value={pauseReason} onChange={setPauseReason} options={['待配件','待客户确认','技术问题','其他'].map(value=>({value,label:value}))}/></Form.Item>:null}
       {action==='inspect'?<><Alert type="info" title="不选择退回项目表示全部通过；勾选的项目退回返工，其余本次项目检验通过。"/><Checkbox.Group value={rejectedItemIds} onChange={values=>setRejectedItemIds(values as number[])} options={task.items.filter(i=>i.status==='待检验').map(i=>({value:i.id,label:`退回：${i.name}`}))}/></>:null}
-      {(['decline','cancel','reassign','reconcile','inspect'].includes(action)||(action==='record-hours'&&task.workHours!==undefined))?<Form.Item label="原因 / 交接说明"><Input.TextArea aria-label="原因或交接说明" value={reason} maxLength={2000} onChange={e=>setReason(e.target.value)} rows={3}/></Form.Item>:null}
+      {(['decline','cancel','reassign','reconcile','inspect','reassign-inspection'].includes(action)||(action==='record-hours'&&task.workHours!==undefined))?<Form.Item label="原因 / 交接说明"><Input.TextArea aria-label="原因或交接说明" value={reason} maxLength={2000} onChange={e=>setReason(e.target.value)} rows={3}/></Form.Item>:null}
       <Form.Item label={action==='submit'?'完工提报说明':'备注'}><Input.TextArea aria-label="备注" value={note} maxLength={2000} onChange={e=>setNote(e.target.value)} rows={3}/></Form.Item>
       {action==='reconcile'?<Alert type="warning" title={historical?"仅核对历史人员，不重新接单、不补发通知、不补造完成时间。":"确认归属后重新发起接单，保留已有项目进度，不补录历史时间。"}/>:null}
       </FormSection>

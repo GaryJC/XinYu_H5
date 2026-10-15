@@ -12,9 +12,10 @@ export async function queryDispatchTasks(actor, query={}) {
   return tasks.filter(t=> {
     if(query.technicianId && !technicianIds(t).includes(query.technicianId)) return false;
     if(query.executionMode && (t.executionMode||'internal')!==query.executionMode) return false;
+    if(query.stage==='进行中' && !['待开工','维修中','暂停'].includes(t.stage)) return false;
     if(query.stage==='完成') { if(t.orderStatus!=='完成') return false; }
     else if(query.stage==='待结算') { if(t.orderStatus!=='待结算') return false; }
-    else if(query.stage && t.stage!==query.stage) return false;
+    else if(query.stage && query.stage!=='进行中' && t.stage!==query.stage) return false;
     if(query.urgent==='true' && !t.urgent) return false;
     if(query.overdue==='true' && !t.overdue) return false;
     if(query.search && ![t.orderId,t.dispatchNo,t.plate].some(v=>v.toLowerCase().includes(query.search.toLowerCase()))) return false;
@@ -54,6 +55,10 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
     const people=await dispatchPeople(actor,client);
     const currentActor=people.find(p=>p.id===actor.id);
     if(!currentActor?.active || currentActor.role!==actor.role) throw new HttpError(403,'当前员工权限已变化，请重新登录');
+    if(input.action==='retry-inspection-notifications') {
+      const {rows:jobs}=await client.query('select status,error from dispatch_inspection_notifications where order_id=$1 order by event_id desc limit 1',[id]);
+      if(task.inspectorId || !jobs[0]?.error || jobs[0].status==='ready') throw new HttpError(409,'当前无需重试检验员通知');
+    }
     const next=applyDispatchAction(task,input,currentActor,people);
     await saveDispatchTask(client,next);
     if(input.action==='assign') await markDispatchPlan(client,id);
@@ -78,7 +83,10 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
       const scheduler=people.find(p=>p.id===task.assignedBy && p.active && ['manager','advisor'].includes(p.role));
       if(scheduler) add(scheduler.id,'无法接单'); else people.filter(p=>p.active && p.role==='manager').forEach(p=>add(p.id,'无法接单'));
     }
-    if(input.action==='submit') add(next.inspectorId,'待检验');
+    if(['submit-order','retry-inspection-notifications'].includes(input.action)) {
+      await client.query(`insert into dispatch_inspection_notifications(event_id,order_id) values($1,$2) on conflict do nothing`,[event.id,id]);
+    }
+    if(input.action==='submit' || input.action==='reassign-inspection') add(next.inspectorId,'待检验');
     if(input.action==='inspect' && next.stage==='维修中') addHandlers(next,'退回返工');
     if(input.action==='remind') {
       const targets=task.stage==='待检验'?[task.inspectorId]:task.feedback?[task.assignedBy]:handlers(task);

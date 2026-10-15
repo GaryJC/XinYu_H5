@@ -5,7 +5,7 @@ import { dispatchApi,type DispatchFilters } from './dispatchApi';
 export type ActionInput=Omit<DispatchActionRequest,'expectedVersion'|'requestId'>;
 export function useDispatchController(user:UserProfile,view:string,initialOrderId?:string) {
   const manager=['manager','advisor'].includes(user.role);
-  const [filters,setFilters]=useState<DispatchFilters>({stage:view==='检验任务'?'待检验':undefined});
+  const [filters,setFilters]=useState<DispatchFilters>({stage:view==='检验任务'?'待检验':view==='我的维修'?'进行中':undefined});
   const [tasks,setTasks]=useState<DispatchTask[]>([]);
   const [people,setPeople]=useState<DispatchPeople>({technicians:[],inspectors:[]});
   const [summaries,setSummaries]=useState<TechnicianSummary[]>([]);
@@ -26,7 +26,7 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
     if(results[2].status==='fulfilled') setSummaries(results[2].value); else setSummaries([]);
     const failed=results.find(r=>r.status==='rejected');
     if(failed?.status==='rejected') setError(failed.reason instanceof Error?failed.reason.message:'数据加载失败');
-    else setUpdatedAt(new Date().toLocaleTimeString('zh-CN',{timeZone:'Asia/Shanghai'}));
+    else {setError('');setUpdatedAt(new Date().toLocaleTimeString('zh-CN',{timeZone:'Asia/Shanghai'}));}
     setLoading(false);
   },[filters,manager]);
   const refreshDetail=useCallback(async()=> {
@@ -62,6 +62,6 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
       await refreshDetail();return false;
     } finally {actionBusy.current=false;setBusy(false);}
   }
-  return {manager,filters,setFilters,tasks,people,summaries,selectedId,detail,error,setError,loading,busy,updatedAt,refresh,select,act};
+  return {manager,filters,setFilters,tasks,people,summaries,selectedId,detail,error,setError,loading,busy,updatedAt,refresh,refreshDetail,select,act};
 }
 export type DispatchController=ReturnType<typeof useDispatchController>;

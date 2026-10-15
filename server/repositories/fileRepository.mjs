@@ -2,16 +2,16 @@ import { pool, transaction } from "../database/pool.mjs";
 import { createId, formatDate, nowString } from "../domain/workOrderModel.mjs";
 import { HttpError } from "../http/HttpError.mjs";
 
-export async function createFileRecord({ orderId, kind, storageProvider, bucket, objectKey, originalName, mimeType, sizeBytes, uploadedBy }) {
+export async function createFileRecord({ orderId, kind, storageProvider, bucket, objectKey, originalName, mimeType, sizeBytes, uploadedBy, uploadRequestId, database=pool }) {
   const id = createId("file");
-  await pool.query(
+  await database.query(
     `
       insert into files (
         id, order_id, kind, storage_provider, bucket, object_key,
-        original_name, mime_type, size_bytes, uploaded_by
+        original_name, mime_type, size_bytes, uploaded_by, upload_request_id
       ) values (
         $1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10
+        $7, $8, $9, $10, $11
       )
     `,
     [
@@ -24,7 +24,7 @@ export async function createFileRecord({ orderId, kind, storageProvider, bucket,
       originalName || "",
       mimeType || "",
       Number(sizeBytes || 0),
-      uploadedBy || null
+      uploadedBy || null, uploadRequestId || null
     ]
   );
   return {
@@ -76,9 +76,9 @@ export async function assertFileReadAccess(fileId, user, database = pool) {
   if (!user.shopId || file.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店文件");
   if (user.role === "manager") return;
   if (user.role === "advisor" && (file.uploaded_by === user.id || file.advisor)) return;
-  if (["repair_order_photo", "damage_photo", "other"].includes(file.kind)) {
+  if (["repair_progress_photo", "repair_order_photo", "damage_photo", "other"].includes(file.kind)) {
     if (user.role === "technician" && (file.technician_id === user.id || file.technician_ids?.includes(user.id))) return;
-    if (user.role === "inspector" && file.inspector_id === user.id) return;
+    if (user.role === "inspector" && user.inspectorRoleMember!==false && (file.inspector_id === user.id || file.stage==='待检验' && ![file.technician_id,...(file.technician_ids||[]),...(file.participant_ids||[])].includes(user.id) && !(file.items||[]).some(i=>i.startedBy===user.id || i.finishedBy===user.id))) return;
   }
   throw new HttpError(403, "无权查看该文件");
 }
@@ -94,7 +94,7 @@ export async function assertFileAccess(fileId, user, database = pool) {
 async function findFileAccess(fileId, database) {
   const { rows } = await database.query(
     `
-      select f.uploaded_by, f.order_id, f.kind, wo.advisor, wo.status, coalesce(wo.shop_id,u.shop_id) as shop_id, dt.technician_id, dt.data->'technicianIds' as technician_ids, dt.inspector_id
+      select f.uploaded_by, f.order_id, f.kind, wo.advisor, wo.status, coalesce(wo.shop_id,u.shop_id) as shop_id, dt.technician_id, dt.data->'technicianIds' as technician_ids, dt.inspector_id, dt.stage, dt.data->'participantIds' as participant_ids, dt.data->'items' as items
       from files f
       left join work_orders wo on wo.id = f.order_id
       left join users u on u.id=f.uploaded_by

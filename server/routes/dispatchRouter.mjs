@@ -1,3 +1,4 @@
+import { uploadRepairPhoto } from '../services/repairPhotoService.mjs';
 import { readJson, sendJson } from '../http/response.mjs';
 import { requireAnyRole } from '../domain/accessPolicy.mjs';
 import { DISPATCH_ROLES } from '../domain/dispatchPolicy.mjs';
@@ -10,8 +11,10 @@ export async function handleDispatchRequest(req,res,url,actor) {
   if(req.method==='GET' && url.pathname==='/api/dispatch/technicians') { sendJson(res,200,await technicianSummaries(actor,query)); return true; }
   if(req.method==='GET' && url.pathname==='/api/dispatch/people') {
     const people=await dispatchPeople(actor);
-    sendJson(res,200,{technicians:people.filter(p=>p.active && p.role==='technician'),inspectors:people.filter(p=>p.active && ['inspector','manager'].includes(p.role) && p.id!==actor.id)}); return true;
+    sendJson(res,200,{technicians:people.filter(p=>p.active && p.role==='technician'),inspectors:people.filter(p=>p.active && (p.role==='manager'||p.inspectorRoleMember!==false) && ['inspector','manager'].includes(p.role) && p.id!==actor.id)}); return true;
   }
+  const photo=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)\/photos$/);
+  if(photo && req.method==='POST') {sendJson(res,201,await uploadRepairPhoto(actor,decodeURIComponent(photo[1]),await readJson(req)));return true;}
   const personal=url.pathname.match(/^\/api\/dispatch\/technicians\/([^/]+)\/tasks$/);
   if(req.method==='GET' && personal) { requireAnyRole(actor,['manager','advisor']); sendJson(res,200,await queryDispatchTasks(actor,{...query,technicianId:decodeURIComponent(personal[1])})); return true; }
   const match=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)(\/actions)?$/);

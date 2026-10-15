@@ -2,5 +2,5 @@
 export const dispatchEnabled = true;
 
 export function isDispatchNavigation(label: string) {
-  return ["派工台", "维修工详情", "我的维修", "检验任务"].includes(label);
+  return ["派工台", "我的维修", "检验任务"].includes(label);
 }

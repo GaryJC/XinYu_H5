@@ -1,3 +1,4 @@
+import { processInspectionNotifications } from './inspectionNotifications.mjs';
 import { notificationConfiguration,sendWorkNotification,queryWorkNotification } from '../integrations/dingtalk/notifications.mjs';
 import { claimNotification,finishNotification,notificationRecipient } from '../repositories/dispatchNotificationRepository.mjs';
 export async function processNotification({claim=claimNotification,finish=finishNotification,recipient=notificationRecipient,send=sendWorkNotification,query=queryWorkNotification}={}) {
@@ -6,6 +7,7 @@ export async function processNotification({claim=claimNotification,finish=finish
   try {
     const user=await recipient(row.recipient_id);
     if(row.previous_status!=='pending') result=await query(row,user?.dingtalk_user_id);
+    else if(row.kind==='待检验' && user?.role==='inspector' && user.inspector_role_member===false) result={status:'failed',error:'收件人已不属于钉钉检验员角色',retryable:false};
     else if(!user?.active) result={status:'failed',error:'收件人已停用',retryable:false};
     else result=await send(row,user.dingtalk_user_id);
   } catch { result={status:'unknown',error:'通知处理异常，需查询或核对平台结果'}; }
@@ -16,6 +18,7 @@ export function startDispatchNotifications() {
   if(mode==='disabled') {console.log('Dispatch notifications disabled; tasks remain queued.');return async()=>{};}
   let stopped=false; let running;
   const tick=()=>{if(stopped || running) return; running=(async()=>{
+    await processInspectionNotifications();
     for(let i=0;i<10 && !stopped;i++) if(!await processNotification()) break;
   })().catch(error=>console.error('Dispatch notification worker:',error.message)).finally(()=>{running=undefined;});};
   const timer=setInterval(tick,5000); timer.unref(); tick();

@@ -22,7 +22,7 @@ export function DraftDispatchFields({plan,users,shopId,disabled,signed,technicia
         <FormSection title="执行方式"><fieldset disabled={disabled} style={{border:0,padding:0,margin:0}}><div className="dispatch-execution-fields"><DispatchExecutionFields disabled={disabled} value={plan} onChange={value=>onChange({...value,technicianIds:plan.technicianIds??(plan.technicianId?[plan.technicianId]:[]),dueAt:plan.dueAt,urgent:plan.urgent,note:plan.note})}/></div></fieldset></FormSection>
         {plan.executionMode!=='outsourced'?<FormSection title="人员安排"><Form.Item label="预选维修工（可多选）"><Select mode="multiple" aria-label="预选维修工" allowClear showSearch optionFilterProp="label" disabled={disabled} value={plan.technicianIds??(plan.technicianId?[plan.technicianId]:[])} options={options} placeholder="选择共同维修的员工" onChange={technicianIds=>patch({technicianIds,technicianId:undefined})}/></Form.Item></FormSection>:null}
         <FormSection title="时间与备注">
-        <Form.Item label="预计完工时间（上海时间）" required><Input type="datetime-local" aria-label="派工预计完工时间" disabled={disabled} value={localTime} onChange={e=>patch({dueAt:e.target.value?new Date(`${e.target.value}:00+08:00`).toISOString():''})}/></Form.Item>
+        <Form.Item label="预计完工时间" required><Input type="datetime-local" aria-label="派工预计完工时间" disabled={disabled} value={localTime} onChange={e=>patch({dueAt:e.target.value?new Date(`${e.target.value}:00+08:00`).toISOString():''})}/></Form.Item>
         <Checkbox disabled={disabled} checked={plan.urgent} onChange={e=>patch({urgent:e.target.checked})}>加急维修</Checkbox>
         <Form.Item label="派工备注"><Input.TextArea aria-label="开单派工备注" disabled={disabled} maxLength={2000} value={plan.note} onChange={e=>patch({note:e.target.value})}/></Form.Item>
         </FormSection>

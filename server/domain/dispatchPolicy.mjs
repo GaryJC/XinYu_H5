@@ -1,6 +1,7 @@
 import { HttpError } from '../http/HttpError.mjs';
 export const DISPATCH_ROLES = ['manager','advisor','technician','inspector'];
 export const technicianIds = task => task.technicianIds ?? (task.technicianId ? [task.technicianId] : []);
+export const canInspect = (task, actor) => actor?.active && (actor.role==='manager'||actor.inspectorRoleMember!==false) && ['inspector','manager'].includes(actor.role) && actor.shopId===task.shopId && !technicianIds(task).includes(actor.id) && !(task.participantIds||[]).includes(actor.id) && !task.items.some(i=>i.startedBy===actor.id || i.finishedBy===actor.id);
 const scheduling = ['manager','advisor'];
 const fail = (message, status = 409) => { throw new HttpError(status, message); };
 export function assertDispatchAccess(task, actor) {
@@ -8,11 +9,11 @@ export function assertDispatchAccess(task, actor) {
   if (scheduling.includes(actor.role)) return;
   if (['草稿','待客户签字'].includes(task.orderStatus)) fail('客户尚未签字，无权访问该维修任务',403);
   if (actor.role === 'technician' && technicianIds(task).includes(actor.id)) return;
-  if (actor.role === 'inspector' && task.inspectorId === actor.id) return;
+  if (actor.role === 'inspector' && actor.inspectorRoleMember!==false && (task.inspectorId === actor.id || task.stage==='待检验' && canInspect(task,actor))) return;
   fail('任务已改派或不属于当前员工',403);
 }
 export function validateDispatchRequest(input) {
-  const actions = ['record-hours','assign','reassign','reoffer','cancel','accept','decline','start','finish','pick','pause','resume','submit','inspect','update','remind','retry-notification','reconcile'];
+  const actions = ['start-order','submit-order','claim-inspection','reassign-inspection','retry-inspection-notifications','record-hours','assign','reassign','reoffer','cancel','accept','decline','start','finish','pick','pause','resume','submit','inspect','update','remind','retry-notification','reconcile'];
   if (!input || !actions.includes(input.action) || !Number.isInteger(input.expectedVersion) || input.expectedVersion < 0 || typeof input.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(input.requestId)) fail('操作参数无效：需要版本号及唯一请求编号',400);
   for (const key of ['note','reason','pauseReason','technicianId','inspectorId','notificationId']) {
     if (input[key] !== undefined && (typeof input[key] !== 'string' || input[key].length > 2000)) fail('文本参数无效',400);
@@ -74,6 +75,28 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     if(task.feedback) fail('已反馈无法接单，请等待服务顾问处理');
     if(action==='decline') { reason(); next.feedback=input.reason.trim(); }
     else { next.acceptedAt=now; next.stage=task.firstStartedAt || task.startHistoryUnknown || task.items.some(i=>['维修中','待检验','已完工'].includes(i.status)) ? '维修中':'待开工'; }
+  } else if(action==='start-order') {
+    requireOwner(); stage('待开工','维修中');
+    const pending=next.items.filter(i=>['待开工','待派工','待领料'].includes(i.status));
+    if(!pending.length) fail('没有需要开工的维修项目');
+    pending.forEach(i=>{i.status='维修中';i.startAt=now;i.startedBy=actor.id;i.finishAt=undefined;});
+    next.firstStartedAt ||= now; next.stage='维修中';
+    next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])];
+  } else if(action==='submit-order') {
+    requireOwner(); stage('维修中');
+    if(!next.items.length || next.items.some(i=>!['维修中','待检验','已完工'].includes(i.status))) fail('请先开始全部待维修项目');
+    next.items.filter(i=>i.status==='维修中').forEach(i=>{i.status='待检验';i.finishAt=now;i.finishedBy=actor.id;});
+    next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])];
+    Object.assign(next,{stage:'待检验',inspectorId:undefined,inspectorName:undefined,submittedAt:now,submissionNote:input.note||''});
+  } else if(action==='claim-inspection' || action==='reassign-inspection') {
+    stage('待检验');
+    let inspector=actor;
+    if(action==='reassign-inspection') {if(actor.role!=='manager') fail('仅管理员可重新分配检验',403);reason();inspector=person(input.inspectorId,['inspector','manager']);}
+    else if(task.inspectorId) fail('任务已被领取，请刷新');
+    if(!canInspect(task,inspector)) fail('不能自检，或没有当前任务检验权限',403);
+    Object.assign(next,{inspectorId:inspector.id,inspectorName:inspector.name,inspectionClaimedAt:now});
+  } else if(action==='retry-inspection-notifications') {
+    requireSchedule();stage('待检验');
   } else if(['start','finish','pick'].includes(action)) {
     requireOwner(); stage('待开工','维修中'); const current=item();
     if(action==='start') { if(!['待开工','待派工','待领料'].includes(current.status)) fail('该项目不能开工'); current.status='维修中'; current.startAt ||= now; current.startedBy=actor.id; next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])]; next.firstStartedAt ||= now; next.stage='维修中'; }
@@ -90,11 +113,11 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     requireOwner(); stage('维修中');
     if(!next.items.length || next.items.some(i=>!['待检验','已完工'].includes(i.status))) fail('全部维修项目完成后才能提报');
     const inspector=person(input.inspectorId,['inspector','manager']);
-    if(technicianIds(task).includes(inspector.id) || (task.participantIds||[]).includes(inspector.id) || next.items.some(i=>i.startedBy===inspector.id || i.finishedBy===inspector.id)) fail('不能选择维修工本人检验',403);
+    if(!canInspect(task,inspector) || technicianIds(task).includes(inspector.id) || (task.participantIds||[]).includes(inspector.id) || next.items.some(i=>i.startedBy===inspector.id || i.finishedBy===inspector.id)) fail('不能选择维修工本人检验',403);
     next.inspectorId=inspector.id; next.inspectorName=inspector.name; next.stage='待检验'; next.submittedAt=now; next.submissionNote=input.note || '';
   } else if(action==='inspect') {
     stage('待检验');
-    if(!['manager','inspector'].includes(actor.role) || (actor.role!=='manager' && task.inspectorId!==actor.id) || (actor.id===task.technicianId || technicianIds(task).includes(actor.id) || (task.participantIds||[]).includes(actor.id)) || next.items.some(i=>i.startedBy===actor.id || i.finishedBy===actor.id)) fail('不能自检，或没有当前任务检验权限',403);
+    if(!canInspect(task,actor) || !['manager','inspector'].includes(actor.role) || (actor.role!=='manager' && task.inspectorId!==actor.id) || (actor.id===task.technicianId || technicianIds(task).includes(actor.id) || (task.participantIds||[]).includes(actor.id)) || next.items.some(i=>i.startedBy===actor.id || i.finishedBy===actor.id)) fail('不能自检，或没有当前任务检验权限',403);
     const rejected=input.rejectedItemIds || [];
     if(rejected.length) reason();
     if(rejected.some(id=>!next.items.some(i=>i.id===id && i.status==='待检验'))) fail('退回项目不在本次待检验项目中',400);
@@ -103,7 +126,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
       if(rejected.includes(current.id)) { current.status='待开工'; current.finishAt=undefined; }
       else { current.status='已完工'; current.inspectedBy=actor.id; current.inspectorName=actor.name; current.inspectedAt=now; }
     }
-    if(rejected.length) { next.stage='维修中'; next.rework=true; next.reworkCount=(task.reworkCount||0)+1; }
+    if(rejected.length) { next.reworkReason=input.reason; next.rejectedItemIds=rejected; next.stage='维修中'; next.rework=true; next.reworkCount=(task.reworkCount||0)+1; }
     else { next.stage='维修完成'; next.completedAt=now; next.completedBy=task.technicianId; next.inspectorName=actor.name; next.rework=false; }
   } else if(action==='record-hours') {
     requireSchedule(); stage('维修中','暂停','待检验','维修完成');

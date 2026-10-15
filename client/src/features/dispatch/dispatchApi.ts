@@ -3,6 +3,7 @@ import type { DispatchActionRequest, DispatchDetail, DispatchPeople, DispatchTas
 export type DispatchFilters = {executionMode?:string;search?:string;technicianId?:string;stage?:string;metric?:string;urgent?:string;overdue?:string;from?:string;to?:string};
 function query(filters: DispatchFilters) { return new URLSearchParams(Object.entries(filters).filter(([,v])=>Boolean(v)) as [string,string][]).toString(); }
 export const dispatchApi={
+  uploadPhoto:(id:string,body:{requestId:string;fileName:string;mimeType:string;imageBase64:string})=>request<{id:string}>(`/api/dispatch/tasks/${encodeURIComponent(id)}/photos`,{method:'POST',body}),
   tasks:(filters:DispatchFilters)=>request<DispatchTask[]>(`/api/dispatch/tasks?${query(filters)}`),
   people:()=>request<DispatchPeople>('/api/dispatch/people'),
   summaries:(filters:DispatchFilters)=>request<TechnicianSummary[]>(`/api/dispatch/technicians?${query({from:filters.from,to:filters.to})}`),
