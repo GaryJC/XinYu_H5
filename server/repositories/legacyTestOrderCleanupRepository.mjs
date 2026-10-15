@@ -15,11 +15,21 @@ export const FIND_LEGACY_TEST_ORDER_QUERY = `
     (select count(*) from dbo.ckdb1 outbound where RTRIM(outbound.pgd) = RTRIM(work_order.pgd)) as outbound_count,
     (select count(*) from dbo.cljgb completion where RTRIM(completion.pgd) = RTRIM(work_order.pgd)) as completion_count,
     (select count(*) from dbo.qxthb returned where RTRIM(returned.pgd) = RTRIM(work_order.pgd)) as return_count,
-    (select count(*) from dbo.skxcb payment where RTRIM(payment.pgd) = RTRIM(work_order.pgd)) as payment_count,
-    (select count(*) from dbo.lscxwx018 archived where RTRIM(archived.pgd) = RTRIM(work_order.pgd)) as archive_count
+    (select count(*) from dbo.skxcb payment where RTRIM(payment.pgd) = RTRIM(work_order.pgd)) as payment_count
   from dbo.qxwxb work_order with (updlock, holdlock)
   where RTRIM(work_order.bzxx) = @source_marker
   order by work_order.reid desc
+`;
+
+// SQL Server 2000 uses sysobjects/syscolumns rather than modern catalog views.
+export const FIND_LEGACY_ARCHIVE_TABLES_QUERY = `
+  select o.name as table_name,
+    case when exists (
+      select 1 from dbo.syscolumns c where c.id = o.id and c.name = 'pgd'
+    ) then 1 else 0 end as has_dispatch_no
+  from dbo.sysobjects o
+  where o.xtype = 'U' and o.uid = user_id('dbo') and o.name like 'lscxwx%'
+  order by o.name
 `;
 
 export const DELETE_LEGACY_TEST_ORDER_ITEMS_QUERY = `
@@ -56,7 +66,9 @@ export async function inspectLegacyTestOrder(
   if (new Set(rows.map((row) => Number(row.reid))).size > 1) {
     throw new Error(`润丰存在多个来源标记为 ${sourceMarker} 的维修单，禁止自动删除`);
   }
-  return rows[0] ? mapLegacyOrder(rows[0], normalizedOrderId) : null;
+  if (!rows[0]) return null;
+  const target = mapLegacyOrder(rows[0], normalizedOrderId);
+  return { ...target, ...await inspectArchives(target.dispatchNo, executeQuery) };
 }
 
 export async function deleteLegacyTestOrder(
@@ -75,7 +87,8 @@ export async function deleteLegacyTestOrder(
     }
     if (!rows[0]) return { orderId: normalizedOrderId, found: false, deleted: false };
 
-    const target = mapLegacyOrder(rows[0], normalizedOrderId);
+    const mapped = mapLegacyOrder(rows[0], normalizedOrderId);
+    const target = { ...mapped, ...await inspectArchives(mapped.dispatchNo, execute) };
     assertNoDownstreamRecords(target);
 
     const deletedItems = await execute(DELETE_LEGACY_TEST_ORDER_ITEMS_QUERY, (request, sql) => {
@@ -96,6 +109,31 @@ export async function deleteLegacyTestOrder(
 
     return { ...target, found: true, deleted: true };
   });
+}
+
+async function inspectArchives(dispatchNo, execute) {
+  const tables = await execute(FIND_LEGACY_ARCHIVE_TABLES_QUERY);
+  const archiveTablesChecked = [];
+  let archiveCount = 0;
+  for (const table of tables.recordset || []) {
+    const name = String(table.table_name || "");
+    // Identifiers cannot be SQL parameters; accept only catalog-derived names
+    // in the archive family, and validate before inserting an identifier.
+    if (!/^lscxwx[a-z0-9_]*$/i.test(name) || Number(table.has_dispatch_no) !== 1) {
+      throw new Error(`无法检查润丰历史归档表 ${name} 的派工号，禁止自动删除`);
+    }
+    const result = await execute(
+      `select count(*) as archive_count from dbo.[${name}] where RTRIM(pgd) = @dispatch_no`,
+      (request, sql) => request.input("dispatch_no", sql.VarChar(50), dispatchNo)
+    );
+    const count = Number(result.recordset?.[0]?.archive_count);
+    if (!Number.isSafeInteger(count) || count < 0) {
+      throw new Error(`润丰历史归档表 ${name} 检查结果无效，禁止自动删除`);
+    }
+    archiveCount += count;
+    archiveTablesChecked.push(name);
+  }
+  return { archive_count: archiveCount, archiveTablesChecked };
 }
 
 export function assertNoDownstreamRecords(target) {

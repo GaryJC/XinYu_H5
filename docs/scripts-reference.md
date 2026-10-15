@@ -198,6 +198,8 @@ npm run db:delete-test-orders -- --order-id WT-20260817-ABC123DEF456
 - `reid`、内部单号、派工号和车牌；
 - 是否已经产生派工明细、出库、竣工、退回、收款或历史归档。
 
+历史归档会通过 SQL Server 2000 系统目录发现当前库的 `dbo.lscxwx*` 表，逐表按派工号检查，不要求固定存在 `lscxwx018`。预览的 `archiveTablesChecked` 会列出检查过的表；空列表表示没有发现此类归档表。若表结构不支持检查或查询失败，脚本会中止，不会跳过保护后删除。
+
 确认无误后，复制输出中的 `confirmationCommand` 执行正式删除。示例：
 
 ```powershell
