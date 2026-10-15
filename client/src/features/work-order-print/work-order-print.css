@@ -12,7 +12,7 @@
 .wop-customer>span:first-child { flex:1.5; }
 .wop-customer>span { flex:1; }
 .wop-address { margin-bottom:1mm; font-size:9.5pt; }
-.work-order-print table { width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed; }
+.work-order-print table { font:inherit; width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed; }
 .work-order-print caption { border:1px solid #222; border-bottom:0; padding:.7mm 0; color:#111; font-size:11pt; line-height:1.2; letter-spacing:3pt; text-align:center; caption-side:top; }
 .work-order-print th,.work-order-print td { border:0; border-right:1px solid #222; border-bottom:1px solid #222; padding:1mm; text-align:center; font-weight:400; vertical-align:middle; }
 .work-order-print tr > :first-child { border-left:1px solid #222; }
@@ -44,7 +44,7 @@
 .wop-customer-signature span { display:block; width:40mm; text-align:center; color:#777; }
 .wop-staff-signatures { border-top:1px solid #222; display:grid; grid-template-columns:1fr 1fr; gap:4mm; min-height:15mm; padding:2mm; }
 .wop-staff-signatures small { display:block; margin-top:2mm; }
-.work-order-print footer { display:flex; justify-content:space-between; gap:4mm; padding-top:2mm; font-weight:700; font-size:10pt; }
+.work-order-print footer { display:flex; justify-content:space-between; gap:4mm; padding-top:2mm; font-weight:400; font-size:9.5pt; }
 .work-order-print-preview { overflow-y:auto; overflow-x:hidden; padding:16px; background:#edf0f3; max-height:70vh; }
 .wop-print-sheet { overflow:hidden; width:100%; height:calc(var(--wop-page-height, 1100px) * var(--wop-preview-scale, 1)); }
 .work-order-print-preview .wop-print-page { transform:scale(var(--wop-preview-scale, 1)); transform-origin:top left; box-shadow:0 1px 8px #0002; }
@@ -62,3 +62,14 @@
 
 .wop-check-box { display:inline-block; position:relative; box-sizing:border-box; width:2.1mm; height:2.1mm; border:.25mm solid #222; vertical-align:baseline; margin-right:.5mm; }
 .wop-check-box[data-checked="true"]::after { content:""; position:absolute; left:.45mm; top:0; width:.65mm; height:1.2mm; border-right:.25mm solid #222; border-bottom:.25mm solid #222; transform:rotate(45deg); }
+
+/* These rules only affect isolated print/capture documents, never the app shell.
+   A fixed viewport and document-level text adjustment prevent iOS text boosting. */
+html.wop-print-document,html.wop-print-document body {
+  box-sizing:border-box; width:794px; margin:0; padding:0;
+  -webkit-text-size-adjust:none!important; text-size-adjust:none!important;
+}
+html.wop-print-document .work-order-print,
+html.wop-print-document .work-order-print * {
+  -webkit-text-size-adjust:none!important; text-size-adjust:none!important;
+}

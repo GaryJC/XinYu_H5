@@ -1,7 +1,7 @@
 .work-order-print-settings-modal .ant-modal-body { min-width:0; overflow-x:hidden; }
 .wop-print-settings { box-sizing:border-box; width:100%; min-width:0; max-width:100%; }
-.wop-print-settings .wop-arrival-input { box-sizing:border-box; display:block; width:100%; min-width:0; max-width:100%; -webkit-appearance:none; }
-.wop-arrival-input::-webkit-date-and-time-value { min-width:0; text-align:left; }
+.wop-print-settings .wop-arrival-input { box-sizing:border-box; display:block; width:100%; min-width:0; max-width:100%; min-height:40px; }
+.wop-arrival-input input { min-width:0; text-align:left; }
 .work-order-print-modal .ant-modal-container,
 .work-order-print-modal .ant-modal-content,
 .work-order-print-modal .ant-modal-body { min-width:0; overflow-x:hidden; }
