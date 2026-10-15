@@ -30,15 +30,21 @@ export async function preparePrintDocument(element: HTMLElement, styles: string,
     const doc = frame.contentDocument;
     const view = frame.contentWindow;
     if (!doc || !view) throw new Error("无法创建委托单打印页面，请重试。");
+    // about:blank starts in quirks mode. A standards document is essential:
+    // otherwise table text can use browser defaults instead of inherited sizes.
+    doc.open();
+    doc.write('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"></head><body></body></html>');
+    doc.close();
     const style = doc.createElement("style");
     style.textContent = styles;
     doc.head.append(style);
     doc.title = title;
     const viewport = doc.createElement("meta");
     viewport.name = "viewport";
-    viewport.content = "width=device-width, initial-scale=1";
+    viewport.content = "width=794, initial-scale=1";
     doc.head.append(viewport);
     doc.documentElement.lang = "zh-CN";
+    doc.documentElement.className = "wop-print-document";
     const page = doc.createElement("main");
     page.className = "wop-print-page";
     const paper = element.cloneNode(true) as HTMLElement;
@@ -46,7 +52,7 @@ export async function preparePrintDocument(element: HTMLElement, styles: string,
     doc.body.append(page);
     if (typeof doc.fonts.load === "function") {
       const text = paper.textContent || "机动车修理委托书";
-      const boldText = Array.from(paper.querySelectorAll("h1,strong,b,footer")).map(node => node.textContent || "").join("");
+      const boldText = Array.from(paper.querySelectorAll("h1,strong,b")).map(node => node.textContent || "").join("");
       await Promise.all([
         doc.fonts.load('400 12px "Noto Serif SC"', text),
         doc.fonts.load('700 12px "Noto Serif SC"', boldText)

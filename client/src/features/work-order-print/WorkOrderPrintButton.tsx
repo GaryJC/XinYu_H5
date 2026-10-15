@@ -1,5 +1,8 @@
+import dayjs from "dayjs";
+import "dayjs/locale/zh-cn";
+import datePickerZhCN from "antd/es/date-picker/locale/zh_CN";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Alert, Button, Input, Modal, Spin } from "antd";
+import { Alert, Button, DatePicker, Modal, Spin } from "antd";
 import { Printer } from "lucide-react";
 import type { WorkOrder } from "../../../../shared/types";
 import { WorkOrderPrintDocument } from "./WorkOrderPrintDocument";
@@ -27,8 +30,10 @@ export function WorkOrderPrintButton({ order }: { order: WorkOrder }) {
       onOk={() => { setSettingsOpen(false); setOpen(true); }}>
       <div className="wop-print-settings">
       <label htmlFor={`print-arrival-${order.id}`}>进厂日期</label>
-      <Input id={`print-arrival-${order.id}`} className="wop-arrival-input" aria-label="打印进厂日期" type="date" value={arrivalDate}
-        onChange={event => setArrivalDate(event.target.value)} style={{marginTop:8}}/>
+      <DatePicker id={`print-arrival-${order.id}`} className="wop-arrival-input" aria-label="打印进厂日期"
+        locale={datePickerZhCN} format="YYYY-MM-DD" inputReadOnly allowClear={false}
+        value={arrivalDate && dayjs(arrivalDate).isValid() ? dayjs(arrivalDate).locale("zh-cn") : null}
+        onChange={value => setArrivalDate(value?.format("YYYY-MM-DD") || "")} style={{marginTop:8}}/>
       <p style={{color:"#657085",fontSize:13}}>仅用于本次打印，不修改已保存的委托单。</p>
       </div>
     </Modal>

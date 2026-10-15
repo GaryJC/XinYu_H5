@@ -76,6 +76,7 @@ function withPrintDom(imageDecode, run) {
   const frame = {
     style: {}, setAttribute() {}, remove() { events.push("removed"); },
     contentDocument: {
+      open() {}, write(html) { assert.match(html, /^<!doctype html>/i); }, close() {},
       createElement: () => ({ style: {}, append() {} }), head: { append() {} }, documentElement: {},
       body: { append() {}, getBoundingClientRect() { events.push("layout"); } },
       fonts: { ready: Promise.resolve() }, images: [{ decode: () => imageDecode(events) }]
@@ -168,4 +169,39 @@ test("font loading failure prevents an export with substituted fonts", async () 
     await assert.rejects(() => preparePrintDocument({ cloneNode: () => paper }, "styles", "title"), /font unavailable/);
     assert.deepEqual(events, ["removed"]);
   });
+});
+
+
+const captureSource = readFileSync(new URL("../client/src/features/work-order-print/freezePrintTypography.ts", import.meta.url), "utf8");
+const captureCode = ts.transpileModule(captureSource, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
+const { freezePrintTypography, markPrintCaptureNodes } = await import(`data:text/javascript;base64,${Buffer.from(captureCode).toString("base64")}`);
+
+test("PDF capture freezes resolved text metrics, matching keyed elements despite inserted pseudo nodes", async () => {
+  const events = [];
+  function node(metrics = {}) {
+    const attrs = new Map(); const styles = new Map();
+    return { metrics, styles, textContent: "测试地址", querySelectorAll: () => [],
+      setAttribute: (key,value) => attrs.set(key,value), getAttribute: key => attrs.get(key),
+      style: { setProperty: (key,value,priority) => styles.set(key,{ value, priority }) } };
+  }
+  const source = node({ "font-size": "12.6667px", "font-weight": "400" });
+  const heading = node({ "font-size": "14.6667px", "font-weight": "400" });
+  const footer = node({ "font-size": "12.6667px", "font-weight": "400" });
+  source.querySelectorAll = () => [heading,footer];
+  source.ownerDocument = { defaultView: { getComputedStyle: element => ({ getPropertyValue: property => element.metrics[property] || "normal" }) } };
+  markPrintCaptureNodes(source);
+  const clone = node(), cloneHeading = node(), cloneFooter = node(), pseudo = node();
+  for (const [index, element] of [clone,cloneHeading,cloneFooter].entries()) element.setAttribute("data-wop-capture-key", String(index));
+  clone.querySelectorAll = selector => selector === "*" ? [pseudo,cloneHeading,cloneFooter] : [cloneHeading];
+  const doc = { documentElement: { classList: { add: value => events.push(value) } },
+    fonts: { load: async font => { events.push(font); }, ready: Promise.resolve() },
+    body: { getBoundingClientRect: () => events.push("layout") } };
+  await freezePrintTypography(source, clone, doc);
+  assert.deepEqual(cloneHeading.styles.get("font-size"), {value:"14.6667px",priority:"important"});
+  assert.equal(cloneFooter.styles.get("font-weight").value,"400");
+  assert.equal(clone.styles.get("font-size").value,"12.6667px");
+  assert.equal(clone.styles.get("-webkit-text-size-adjust").value,"none");
+  assert.equal(pseudo.styles.size,0);
+  assert.equal(events.at(-1),"layout");
+  assert.equal(events.filter(value => value.includes("Noto Serif SC")).length,2);
 });
