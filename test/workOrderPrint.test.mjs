@@ -142,3 +142,30 @@ test("PDF preparation works without a native print API", async () => {
     await assert.rejects(() => printDocument({ cloneNode: () => ({ style: {}, scrollHeight: 900, getBoundingClientRect: () => ({ height: 900 }) }) }, "styles", "title"), /请选择导出 PDF|请选择导出|选择导出 PDF/);
   });
 });
+
+
+test("printing waits for both document font weights before signature decoding and layout", async () => {
+  await withPrintDom(async events => { events.push("decoded"); }, async (events, frame) => {
+    frame.contentDocument.fonts.load = async (font, text) => {
+      events.push(font.startsWith("400") ? "regular font" : "bold font");
+      assert.ok(text.includes("委托书"));
+      await Promise.resolve();
+    };
+    const paper = {
+      style: {}, textContent: "机动车修理委托书 测试车主",
+      querySelectorAll: () => [{ textContent: "机动车修理委托书" }],
+      scrollHeight: 900, getBoundingClientRect: () => ({ height: 900 })
+    };
+    await printDocument({ cloneNode: () => paper }, "styles", "title");
+    assert.deepEqual(events, ["regular font", "bold font", "decoded", "layout", "print"]);
+  });
+});
+
+test("font loading failure prevents an export with substituted fonts", async () => {
+  await withPrintDom(async events => { events.push("decoded"); }, async (events, frame) => {
+    frame.contentDocument.fonts.load = async () => { throw new Error("font unavailable"); };
+    const paper = { style: {}, textContent: "委托书", querySelectorAll: () => [] };
+    await assert.rejects(() => preparePrintDocument({ cloneNode: () => paper }, "styles", "title"), /font unavailable/);
+    assert.deepEqual(events, ["removed"]);
+  });
+});

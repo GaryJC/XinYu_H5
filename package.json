@@ -28,6 +28,7 @@
     "@alicloud/openapi-client": "^0.4.15",
     "@ant-design/cssinjs": "^2.1.2",
     "@ant-design/icons": "^6.3.2",
+    "@fontsource/noto-serif-sc": "^5.3.1",
     "@vitejs/plugin-react": "latest",
     "ali-oss": "^6.23.0",
     "antd": "^6.5.0",

@@ -18,7 +18,7 @@ export function WorkOrderPrintDocument({ order, signatureSource, arrivalDate = o
       <td>{present(order.vehicle.plate)}</td><td>{present(order.vehicle.model)}</td><td>{present(order.vehicle.purchaseDate)}</td><td className="wop-vin">{present(order.vehicle.vin)}</td><td>{present(order.vehicle.mileage)}</td>
     </tr></tbody></table>
     <section className="wop-inspection">
-      <div className="wop-inspection-left"><div className="wop-belongings"><h2>物品及功能确认</h2><p className="wop-check-note">☑ 表示已登记的随车物品，功能状态以现场检查为准</p><div>{[...new Set([...belongings, ...selected])].map(item=><span key={item}>{selected.includes(item) ? "☑" : "☐"} {item}</span>)}</div><p>燃油存量：{order.inspection.fuelLevel}</p></div>
+      <div className="wop-inspection-left"><div className="wop-belongings"><h2>物品及功能确认</h2><p className="wop-check-note"><CheckBox checked/> 表示已登记的随车物品，功能状态以现场检查为准</p><div>{[...new Set([...belongings, ...selected])].map(item=><span key={item}><CheckBox checked={selected.includes(item)}/>{item}</span>)}</div><p>燃油存量：{order.inspection.fuelLevel}</p></div>
       <div className="wop-fault"><h2>故障描述（用户反映）</h2><p>{present(order.faultDescription)}</p></div></div>
       <div className="wop-condition"><h2>车辆状况</h2><VehicleConditionDiagram /><p>外观记录：{order.inspection.exteriorIssues.join("、") || "未登记外观异常"}</p><small>× 石击　○ 凹凸　△ 划伤　□ 损坏</small></div>
     </section>
@@ -32,4 +32,8 @@ export function WorkOrderPrintDocument({ order, signatureSource, arrivalDate = o
 
 function VehicleConditionDiagram() {
   return <svg className="wop-car" viewBox="0 0 240 180" fill="none" aria-hidden="true"><g stroke="currentColor" strokeWidth="1.3"><path d="M100 22Q120 12 140 22l9 24v91l-9 21q-20 10-40 0l-9-21V46Z"/><path d="m99 52 5-16q16-7 32 0l5 16-5 13h-32Zm0 69 5 20q16 6 32 0l5-20-6-10h-30Z"/><path d="M99 70v36m42-36v36M106 69h28v40h-28Z"/><rect x="84" y="43" width="7" height="23" rx="2"/><rect x="149" y="43" width="7" height="23" rx="2"/><rect x="84" y="119" width="7" height="23" rx="2"/><rect x="149" y="119" width="7" height="23" rx="2"/><path d="m29 39 8-13h22l8 13v107H29Zm7 11h24v32H36Zm0 45h24v30H36ZM173 39l8-13h22l8 13v107h-38Zm7 11h24v32h-24Zm0 45h24v30h-24Z"/><path d="M100 6h40M99 174h42"/></g></svg>;
+}
+
+function CheckBox({ checked }: { checked: boolean }) {
+  return <i className="wop-check-box" data-checked={checked} aria-hidden="true"/>;
 }

@@ -44,6 +44,14 @@ export async function preparePrintDocument(element: HTMLElement, styles: string,
     const paper = element.cloneNode(true) as HTMLElement;
     page.append(paper);
     doc.body.append(page);
+    if (typeof doc.fonts.load === "function") {
+      const text = paper.textContent || "机动车修理委托书";
+      const boldText = Array.from(paper.querySelectorAll("h1,strong,b,footer")).map(node => node.textContent || "").join("");
+      await Promise.all([
+        doc.fonts.load('400 12px "Noto Serif SC"', text),
+        doc.fonts.load('700 12px "Noto Serif SC"', boldText)
+      ]);
+    }
     await doc.fonts.ready;
     await Promise.all(Array.from(doc.images).map(image => image.decode()));
     // Force layout without waiting on animation frames, which WebViews can

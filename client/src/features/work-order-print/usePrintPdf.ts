@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export function usePrintPdf() {
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File>();
   const [generating, setGenerating] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const generatingRef = useRef(false);
   const [error, setError] = useState("");
   const urlRef = useRef("");
   const active = useRef(true);
@@ -18,8 +20,9 @@ export function usePrintPdf() {
     };
   }, []);
 
-  async function generate(element: HTMLElement, styles: string, title: string) {
-    if (generating) return;
+  const generate = useCallback(async (element: HTMLElement, styles: string, title: string) => {
+    if (generatingRef.current) return;
+    generatingRef.current = true;
     setGenerating(true);
     setError("");
     try {
@@ -34,18 +37,23 @@ export function usePrintPdf() {
     } catch (reason) {
       if (active.current) setError(reason instanceof Error ? reason.message : "PDF 生成失败，请重试。");
     } finally {
+      generatingRef.current = false;
       if (active.current) setGenerating(false);
     }
-  }
+  }, []);
 
-  const canShare = Boolean(file && typeof navigator.canShare === "function" && navigator.canShare({ files: [file] }));
+  const canShare = Boolean(file && typeof navigator.share === "function" && typeof navigator.canShare === "function" && navigator.canShare({ files: [file] }));
   async function share() {
-    if (!file || !canShare) return;
+    if (!file || !canShare || sharing) return;
+    setSharing(true);
+    setError("");
     try { await navigator.share({ files: [file], title: file.name }); }
     catch (reason) {
       if (reason instanceof Error && reason.name === "AbortError") return;
-      setError("系统分享未能打开，请使用打开 PDF 或保存 PDF。");
+      if (active.current) setError("发送未能完成，请重试或在支持系统分享的手机浏览器中打开本页面。");
+    } finally {
+      if (active.current) setSharing(false);
     }
   }
-  return { url, file, generating, error, generate, canShare, share };
+  return { url, file, generating, error, generate, canShare, share, sharing };
 }
