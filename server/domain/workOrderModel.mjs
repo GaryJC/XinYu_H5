@@ -94,6 +94,7 @@ export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecord
     settlementAmount: Number(row.settlement_amount || 0),
     feeNote: row.fee_note,
     signatures: signatures.reduce((acc, item) => ({ ...acc, [item.signer_type]: item.signer_name }), {}),
+    customerSignatureFileId: signatures.find((item) => item.signer_type === "customer")?.file_id || undefined,
     signatureToken: row.signature_token || undefined,
     signatureTokenUsed: row.signature_token_used ?? undefined,
     platformOrderNo: row.platform_order_no || undefined,

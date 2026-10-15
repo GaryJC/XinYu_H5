@@ -1,3 +1,4 @@
+import { WorkOrderPrintButton } from "../work-order-print/WorkOrderPrintButton";
 import { PreRepairPhotos } from "../pre-repair-photos/PreRepairPhotos";
 import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
 import { QuickDispatchDialog } from "../dispatch/QuickDispatchDialog";
@@ -115,6 +116,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
         onCancel={() => setDetailOrder(undefined)}
         footer={(
           <div className="archive-detail-actions">
+            {detailOrder && <WorkOrderPrintButton order={detailOrder} />}
             {canManageDraft && detailOrder ? (
               <Popconfirm
                 title="确认删除这张草稿？"

@@ -328,6 +328,7 @@ export type WorkOrder = {
     reception?: string;
     technician?: string;
   };
+  customerSignatureFileId?: string;
   signatureToken?: string;
   signatureTokenUsed?: boolean;
   platformOrderNo?: string;

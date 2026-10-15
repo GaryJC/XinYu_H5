@@ -1,0 +1,51 @@
+.work-order-print { box-sizing:border-box; width:190mm; margin:0 auto; background:white; color:#111; font:9.5pt/1.3 "Songti SC","SimSun","Noto Serif CJK SC",serif; overflow-wrap:anywhere; }
+.work-order-print * { box-sizing:border-box; }
+.work-order-print h1 { text-align:center; font-size:21pt; font-weight:700; letter-spacing:3pt; margin:0 0 2mm; }
+.work-order-print h2 { text-align:center; font-size:10pt; line-height:1.2; margin:0 0 1mm; font-weight:500; }
+.work-order-print p { margin:0; white-space:pre-wrap; }
+.wop-heading,.wop-customer { display:flex; justify-content:space-between; gap:4mm; margin-bottom:1mm; }
+.wop-heading>span,.wop-customer>span { min-width:0; }
+.wop-customer>span:first-child { flex:1.5; }
+.wop-customer>span { flex:1; }
+.wop-reference { font-size:8pt; margin-bottom:1mm; }
+.wop-address { margin-bottom:1mm; }
+.work-order-print table { width:100%; border-collapse:collapse; table-layout:fixed; }
+.work-order-print caption { border:1px solid #222; border-bottom:0; padding:.7mm 0; color:#111; font-size:11pt; line-height:1.2; letter-spacing:3pt; text-align:center; caption-side:top; }
+.work-order-print th,.work-order-print td { border:1px solid #222; padding:1mm; text-align:center; font-weight:400; vertical-align:middle; }
+.wop-vehicle td { height:8mm; }
+.wop-vehicle th:nth-child(4),.wop-vehicle td:nth-child(4) { width:32%; }
+.wop-vin { font-family:Arial,sans-serif; font-size:9pt; }
+.wop-inspection { display:grid; grid-template-columns:1fr 1fr; border:1px solid #222; border-top:0; border-bottom:0; break-inside:avoid; }
+.wop-inspection-left { border-right:1px solid #222; }
+.wop-belongings { padding:2mm; }
+.wop-check-note { font-size:7.5pt; margin-bottom:2mm!important; }
+.wop-belongings>div { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.7mm; font-size:8.5pt; }
+.wop-belongings>p:last-child { margin-top:2mm; }
+.wop-fault { border-top:1px solid #222; min-height:23mm; padding:2mm; }
+.wop-condition { padding:2mm; }
+.wop-car { display:block; width:100%; height:36mm; color:#777; }
+.wop-condition small { display:block; text-align:center; font-size:8pt; margin-top:1mm; }
+.wop-repairs thead { display:table-header-group; }
+.wop-repairs tr { break-inside:avoid; }
+.wop-repairs td { height:8mm; }
+.wop-repairs .wop-repair-name { text-align:left; }
+.wop-repair-times { font-size:8pt; }
+.wop-closing { border:1px solid #222; border-top:0; break-inside:avoid; }
+.wop-fees { display:flex; flex-wrap:wrap; gap:1mm 4mm; padding:2mm; }
+.wop-fees>p { width:100%; font-size:8pt; }
+.wop-authorization { border-top:1px solid #222; padding:2mm 3mm; }
+.wop-authorization>p { text-indent:2em; font-size:9pt; }
+.wop-customer-signature { display:flex; align-items:center; justify-content:flex-end; min-height:12mm; gap:2mm; }
+.wop-customer-signature img { width:40mm; height:12mm; object-fit:contain; }
+.wop-customer-signature span { display:block; width:40mm; text-align:center; color:#777; }
+.wop-staff-signatures { border-top:1px solid #222; display:grid; grid-template-columns:1fr 1fr; gap:4mm; min-height:15mm; padding:2mm; }
+.wop-staff-signatures small { display:block; margin-top:2mm; }
+.work-order-print footer { display:flex; justify-content:space-between; gap:4mm; padding-top:2mm; font-weight:700; font-size:10pt; }
+.work-order-print-preview { overflow:auto; padding:16px; background:#edf0f3; max-height:70vh; }
+.wop-print-sheet { width:100%; height:calc(var(--wop-page-height, 1100px) * var(--wop-preview-scale, 1)); }
+.work-order-print-preview .work-order-print { transform:scale(var(--wop-preview-scale, 1)); transform-origin:top left; margin:0; padding:6mm; width:202mm; box-shadow:0 1px 8px #0002; }
+@page { size:A4 portrait; margin:10mm; }
+@media print {
+  html,body { margin:0!important; padding:0!important; background:white!important; }
+  .work-order-print { width:189mm; max-width:100%; margin:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}
