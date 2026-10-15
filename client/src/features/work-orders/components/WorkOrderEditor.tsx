@@ -493,7 +493,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   <strong>请客户横向签名</strong>
                   <span>{signatureSession.order.vehicle.plate} · {signatureSession.order.customer.name}</span>
                 </div>
-                <Button icon={<Minimize2 size={16} />} onClick={() => setLandscapeSignature(false)}>完成横屏签字</Button>
+                <Button type="primary" icon={<Minimize2 size={16} />} onClick={() => setLandscapeSignature(false)}>完成横屏签字</Button>
               </div>
               <SignaturePad landscapeMode value={signatureImage} disabled={signatureSubmitting || signatureCompleted} onChange={setSignatureImage} />
             </div>

@@ -1,4 +1,4 @@
-import { type PointerEvent, useEffect, useRef } from "react";
+import { type PointerEvent, useLayoutEffect, useRef } from "react";
 import { Button } from "antd";
 import { Eraser } from "lucide-react";
 
@@ -14,29 +14,74 @@ export function SignaturePad({
   landscapeMode?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const drawingRef = useRef(false);
+  const activePointerRef = useRef<number | null>(null);
+  const displayedValueRef = useRef<string | undefined>(undefined);
+  const imageRevisionRef = useRef(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ratio = window.devicePixelRatio || 1;
-    const width = canvas.clientWidth;
-    const height = canvas.clientHeight;
-    canvas.width = Math.round(width * ratio);
-    canvas.height = Math.round(height * ratio);
-    const context = canvas.getContext("2d");
-    context?.scale(ratio, ratio);
-    if (context) {
-      context.lineWidth = 2.4;
-      context.lineCap = "round";
-      context.lineJoin = "round";
-      context.strokeStyle = "#141414";
-      if (value) {
-        const image = new Image();
-        image.onload = () => context.drawImage(image, 0, 0, width, height);
-        image.src = value;
+
+    function resize() {
+      if (!canvas) return;
+      const ratio = window.devicePixelRatio || 1;
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      if (!width || !height) return;
+      const bitmapWidth = Math.round(width * ratio);
+      const bitmapHeight = Math.round(height * ratio);
+      if (canvas.width === bitmapWidth && canvas.height === bitmapHeight) return;
+
+      // Resizing clears the bitmap. Preserve current ink synchronously so a
+      // delayed image decode cannot overwrite a new stroke after rotation.
+      const previous = document.createElement("canvas");
+      previous.width = canvas.width;
+      previous.height = canvas.height;
+      previous.getContext("2d")?.drawImage(canvas, 0, 0);
+      canvas.width = bitmapWidth;
+      canvas.height = bitmapHeight;
+      const context = canvas.getContext("2d");
+      if (context) {
+        context.setTransform(bitmapWidth / width, 0, 0, bitmapHeight / height, 0, 0);
+        context.lineWidth = 2.4;
+        context.lineCap = "round";
+        context.lineJoin = "round";
+        context.strokeStyle = "#141414";
+        context.drawImage(previous, 0, 0, width, height);
       }
+      // Resizing resets the current path too, so the next move starts at
+      // its new position instead of connecting to an old coordinate.
     }
+
+    resize();
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(resize);
+    observer?.observe(canvas);
+    window.addEventListener("resize", resize);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", resize);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || value === displayedValueRef.current) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const revision = ++imageRevisionRef.current;
+    context.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+    if (value) {
+      const image = new Image();
+      image.onload = () => {
+        if (revision !== imageRevisionRef.current) return;
+        context.drawImage(image, 0, 0, canvas.clientWidth, canvas.clientHeight);
+        displayedValueRef.current = value;
+      };
+      image.src = value;
+    } else {
+      displayedValueRef.current = value;
+    }
+    return () => { imageRevisionRef.current++; };
   }, [value]);
 
   function point(event: PointerEvent<HTMLCanvasElement>) {
@@ -64,7 +109,9 @@ export function SignaturePad({
 
   function start(event: PointerEvent<HTMLCanvasElement>) {
     if (disabled) return;
-    drawingRef.current = true;
+    if (!event.isPrimary || event.button !== 0 || activePointerRef.current !== null) return;
+    imageRevisionRef.current++;
+    activePointerRef.current = event.pointerId;
     event.currentTarget.setPointerCapture(event.pointerId);
     const context = event.currentTarget.getContext("2d");
     const next = point(event);
@@ -73,7 +120,7 @@ export function SignaturePad({
   }
 
   function draw(event: PointerEvent<HTMLCanvasElement>) {
-    if (!drawingRef.current || disabled) return;
+    if (activePointerRef.current !== event.pointerId || disabled) return;
     const context = event.currentTarget.getContext("2d");
     const next = point(event);
     context?.lineTo(next.x, next.y);
@@ -81,16 +128,23 @@ export function SignaturePad({
   }
 
   function finish(event: PointerEvent<HTMLCanvasElement>) {
-    if (!drawingRef.current) return;
-    drawingRef.current = false;
-    event.currentTarget.releasePointerCapture(event.pointerId);
-    onChange(event.currentTarget.toDataURL("image/png"));
+    if (activePointerRef.current !== event.pointerId) return;
+    if (event.type === "pointerup") draw(event);
+    activePointerRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const nextValue = event.currentTarget.toDataURL("image/png");
+    displayedValueRef.current = nextValue;
+    onChange(nextValue);
   }
 
   function clear() {
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d");
-    if (canvas && context) context.clearRect(0, 0, canvas.width, canvas.height);
+    imageRevisionRef.current++;
+    displayedValueRef.current = "";
+    if (canvas && context) context.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
     onChange("");
   }
 
@@ -104,6 +158,7 @@ export function SignaturePad({
         onPointerMove={draw}
         onPointerUp={finish}
         onPointerCancel={finish}
+        onLostPointerCapture={finish}
       />
       <Button type="text" size="small" icon={<Eraser size={15} />} onClick={clear} disabled={disabled}>清空重签</Button>
     </div>
