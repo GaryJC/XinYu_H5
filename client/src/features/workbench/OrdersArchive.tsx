@@ -20,7 +20,9 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
   const [detailOrderId, setDetailOrderId] = useState<string>();
   const detailOrder = controller.orders.find(order => order.id === detailOrderId);
   const legacyRefresh = useArchiveLegacyRefresh(currentUser, controller.acceptRefreshedOrder, controller.refreshArchiveSummary);
-  const refreshTargets = searchedOrders.filter(legacyRefresh.canRefresh);
+  // The archive API returns the full authorized list; search and table pagination
+  // must not narrow the all-orders refresh operation.
+  const refreshTargets = controller.orders.filter(legacyRefresh.canRefresh);
   const refreshReport = legacyRefresh.report ? <Alert style={{ marginBottom: 12 }} showIcon
     type={legacyRefresh.report.failures.length ? "warning" : "success"}
     title={`润丰更新完成：成功 ${legacyRefresh.report.succeeded} 单，失败 ${legacyRefresh.report.failures.length} 单`}
@@ -70,12 +72,12 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minWidth: 0, maxWidth: "100%" }}>
         {["advisor", "manager"].includes(role) && <Button icon={<RefreshCw size={16}/>} loading={Boolean(legacyRefresh.progress)}
           disabled={!refreshTargets.length || Boolean(legacyRefresh.progress)} onClick={() => void legacyRefresh.refresh(refreshTargets)}>
-          {legacyRefresh.progress ? `正在更新 ${legacyRefresh.progress.done}/${legacyRefresh.progress.total}` : `从润丰更新（${refreshTargets.length}）`}
+          {legacyRefresh.progress ? `正在更新 ${legacyRefresh.progress.done}/${legacyRefresh.progress.total}` : `全部从润丰更新（${refreshTargets.length}）`}
         </Button>}
         <Input.Search className="search-box" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="搜索车牌 / VIN / 工单号 / 派工号" allowClear />
         </div>
       </div>
-      {["advisor", "manager"].includes(role) && <p style={{ color: "#657085", fontSize: 13 }}>从润丰更新当前查询结果中已同步且有权限的委托单，保留签名、照片和维修进度。</p>}
+      {["advisor", "manager"].includes(role) && <p style={{ color: "#657085", fontSize: 13 }}>更新全部已同步且有权限的委托单，不受搜索和分页影响；保留签名、照片和维修进度。更新期间请保持页面打开。</p>}
       {refreshReport}
 
       {isMobile ? (
