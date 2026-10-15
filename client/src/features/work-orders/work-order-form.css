@@ -62,3 +62,15 @@
   .form-panel .section-title-row { gap: 8px; }
   .form-panel .section-title-row > .ant-btn { padding-inline: 8px; flex-shrink: 0; }
 }
+
+/* Keep the two identifier illustrations together, as a pair of scan targets. */
+.form-panel .vehicle-identity-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.form-panel .identifier-scanner > div:first-child { min-height: 64px; }
+.form-panel .vehicle-license-ocr .button-row { width: 100%; }
+.form-panel .vehicle-license-ocr .has-camera-artwork { max-width: 360px; }
+@media (max-width: 767px) {
+  .form-panel .vehicle-identity-grid { gap: 10px; }
+  .form-panel .identifier-scanner { padding: 10px; gap: 8px; }
+  .form-panel .identifier-scanner > div:first-child { min-height: 78px; }
+  .form-panel .vehicle-license-ocr .has-camera-artwork { max-width: none; }
+}

@@ -1,3 +1,4 @@
+import { VehicleScanIllustration } from "../vehicle-identity/VehicleScanIllustration";
 import { Button, Flex } from "antd";
 import { CircleCheckBig } from "lucide-react";
 import { OcrFieldState, VehicleLicenseOcrResult } from "../../../../shared/types";
@@ -51,6 +52,7 @@ export function VehicleLicenseOcrControl({ state, result, disabled, requirement 
           disabled={disabled}
           loading={state.status === "识别中"}
           label="识别行驶证照片"
+          cameraArtwork={<VehicleScanIllustration kind="license" />}
           primaryActionLabel="拍照识别"
           galleryActionLabel="相册选择"
           onSelect={onScan}

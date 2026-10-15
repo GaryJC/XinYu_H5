@@ -1,12 +1,14 @@
 import { Camera, Images, Sparkles } from "lucide-react";
-import { type ChangeEvent, type MouseEvent } from "react";
-import { Button } from "antd";
+import { type ChangeEvent, type MouseEvent, type ReactNode } from "react";
+import { Button, Spin } from "antd";
+import "./image-source-picker.css";
 
 type Props = {
   disabled?: boolean;
   loading?: boolean;
   label: string;
   emphasized?: boolean;
+  cameraArtwork?: ReactNode;
   primaryActionLabel?: string;
   galleryActionLabel?: string;
   multiple?: boolean;
@@ -14,7 +16,7 @@ type Props = {
   onSelect: (file: File) => void | Promise<void>;
 };
 
-export function ImageSourcePicker({ disabled, loading, label, emphasized, primaryActionLabel, galleryActionLabel, multiple, onSelectMany, onSelect }: Props) {
+export function ImageSourcePicker({ disabled, loading, label, emphasized, primaryActionLabel, galleryActionLabel, cameraArtwork, multiple, onSelectMany, onSelect }: Props) {
   const pickerDisabled = disabled || loading;
 
   async function handleChange(event: ChangeEvent<HTMLInputElement>) {
@@ -29,9 +31,15 @@ export function ImageSourcePicker({ disabled, loading, label, emphasized, primar
   };
 
   return (
-    <div className={`image-source-buttons${emphasized ? " emphasized" : ""}`}>
-      <div className="file-button">
-        <Button
+    <div className={`image-source-buttons${emphasized ? " emphasized" : ""}${cameraArtwork ? " has-camera-artwork" : ""}`}>
+      <div className={`file-button${cameraArtwork ? " camera-source-card" : ""}${pickerDisabled ? " is-disabled" : ""}`}>
+        {cameraArtwork ? (
+          <div className="camera-source-artwork" aria-hidden="true">
+            {cameraArtwork}
+            <span className="camera-source-caption">{loading ? "正在识别…" : primaryActionLabel || "拍照识别"}</span>
+            <span className="camera-source-badge">{loading ? <Spin size="small" /> : <Camera size={27} strokeWidth={1.8} />}</span>
+          </div>
+        ) : <Button
           type="primary"
           size={emphasized ? "large" : "middle"}
           icon={loading ? <Sparkles size={16} /> : <Camera size={16} />}
@@ -40,7 +48,7 @@ export function ImageSourcePicker({ disabled, loading, label, emphasized, primar
           tabIndex={-1}
         >
           {primaryActionLabel || (emphasized ? "拍照扫描" : "拍照")}
-        </Button>
+        </Button>}
         <input
           type="file"
           accept="image/*"

@@ -1,3 +1,4 @@
+import { VehicleScanIllustration } from "./VehicleScanIllustration";
 import { useState } from "react";
 import { Alert, Button, Input, Spin } from "antd";
 import { VehicleHistoryLookupResult, VehicleLookupInput } from "../../../../shared/types";
@@ -107,6 +108,7 @@ function IdentifierScanner({ kind, title, hint, disabled, state, onScan }: {
         disabled={disabled}
         loading={scanning}
         label={title}
+        cameraArtwork={<VehicleScanIllustration kind={kind} />}
         primaryActionLabel="拍照识别"
         galleryActionLabel="相册选择"
         onSelect={(file) => onScan(kind, file)}

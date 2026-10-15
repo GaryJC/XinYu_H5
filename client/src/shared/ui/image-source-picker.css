@@ -1,0 +1,19 @@
+.image-source-buttons.has-camera-artwork,
+.form-panel .image-source-buttons.has-camera-artwork,
+.form-panel .identifier-scanner .image-source-buttons.has-camera-artwork,
+.form-panel .vehicle-license-ocr .image-source-buttons.has-camera-artwork { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; width: 100%; }
+.image-source-buttons.has-camera-artwork .camera-source-card { display: block; overflow: hidden; width: 100%; border-radius: 12px; background: #e9eceb; transition: box-shadow .15s, opacity .15s; }
+.camera-source-card:hover { box-shadow: 0 0 0 2px #a8b3ae; }
+.camera-source-card.is-disabled { opacity: .5; }
+.camera-source-artwork { position: relative; width: 100%; height: 164px; overflow: hidden; }
+.camera-source-artwork > svg { display: block; width: 100%; height: 100%; }
+.camera-source-caption { position: absolute; left: 12px; bottom: 12px; max-width: calc(100% - 80px); color: #48554f; font-size: 12px; font-weight: 600; }
+.camera-source-badge { position: absolute; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; width: 60px; height: 48px; border-radius: 14px 0 0 0; background: #48554f; color: #fff; }
+.camera-source-badge .ant-spin { color: #fff; }
+.image-source-buttons.has-camera-artwork .file-button { min-width: 0; }
+.image-source-buttons.has-camera-artwork .file-button > .ant-btn { width: 100%; }
+@media (max-width: 767px) {
+  .camera-source-artwork { height: 140px; }
+  .camera-source-caption { left: 10px; bottom: 10px; font-size: 11px; }
+  .camera-source-badge { width: 50px; height: 42px; }
+}

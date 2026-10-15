@@ -1,3 +1,4 @@
+import { VehicleScanIllustration } from "../../vehicle-identity/VehicleScanIllustration";
 import "../work-order-form.css";
 import { PreRepairPhotos } from "../../pre-repair-photos/PreRepairPhotos";
 import { DraftDispatchFields } from "../../dispatch/DraftDispatchFields";
@@ -206,6 +207,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   disabled={!canEditForm || vehicleHistoryLoading}
                   loading={identifierRecognition.vin.status === "识别中"}
                   label="VIN 码识别"
+                  cameraArtwork={<VehicleScanIllustration kind="vin" />}
                   primaryActionLabel="拍照识别 VIN"
                   onSelect={(file) => scanVehicleIdentifier("vin", file)}
                 />
