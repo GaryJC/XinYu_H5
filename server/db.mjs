@@ -1,3 +1,5 @@
+import {readLicenseExceptions} from './repositories/vehicleLicenseExceptionRepository.mjs';
+import {assertWorkOrderAccess} from './repositories/accessRepository.mjs';
 import { attachPreRepairPhotos } from "./repositories/preRepairPhotoRepository.mjs";
 import { assertPreRepairPhotosReady } from "./domain/preRepairPhotos.mjs";
 import { assertWorkHoursRecorded } from './repositories/dispatchRepository.mjs';
@@ -149,14 +151,14 @@ export async function transitionWorkOrder(id, status, actor, action, patch = {})
   });
 }
 
-export async function createSignatureTokenForOrder(id, actor) {
+export async function createSignatureTokenForOrder(id, actor, {lookup=lookupVehicleInCompanySystem}={}) {
   return transaction(async (client) => {
     const order = await findWorkOrderById(client, id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
     if (order.status !== "草稿") throw new HttpError(409, `当前状态“${order.status}”不能发起签字`);
     assertOrderReadyForSignature(order);
     assertPreRepairPhotosReady(order);
-    const vehicleLookup = await lookupVehicleInCompanySystem({
+    const vehicleLookup = await lookup({
       plate: order.vehicle.plate,
       vin: order.vehicle.vin
     });
@@ -171,7 +173,7 @@ export async function createSignatureTokenForOrder(id, actor) {
         `,
         [id]
       );
-      assertVehicleLicenseRequirement(vehicleLookup.status, Boolean(vehicleLicense.rows[0]));
+      assertVehicleLicenseRequirement(vehicleLookup.status, Boolean(vehicleLicense.rows[0]), order.vehicleLicenseException, order.vehicle);
     }
     const token = createSignatureToken(id);
     await upsertWorkOrder(client, { ...order, status: "待客户签字", updatedAt: nowString() });
@@ -432,6 +434,7 @@ async function hydrateOrders(rows, client = pool) {
     [ids]
   );
 
+  const licenseExceptions = await readLicenseExceptions(client,ids);
   const dispatchPlans = await readDispatchPlans(client, ids);
   const itemsByOrder = groupBy(repairItems.rows, "order_id");
   const signaturesByOrder = groupBy(signatures.rows, "order_id");
@@ -454,6 +457,7 @@ async function hydrateOrders(rows, client = pool) {
       settlementByOrder.get(row.id) || [],
       filesByOrder.get(row.id) || []
     ),
+    vehicleLicenseException: licenseExceptions.get(row.id),
     dispatchPlan: dispatchPlans.get(row.id)
   }));
 }
@@ -630,4 +634,11 @@ async function refreshOutboundPickedState(client, orderId, repairItems) {
   const stats = rows[0] || { total: 0, picked: 0 };
   const status = stats.picked === 0 ? "待领料" : stats.picked === stats.total ? "已领料" : "部分领料";
   await client.query("update outbound_orders set status = $2 where id = $1", [outboundId, status]);
+}
+
+export async function getWorkOrderDetail(id,user) {
+  await assertWorkOrderAccess(id,user);
+  const order=await findWorkOrderById(pool,id);
+  if(!order)throw new HttpError(404,'委托单不存在');
+  return sanitizeVisibleOrders([order],user.role,user)[0];
 }

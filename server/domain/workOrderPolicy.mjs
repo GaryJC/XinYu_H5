@@ -1,3 +1,4 @@
+import {isCurrentLicenseException} from './vehicleLicenseException.mjs';
 import { HttpError } from "../http/HttpError.mjs";
 
 const nextStatus = new Map([
@@ -41,8 +42,8 @@ export function assertOrderReadyForSignature(order) {
   if (missing.length) throw new HttpError(400, `请完善必填项：${missing.join("、")}`);
 }
 
-export function assertVehicleLicenseRequirement(vehicleLookupStatus, hasVehicleLicense) {
-  if (vehicleLookupStatus === "new" && !hasVehicleLicense) {
+export function assertVehicleLicenseRequirement(vehicleLookupStatus, hasVehicleLicense, exception, vehicle) {
+  if (vehicleLookupStatus === "new" && !hasVehicleLicense && !isCurrentLicenseException(exception,vehicle)) {
     throw new HttpError(400, "公司系统中未找到该车辆，新车必须上传行驶证照片后再发起签字");
   }
 }

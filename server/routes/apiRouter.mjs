@@ -1,7 +1,9 @@
+import {reportVehicleLicenseException} from '../services/vehicleLicenseExceptionService.mjs';
 import { handleDispatchRequest } from "./dispatchRouter.mjs";
 import { executeDispatchAction } from "../services/dispatchService.mjs";
 import { authenticateRequest, loginForDevelopment, loginWithDingTalk } from "../auth.mjs";
 import {
+  getWorkOrderDetail,
   createSignatureTokenForOrder,
   createSettlementForOrder,
   createWorkOrder,
@@ -200,7 +202,16 @@ export async function handleApiRequest(req, res, url) {
     return true;
   }
 
+  const licenseExceptionMatch=url.pathname.match(/^\/api\/work-orders\/([^/]+)\/license-exception$/);
+  if(licenseExceptionMatch && req.method==='POST') {
+    requireAnyRole(currentUser,['advisor','manager']);
+    sendJson(res,200,await reportVehicleLicenseException(currentUser,decodeURIComponent(licenseExceptionMatch[1]),await readJson(req)));return true;
+  }
   const workOrderMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)$/);
+  if(workOrderMatch && req.method==='GET') {
+    requireAnyRole(currentUser,['advisor','manager']);
+    sendJson(res,200,await getWorkOrderDetail(decodeURIComponent(workOrderMatch[1]),currentUser));return true;
+  }
   if (workOrderMatch && req.method === "PUT") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     const { order, actor, action } = await readJson(req);

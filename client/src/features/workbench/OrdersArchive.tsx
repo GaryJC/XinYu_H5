@@ -1,3 +1,5 @@
+import {VehicleLicenseExceptionNotice} from '../work-orders/components/VehicleLicenseException';
+import {isCurrentVehicleLicenseException} from '../work-orders/domain/vehicleLicenseException';
 import { PreRepairPhotos } from "../pre-repair-photos/PreRepairPhotos";
 import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
 import { QuickDispatchDialog } from "../dispatch/QuickDispatchDialog";
@@ -15,7 +17,9 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
     searchTerm, setSearchTerm, searchedOrders, selectedId, selectOrder, setActiveNav,
     role, currentUser, deleteDraft, actionLoading
   } = controller;
-  const [detailOrder, setDetailOrder] = useState<WorkOrder>();
+  const [localDetailOrder,setLocalDetailOrder]=useState<WorkOrder>();
+  const detailOrder=localDetailOrder||controller.linkedOrderDetail;
+  const setDetailOrder=(order?:WorkOrder)=>{setLocalDetailOrder(order);if(!order)controller.clearLinkedOrder();};
   const [dispatchOrder, setDispatchOrder] = useState<WorkOrder>();
   const canAssign = (order: WorkOrder) => dispatchEnabled && ["advisor","manager"].includes(role) && workOrderDisplayStatus(order) === "待派工" && (!order.technician || order.technician === "待派工");
   const [deleteError, setDeleteError] = useState("");
@@ -137,6 +141,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
         styles={{ body: { maxHeight: isMobile ? "calc(100vh - 132px)" : "72vh", overflowY: "auto" } }}
       >
         {deleteError ? <Alert type="error" showIcon title="删除草稿失败" description={deleteError} style={{ marginBottom: 12 }} /> : null}
+        {detailOrder?.vehicleLicenseException?<div style={{marginBottom:16}}><VehicleLicenseExceptionNotice exception={detailOrder.vehicleLicenseException} current={isCurrentVehicleLicenseException(detailOrder.vehicleLicenseException,detailOrder.vehicle)}/></div>:null}
         {detailOrder ? <OrderDetail order={detailOrder} isMobile={isMobile} /> : null}
       </Modal>
       {dispatchEnabled && dispatchOrder && currentUser && <QuickDispatchDialog key={dispatchOrder.id} orderId={dispatchOrder.id} user={currentUser} onClose={() => { setDispatchOrder(undefined); void controller.refreshWorkbench(); }} />}

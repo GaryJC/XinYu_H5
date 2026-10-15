@@ -1,3 +1,5 @@
+import {isCurrentVehicleLicenseException} from '../work-orders/domain/vehicleLicenseException';
+import {createRequestId} from '../../shared/api/requestId';
 import { usePreRepairPhotos } from "../pre-repair-photos/usePreRepairPhotos";
 import { missingPhotoErrors } from "../pre-repair-photos/photoSlots";
 import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
@@ -24,6 +26,8 @@ import { navItems } from "./workbenchConfig";
 import { dispatchEnabled, isDispatchNavigation } from "../dispatch/dispatchAvailability";
 
 export function useWorkbenchController() {
+  const [linkedOrderDetail,setLinkedOrderDetail]=useState<WorkOrder>();
+  const exceptionRequest=useRef<{key:string;requestId:string}|undefined>(undefined);
   const [activeNav, setActiveNav] = useState("工作台");
   const [role, setRole] = useState<RoleKey>("advisor");
   const [orders, setOrders] = useState<WorkOrder[]>([]);
@@ -220,11 +224,25 @@ export function useWorkbenchController() {
     // 普通浏览器没有钉钉 JSAPI，保留未登录的本地开发体验。
   }
 
+  useEffect(()=>{
+    setLinkedOrderDetail(undefined);
+    const id=new URLSearchParams(location.search).get('workOrder');
+    if(!currentUser || !id || !['manager','advisor'].includes(currentUser.role))return;
+    let active=true;
+    void workOrderApi.get(id).then(order=>{if(active){setLinkedOrderDetail(order);setActiveNav('工作台');}}).catch(e=>{if(active)setApiError(e instanceof Error?e.message:'无法查看通知中的委托单');});
+    return()=>{active=false;};
+  },[currentUser?.id]);
+  function clearLinkedOrder() {
+    setLinkedOrderDetail(undefined);
+    const url=new URL(location.href);url.searchParams.delete('workOrder');history.replaceState(null,'',url);
+  }
+
   function applyAuthenticatedUser(user: UserProfile) {
     const nextRole = user.role;
     setRole(nextRole);
+    const orderLink=new URLSearchParams(location.search).has('workOrder');
     const dispatchLink = new URLSearchParams(location.search).has("dispatchOrder");
-    const landing = nextRole === "technician" ? "我的维修" : nextRole === "inspector" ? "检验任务" : (dispatchLink && ["advisor", "manager"].includes(nextRole)) ? "派工台" : user.homeRoute === "order-create" ? "委托开单" : "工作台";
+    const landing = orderLink&&['advisor','manager'].includes(nextRole)?'工作台':nextRole === "technician" ? "我的维修" : nextRole === "inspector" ? "检验任务" : (dispatchLink && ["advisor", "manager"].includes(nextRole)) ? "派工台" : user.homeRoute === "order-create" ? "委托开单" : "工作台";
     setActiveNav(!dispatchEnabled && isDispatchNavigation(landing) ? "工作台" : landing);
     setDraft((current) => ({ ...current, advisor: user.name }));
   }
@@ -296,6 +314,25 @@ export function useWorkbenchController() {
     }
   }
 
+  async function reportMissingVehicleLicense(reason:string) {
+    if(!draft.vehicle.plate.trim()||!/^[A-Z0-9]{17}$/i.test(draft.vehicle.vin.trim())){setFormErrors(['请先填写车牌和17位 VIN，再办理行驶证缺失备案']);return false;}
+    if(!canEditForm || preRepairPhotos.isUploading()){setFormErrors(['请先等待照片上传完成，并确认当前草稿可以编辑']);return false;}
+    setActionLoading('save');setFormErrors([]);
+    try {
+      const cleaned={...draft,repairItems:filterEmptyRepairItems(draft.repairItems)};
+      const order=selectedOrder?await workOrderApi.update({...selectedOrder,...cleaned},actor,'保存行驶证缺失备案前草稿'):await workOrderApi.create(cleaned,actor);
+      setOrders(current=>[order,...current.filter(o=>o.id!==order.id)]);setSelectedId(order.id);
+      const normalize=(value:string)=>value.replace(/\s/g,'').toUpperCase();
+      const input={reason,vehiclePlate:normalize(order.vehicle.plate),vehicleVin:normalize(order.vehicle.vin)};
+      const key=JSON.stringify({orderId:order.id,...input});
+      if(exceptionRequest.current?.key!==key)exceptionRequest.current={key,requestId:createRequestId()};
+      await workOrderApi.reportLicenseException(order.id,{...input,requestId:exceptionRequest.current.requestId});
+      exceptionRequest.current=undefined;
+      await loadOrders(role,order.id);return true;
+    } catch(error){setFormErrors([actionError(error,'行驶证缺失备案失败')]);return false;}
+    finally{setActionLoading('');}
+  }
+
   async function deleteDraft(order: WorkOrder) {
     if (order.status !== "草稿") return "只能删除草稿";
     if (role !== "manager" && order.advisor !== currentUser?.name) return "只能删除自己创建的草稿";
@@ -352,7 +389,7 @@ export function useWorkbenchController() {
     const hasVehicleLicense = Boolean(
       vehicleLicenseFileId || selectedOrder?.files?.some((file) => file.kind === "vehicle_license")
     );
-    if (vehicleHistory?.status === "new" && !hasVehicleLicense) {
+    if (vehicleHistory?.status === "new" && !hasVehicleLicense && !isCurrentVehicleLicenseException(draft.vehicleLicenseException,draft.vehicle)) {
       errors.push("公司系统中未找到该车辆，新车必须上传行驶证照片");
     }
     return errors;
@@ -377,6 +414,7 @@ export function useWorkbenchController() {
   }
 
   return {
+    linkedOrderDetail,clearLinkedOrder,reportMissingVehicleLicense,
     refreshWorkbench: async () => { await Promise.all([loadOrders(), loadDashboard()]); },
     openDispatch,
     activeNav,

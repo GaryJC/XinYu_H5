@@ -1,3 +1,4 @@
+import {startVehicleLicenseExceptionNotifications} from './workers/vehicleLicenseExceptionNotifications.mjs';
 import { startDispatchNotifications } from "./workers/dispatchNotifications.mjs";
 import path from "node:path";
 import { createServer } from "node:http";
@@ -12,6 +13,7 @@ import { withRequestTiming } from "./http/requestTiming.mjs";
 
 const config = serverConfig();
 const stopNotifications = startDispatchNotifications();
+const stopLicenseNotifications = startVehicleLicenseExceptionNotifications();
 const distDir = path.resolve(config.distDir);
 
 const server = createServer(async (req, res) => {
@@ -47,6 +49,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {
     server.close(async () => {
       await stopNotifications();
+      await stopLicenseNotifications();
       await Promise.all([closePool(), closeSqlServerPool()]);
       process.exit(0);
     });

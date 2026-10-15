@@ -278,7 +278,14 @@ export type WorkOrderDispatchPlan = DispatchExecution & {
   activatedAt?: string;
 };
 
+export type VehicleLicenseException = {
+  id:string; reason:string; vehiclePlate:string; vehicleVin:string;
+  reportedBy:string; reportedName:string; reportedAt:string;
+  notificationStatus:'pending'|'queued'|'failed'|'sent'|'unknown'; notificationError:string;
+};
+
 export type WorkOrder = {
+  vehicleLicenseException?: VehicleLicenseException;
   dispatchStage?: DispatchStage;
   dispatchPlan?: WorkOrderDispatchPlan | null;
   id: string;

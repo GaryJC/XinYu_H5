@@ -1,3 +1,5 @@
+import {VehicleLicenseExceptionNotice,VehicleLicenseExceptionButton} from './VehicleLicenseException';
+import {isCurrentVehicleLicenseException} from '../domain/vehicleLicenseException';
 import "../work-order-form.css";
 import { PreRepairPhotos } from "../../pre-repair-photos/PreRepairPhotos";
 import { DraftDispatchFields } from "../../dispatch/DraftDispatchFields";
@@ -63,6 +65,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
       ? "optional"
       : "pending";
   const vehicleLicenseRequired = vehicleLicenseRequirement === "required";
+  const licenseExceptionCurrent=isCurrentVehicleLicenseException(draft.vehicleLicenseException,draft.vehicle);
   const hasVehicleLicense = Boolean(vehicleLicenseFileId || selectedOrder?.files?.some((file) => file.kind === "vehicle_license"));
 
   useEffect(() => {
@@ -182,20 +185,22 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 : vehicleLicenseRequirement === "optional"
                   ? "行驶证照片（已有车辆选填）"
                   : "行驶证照片（请先查询车辆）"}
-              required={vehicleLicenseRequired}
+              required={vehicleLicenseRequired&&!licenseExceptionCurrent}
               validateStatus={fieldError("行驶证") ? "error" : undefined}
-              help={fieldError("行驶证") || (vehicleLicenseRequired && !hasVehicleLicense ? "公司系统未找到该车辆，请上传行驶证照片" : undefined)}
+              help={fieldError("行驶证") || (vehicleLicenseRequired && !hasVehicleLicense && !licenseExceptionCurrent ? "公司系统未找到该车辆，请上传行驶证照片" : undefined)}
             >
               <div className="ocr-grid">
                 <VehicleLicenseOcrControl
                   disabled={!canEditForm}
-                  requirement={vehicleLicenseRequirement}
+                  requirement={licenseExceptionCurrent?"optional":vehicleLicenseRequirement}
                   result={vehicleLicenseOcr}
                   state={ocrState.vehicleLicense}
                   onScan={scanVehicleLicense}
                   onConfirm={confirmVehicleLicenseOcr}
                 />
               </div>
+              {draft.vehicleLicenseException?<div style={{marginTop:12}}><VehicleLicenseExceptionNotice exception={draft.vehicleLicenseException} current={licenseExceptionCurrent}/></div>:null}
+              {vehicleLicenseRequired&&!hasVehicleLicense&&!licenseExceptionCurrent?<VehicleLicenseExceptionButton disabled={!canEditForm||Boolean(actionLoading)} onConfirm={controller.reportMissingVehicleLicense}/>:null}
             </Form.Item>
 
             <div className="field-grid">
