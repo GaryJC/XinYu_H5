@@ -29,7 +29,7 @@ function fixture() {
     estimatedFee: 100, faultDescription: "制动异响"
   }), signatures: { customer: "测试车主", reception: "不能出现在打印上的接车签名" } };
 }
-const render = (order, source) => renderToStaticMarkup(React.createElement(WorkOrderPrintDocument, { order, signatureSource: source }));
+const render = (order, source, arrivalDate) => renderToStaticMarkup(React.createElement(WorkOrderPrintDocument, { order, signatureSource: source, arrivalDate }));
 
 test("print template includes saved vehicle data and customer ink, omitting pickup confirmation", () => {
   const html = render(fixture(), "blob:customer-signature");
@@ -67,7 +67,7 @@ test("API identifies the customer's linked signature instead of another signer's
 
 const printSource = readFileSync(new URL("../client/src/features/work-order-print/printDocument.ts", import.meta.url), "utf8");
 const printCode = ts.transpileModule(printSource, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
-const { printDocument } = await import(`data:text/javascript;base64,${Buffer.from(printCode).toString("base64")}`);
+const { printDocument, singlePageScale } = await import(`data:text/javascript;base64,${Buffer.from(printCode).toString("base64")}`);
 
 function withPrintDom(imageDecode, run) {
   const previousDocument = globalThis.document;
@@ -76,7 +76,7 @@ function withPrintDom(imageDecode, run) {
   const frame = {
     style: {}, setAttribute() {}, remove() { events.push("removed"); },
     contentDocument: {
-      createElement: () => ({}), head: { append() {} }, documentElement: {},
+      createElement: () => ({ style: {}, append() {} }), head: { append() {} }, documentElement: {},
       body: { append() {}, getBoundingClientRect() { events.push("layout"); } },
       fonts: { ready: Promise.resolve() }, images: [{ decode: () => imageDecode(events) }]
     },
@@ -92,14 +92,42 @@ function withPrintDom(imageDecode, run) {
 
 test("printing waits for signature decoding and layout before opening the dialog", async () => {
   await withPrintDom(async events => { events.push("decoded"); }, async events => {
-    await printDocument({ cloneNode: () => ({}) }, "styles", "title");
+    await printDocument({ cloneNode: () => ({style:{},scrollHeight:900,getBoundingClientRect:()=>({height:900})}) }, "styles", "title");
     assert.deepEqual(events, ["decoded", "layout", "print"]);
   });
 });
 
 test("signature decoding failure removes the print frame without printing", async () => {
   await withPrintDom(async () => { throw new Error("image decode failed"); }, async events => {
-    await assert.rejects(() => printDocument({ cloneNode: () => ({}) }, "styles", "title"), /image decode failed/);
+    await assert.rejects(() => printDocument({ cloneNode: () => ({style:{},scrollHeight:900,getBoundingClientRect:()=>({height:900})}) }, "styles", "title"), /image decode failed/);
     assert.deepEqual(events, ["removed"]);
   });
+});
+
+test("print removes marked content and the work-time column, leaving zero labor fees blank", () => {
+  const order = fixture();
+  order.repairItems[0].laborFee = 0;
+  order.repairItems[0].startAt = "start-must-not-print";
+  order.feeNote = "fee-note-must-not-print";
+  const html = render(order);
+  for (const removed of [order.id, "开工 / 完工时间", "start-must-not-print", "fee-note-must-not-print", "旧件：", "含检查费", "费用备注"]) assert.ok(!html.includes(removed), removed);
+  assert.match(html, /检查制动系统<\/td><td><\/td>/);
+});
+
+test("printing can override the arrival date without modifying the stored order", () => {
+  const order = fixture();
+  order.arrivalDate = "2026-09-14";
+  const html = render(order, undefined, "2026-10-15");
+  assert.match(html, /进厂日期：2026-10-15/);
+  assert.ok(!html.includes("2026-09-14"));
+  assert.equal(order.arrivalDate, "2026-09-14");
+});
+
+test("single-page fitting preserves all content within one A4 page", () => {
+  for (const height of [500, 1000, 2000, 5000]) {
+    const scale = singlePageScale(height);
+    assert.ok(scale > 0 && scale <= 1);
+    assert.ok(height * scale <= 276 * 96 / 25.4 + 0.01);
+  }
+  assert.throws(() => singlePageScale(0), /无法计算/);
 });
