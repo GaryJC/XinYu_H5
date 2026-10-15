@@ -7,7 +7,6 @@ import {
   assertRepairItemAction,
   assertSettlementAllowed,
   assertStatusTransition,
-  assertVehicleLicenseRequirement,
   sanitizeTransitionPatch
 } from "../server/domain/workOrderPolicy.mjs";
 import { HttpError } from "../server/http/HttpError.mjs";
@@ -41,24 +40,24 @@ test("signed work orders cannot be edited as drafts", () => {
   assert.throws(() => assertDraftEditable("已委托"), (error) => error.status === 409);
 });
 
-test("signing requires the legacy model and organization codes used by Runfeng", () => {
-  const readyOrder = {
-    department: { code: "A", name: "机电一部" },
-    vehicle: {
-      plate: "鲁B12345",
-      vin: "LSV12345678901234",
-      mileage: "12000",
-      model: "大众-帕萨特",
-      modelLegacyCode: "DZPST"
-    },
-    customer: {
-      name: "个人（水务集团）",
-      legacyCode: "grqdswjty",
-      phone: "13800000000"
-    },
-    repairItems: [{ name: "常规保养" }]
-  };
+const readyOrder = {
+  department: { code: "A", name: "机电一部" },
+  vehicle: {
+    plate: "鲁B12345",
+    vin: "LSV12345678901234",
+    mileage: "12000",
+    model: "大众-帕萨特",
+    modelLegacyCode: "DZPST"
+  },
+  customer: {
+    name: "个人（水务集团）",
+    legacyCode: "grqdswjty",
+    phone: "13800000000"
+  },
+  repairItems: [{ name: "常规保养" }]
+};
 
+test("signing requires the legacy model and organization codes used by Runfeng", () => {
   assert.doesNotThrow(() => assertOrderReadyForSignature(readyOrder));
   assert.throws(
     () => assertOrderReadyForSignature({
@@ -73,13 +72,9 @@ test("signing requires the legacy model and organization codes used by Runfeng",
   );
 });
 
-test("only new vehicles require an uploaded vehicle license before signing", () => {
-  assert.doesNotThrow(() => assertVehicleLicenseRequirement("found", false));
-  assert.doesNotThrow(() => assertVehicleLicenseRequirement("new", true));
-  assert.throws(
-    () => assertVehicleLicenseRequirement("new", false),
-    (error) => error instanceof HttpError && error.status === 400 && /新车必须上传行驶证/.test(error.message)
-  );
+test("signing permits orders without a vehicle-license attachment", () => {
+  assert.doesNotThrow(() => assertOrderReadyForSignature({ ...readyOrder, files: [] }));
+  assert.doesNotThrow(() => assertOrderReadyForSignature({ ...readyOrder, files: undefined }));
 });
 
 test("repair-item actions reject missing items, unknown actions, and wrong states", () => {

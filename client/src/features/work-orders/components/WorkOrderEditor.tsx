@@ -36,7 +36,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const isMobile = !screens.md;
   const {
     selectedOrder, startNewOrder, canEditForm, saveDraft, role, sendSignature,
-    formErrors, vehicleLicenseOcr, vehicleLicenseFileId, ocrState, scanVehicleLicense,
+    formErrors, vehicleLicenseOcr, ocrState, scanVehicleLicense,
     confirmVehicleLicenseOcr, draft, updateDraft, updateVehicle, updateCustomer,
     toggleArrayField, setDraft, totalLabor, updateRepairItem,
     actionLoading, completeSignature, identifierRecognition,
@@ -58,13 +58,6 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
       : selectedOrder?.legacySyncStatus === "processing"
         ? "签字和委托单已上传，润丰正在处理。"
         : "签字和委托单已上传，正在等待润丰系统拉取。";
-  const vehicleLicenseRequirement = vehicleHistory?.status === "new"
-    ? "required"
-    : vehicleHistory?.status === "found"
-      ? "optional"
-      : "pending";
-  const vehicleLicenseRequired = vehicleLicenseRequirement === "required";
-  const hasVehicleLicense = Boolean(vehicleLicenseFileId || selectedOrder?.files?.some((file) => file.kind === "vehicle_license"));
 
   useEffect(() => {
     if (!landscapeSignature) return;
@@ -165,7 +158,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               </div>
             ) : null}
 
-            <FormSection title="车辆识别与资料" description="先查询车辆档案；新车须上传行驶证，OCR 确认选填。">
+            <FormSection title="车辆识别与资料" description="先查询车辆档案；行驶证照片及 OCR 确认均为选填。">
             <VehicleIdentityRecognition
               disabled={!canEditForm}
               recognition={identifierRecognition}
@@ -178,19 +171,13 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
 
             <Form.Item
               className="ocr-form-item"
-              label={vehicleLicenseRequirement === "required"
-                ? "行驶证照片（新车必填）"
-                : vehicleLicenseRequirement === "optional"
-                  ? "行驶证照片（已有车辆选填）"
-                  : "行驶证照片（请先查询车辆）"}
-              required={vehicleLicenseRequired}
+              label="行驶证照片（选填）"
               validateStatus={fieldError("行驶证") ? "error" : undefined}
-              help={fieldError("行驶证") || (vehicleLicenseRequired && !hasVehicleLicense ? "公司系统未找到该车辆，请上传行驶证照片" : undefined)}
+              help={fieldError("行驶证")}
             >
               <div className="ocr-grid">
                 <VehicleLicenseOcrControl
                   disabled={!canEditForm}
-                  requirement={vehicleLicenseRequirement}
                   result={vehicleLicenseOcr}
                   state={ocrState.vehicleLicense}
                   onScan={scanVehicleLicense}
