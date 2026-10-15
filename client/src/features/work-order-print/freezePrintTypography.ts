@@ -3,21 +3,32 @@ const properties = [
   "line-height", "letter-spacing", "word-spacing", "font-synthesis"
 ] as const;
 
-/** Freeze resolved text metrics before html2canvas performs its second layout. */
-export async function freezePrintTypography(source: HTMLElement, target: HTMLElement, document: Document) {
+type TypographySnapshot = Map<string, Record<string, string>>;
+
+/** Read once from the visible preview, before either export iframe can reflow it. */
+export function capturePrintTypography(source: HTMLElement): TypographySnapshot {
   const view = source.ownerDocument.defaultView;
   if (!view) throw new Error("无法读取打印页面字号，请重试。");
-  document.documentElement.classList.add("wop-print-document");
-  const sourceNodes = [source, ...source.querySelectorAll<HTMLElement>("*")];
-  const targetNodes = [target, ...target.querySelectorAll<HTMLElement>("*")];
-  // html2canvas inserts nodes for CSS pseudo-elements. Match real elements by
-  // a temporary key assigned before capture, rather than their child positions.
-  const targets = new Map(targetNodes.map(node => [node.getAttribute("data-wop-capture-key"), node]));
-  for (const node of sourceNodes) {
-    const clone = targets.get(node.getAttribute("data-wop-capture-key"));
-    if (!clone?.style) continue;
+  const snapshot: TypographySnapshot = new Map();
+  for (const node of [source, ...source.querySelectorAll<HTMLElement>("*")]) {
+    const key = node.getAttribute("data-wop-capture-key");
+    if (key === null) continue;
     const style = view.getComputedStyle(node);
-    for (const property of properties) clone.style.setProperty(property, style.getPropertyValue(property), "important");
+    snapshot.set(key, Object.fromEntries(properties.map(property => [property, style.getPropertyValue(property)])));
+  }
+  return snapshot;
+}
+
+/** Both export layouts reuse the preview's metrics, never a reflowed iframe's. */
+export async function freezePrintTypography(source: HTMLElement, target: HTMLElement, document: Document,
+  snapshot = capturePrintTypography(source)) {
+  document.documentElement.classList.add("wop-print-document");
+  // html2canvas adds pseudo-element nodes; only copy to keyed original elements.
+  for (const clone of [target, ...target.querySelectorAll<HTMLElement>("*")]) {
+    const key = clone.getAttribute("data-wop-capture-key");
+    const metrics = key === null ? undefined : snapshot.get(key);
+    if (!clone.style || !metrics) continue;
+    for (const property of properties) clone.style.setProperty(property, metrics[property], "important");
     clone.style.setProperty("-webkit-text-size-adjust", "none", "important");
     clone.style.setProperty("text-size-adjust", "none", "important");
   }
