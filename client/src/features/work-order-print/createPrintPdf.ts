@@ -1,13 +1,18 @@
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { freezePrintTypography, markPrintCaptureNodes } from "./freezePrintTypography";
-import { preparePrintDocument } from "./printDocument";
+import { capturePrintTypography, freezePrintTypography, markPrintCaptureNodes } from "./freezePrintTypography";
+import { fitSinglePage, preparePrintDocument } from "./printDocument";
 
 export async function createPrintPdf(element: HTMLElement, styles: string, title: string): Promise<Blob> {
-  const { frame, page } = await preparePrintDocument(element, styles, title);
+  markPrintCaptureNodes(element);
+  const typography = capturePrintTypography(element);
+  const { frame, page, doc } = await preparePrintDocument(element, styles, title);
   try {
     // Keep the canvas below four megapixels for mobile WebView memory limits.
-    markPrintCaptureNodes(page);
+    await freezePrintTypography(element, page, doc, typography);
+    const paper = page.querySelector<HTMLElement>(".work-order-print");
+    if (!paper) throw new Error("无法读取打印内容，请重试。");
+    fitSinglePage(paper, page);
     const canvas = await html2canvas(page, {
       scale: 2,
       backgroundColor: "#ffffff",
@@ -20,7 +25,7 @@ export async function createPrintPdf(element: HTMLElement, styles: string, title
       onclone: async (document, clonedPage) => {
         // html2canvas creates another iframe. Keep that second layout's text
         // metrics identical to the prepared print page, including on iOS.
-        await freezePrintTypography(page, clonedPage, document);
+        await freezePrintTypography(element, clonedPage, document, typography);
       }
     });
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });

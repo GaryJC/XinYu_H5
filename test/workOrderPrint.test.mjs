@@ -174,7 +174,7 @@ test("font loading failure prevents an export with substituted fonts", async () 
 
 const captureSource = readFileSync(new URL("../client/src/features/work-order-print/freezePrintTypography.ts", import.meta.url), "utf8");
 const captureCode = ts.transpileModule(captureSource, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
-const { freezePrintTypography, markPrintCaptureNodes } = await import(`data:text/javascript;base64,${Buffer.from(captureCode).toString("base64")}`);
+const { capturePrintTypography, freezePrintTypography, markPrintCaptureNodes } = await import(`data:text/javascript;base64,${Buffer.from(captureCode).toString("base64")}`);
 
 test("PDF capture freezes resolved text metrics, matching keyed elements despite inserted pseudo nodes", async () => {
   const events = [];
@@ -190,13 +190,18 @@ test("PDF capture freezes resolved text metrics, matching keyed elements despite
   source.querySelectorAll = () => [heading,footer];
   source.ownerDocument = { defaultView: { getComputedStyle: element => ({ getPropertyValue: property => element.metrics[property] || "normal" }) } };
   markPrintCaptureNodes(source);
+  const snapshot = capturePrintTypography(source);
+  // Simulate the hidden export layout boosting address/title text after capture.
+  source.metrics["font-size"] = "20px";
+  heading.metrics["font-size"] = "24px";
+  footer.metrics["font-weight"] = "700";
   const clone = node(), cloneHeading = node(), cloneFooter = node(), pseudo = node();
   for (const [index, element] of [clone,cloneHeading,cloneFooter].entries()) element.setAttribute("data-wop-capture-key", String(index));
   clone.querySelectorAll = selector => selector === "*" ? [pseudo,cloneHeading,cloneFooter] : [cloneHeading];
   const doc = { documentElement: { classList: { add: value => events.push(value) } },
     fonts: { load: async font => { events.push(font); }, ready: Promise.resolve() },
     body: { getBoundingClientRect: () => events.push("layout") } };
-  await freezePrintTypography(source, clone, doc);
+  await freezePrintTypography(source, clone, doc, snapshot);
   assert.deepEqual(cloneHeading.styles.get("font-size"), {value:"14.6667px",priority:"important"});
   assert.equal(cloneFooter.styles.get("font-weight").value,"400");
   assert.equal(clone.styles.get("font-size").value,"12.6667px");
