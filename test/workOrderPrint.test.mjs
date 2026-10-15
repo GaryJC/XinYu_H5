@@ -67,7 +67,7 @@ test("API identifies the customer's linked signature instead of another signer's
 
 const printSource = readFileSync(new URL("../client/src/features/work-order-print/printDocument.ts", import.meta.url), "utf8");
 const printCode = ts.transpileModule(printSource, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
-const { printDocument, singlePageScale } = await import(`data:text/javascript;base64,${Buffer.from(printCode).toString("base64")}`);
+const { printDocument, preparePrintDocument, singlePageScale } = await import(`data:text/javascript;base64,${Buffer.from(printCode).toString("base64")}`);
 
 function withPrintDom(imageDecode, run) {
   const previousDocument = globalThis.document;
@@ -84,7 +84,7 @@ function withPrintDom(imageDecode, run) {
   };
   globalThis.document = { createElement: () => frame, body: { append() {} } };
   globalThis.window = { setTimeout() {} };
-  return Promise.resolve().then(() => run(events)).finally(() => {
+  return Promise.resolve().then(() => run(events, frame)).finally(() => {
     globalThis.document = previousDocument;
     globalThis.window = previousWindow;
   });
@@ -130,4 +130,15 @@ test("single-page fitting preserves all content within one A4 page", () => {
     assert.ok(height * scale <= 276 * 96 / 25.4 + 0.01);
   }
   assert.throws(() => singlePageScale(0), /无法计算/);
+});
+
+test("PDF preparation works without a native print API", async () => {
+  await withPrintDom(async events => { events.push("decoded"); }, async (events, frame) => {
+    frame.contentWindow.print = undefined;
+    const prepared = await preparePrintDocument({ cloneNode: () => ({ style: {}, scrollHeight: 900, getBoundingClientRect: () => ({ height: 900 }) }) }, "styles", "title");
+    assert.equal(prepared.frame, frame);
+    assert.deepEqual(events, ["decoded", "layout"]);
+    prepared.frame.remove();
+    await assert.rejects(() => printDocument({ cloneNode: () => ({ style: {}, scrollHeight: 900, getBoundingClientRect: () => ({ height: 900 }) }) }, "styles", "title"), /请选择导出 PDF|请选择导出|选择导出 PDF/);
+  });
 });

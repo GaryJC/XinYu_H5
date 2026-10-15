@@ -20,16 +20,16 @@ export function fitSinglePage(paper: HTMLElement, page: HTMLElement) {
   page.style.height = `${PAGE_HEIGHT}mm`;
 }
 
-export async function printDocument(element: HTMLElement, styles: string, title: string) {
+export async function preparePrintDocument(element: HTMLElement, styles: string, title: string) {
   const frame = document.createElement("iframe");
   frame.title = "委托单打印";
   frame.setAttribute("aria-hidden", "true");
-  Object.assign(frame.style, { position: "fixed", width: "1px", height: "1px", left: "-10000px", top: "0", border: "0" });
+  Object.assign(frame.style, { position: "fixed", width: "794px", height: "1123px", left: "-10000px", top: "0", border: "0" });
   document.body.append(frame);
   try {
     const doc = frame.contentDocument;
     const view = frame.contentWindow;
-    if (!doc || !view || typeof view.print !== "function") throw new Error("当前浏览器不支持打印，请在电脑浏览器打开委托单打印。");
+    if (!doc || !view) throw new Error("无法创建委托单打印页面，请重试。");
     const style = doc.createElement("style");
     style.textContent = styles;
     doc.head.append(style);
@@ -50,7 +50,18 @@ export async function printDocument(element: HTMLElement, styles: string, title:
     // suspend for an off-screen iframe.
     doc.body.getBoundingClientRect();
     fitSinglePage(paper, page);
-    // Leave the frame alive while the browser owns its print preview.
+    return { frame, doc, view, page };
+  } catch (error) {
+    frame.remove();
+    throw error;
+  }
+}
+
+
+export async function printDocument(element: HTMLElement, styles: string, title: string) {
+  const { frame, view } = await preparePrintDocument(element, styles, title);
+  try {
+    if (typeof view.print !== "function") throw new Error("当前浏览器不支持系统打印，请选择导出 PDF。");
     view.addEventListener("afterprint", () => frame.remove(), { once: true });
     view.focus();
     view.print();

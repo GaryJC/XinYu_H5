@@ -309,3 +309,21 @@ html, body { touch-action: pan-x pan-y; }
 @media (max-width: 767px) {
   input, textarea, select, .ant-input, .ant-select-selection-search-input { font-size: 16px !important; }
 }
+
+/* Keep detail and print actions above the phone's home indicator. */
+@media (max-width: 760px), (pointer: coarse) {
+  .archive-detail-modal .ant-modal,
+  .work-order-print-modal .ant-modal { max-width:calc(100vw - 16px); top:8px; margin:0 auto; padding-bottom:0; }
+  .archive-detail-modal .ant-modal-container,
+  .archive-detail-modal .ant-modal-content,
+  .work-order-print-modal .ant-modal-container,
+  .work-order-print-modal .ant-modal-content { display:flex; flex-direction:column; max-height:calc(100vh - 16px); max-height:calc(100dvh - 16px); padding:14px; }
+  .archive-detail-modal .ant-modal-header,
+  .work-order-print-modal .ant-modal-header,
+  .archive-detail-modal .ant-modal-footer,
+  .work-order-print-modal .ant-modal-footer { flex-shrink:0; }
+  .archive-detail-modal .ant-modal-body,
+  .work-order-print-modal .ant-modal-body { min-height:0; overflow-y:auto; }
+  .archive-detail-modal .ant-modal-footer,
+  .work-order-print-modal .ant-modal-footer { padding-bottom:0; padding-bottom:constant(safe-area-inset-bottom); padding-bottom:env(safe-area-inset-bottom, 0px); }
+}

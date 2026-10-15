@@ -33,6 +33,8 @@
     "antd": "^6.5.0",
     "dayjs": "^1.11.21",
     "dingtalk-jsapi": "^3.2.9",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "lucide-react": "latest",
     "mssql": "^12.7.0",
     "pg": "^8.22.0",

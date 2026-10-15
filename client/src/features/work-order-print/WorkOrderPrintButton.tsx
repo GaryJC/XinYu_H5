@@ -3,6 +3,7 @@ import { Alert, Button, Input, Modal, Spin } from "antd";
 import { Printer } from "lucide-react";
 import type { WorkOrder } from "../../../../shared/types";
 import { WorkOrderPrintDocument } from "./WorkOrderPrintDocument";
+import { usePrintPdf } from "./usePrintPdf";
 import { useWorkOrderPrint } from "./useWorkOrderPrint";
 import { fitSinglePage, printDocument } from "./printDocument";
 import printStyles from "./work-order-print.css?inline";
@@ -20,7 +21,7 @@ export function WorkOrderPrintButton({ order }: { order: WorkOrder }) {
 
   return <>
     <Button icon={<Printer size={16}/>} onClick={openSettings}>打印委托单</Button>
-    <Modal open={settingsOpen} title="打印设置" okText="生成打印预览" cancelText="取消"
+    <Modal rootClassName="work-order-print-modal" open={settingsOpen} title="打印设置" okText="生成打印预览" cancelText="取消"
       onCancel={() => setSettingsOpen(false)} okButtonProps={{disabled:!validDate}}
       onOk={() => { setSettingsOpen(false); setOpen(true); }}>
       <label htmlFor={`print-arrival-${order.id}`}>进厂日期</label>
@@ -38,6 +39,15 @@ function PrintPreview({ order, arrivalDate, onClose }: { order: WorkOrder; arriv
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState("");
   const documentRef = useRef<HTMLDivElement>(null);
+  const pdf = usePrintPdf();
+  const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+    || window.matchMedia("(pointer: coarse)").matches;
+  const busy = printing || pdf.generating;
+  async function handlePdf() {
+    const element = documentRef.current?.querySelector<HTMLElement>(".work-order-print");
+    if (!element || loading || error || busy) return;
+    await pdf.generate(element, printStyles, `${order.id}-机动车修理委托书`);
+  }
   useLayoutEffect(() => {
     const preview = documentRef.current;
     const paper = preview?.querySelector<HTMLElement>(".work-order-print");
@@ -67,9 +77,22 @@ function PrintPreview({ order, arrivalDate, onClose }: { order: WorkOrder; arriv
     catch (reason) { setPrintError(reason instanceof Error ? reason.message : "打印失败，请在电脑浏览器重试。"); }
     finally { setPrinting(false); }
   }
-  return <Modal open afterOpenChange={setPreviewReady} title="委托单打印预览" width={860} styles={{body:{maxHeight:"calc(100vh - 220px)",overflowY:"auto"}}} onCancel={onClose} footer={<><Button onClick={onClose}>关闭</Button><Button type="primary" icon={<Printer size={16}/>} onClick={handlePrint} loading={printing} disabled={loading || Boolean(error)}>打印 / 另存为 PDF</Button></>}>
+  return <Modal rootClassName="work-order-print-modal" open afterOpenChange={setPreviewReady} title="委托单打印预览" width={860} styles={{body:{maxHeight:"calc(100vh - 220px)",overflowY:"auto"}}} onCancel={onClose} footer={<div className="wop-print-actions">
+    <Button onClick={onClose}>关闭</Button>
+    {!mobile && <Button icon={<Printer size={16}/>} onClick={handlePrint} loading={printing} disabled={loading || Boolean(error) || pdf.generating}>打印</Button>}
+    <Button type="primary" icon={<Printer size={16}/>} onClick={handlePdf} loading={pdf.generating} disabled={loading || Boolean(error) || printing}>{mobile ? "生成打印 PDF" : "导出 PDF"}</Button>
+  </div>}>
     <style>{printStyles}</style>
     {error && <Alert type="error" showIcon title="签名加载失败，暂不能打印" description={error} action={<Button onClick={retry}>重试</Button>} style={{marginBottom:12}}/>}
+    {pdf.error && <Alert type="error" showIcon title="PDF 生成或分享失败" description={pdf.error} style={{marginBottom:12}}/>}
+    {pdf.url && <Alert type="success" showIcon title="单页 PDF 已生成" description={<>
+      <p>打开 PDF 后可通过系统菜单打印或保存。</p>
+      <div className="wop-print-actions">
+        <Button href={pdf.url} target="_blank" rel="noopener">打开 PDF</Button>
+        <Button href={pdf.url} download={pdf.file?.name}>保存 PDF</Button>
+        {pdf.canShare && <Button onClick={pdf.share}>系统分享</Button>}
+      </div>
+    </>} style={{marginBottom:12}}/>}
     {printError && <Alert type="error" showIcon title={printError} style={{marginBottom:12}}/>}
     <Spin spinning={loading} description="正在加载客户签名"><div ref={documentRef} className="work-order-print-preview"><div className="wop-print-sheet"><main className="wop-print-page"><WorkOrderPrintDocument order={order} signatureSource={source} arrivalDate={arrivalDate}/></main></div></div></Spin>
   </Modal>;
