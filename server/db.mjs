@@ -309,7 +309,7 @@ export async function dashboardSummary(role = "manager", user) {
   };
 }
 
-async function findWorkOrderById(client, id, forUpdate = false) {
+export async function findWorkOrderById(client, id, forUpdate = false) {
   const { rows } = await client.query(
     `
       select wo.*, st.token as signature_token, st.used as signature_token_used
@@ -501,12 +501,19 @@ async function upsertWorkOrder(client, order) {
 }
 
 async function replaceRepairItems(client, orderId, items) {
-  await client.query("delete from repair_items where order_id = $1", [orderId]);
+  const itemIds = items.map((item, index) => Number(item.id || index + 1));
+  if (new Set(itemIds).size !== itemIds.length) throw new HttpError(400, "维修项目编号不能重复");
+  await client.query("delete from repair_items where order_id = $1 and not (client_item_id = any($2::bigint[]))",
+    [orderId, itemIds]);
   for (const [index, item] of items.entries()) {
     await client.query(
       `
         insert into repair_items (order_id, client_item_id, item_no, name, labor_fee, owner, start_at, finish_at, inspector, status)
         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        on conflict (order_id, client_item_id) do update set
+          item_no=excluded.item_no, name=excluded.name, labor_fee=excluded.labor_fee,
+          owner=excluded.owner, start_at=excluded.start_at, finish_at=excluded.finish_at,
+          inspector=excluded.inspector, status=excluded.status
       `,
       [
         orderId,

@@ -74,7 +74,7 @@ export function useWorkbenchController() {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return orders;
     return orders.filter((order) =>
-      [order.id, order.vehicle.plate, order.vehicle.vin, order.vehicle.model, order.customer.name].some((value) =>
+      [order.id, order.dispatchNo, order.vehicle.plate, order.vehicle.vin, order.vehicle.model, order.customer.name].some((value) =>
         value.toLowerCase().includes(term)
       )
     );
@@ -371,6 +371,11 @@ export function useWorkbenchController() {
   }
 
   return {
+    acceptRefreshedOrder: (updated: WorkOrder) => {
+      setOrders(previous => previous.map(order => order.id === updated.id
+        ? { ...updated, dispatchStage: order.dispatchStage } : order));
+    },
+    refreshArchiveSummary: () => { void loadDashboard(); },
     refreshWorkbench: async () => { await Promise.all([loadOrders(), loadDashboard()]); },
     openDispatch,
     activeNav,

@@ -1,3 +1,4 @@
+import { useArchiveLegacyRefresh } from "./useArchiveLegacyRefresh";
 import { WorkOrderPrintButton } from "../work-order-print/WorkOrderPrintButton";
 import { PreRepairPhotos } from "../pre-repair-photos/PreRepairPhotos";
 import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
@@ -5,7 +6,7 @@ import { QuickDispatchDialog } from "../dispatch/QuickDispatchDialog";
 import { dispatchEnabled } from "../dispatch/dispatchAvailability";
 import { useState, type ReactNode } from "react";
 import { Alert, Button, Card, Collapse, Descriptions, Empty, Grid, Image, Input, Modal, Popconfirm, Table } from "antd";
-import { ChevronRight, PencilLine, Trash2 } from "lucide-react";
+import { ChevronRight, PencilLine, Trash2, RefreshCw } from "lucide-react";
 import { WorkOrder } from "../../../../shared/types";
 import { LegacySyncStatusChip, StatusChip } from "../../shared/ui/Status";
 import { AuthenticatedImage } from "../../shared/ui/AuthenticatedImage";
@@ -16,7 +17,15 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
     searchTerm, setSearchTerm, searchedOrders, selectedId, selectOrder, setActiveNav,
     role, currentUser, deleteDraft, actionLoading
   } = controller;
-  const [detailOrder, setDetailOrder] = useState<WorkOrder>();
+  const [detailOrderId, setDetailOrderId] = useState<string>();
+  const detailOrder = controller.orders.find(order => order.id === detailOrderId);
+  const legacyRefresh = useArchiveLegacyRefresh(currentUser, controller.acceptRefreshedOrder, controller.refreshArchiveSummary);
+  const refreshTargets = searchedOrders.filter(legacyRefresh.canRefresh);
+  const refreshReport = legacyRefresh.report ? <Alert style={{ marginBottom: 12 }} showIcon
+    type={legacyRefresh.report.failures.length ? "warning" : "success"}
+    title={`润丰更新完成：成功 ${legacyRefresh.report.succeeded} 单，失败 ${legacyRefresh.report.failures.length} 单`}
+    description={legacyRefresh.report.failures.length ? <ul style={{ paddingLeft: 18, marginBottom: 0 }}>{legacyRefresh.report.failures.map(failure =>
+      <li key={failure.id}>{failure.id}：{failure.message}</li>)}</ul> : "已更新本地数据库，可查看最新详情或打印。"} /> : null;
   const [dispatchOrder, setDispatchOrder] = useState<WorkOrder>();
   const canAssign = (order: WorkOrder) => dispatchEnabled && ["advisor","manager"].includes(role) && workOrderDisplayStatus(order) === "待派工" && (!order.technician || order.technician === "待派工");
   const [deleteError, setDeleteError] = useState("");
@@ -26,12 +35,13 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
   function openDetail(order: WorkOrder) {
     selectOrder(order);
     setDeleteError("");
-    setDetailOrder(order);
+    legacyRefresh.clearReport();
+    setDetailOrderId(order.id);
   }
 
   function resumeDraft(order: WorkOrder) {
     selectOrder(order);
-    setDetailOrder(undefined);
+    setDetailOrderId(undefined);
     setActiveNav("委托开单");
   }
 
@@ -47,7 +57,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
       setDeleteError(error);
       return;
     }
-    setDetailOrder(undefined);
+    setDetailOrderId(undefined);
   }
 
   return (
@@ -57,8 +67,16 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
           <h2>归档查询</h2>
           <p>点击任一委托单可查看完整归档内容。</p>
         </div>
-        <Input.Search className="search-box" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="搜索车牌 / VIN / 工单号" allowClear />
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minWidth: 0, maxWidth: "100%" }}>
+        {["advisor", "manager"].includes(role) && <Button icon={<RefreshCw size={16}/>} loading={Boolean(legacyRefresh.progress)}
+          disabled={!refreshTargets.length || Boolean(legacyRefresh.progress)} onClick={() => void legacyRefresh.refresh(refreshTargets)}>
+          {legacyRefresh.progress ? `正在更新 ${legacyRefresh.progress.done}/${legacyRefresh.progress.total}` : `从润丰更新（${refreshTargets.length}）`}
+        </Button>}
+        <Input.Search className="search-box" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="搜索车牌 / VIN / 工单号 / 派工号" allowClear />
+        </div>
       </div>
+      {["advisor", "manager"].includes(role) && <p style={{ color: "#657085", fontSize: 13 }}>从润丰更新当前查询结果中已同步且有权限的委托单，保留签名、照片和维修进度。</p>}
+      {refreshReport}
 
       {isMobile ? (
         <div className="archive-mobile-list">
@@ -113,9 +131,11 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
         title={isMobile ? "委托单详情" : detailOrder ? `委托单详情 · ${detailOrder.id}` : "委托单详情"}
         width={isMobile ? "calc(100vw - 16px)" : 980}
         style={isMobile ? { top: 8, paddingBottom: 8 } : undefined}
-        onCancel={() => setDetailOrder(undefined)}
+        onCancel={() => setDetailOrderId(undefined)}
         footer={(
           <div className="archive-detail-actions">
+            {detailOrder && legacyRefresh.canRefresh(detailOrder) && <Button icon={<RefreshCw size={16}/>} loading={Boolean(legacyRefresh.progress)}
+              disabled={Boolean(legacyRefresh.progress)} onClick={() => void legacyRefresh.refresh([detailOrder])}>从润丰更新</Button>}
             {detailOrder && <WorkOrderPrintButton order={detailOrder} />}
             {canManageDraft && detailOrder ? (
               <Popconfirm
@@ -132,12 +152,13 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
             {canManageDraft && detailOrder ? (
               <Button type="primary" icon={<PencilLine size={16} />} onClick={() => resumeDraft(detailOrder)}>继续编辑草稿</Button>
             ) : null}
-            {detailOrder && canAssign(detailOrder) && <Button type="primary" onClick={() => { setDispatchOrder(detailOrder); setDetailOrder(undefined); }}>派工</Button>}
-            <Button onClick={() => setDetailOrder(undefined)}>关闭</Button>
+            {detailOrder && canAssign(detailOrder) && <Button type="primary" onClick={() => { setDispatchOrder(detailOrder); setDetailOrderId(undefined); }}>派工</Button>}
+            <Button onClick={() => setDetailOrderId(undefined)}>关闭</Button>
           </div>
         )}
         styles={{ body: { maxHeight: isMobile ? "calc(100vh - 132px)" : "72vh", overflowY: "auto" } }}
       >
+        {refreshReport}
         {deleteError ? <Alert type="error" showIcon title="删除草稿失败" description={deleteError} style={{ marginBottom: 12 }} /> : null}
         {detailOrder ? <OrderDetail order={detailOrder} isMobile={isMobile} /> : null}
       </Modal>

@@ -1,3 +1,4 @@
+import { refreshWorkOrderFromLegacy } from "../services/workOrderRefreshService.mjs";
 import { handleDispatchRequest } from "./dispatchRouter.mjs";
 import { executeDispatchAction } from "../services/dispatchService.mjs";
 import { authenticateRequest, loginForDevelopment, loginWithDingTalk } from "../auth.mjs";
@@ -216,6 +217,13 @@ export async function handleApiRequest(req, res, url) {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     await assertWorkOrderAccess(workOrderMatch[1], currentUser);
     sendJson(res, 200, await deleteDraftWorkOrder(workOrderMatch[1]));
+    return true;
+  }
+
+  const refreshMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/refresh-from-runfeng$/);
+  if (refreshMatch && req.method === "POST") {
+    requireAnyRole(currentUser, ["advisor", "manager"]);
+    sendJson(res, 200, await refreshWorkOrderFromLegacy(decodeURIComponent(refreshMatch[1]), currentUser));
     return true;
   }
 
