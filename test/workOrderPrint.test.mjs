@@ -29,7 +29,7 @@ function fixture() {
     estimatedFee: 100, faultDescription: "制动异响"
   }), signatures: { customer: "测试车主", reception: "不能出现在打印上的接车签名" } };
 }
-const render = (order, source, arrivalDate) => renderToStaticMarkup(React.createElement(WorkOrderPrintDocument, { order, signatureSource: source, arrivalDate }));
+const render = (order, source, arrivalDate, printSignature) => renderToStaticMarkup(React.createElement(WorkOrderPrintDocument, { order, signatureSource: source, arrivalDate, printSignature }));
 
 test("print template includes saved vehicle data and customer ink, omitting pickup confirmation", () => {
   const html = render(fixture(), "blob:customer-signature");
@@ -209,4 +209,15 @@ test("PDF capture freezes resolved text metrics, matching keyed elements despite
   assert.equal(pseudo.styles.size,0);
   assert.equal(events.at(-1),"layout");
   assert.equal(events.filter(value => value.includes("Noto Serif SC")).length,2);
+});
+
+
+test("printing without customer signature leaves a blank field even if ink is available", () => {
+  const order = fixture();
+  const before = JSON.stringify(order);
+  const html = render(order, "blob:private-customer-ink", undefined, false);
+  assert.match(html, /用户确认：/);
+  assert.match(html, /用户签字留空/);
+  assert.doesNotMatch(html, /<img|blob:private-customer-ink|签名图片待加载|未签字/);
+  assert.equal(JSON.stringify(order), before);
 });

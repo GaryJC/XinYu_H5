@@ -4,7 +4,7 @@ const belongings = ["音响系统", "点烟器", "天窗", "四门玻璃机", "�
 const money = (value: number) => Number.isFinite(value) ? value.toFixed(2) : "";
 const present = (value: string | undefined) => value || "—";
 
-export function WorkOrderPrintDocument({ order, signatureSource, arrivalDate = order.arrivalDate }: { order: WorkOrder; signatureSource?: string; arrivalDate?: string }) {
+export function WorkOrderPrintDocument({ order, signatureSource, arrivalDate = order.arrivalDate, printSignature = true }: { order: WorkOrder; signatureSource?: string; arrivalDate?: string; printSignature?: boolean }) {
   const rows = [...order.repairItems];
   while (rows.length < 9) rows.push({ id: -rows.length - 1, name: "", laborFee: 0, owner: "", startAt: "", finishAt: "", inspector: "", status: "待派工" });
   const selected = order.inspection.belongings;
@@ -24,7 +24,7 @@ export function WorkOrderPrintDocument({ order, signatureSource, arrivalDate = o
     </section>
     <table className="wop-repairs"><caption>预计修理项目</caption><colgroup><col style={{width:"6%"}}/><col style={{width:"52%"}}/><col style={{width:"14%"}}/><col style={{width:"14%"}}/><col style={{width:"14%"}}/></colgroup><thead><tr><th>序号</th><th>修理内容</th><th>修理工费</th><th>主修人</th><th>过程检查人</th></tr></thead><tbody>{rows.map((item,index)=><tr key={`${item.id}-${index}`}><td>{index+1}</td><td className="wop-repair-name">{item.name}</td><td>{item.name && item.laborFee !== 0 ? money(item.laborFee) : ""}</td><td>{item.owner === "待派工" ? "" : item.owner}</td><td>{item.inspector === "待检验" ? "" : item.inspector}</td></tr>)}</tbody></table>
     <section className="wop-closing"><div className="wop-fees"><span>预计修理费：{order.estimatedFee !== 0 ? `¥${money(order.estimatedFee)}` : ""}</span><span>预计交车时间：{present(order.estimatedDeliveryAt)}</span><span>工号 / 服务顾问：{present(order.advisor)}</span></div>
-    <div className="wop-authorization"><p>本人已确认登记无误，同意贵公司维修上述项目，并同意维修必要的厂外试车。本人亦认可维修必要的附料按实际消耗量进行结算，并同意承担全部费用。本人确认无贵重物品。</p><div className="wop-customer-signature"><strong>用户确认：</strong>{signatureSource ? <img src={signatureSource} alt="客户手写签名"/> : <span>{isSigned ? "签名图片待加载" : "未签字"}</span>}</div></div>
+    <div className="wop-authorization"><p>本人已确认登记无误，同意贵公司维修上述项目，并同意维修必要的厂外试车。本人亦认可维修必要的附料按实际消耗量进行结算，并同意承担全部费用。本人确认无贵重物品。</p><div className="wop-customer-signature"><strong>用户确认：</strong>{!printSignature ? <span aria-label="用户签字留空"/> : signatureSource ? <img src={signatureSource} alt="客户手写签名"/> : <span>{isSigned ? "签名图片待加载" : "未签字"}</span>}</div></div>
     <div className="wop-staff-signatures"><span>服务顾问：{order.signatures.advisor || order.advisor || "____________"}</span><span>总检验员签名：{order.signatures.inspector || "____________"}<small>（完工交检）　　年　　月　　日</small></span></div></section>
     <footer><span>地址：{present(order.shop.address)}</span><span>电话：{present(order.shop.phone)}</span></footer>
   </article>;

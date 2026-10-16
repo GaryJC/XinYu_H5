@@ -2,7 +2,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
 import datePickerZhCN from "antd/es/date-picker/locale/zh_CN";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Alert, Button, DatePicker, Modal, Spin } from "antd";
+import { Alert, Button, DatePicker, Modal, Radio, Spin } from "antd";
 import { Printer } from "lucide-react";
 import type { WorkOrder } from "../../../../shared/types";
 import { WorkOrderPrintDocument } from "./WorkOrderPrintDocument";
@@ -15,11 +15,13 @@ import printStyles from "./work-order-print.css?inline";
 export function WorkOrderPrintButton({ order }: { order: WorkOrder }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [open, setOpen] = useState(false);
+  const [printSignature, setPrintSignature] = useState(true);
   const [arrivalDate, setArrivalDate] = useState("");
   const validDate = /^\d{4}-\d{2}-\d{2}$/.test(arrivalDate);
 
   function openSettings() {
     setArrivalDate(order.arrivalDate?.slice(0, 10) || "");
+    setPrintSignature(true);
     setSettingsOpen(true);
   }
 
@@ -35,14 +37,20 @@ export function WorkOrderPrintButton({ order }: { order: WorkOrder }) {
         value={arrivalDate && dayjs(arrivalDate).isValid() ? dayjs(arrivalDate).locale("zh-cn") : null}
         onChange={value => setArrivalDate(value?.format("YYYY-MM-DD") || "")} style={{marginTop:8}}/>
       <p style={{color:"#657085",fontSize:13}}>仅用于本次打印，不修改已保存的委托单。</p>
+      <div role="group" aria-labelledby={`print-signature-label-${order.id}`} style={{marginTop:16}}>
+        <div id={`print-signature-label-${order.id}`} style={{marginBottom:8}}>打印签字</div>
+        <Radio.Group aria-label="打印签字" value={printSignature} onChange={event => setPrintSignature(event.target.value)}>
+          <Radio value={true}>是</Radio><Radio value={false}>否</Radio>
+        </Radio.Group>
+      </div>
       </div>
     </Modal>
-    {open && <PrintPreview key={order.id} order={order} arrivalDate={arrivalDate} onClose={() => setOpen(false)}/>}
+    {open && <PrintPreview key={order.id} order={order} arrivalDate={arrivalDate} printSignature={printSignature} onClose={() => setOpen(false)}/>}
   </>;
 }
 
-function PrintPreview({ order, arrivalDate, onClose }: { order: WorkOrder; arrivalDate: string; onClose: () => void }) {
-  const { source, loading, error, retry } = useWorkOrderPrint(order);
+function PrintPreview({ order, arrivalDate, printSignature, onClose }: { order: WorkOrder; arrivalDate: string; printSignature: boolean; onClose: () => void }) {
+  const { source, loading, error, retry } = useWorkOrderPrint(order, printSignature);
   const [previewReady, setPreviewReady] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState("");
@@ -80,7 +88,7 @@ function PrintPreview({ order, arrivalDate, onClose }: { order: WorkOrder; arriv
     if (!mobile || !previewReady || loading || error) return;
     const element = documentRef.current?.querySelector<HTMLElement>(".work-order-print");
     if (element) void pdf.generate(element, printStyles, `${order.id}-机动车修理委托书`);
-  }, [mobile, previewReady, loading, error, source, order.id, arrivalDate, pdf.generate]);
+  }, [mobile, previewReady, loading, error, source, order.id, arrivalDate, printSignature, pdf.generate]);
 
   async function handlePrint() {
     const element = documentRef.current?.querySelector<HTMLElement>(".work-order-print");
@@ -111,6 +119,6 @@ function PrintPreview({ order, arrivalDate, onClose }: { order: WorkOrder; arriv
       </div>
     </>} style={{marginBottom:12}}/>}
     {printError && <Alert type="error" showIcon title={printError} style={{marginBottom:12}}/>}
-    <Spin spinning={loading || mobile && pdf.generating} description={loading ? "正在加载客户签名" : "正在准备文件…"}><div ref={documentRef} className="work-order-print-preview"><div className="wop-print-sheet"><main className="wop-print-page"><WorkOrderPrintDocument order={order} signatureSource={source} arrivalDate={arrivalDate}/></main></div></div></Spin>
+    <Spin spinning={loading || mobile && pdf.generating} description={loading ? "正在加载客户签名" : "正在准备文件…"}><div ref={documentRef} className="work-order-print-preview"><div className="wop-print-sheet"><main className="wop-print-page"><WorkOrderPrintDocument order={order} signatureSource={source} arrivalDate={arrivalDate} printSignature={printSignature}/></main></div></div></Spin>
   </Modal>;
 }
