@@ -1,4 +1,5 @@
 import { VehicleScanIllustration } from "../vehicle-identity/VehicleScanIllustration";
+import { AuthenticatedImage } from "../../shared/ui/AuthenticatedImage";
 import { Button, Flex } from "antd";
 import { CircleCheckBig } from "lucide-react";
 import { OcrFieldState, VehicleLicenseOcrResult } from "../../../../shared/types";
@@ -8,12 +9,13 @@ import { normalizeOcrDate } from "./ocrUtils";
 type Props = {
   state: OcrFieldState;
   result?: VehicleLicenseOcrResult;
+  fileId?: string;
   disabled?: boolean;
   onScan: (file: File) => Promise<void>;
   onConfirm: () => void | Promise<void>;
 };
 
-export function VehicleLicenseOcrControl({ state, result, disabled, onScan, onConfirm }: Props) {
+export function VehicleLicenseOcrControl({ state, result, fileId, disabled, onScan, onConfirm }: Props) {
   const resultFields = result
     ? [
         ["车牌", result.plate],
@@ -30,6 +32,8 @@ export function VehicleLicenseOcrControl({ state, result, disabled, onScan, onCo
       <div className="ocr-main">
         <strong>扫描行驶证（选填）</strong>
         <span>{state.source} · {state.status}{state.value ? ` · ${state.value}` : ""}</span>
+        {fileId && <div><AuthenticatedImage fileId={fileId} alt="已上传的行驶证照片" width={160} height={100}/>
+          <p>照片已上传，保存委托单时会一并保存；识别失败不影响照片保存。</p></div>}
         {state.error ? <em>{state.error}</em> : null}
         {resultFields.length ? (
           <div className="ocr-result-grid">
@@ -44,7 +48,7 @@ export function VehicleLicenseOcrControl({ state, result, disabled, onScan, onCo
       </div>
       <Flex className="button-row" gap={8} wrap="wrap">
         <ImageSourcePicker
-          disabled={disabled}
+          disabled={disabled || state.status === "识别中"}
           loading={state.status === "识别中"}
           label="识别行驶证照片"
           cameraArtwork={<VehicleScanIllustration kind="license" />}

@@ -315,6 +315,7 @@ export type WorkOrder = {
     exteriorIssues: string[];
     preRepairPhotos?: PreRepairPhotos;
     replacedPhotoIds?: string[];
+    vehicleLicenseFileId?: string;
   };
   faultDescription: string;
   repairItems: RepairItem[];

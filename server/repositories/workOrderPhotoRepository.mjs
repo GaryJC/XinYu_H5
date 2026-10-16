@@ -31,6 +31,7 @@ export async function updateWorkOrderPhoto(client, id, input, actor) {
   }
   const inspection = { ...(order.inspection || {}) };
   if ((inspection.replacedPhotoIds || []).includes(file.id)) throw new HttpError(409, "不能复用已替换的历史照片，请重新上传");
+  if (input.slot === "vehicleLicense") inspection.vehicleLicenseFileId = file.id;
   if (input.replaceFileId) {
     const {rows: previousFiles} = await client.query("select * from files where id=$1 and order_id=$2", [input.replaceFileId, id]);
     const previous = previousFiles[0];

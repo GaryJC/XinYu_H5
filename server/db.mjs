@@ -1,3 +1,4 @@
+import { attachDraftVehicleLicense } from "./repositories/draftVehicleLicenseRepository.mjs";
 import { attachPreRepairPhotos } from "./repositories/preRepairPhotoRepository.mjs";
 import { assertPreRepairPhotosReady } from "./domain/preRepairPhotos.mjs";
 import { assertWorkHoursRecorded } from './repositories/dispatchRepository.mjs';
@@ -77,6 +78,7 @@ export async function createWorkOrder(draft, actor, actorUser) {
     };
     await upsertWorkOrder(client, order);
     await attachPreRepairPhotos(client, order, actorUser?.id);
+    await attachDraftVehicleLicense(client, order, actorUser?.id);
     await saveDispatchPlan(client, order, actorUser, draft.dispatchPlan);
     await addAudit(client, order.id, actor, "创建委托单草稿");
     return findWorkOrderById(client, order.id);
@@ -106,6 +108,7 @@ export async function updateWorkOrder(order, actor, action, actorUser) {
     };
     await upsertWorkOrder(client, next);
     await attachPreRepairPhotos(client, next, actorUser?.id);
+    await attachDraftVehicleLicense(client, next, actorUser?.id);
     await saveDispatchPlan(client, next, actorUser, next.dispatchPlan);
     await addAudit(client, next.id, actor, action);
     return findWorkOrderById(client, next.id);

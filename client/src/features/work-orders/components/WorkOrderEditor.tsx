@@ -188,6 +188,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 <VehicleLicenseOcrControl
                   disabled={!canEditForm}
                   result={vehicleLicenseOcr}
+                  fileId={controller.vehicleLicenseFileId}
                   state={ocrState.vehicleLicense}
                   onScan={scanVehicleLicense}
                   onConfirm={confirmVehicleLicenseOcr}

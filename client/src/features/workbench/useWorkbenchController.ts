@@ -57,8 +57,8 @@ export function useWorkbenchController() {
     lookupVehicleLicenseForDevelopment,
     selectVehicleReference
   } = useVehicleIdentityRecognition({ setDraft });
-  const { ocrState, vehicleLicenseOcr, vehicleLicenseFileId, resetOcr, scanVehicleLicense, confirmVehicleLicenseOcr } =
-    useVehicleLicenseOcr({ orderId: selectedOrder?.id, actor, setDraft, onRecognized: lookupVehicleLicense });
+  const { ocrState, vehicleLicenseOcr, vehicleLicenseFileId, isUploading: isVehicleLicenseUploading, resetOcr, scanVehicleLicense, confirmVehicleLicenseOcr } =
+    useVehicleLicenseOcr({ actor, setDraft, onRecognized: lookupVehicleLicense });
   const visibleNavItems = useMemo(() => navItems.filter((item) => item.roles.includes(role) && (dispatchEnabled || !isDispatchNavigation(item.label))), [role]);
   const canEditForm = canCreateOrder(role) && (
     !selectedOrder || (
@@ -256,7 +256,7 @@ export function useWorkbenchController() {
     resetDraft(order);
     setFormErrors([]);
     preRepairPhotos.reset();
-    resetOcr(order.ocrRecords);
+    resetOcr(order.ocrRecords, order.inspection.vehicleLicenseFileId || order.files?.find(file => file.kind === "vehicle_license")?.id);
     resetVehicleIdentityRecognition();
   }
 
@@ -270,7 +270,7 @@ export function useWorkbenchController() {
   }
 
   async function saveDraft() {
-    if (preRepairPhotos.isUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
+    if (preRepairPhotos.isUploading() || isVehicleLicenseUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
     if (!canCreateOrder(role)) {
       setFormErrors(["当前角色不能创建或编辑委托单"]);
       return;
@@ -279,7 +279,8 @@ export function useWorkbenchController() {
     setActionLoading("save");
     setFormErrors([]);
     try {
-      const cleanedDraft = { ...draft, repairItems: filterEmptyRepairItems(draft.repairItems) };
+      const cleanedDraft = { ...draft, inspection: {...draft.inspection, vehicleLicenseFileId:draft.inspection.vehicleLicenseFileId || vehicleLicenseFileId},
+        repairItems: filterEmptyRepairItems(draft.repairItems) };
       if (selectedOrder) {
         const updated = await workOrderApi.update({ ...selectedOrder, ...cleanedDraft }, actor, "保存委托单");
         await loadOrders(role, updated.id);
@@ -287,7 +288,6 @@ export function useWorkbenchController() {
       }
 
       const created = await workOrderApi.create(cleanedDraft, actor);
-      if (vehicleLicenseFileId) await workOrderApi.attachFile(vehicleLicenseFileId, created.id);
       await loadOrders(role, created.id);
     } catch (error) {
       setFormErrors([actionError(error, "保存草稿失败")]);
@@ -316,7 +316,7 @@ export function useWorkbenchController() {
   }
 
   async function sendSignature() {
-    if (preRepairPhotos.isUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
+    if (preRepairPhotos.isUploading() || isVehicleLicenseUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
     const errors = validateBeforeSignature();
     if (errors.length) {
       setFormErrors(errors);
@@ -326,9 +326,9 @@ export function useWorkbenchController() {
     setActionLoading("signature");
     setFormErrors([]);
     try {
-      const cleanedDraft = { ...draft, repairItems: filterEmptyRepairItems(draft.repairItems) };
+      const cleanedDraft = { ...draft, inspection: {...draft.inspection, vehicleLicenseFileId:draft.inspection.vehicleLicenseFileId || vehicleLicenseFileId},
+        repairItems: filterEmptyRepairItems(draft.repairItems) };
       const order = selectedOrder ?? (await workOrderApi.create(cleanedDraft, actor));
-      if (!selectedOrder && vehicleLicenseFileId) await workOrderApi.attachFile(vehicleLicenseFileId, order.id);
       if (selectedOrder) await workOrderApi.update({ ...selectedOrder, ...cleanedDraft }, actor, "保存签字前委托单");
       const withToken = await workOrderApi.createSignatureToken(order.id, actor);
       await loadOrders(role, withToken.id);

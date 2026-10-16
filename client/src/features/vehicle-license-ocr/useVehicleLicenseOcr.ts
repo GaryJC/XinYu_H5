@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 import { OcrFieldKey, OcrFieldState, OcrRecord, VehicleLicenseOcrResult, WorkOrderDraft } from "../../../../shared/types";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
 import { formatVehicleLicenseSummary, normalizeOcrDate } from "./ocrUtils";
@@ -9,19 +9,23 @@ const initialOcrState: Record<OcrFieldKey, OcrFieldState> = {
 };
 
 type Options = {
-  orderId?: string;
   actor: string;
   setDraft: Dispatch<SetStateAction<WorkOrderDraft>>;
   onRecognized?: (result: VehicleLicenseOcrResult) => Promise<void>;
 };
 
-export function useVehicleLicenseOcr({ orderId, actor, setDraft, onRecognized }: Options) {
+export function useVehicleLicenseOcr({ actor, setDraft, onRecognized }: Options) {
+  const generation = useRef(0);
+  const scanning = useRef(false);
+  useEffect(() => () => { generation.current++; }, []);
   const [ocrState, setOcrState] = useState(initialOcrState);
   const [ocrRecordIds, setOcrRecordIds] = useState<Partial<Record<OcrFieldKey, string>>>({});
   const [vehicleLicenseOcr, setVehicleLicenseOcr] = useState<VehicleLicenseOcrResult>();
   const [vehicleLicenseFileId, setVehicleLicenseFileId] = useState<string>();
 
-  function resetOcr(records: OcrRecord[] = []) {
+  function resetOcr(records: OcrRecord[] = [], savedFileId?: string) {
+    generation.current++;
+    scanning.current = false;
     const record = records.find((item) => item.field === "vehicleLicense");
     let parsed: VehicleLicenseOcrResult | undefined;
     if (record?.value) {
@@ -41,10 +45,13 @@ export function useVehicleLicenseOcr({ orderId, actor, setDraft, onRecognized }:
     } : initialOcrState);
     setOcrRecordIds(record ? { vehicleLicense: record.id } : {});
     setVehicleLicenseOcr(parsed);
-    setVehicleLicenseFileId(record?.fileId);
+    setVehicleLicenseFileId(savedFileId || record?.fileId);
   }
 
   async function scanVehicleLicense(file: File) {
+    if (scanning.current) return;
+    scanning.current = true;
+    const session = generation.current;
     setOcrState((current) => ({
       ...current,
       vehicleLicense: { ...current.vehicleLicense, status: "识别中", error: undefined }
@@ -53,15 +60,18 @@ export function useVehicleLicenseOcr({ orderId, actor, setDraft, onRecognized }:
 
     try {
       const image = await prepareOcrImage(file);
+      if (session !== generation.current) return;
       const uploadedFile = await workOrderApi.uploadFile({
-        orderId,
         kind: "vehicle_license",
         ...image
       });
+      if (session !== generation.current) return;
       setVehicleLicenseFileId(uploadedFile.id);
+      setDraft(current => ({...current, inspection:{...current.inspection,vehicleLicenseFileId:uploadedFile.id}}));
       const result = await workOrderApi.recognizeVehicleLicense({ fileId: uploadedFile.id });
+      if (session !== generation.current) return;
       const record = await workOrderApi.createOcrRecord(
-        orderId,
+        undefined,
         "vehicleLicense",
         initialOcrState.vehicleLicense.source,
         JSON.stringify(result),
@@ -69,6 +79,7 @@ export function useVehicleLicenseOcr({ orderId, actor, setDraft, onRecognized }:
         uploadedFile.id
       );
 
+      if (session !== generation.current) return;
       setOcrRecordIds((current) => ({ ...current, vehicleLicense: record.id }));
       setVehicleLicenseOcr(result);
       setOcrState((current) => ({
@@ -99,6 +110,7 @@ export function useVehicleLicenseOcr({ orderId, actor, setDraft, onRecognized }:
       }));
       await onRecognized?.(result);
     } catch (error) {
+      if (session !== generation.current) return;
       setOcrState((current) => ({
         ...current,
         vehicleLicense: {
@@ -108,20 +120,25 @@ export function useVehicleLicenseOcr({ orderId, actor, setDraft, onRecognized }:
           error: error instanceof Error ? error.message : "行驶证识别失败"
         }
       }));
+    } finally {
+      if (session === generation.current) scanning.current = false;
     }
   }
 
   async function confirmVehicleLicenseOcr() {
+    const session = generation.current;
     const recordId = ocrRecordIds.vehicleLicense;
     const value = vehicleLicenseOcr ? JSON.stringify(vehicleLicenseOcr) : ocrState.vehicleLicense.value;
     if (!recordId) return;
     try {
       await workOrderApi.confirmOcrRecord(recordId, value, actor);
+      if (session !== generation.current) return;
       setOcrState((current) => ({
         ...current,
         vehicleLicense: { ...current.vehicleLicense, status: "已确认", error: undefined }
       }));
     } catch (error) {
+      if (session !== generation.current) return;
       setOcrState((current) => ({
         ...current,
         vehicleLicense: { ...current.vehicleLicense, error: error instanceof Error ? error.message : "确认 OCR 结果失败" }
@@ -131,6 +148,7 @@ export function useVehicleLicenseOcr({ orderId, actor, setDraft, onRecognized }:
 
   return {
     ocrState,
+    isUploading: () => scanning.current,
     vehicleLicenseOcr,
     vehicleLicenseFileId,
     resetOcr,
