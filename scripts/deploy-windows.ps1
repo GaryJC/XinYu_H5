@@ -2,6 +2,7 @@ param(
     [string]$AppPath = "C:\apps\XinYu_H5",
     [string]$ProcessName = "xinyu-h5",
     [int]$Port = 8787,
+    [string]$NpmCachePath = "",
     [switch]$SkipSqlServerCheck
 )
 
@@ -10,6 +11,9 @@ Set-Location $AppPath
 $env:PM2_HOME = Join-Path $AppPath ".pm2"
 $env:PM2_PROCESS_NAME = $ProcessName
 New-Item $env:PM2_HOME -ItemType Directory -Force | Out-Null
+if (-not $NpmCachePath) { $NpmCachePath = Join-Path $AppPath ".npm-cache" }
+New-Item $NpmCachePath -ItemType Directory -Force | Out-Null
+Write-Host "npm cache: $NpmCachePath (debug logs: $NpmCachePath\_logs)"
 
 function Invoke-Native {
     param(
@@ -19,15 +23,25 @@ function Invoke-Native {
         [string]$FailureMessage
     )
 
-    & $Command
-    if ($LASTEXITCODE -ne 0) {
-        throw $FailureMessage
+    $stepName = $FailureMessage -replace ' failed$', ''
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
+    Write-Host "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Starting: $stepName"
+    try {
+        & $Command
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -ne 0) {
+            throw "$FailureMessage (exit code $exitCode)"
+        }
+    }
+    finally {
+        $timer.Stop()
+        Write-Host "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $stepName elapsed: $([math]::Round($timer.Elapsed.TotalSeconds, 1)) seconds"
     }
 }
 
 Invoke-Native { node.exe scripts/clean-obsolete-deployment-files.mjs } "Obsolete deployment file cleanup failed"
-Invoke-Native { npm.cmd ci --include=dev --no-audit --no-fund } "npm ci failed"
-Invoke-Native { npm.cmd run check } "Application check or build failed"
+Invoke-Native { npm.cmd ci --include=dev --no-audit --no-fund --prefer-offline --cache "$NpmCachePath" --loglevel=http } "npm ci failed"
+Invoke-Native { cmd.exe /d /c "npm.cmd run check 2>&1" } "Application check or build failed"
 Invoke-Native { npm.cmd run migrate } "PostgreSQL migration failed"
 
 if (-not $SkipSqlServerCheck) {

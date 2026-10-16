@@ -12,3 +12,6 @@ vite.config.js
 vite.config.d.ts
 *.tgz
 .pm2/
+
+# Persistent npm cache on Windows deployment hosts
+.npm-cache/

@@ -266,3 +266,12 @@ where name = '员工姓名';
 ### 历史覆盖部署的兼容清理
 
 Windows 部署在安装依赖前运行 `scripts/clean-obsolete-deployment-files.mjs`，只移除已在提交 d3728bf 删除的 `DingTalkRoleMappings.tsx` 与 `MappingEditor.tsx`。旧部署直接解压覆盖时，这两个文件可能残留并触发类型检查错误。清理不会扫描或删除环境配置、上传照片、PM2 状态和其他源文件。长期应使用独立版本目录部署，避免覆盖解压留下历史源码。
+
+
+### Windows 部署慢或覆盖部署检查失败
+
+`deploy-windows.ps1` 会打印每个步骤的开始时间和耗时。依赖安装使用固定的 `<AppPath>\.npm-cache` 缓存并优先复用缓存，仍按锁文件执行 `npm ci`；首次填充缓存仍需下载。可用 `-NpmCachePath` 指定已有缓存目录。不要在不同部署间清理该目录。安装输出 HTTP/缓存命中日志，完整 npm 日志在缓存目录的 `_logs` 下，便于判断下载、重试和缓存情况。检查命令合并 stdout/stderr，避免云效漏掉测试或构建错误。
+
+部署包采用覆盖解压时，Git 已删除的文件可能残留。脚本会清理明确列出的旧文件，包括已退役的 `test/legacyWorkOrderRepository.test.mjs`；它引用已移除的 `ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY`，残留时会导致检查失败。该清理不触碰配置、上传文件、PM2 数据或当前测试。
+
+如果旧版本已因这一残留文件部署失败，可以在服务器应用目录执行新版清理脚本后重跑部署。不要通过跳过 `npm run check` 绕过失败。
