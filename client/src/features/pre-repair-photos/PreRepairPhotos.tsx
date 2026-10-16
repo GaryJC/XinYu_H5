@@ -1,4 +1,5 @@
-import { Alert, Button, Image } from "antd";
+import { PhotoPreviewGroup } from "../../shared/ui/PhotoPreviewGroup";
+import { Alert, Button } from "antd";
 import type { PreRepairPhotos as Photos } from "../../../../shared/types";
 import { AuthenticatedImage } from "../../shared/ui/AuthenticatedImage";
 import { ImageSourcePicker } from "../../shared/ui/ImageSourcePicker";
@@ -26,7 +27,7 @@ export function PreRepairPhotos({ photos = {}, disabled, controls, errors = [] }
     <div className="pre-repair-photos-heading"><h3>车辆维修前照片</h3><span>{photoSlots.filter((slot) => slot.required && photos[slot.key]).length}/2 必传</span></div>
     <p>请拍摄车辆左前方与右后方，覆盖车头、车尾和两侧全貌；公里数照片可选上传。</p>
     {controls?.error && <Alert type="error" showIcon message={controls.error} />}
-    <Image.PreviewGroup><div className="pre-repair-photo-grid">
+    <PhotoPreviewGroup><div className="pre-repair-photo-grid">
       {photoSlots.map((slot) => {
         const id = photos[slot.key];
         const error = errors.find((message) => message.includes(slot.label));
@@ -54,6 +55,6 @@ export function PreRepairPhotos({ photos = {}, disabled, controls, errors = [] }
         <p>可补充划痕、凹陷、内饰或其他细节照片</p>
         <ImageSourcePicker disabled={busy} loading={controls.uploading === "extra"} label="维修前额外照片" multiple onSelectMany={controls.uploadExtras} galleryActionLabel="相册多选" primaryActionLabel="添加照片" onSelect={(file) => controls.upload("extra", file)} />
       </div>}
-    </div></Image.PreviewGroup>
+    </div></PhotoPreviewGroup>
   </section>;
 }

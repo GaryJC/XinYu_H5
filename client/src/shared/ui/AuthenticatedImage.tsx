@@ -1,5 +1,6 @@
 import { Image, Skeleton } from "antd";
 import { useEffect, useState } from "react";
+import { PhotoPreviewActions } from "./PhotoPreviewGroup";
 import { requestBlob } from "../api/httpClient";
 
 type AuthenticatedImageProps = {
@@ -15,27 +16,24 @@ export function AuthenticatedImage({ fileId, alt, width, height }: Authenticated
 
   useEffect(() => {
     let active = true;
-    let objectUrl = "";
     setSource("");
     setError("");
 
     void requestBlob(`/api/files/${encodeURIComponent(fileId)}/content`)
-      .then((blob) => {
-        const nextUrl = URL.createObjectURL(blob);
-        if (!active) {
-          URL.revokeObjectURL(nextUrl);
-          return;
-        }
-        objectUrl = nextUrl;
-        setSource(nextUrl);
-      })
+      .then((blob) => new Promise<string>((resolve, reject) => {
+        // Native WebView image menus cannot resolve browser-owned blob URLs.
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("图片加载失败"));
+        reader.readAsDataURL(blob);
+      }))
+      .then((url) => { if (active) setSource(url); })
       .catch((loadError) => {
         if (active) setError(loadError instanceof Error ? loadError.message : "图片加载失败");
       });
 
     return () => {
       active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [fileId]);
 
@@ -47,5 +45,5 @@ export function AuthenticatedImage({ fileId, alt, width, height }: Authenticated
     return <Skeleton.Image active style={{ width, height }} />;
   }
 
-  return <Image width={width} height={height} src={source} alt={alt} />;
+  return <Image width={width} height={height} src={source} alt={alt} preview={{ actionsRender: (actions, info) => <PhotoPreviewActions source={info.image.url}>{actions}</PhotoPreviewActions> }} />;
 }

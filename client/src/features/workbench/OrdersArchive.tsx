@@ -1,3 +1,4 @@
+import { PhotoPreviewGroup } from "../../shared/ui/PhotoPreviewGroup";
 import { SubmittedOrderPhotos } from "../work-order-photos/SubmittedOrderPhotos";
 import { useArchiveLegacyRefresh } from "./useArchiveLegacyRefresh";
 import { WorkOrderPrintButton } from "../work-order-print/WorkOrderPrintButton";
@@ -5,7 +6,7 @@ import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
 import { QuickDispatchDialog } from "../dispatch/QuickDispatchDialog";
 import { dispatchEnabled } from "../dispatch/dispatchAvailability";
 import { useState, type ReactNode } from "react";
-import { Alert, Button, Card, Collapse, Descriptions, Empty, Grid, Image, Input, Modal, Popconfirm, Table } from "antd";
+import { Alert, Button, Card, Collapse, Descriptions, Empty, Grid, Input, Modal, Popconfirm, Table } from "antd";
 import { ChevronRight, PencilLine, Trash2, RefreshCw } from "lucide-react";
 import { WorkOrder, UserProfile } from "../../../../shared/types";
 import { LegacySyncStatusChip, StatusChip } from "../../shared/ui/Status";
@@ -272,12 +273,12 @@ function DesktopOrderRecords({ order }: { order: WorkOrder }) {
 function FileGallery({ title, files, mobile }: { title: string; files: NonNullable<WorkOrder["files"]>; mobile: boolean }) {
   return <section className="archive-detail-section">
     <h3>{title}</h3>
-    {files.length ? <Image.PreviewGroup><div className="archive-file-gallery">{files.map((file) => (
+    {files.length ? <PhotoPreviewGroup><div className="archive-file-gallery">{files.map((file) => (
       <div className="archive-file-card" key={file.id}>
         <AuthenticatedImage fileId={file.id} width={mobile ? "100%" : 180} height={mobile ? 160 : 120} alt={file.kind === "signature_image" ? "客户签名" : file.kind === "vehicle_license" ? "行驶证照片" : "其他照片"} />
         <span>{file.originalName || file.createdAt}</span>
       </div>
-    ))}</div></Image.PreviewGroup> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无图片" />}
+    ))}</div></PhotoPreviewGroup> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无图片" />}
   </section>;
 }
 
