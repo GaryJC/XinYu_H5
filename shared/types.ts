@@ -1,4 +1,4 @@
-export type RoleKey = "advisor" | "technician" | "inspector" | "manager";
+export type RoleKey = "warehouse" | "advisor" | "technician" | "inspector" | "manager";
 export type DevelopmentPersonaKey = RoleKey | "unassigned" | "disabled";
 
 export type WorkOrderStatus =
@@ -382,8 +382,9 @@ export type DispatchItem = {
   inspectorName?: string; inspectedBy?: string; inspectedAt?: string; pickedAt?: string;
 };
 export type RepairPhotoUploadRequest = {requestId:string;fileName:string;mimeType:string;imageBase64:string;repairRound?:number;purpose?:"progress"|"parts"};
-export type PartsRequirement = { mode:"none"|"list"|"photo"; items:Array<{name:string;quantity:number;unit:string}>; photoIds:string[]; recordedBy?:string; recordedName?:string; recordedAt?:string };
+export type PartsRequirement = { confirmedBy?:string; confirmedName?:string; confirmedAt?:string; mode:"none"|"list"|"photo"; items:Array<{name:string;quantity:number;unit:string}>; photoIds:string[]; recordedBy?:string; recordedName?:string; recordedAt?:string };
 export type DispatchTask = DispatchExecution & {
+  hasPartsHistory?:boolean;
   partsRequirement?:PartsRequirement;
   vehicleModel?:string; vehicleMileage?:string; customerName?:string; advisor?:string;
   repairRound?: number; roundReason?: string; roundOpenedAt?: string; roundOpenedBy?: string; roundOpenedName?: string;
@@ -402,7 +403,7 @@ export type DispatchTask = DispatchExecution & {
   plate: string; dispatchNo: string; arrivalDate: string; orderStatus: WorkOrderStatus;
   faultDescription: string; overdue: boolean;
 };
-export type DispatchActionName = "record-parts" | "reopen-repair" | "retry-scheduler-notifications" | "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
+export type DispatchActionName = "confirm-parts" | "record-parts" | "reopen-repair" | "retry-scheduler-notifications" | "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
 export type DispatchActionRequest = DispatchExecution & {
   partsRequirement?:PartsRequirement;
   reworkItemIds?: number[]; additionalItems?: string[];

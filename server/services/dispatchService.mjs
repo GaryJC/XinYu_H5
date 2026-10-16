@@ -22,6 +22,7 @@ export async function queryDispatchTasks(actor, query={}) {
     if(query.urgent==='true' && !t.urgent) return false;
     if(query.overdue==='true' && !t.overdue) return false;
     if(query.search && ![t.orderId,t.dispatchNo,t.plate].some(v=>v.toLowerCase().includes(query.search.toLowerCase()))) return false;
+    if(actor.role==='warehouse') return true;
     if(t.orderStatus==='完成' && !hasActiveRepairRound(t) && !['完成','维修完成'].includes(query.stage) && query.metric!=='completed') return false;
     if(query.metric) return dispatchMetric(t,query.metric,range.from,range.to);
     // Only an explicit historical view includes closed orders. Unsettled repairs
@@ -113,6 +114,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
     if(['submit-order','retry-inspection-notifications'].includes(input.action)) {
       await client.query(`insert into dispatch_inspection_notifications(event_id,order_id) values($1,$2) on conflict do nothing`,[event.id,id]);
     }
+    if(['accept','record-parts'].includes(input.action) && next.partsRequirement.mode!=='none') people.filter(p=>p.active && p.role==='warehouse').forEach(p=>add(p.id,'配件申请'));
     if(input.action==='submit' || input.action==='reassign-inspection') add(next.inspectorId,'待检验');
     if(input.action==='inspect' && next.stage==='维修中') addHandlers(next,'退回返工');
     if(input.action==='remind') {
@@ -125,5 +127,5 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
       add(recipient,'人工催办');
       }
     }
-    for(const {recipient,kind} of recipients) await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),id,event.id,recipient,kind,JSON.stringify({repairRound:next.repairRound||0,orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,reason:input.reason||''})]);
+    for(const {recipient,kind} of recipients) await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),id,event.id,recipient,kind,JSON.stringify({shopId:next.shopId,repairRound:next.repairRound||0,orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,reason:input.reason||''})]);
 }

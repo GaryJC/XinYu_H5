@@ -1,7 +1,7 @@
 import { validatePartsRequirement,beginPendingItems } from './partsRequirement.mjs';
 import { reopenRepairTask,validateReopenItems } from './repairRounds.mjs';
 import { HttpError } from '../http/HttpError.mjs';
-export const DISPATCH_ROLES = ['manager','advisor','technician','inspector'];
+export const DISPATCH_ROLES = ['manager','advisor','technician','inspector','warehouse'];
 export const technicianIds = task => task.technicianIds ?? (task.technicianId ? [task.technicianId] : []);
 export const canInspect = (task, actor) => actor?.active && (actor.role==='manager'||actor.inspectorRoleMember!==false) && ['inspector','manager'].includes(actor.role) && actor.shopId===task.shopId && !technicianIds(task).includes(actor.id) && !(task.participantIds||[]).includes(actor.id) && !task.items.some(i=>i.startedBy===actor.id || i.finishedBy===actor.id);
 const scheduling = ['manager','advisor'];
@@ -10,13 +10,14 @@ export function assertDispatchAccess(task, actor) {
   if (!actor?.active || !DISPATCH_ROLES.includes(actor.role) || task.shopId !== actor.shopId) fail('无权访问该门店任务',403);
   if (scheduling.includes(actor.role)) return;
   if (['草稿','待客户签字'].includes(task.orderStatus)) fail('客户尚未签字，无权访问该维修任务',403);
+  if (actor.role === 'warehouse' && (task.partsRequirement || task.hasPartsHistory)) return;
   if (actor.role === 'technician' && technicianIds(task).includes(actor.id)) return;
   if (actor.role === 'inspector' && actor.inspectorRoleMember!==false && (task.inspectorId === actor.id || task.stage==='待检验' && canInspect(task,actor))) return;
   fail('任务已改派或不属于当前员工',403);
 }
 export function validateDispatchRequest(input) {
   validateReopenItems(input||{});
-  const actions = ['record-parts','reopen-repair','start-order','submit-order','claim-inspection','reassign-inspection','retry-inspection-notifications','retry-scheduler-notifications','record-hours','assign','reassign','reoffer','cancel','accept','decline','start','finish','pick','pause','resume','submit','inspect','update','remind','retry-notification','reconcile'];
+  const actions = ['confirm-parts','record-parts','reopen-repair','start-order','submit-order','claim-inspection','reassign-inspection','retry-inspection-notifications','retry-scheduler-notifications','record-hours','assign','reassign','reoffer','cancel','accept','decline','start','finish','pick','pause','resume','submit','inspect','update','remind','retry-notification','reconcile'];
   if (!input || !actions.includes(input.action) || !Number.isInteger(input.expectedVersion) || input.expectedVersion < 0 || typeof input.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(input.requestId)) fail('操作参数无效：需要版本号及唯一请求编号',400);
   for (const key of ['note','reason','pauseReason','technicianId','inspectorId','notificationId','notificationJobId']) {
     if (input[key] !== undefined && (typeof input[key] !== 'string' || input[key].length > 2000)) fail('文本参数无效',400);
@@ -40,6 +41,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   let next = structuredClone(task);
   if(input.action==='reopen-repair') next=reopenRepairTask(task,input,actor,now);
   const action = input.action;
+  if(actor.role==='warehouse' && action!=='confirm-parts') fail('仓管仅可确认配件申请',403);
   if((task.repairRound||action==='reopen-repair') && input.agreedFee!=null) fail('返工仅处理维修，不新增约定费用',400);
   const requireSchedule = () => { if(!scheduling.includes(actor.role)) fail('仅服务顾问或管理员可调度任务',403); };
   const requireOwner = () => { if(!(task.executionMode==='outsourced' ? scheduling.includes(actor.role) : technicianIds(task).includes(actor.id) && actor.role==='technician')) fail('仅当前维修工可执行此操作',403); };
@@ -88,6 +90,11 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   } else if(action==='record-parts') {
     requireOwner();stage('待开工','维修中','暂停');
     next.partsRequirement={...validatePartsRequirement(input.partsRequirement),recordedBy:actor.id,recordedName:actor.name,recordedAt:now};
+  } else if(action==='confirm-parts') {
+    if(actor.role!=='warehouse') fail('仅仓管可确认配件申请',403);
+    if(!task.partsRequirement || task.partsRequirement.mode==='none') fail('没有需要确认的配件申请');
+    if(task.partsRequirement.confirmedAt) fail('该配件申请已确认，请勿重复确认');
+    Object.assign(next.partsRequirement,{confirmedBy:actor.id,confirmedName:actor.name,confirmedAt:now});
   } else if(action==='start-order') {
     requireOwner(); stage('待开工','维修中');
     const pending=next.items.filter(i=>['待开工','待派工','待领料'].includes(i.status));

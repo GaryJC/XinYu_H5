@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { prepareOcrImage } from '../../shared/images/prepareOcrImage';
+import { prepareUploadPhoto } from '../../shared/images/prepareOcrImage';
 import { createRequestId } from '../../shared/api/requestId';
 import { dispatchApi } from './dispatchApi';
 import type { DispatchController } from './useDispatchController';
-type Upload = { repairRound:number; id:string; file:File; state:'uploading'|'failed'; error?:string; body?:Awaited<ReturnType<typeof prepareOcrImage>> };
+type Upload = { repairRound:number; id:string; file:File; state:'uploading'|'failed'; error?:string; body?:Awaited<ReturnType<typeof prepareUploadPhoto>> };
 export function useRepairPhotos(controller:DispatchController,onBlocked:(blocked:boolean)=>void) {
   const [uploads,setUploads]=useState<Upload[]>([]);
   const pending=useRef<Upload[]>([]),mounted=useRef(true);
@@ -14,7 +14,7 @@ export function useRepairPhotos(controller:DispatchController,onBlocked:(blocked
   async function upload(row:Upload) {
     update(pending.current.map(p=>p.id===row.id?{...p,state:'uploading',error:undefined}:p));
     try {
-      row.body ||= await prepareOcrImage(row.file);
+      row.body ||= await prepareUploadPhoto(row.file);
       await dispatchApi.uploadPhoto(orderId,{...row.body,requestId:row.id,repairRound:row.repairRound});
       await controller.refreshDetail();
       update(pending.current.filter(p=>p.id!==row.id));

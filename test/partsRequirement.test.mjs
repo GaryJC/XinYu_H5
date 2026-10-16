@@ -22,3 +22,28 @@ test('legacy accepted tasks can submit without a second start operation and reta
  const next=applyDispatchAction(task,{action:'submit-order',expectedVersion:1,requestId:randomUUID()},tech,[tech],'2026-10-15T12:00:00Z');
  assert.equal(next.stage,'待检验');assert.equal(next.items[0].status,'待检验');assert.deepEqual(next.items[1],task.items[1]);
 });
+
+const warehouse={id:'w',name:'仓管',role:'warehouse',active:true,shopId:'s'};
+const request=(task,action,extra={})=>({action,expectedVersion:task.version,requestId:randomUUID(),...extra});
+const withParts=()=>applyDispatchAction(waiting(),input({mode:'list',items:[{name:'机油',quantity:4,unit:'升'}]}),tech,[tech]);
+test('warehouse confirmation records real identity and time without changing repair or inventory',()=>{
+ const task=withParts(),before=structuredClone(task),now='2026-10-16T12:00:00Z';
+ const next=applyDispatchAction(task,request(task,'confirm-parts'),warehouse,[],now);
+ assert.deepEqual(task,before);assert.equal(next.partsRequirement.confirmedBy,'w');assert.equal(next.partsRequirement.confirmedName,'仓管');assert.equal(next.partsRequirement.confirmedAt,now);
+ assert.deepEqual(next.items,task.items);assert.equal(next.stage,task.stage);assert.equal(next.version,task.version+1);
+ assert.throws(()=>applyDispatchAction(next,request(next,'confirm-parts'),warehouse,[]),e=>e.status===409);
+ assert.throws(()=>applyDispatchAction(next,request(task,'confirm-parts'),warehouse,[]),e=>e.status===409);
+});
+test('only active same-shop warehouse can confirm; warehouse cannot repair or schedule',()=>{
+ const task=withParts();
+ for(const actor of [tech,{...warehouse,active:false},{...warehouse,shopId:'other'},{...warehouse,role:'manager'}]) assert.throws(()=>applyDispatchAction(task,request(task,'confirm-parts'),actor,[]),e=>e.status===403);
+ for(const action of ['record-parts','submit-order','update','start-order','pick']) assert.throws(()=>applyDispatchAction(task,request(task,action),warehouse,[]),e=>e.status===403);
+ const noParts={...task,partsRequirement:{mode:'none',items:[],photoIds:[]}};
+ assert.throws(()=>applyDispatchAction(noParts,request(noParts,'confirm-parts'),warehouse,[]),e=>e.status===409);
+});
+test('changing an application resets confirmation and ignores forged audit fields',()=>{
+ const task=withParts();const confirmed=applyDispatchAction(task,request(task,'confirm-parts'),warehouse,[]);
+ const next=applyDispatchAction(confirmed,request(confirmed,'record-parts',{partsRequirement:{...confirmed.partsRequirement,items:[{name:'滤芯',quantity:1,unit:'个'}]}}),tech,[]);
+ assert.equal(next.partsRequirement.confirmedAt,undefined);assert.equal(next.partsRequirement.confirmedBy,undefined);assert.equal(next.partsRequirement.recordedBy,tech.id);
+ assert.ok(confirmed.partsRequirement.confirmedAt);
+});

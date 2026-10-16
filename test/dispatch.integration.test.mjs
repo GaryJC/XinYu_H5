@@ -104,6 +104,29 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal((await service.dispatchDetail(advisor,fallback.id)).task.stage,'待接单');
       assert.equal((await pool.query('select activation_error from work_order_dispatch_plans where order_id=$1',[fallback.id])).rows[0].activation_error,'');
     });
+    await t.test('warehouse applications persist confirmation, concurrency, notifications and revision history',async()=>{
+      const warehouse={id:'warehouse',name:'仓管',role:'warehouse',shopId:'shop-hq',active:true};
+      await pool.query("insert into users(id,name,role,shop_id,active) values('warehouse','仓管','warehouse','shop-hq',true)");
+      await seed('warehouse-order');
+      const run=(actor,action,version,extra={})=>service.executeDispatchAction(actor,'warehouse-order',{action,expectedVersion:version,requestId:randomUUID(),...extra});
+      await run(manager,'assign',0,{technicianId:tech.id,dueAt});
+      const requirement={mode:'list',items:[{name:'机油',quantity:4,unit:'升'}]};
+      const accepted=await run(tech,'accept',1,{partsRequirement:requirement});
+      assert.ok((await service.queryDispatchTasks(warehouse)).some(t=>t.orderId==='warehouse-order'));
+      assert.equal((await pool.query("select 1 from dispatch_notifications where order_id='warehouse-order' and kind='配件申请' and recipient_id='warehouse'")).rowCount,1);
+      const command={action:'confirm-parts',expectedVersion:accepted.task.version,requestId:randomUUID()};
+      const results=await Promise.allSettled([service.executeDispatchAction(warehouse,'warehouse-order',command),service.executeDispatchAction(warehouse,'warehouse-order',command)]);
+      assert.ok(results.every(r=>r.status==='fulfilled'));
+      assert.equal((await pool.query("select 1 from dispatch_events where order_id='warehouse-order' and action='confirm-parts'")).rowCount,1);
+      const confirmed=await service.dispatchDetail(warehouse,'warehouse-order');
+      assert.equal(confirmed.task.partsRequirement.confirmedBy,'warehouse');
+      await assert.rejects(()=>run(warehouse,'confirm-parts',accepted.task.version),e=>e.status===409);
+      await assert.rejects(()=>service.dispatchDetail({...warehouse,shopId:'other'},'warehouse-order'),e=>e.status===403);
+      const updated=await run(tech,'record-parts',confirmed.task.version,{partsRequirement:{...requirement,items:[{name:'滤芯',quantity:1,unit:'个'}]}});
+      assert.equal(updated.task.partsRequirement.confirmedAt,undefined);
+      assert.ok(updated.events.some(e=>e.action==='confirm-parts' && e.detail.partsRequirement.confirmedBy==='warehouse'));
+      assert.equal((await pool.query("select 1 from outbound_orders where order_id='warehouse-order'")).rowCount,0);
+    });
     await seed('new');
     await t.test('only one of two concurrent initial assignments commits; retry is idempotent',async()=>{
       const command=body('assign',{technicianId:tech.id,dueAt});

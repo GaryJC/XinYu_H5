@@ -12,6 +12,7 @@ export async function processNotification({claim=claimNotification,finish=finish
     else if(row.kind==='待检验' && user?.role==='inspector' && user.inspector_role_member===false) result={status:'failed',error:'收件人已不属于钉钉检验员角色',retryable:false};
     else if(row.kind==='即将到期' && !await validateDue(row,user)) result={status:'failed',error:'工单状态、截止时间或责任人已变化，旧临期提醒已取消',retryable:false};
     else if(['无法接单','维修暂停','维修已提检'].includes(row.kind) && !await validateScheduler(row,user)) result={status:'failed',error:'收件人已无本店调度权限',retryable:false};
+    else if(row.kind==='配件申请' && (user?.role!=='warehouse' || user.shopId!==row.payload.shopId)) result={status:'failed',error:'收件人已无本店仓管权限',retryable:false};
     else if(!user?.active) result={status:'failed',error:'收件人已停用',retryable:false};
     else {sendStarted=true;result=await send(row,user.dingtalk_user_id);}
   } catch { result=!sendStarted&&row.previous_status==='pending'?{status:'failed',error:'发送前校验失败，将重试',retryable:true}:{status:'unknown',error:'通知处理异常，需查询或核对平台结果'}; }

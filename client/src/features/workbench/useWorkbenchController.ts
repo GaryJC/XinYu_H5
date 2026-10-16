@@ -126,7 +126,7 @@ export function useWorkbenchController() {
   async function loadOrders(nextRole = role, keepId = selectedId, generation = sessionGeneration.current) {
     try {
       setApiError("");
-      const next = await workOrderApi.list(nextRole);
+      const next = nextRole === "warehouse" ? [] : await workOrderApi.list(nextRole);
       if (generation !== sessionGeneration.current) return;
       const safeNext = Array.isArray(next) ? next : [];
       setOrders(safeNext);
@@ -242,7 +242,7 @@ export function useWorkbenchController() {
     setRole(nextRole);
     const orderLink=new URLSearchParams(location.search).has('workOrder');
     const dispatchLink = new URLSearchParams(location.search).has("dispatchOrder");
-    const landing = orderLink&&['advisor','manager'].includes(nextRole)?'工作台':nextRole === "technician" ? "我的维修" : nextRole === "inspector" ? "检验任务" : (dispatchLink && ["advisor", "manager"].includes(nextRole)) ? "派工台" : user.homeRoute === "order-create" ? "委托开单" : "工作台";
+    const landing = orderLink&&['advisor','manager'].includes(nextRole)?'工作台':nextRole === "warehouse" ? "配件申请" : nextRole === "technician" ? "我的维修" : nextRole === "inspector" ? "检验任务" : (dispatchLink && ["advisor", "manager"].includes(nextRole)) ? "派工台" : user.homeRoute === "order-create" ? "委托开单" : "工作台";
     setActiveNav(!dispatchEnabled && isDispatchNavigation(landing) ? "工作台" : landing);
     setDraft((current) => ({ ...current, advisor: user.name }));
   }

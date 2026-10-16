@@ -85,3 +85,11 @@ test('scheduler fanout checks role and store again before sending',async()=>{
  await processNotification({claim:async()=>({...notification,kind:'维修暂停',previous_status:'pending'}),recipient:async()=>({active:true,role:'advisor',shopId:'other'}),validateScheduler:async()=>false,send:async()=>sends++,finish:async(_,r)=>{result=r;}});
  assert.equal(sends,0);assert.equal(result.retryable,false);
 });
+
+test('parts notifications reject recipients who lost warehouse or shop membership',async()=>{
+ for(const user of [{active:true,role:'technician',shopId:'s'},{active:true,role:'warehouse',shopId:'other'},{active:false,role:'warehouse',shopId:'s'}]) {
+   let result,sent=false;
+   await processNotification({claim:async()=>({id:'parts',kind:'配件申请',previous_status:'pending',recipient_id:'w',payload:{shopId:'s'}}),recipient:async()=>user,send:async()=>{sent=true;},finish:async(_row,value)=>{result=value;}});
+   assert.equal(sent,false);assert.equal(result.status,'failed');
+ }
+});

@@ -35,5 +35,14 @@
     "homeRoute": "workbench",
     "page": "检验任务",
     "priority": 40
+  },
+  {
+    "role": "warehouse",
+    "names": [
+      "仓管"
+    ],
+    "homeRoute": "workbench",
+    "page": "配件申请",
+    "priority": 30
   }
 ]

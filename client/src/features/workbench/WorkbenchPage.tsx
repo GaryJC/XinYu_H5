@@ -93,6 +93,7 @@ export function WorkbenchPage() {
                   { value: "advisor", label: "张三｜服务顾问" },
                   { value: "manager", label: "Gary｜门店管理员" },
                   ...(dispatchEnabled ? [
+                    { value: "warehouse", label: "仓管｜测试" },
                     { value: "technician", label: "维修工｜测试" },
                     { value: "inspector", label: "检验员｜测试" }
                   ] : []),
@@ -110,9 +111,9 @@ export function WorkbenchPage() {
 
         {apiError ? <Alert className="error-box" type="warning" showIcon title="无法完成登录或加载数据" description={apiError} /> : null}
 
-        {!dispatchEnabled && ["technician", "inspector"].includes(role) ? <Alert type="info" showIcon title="维修与检验功能暂未开放" /> : null}
+        {!dispatchEnabled && ["technician", "inspector", "warehouse"].includes(role) ? <Alert type="info" showIcon title="维修与检验功能暂未开放" /> : null}
 
-        {activeNav === "工作台" && (dispatchEnabled || !["technician", "inspector"].includes(role)) ? (
+        {activeNav === "工作台" && (dispatchEnabled || !["technician", "inspector", "warehouse"].includes(role)) ? (
           <>
             <section className="metric-grid" aria-label="待办统计">
               {counters.map((counter) => <MetricCard key={counter.label} label={counter.label} value={counter.value} />)}

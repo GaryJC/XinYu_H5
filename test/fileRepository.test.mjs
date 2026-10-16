@@ -73,3 +73,16 @@ test("assigned mechanics can preview reception photos without access to other sh
     await assert.rejects(()=>assertFileReadAccess("photo",mechanic,database),e=>e.status===403);
   }
 });
+
+test('warehouse reads only signed same-shop parts photos and cannot modify files',async()=>{
+ const user={id:'w',role:'warehouse',active:true,shopId:'shop-hq'};
+ const file={kind:'repair_parts_photo',status:'维修中',shop_id:'shop-hq'};
+ const database={query:async()=>({rows:[file]})};
+ await assertFileReadAccess('parts',user,database);
+ for(const kind of ['vehicle_license','signature_image','repair_progress_photo','other']) {
+   file.kind=kind;await assert.rejects(()=>assertFileReadAccess('parts',user,database),e=>e.status===403);
+ }
+ file.kind='repair_parts_photo';file.status='草稿';await assert.rejects(()=>assertFileReadAccess('parts',user,database),e=>e.status===403);
+ file.status='维修中';file.shop_id='other';await assert.rejects(()=>assertFileReadAccess('parts',user,database),e=>e.status===403);
+ file.shop_id='shop-hq';await assert.rejects(()=>assertFileAccess('parts',user,database),e=>e.status===403);
+});

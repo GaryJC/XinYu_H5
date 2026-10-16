@@ -6,6 +6,7 @@ export const navItems: Array<{ label: string; icon: typeof LayoutDashboard; role
   { label: "工作台", icon: LayoutDashboard, roles: ["advisor", "manager"] },
   { label: "委托开单", icon: ClipboardList, roles: ["advisor", "manager"] },
   { label: "派工台", icon: ClipboardList, roles: ["advisor", "manager"] },
+  { label: "配件申请", icon: ClipboardList, roles: ["warehouse"] },
   { label: "我的维修", icon: ClipboardList, roles: ["technician"] },
   { label: "检验任务", icon: ClipboardList, roles: ["inspector", "manager"] },
   { label: "数据看板", icon: BarChart3, roles: ["manager"] },
@@ -16,6 +17,7 @@ export const belongings = ["音响系统", "点烟器", "天窗", "四门玻璃�
 export const exteriorIssues = ["石击", "凹凸", "划伤", "损坏"];
 
 export const roleFocus: Record<RoleKey, { title: string; dataScope: string; primary: string; blocked: string[] }> = {
+  warehouse: {title:"仓管工作区",dataScope:"本店配件申请",primary:"查看并确认配件申请，全程留痕",blocked:["暂不处理出入库"]},
   advisor: {
     title: "服务顾问工作区",
     dataScope: dispatchEnabled ? "查看本店委托单、维修任务和维修工负荷" : "查看本店委托单",

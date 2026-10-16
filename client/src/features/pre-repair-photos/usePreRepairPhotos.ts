@@ -1,6 +1,6 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { WorkOrderDraft } from "../../../../shared/types";
-import { prepareOcrImage } from "../../shared/images/prepareOcrImage";
+import { prepareUploadPhoto } from "../../shared/images/prepareOcrImage";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
 import type { PhotoSlot } from "./photoSlots";
 
@@ -28,7 +28,7 @@ export function usePreRepairPhotos(setDraft: Dispatch<SetStateAction<WorkOrderDr
     try {
       // Upload sequentially to avoid overwhelming mobile WebViews with large images.
       for (const file of files) {
-        const image = await prepareOcrImage(file);
+        const image = await prepareUploadPhoto(file);
         if (generation.current !== session) return;
         const stored = await workOrderApi.uploadFile({ kind: "repair_order_photo", ...image });
         if (generation.current !== session) return;
