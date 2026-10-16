@@ -213,8 +213,11 @@ export function useWorkbenchController() {
       applyAuthenticatedUser(user);
       setSyncLabel(`已登录：${user.name}`);
       return;
-    } catch {
+    } catch (error) {
       // No local session yet. In plain browser development we keep the role switcher.
+      if ((error as { status?: number })?.status !== 401) {
+        setApiError(actionError(error, "恢复登录失败，请重新登录"));
+      }
     }
 
     // 普通浏览器没有钉钉 JSAPI，保留未登录的本地开发体验。

@@ -26,6 +26,14 @@ import {
 } from "../../../../../shared/types";
 import { request, setAuthToken } from "../../../shared/api/httpClient";
 import { dispatchEnabled } from "../../dispatch/dispatchAvailability";
+import { roles } from "../domain/workOrderDomain";
+
+function validateAuthenticatedUser(user: UserProfile) {
+  if (!user || !Object.hasOwn(roles, user.role)) {
+    throw new Error("当前账号的岗位尚未在此版本开放，请切换受支持的账号或联系管理员。");
+  }
+  return user;
+}
 
 export type WorkOrderApi = {
   loginWithDingTalk(authCode: string): Promise<AuthResult>;
@@ -63,16 +71,18 @@ export type WorkOrderApi = {
 export const workOrderApi: WorkOrderApi = {
   async loginWithDingTalk(authCode) {
     const result = await request<AuthResult>("/api/auth/dingtalk-login", { method: "POST", body: { authCode }, skipAuth: true });
+    validateAuthenticatedUser(result.user);
     setAuthToken(result.token);
     return result;
   },
   async loginForDevelopment(persona) {
     const result = await request<AuthResult>("/api/auth/dev-login", { method: "POST", body: { persona }, skipAuth: true });
+    validateAuthenticatedUser(result.user);
     setAuthToken(result.token);
     return result;
   },
-  me() {
-    return request("/api/auth/me");
+  async me() {
+    return validateAuthenticatedUser(await request<UserProfile>("/api/auth/me"));
   },
   async list(_role) {
     if (!dispatchEnabled) return request<WorkOrder[]>("/api/work-orders");
