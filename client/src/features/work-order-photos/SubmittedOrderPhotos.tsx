@@ -1,8 +1,7 @@
-import { PhotoPreviewGroup } from "../../shared/ui/PhotoPreviewGroup";
 import { Alert, Empty } from "antd";
 import type { UserProfile, WorkOrder } from "../../../../shared/types";
 import { ImageSourcePicker } from "../../shared/ui/ImageSourcePicker";
-import { AuthenticatedImage } from "../../shared/ui/AuthenticatedImage";
+import { AuthenticatedImage, AuthenticatedImagePreviewGroup } from "../../shared/ui/AuthenticatedImage";
 import { PreRepairPhotos } from "../pre-repair-photos/PreRepairPhotos";
 import { useOrderPhotoUpload } from "./useOrderPhotoUpload";
 
@@ -26,10 +25,10 @@ export function SubmittedOrderPhotos({order, user, onUpdated, section = "all"}: 
       disabled={busy} loading={upload.uploading === kind} primaryActionLabel={id ? "重新上传" : "上传照片"}
       onSelect={async file=>{await upload.upload(kind,file,id);}}/>;
     return <section className="archive-detail-section"><h3>{title}</h3>
-      <PhotoPreviewGroup><div className="archive-file-gallery">{files.map(file => <div className="archive-file-card" key={file.id}>
+      <AuthenticatedImagePreviewGroup fileIds={files.map(file => file.id)}><div className="archive-file-gallery">{files.map(file => <div className="archive-file-card" key={file.id}>
         <AuthenticatedImage fileId={file.id} width="100%" height={160} alt={title}/>
         <span>{file.originalName || file.createdAt}</span>{picker(file.id)}
-      </div>)}</div></PhotoPreviewGroup>
+      </div>)}</div></AuthenticatedImagePreviewGroup>
       {!files.length && <><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无图片"/>{picker()}</>}
       {kind === "other" && Boolean(files.length) && picker()}
     </section>;

@@ -1,11 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import OSS from "ali-oss";
+import { createImageThumbnail } from "./images/thumbnail.mjs";
 import { HttpError } from "./http/HttpError.mjs";
 import { createFileRecord, findFileRecord } from "./repositories/fileRepository.mjs";
 import { measureStage } from "./http/requestTiming.mjs";
 
 let ossClient;
+const pendingThumbnails = new Map();
 
 const allowedFileKinds = new Set(["vehicle_license", "repair_order_photo", "damage_photo", "signature_image", "other"]);
 const allowedImageMimeTypes = new Set([
@@ -66,16 +68,71 @@ export function validateUploadedImageMetadata(kind, mimeType) {
 
 export async function readStoredFile(fileId) {
   const record = await findFileRecord(fileId);
-  if (record.storageProvider === "oss") {
-    const result = await getOssClient().get(record.objectKey);
-    return { record, body: result.content };
+  return { record, body: await readStorageObject(record, record.objectKey) };
+}
+
+export async function readStoredThumbnail(fileId) {
+  const record = await findFileRecord(fileId);
+  if (!record.mimeType.toLowerCase().startsWith("image/")) throw new HttpError(400, "该文件不是图片");
+  const existing = pendingThumbnails.get(fileId);
+  if (existing) return existing;
+  const pending = loadOrCreateThumbnail(record);
+  pendingThumbnails.set(fileId, pending);
+  try {
+    return await pending;
+  } finally {
+    pendingThumbnails.delete(fileId);
+  }
+}
+
+export async function loadOrCreateThumbnail(record) {
+  const thumbnailKey = `${record.objectKey}.thumb.jpg`;
+  try {
+    const body = await readStorageObject(record, thumbnailKey);
+    return { record, body, mimeType: "image/jpeg" };
+  } catch (error) {
+    if (!isMissingStorageObject(error)) throw error;
   }
 
+  const original = await readStorageObject(record, record.objectKey);
+  const thumbnail = await createImageThumbnail(original);
+  if (!thumbnail || thumbnail.byteLength >= original.byteLength) {
+    return { record, body: original, mimeType: record.mimeType };
+  }
+  await putDerivedObject(record, thumbnailKey, thumbnail);
+  return { record, body: thumbnail, mimeType: "image/jpeg" };
+}
+
+async function readStorageObject(record, objectKey) {
+  if (record.storageProvider === "oss") {
+    const result = await getOssClient().get(objectKey);
+    return result.content;
+  }
+
+  if (record.storageProvider !== "local") throw new HttpError(500, "不支持的图片存储服务");
+  return fs.readFile(resolveLocalObjectPath(objectKey));
+}
+
+function resolveLocalObjectPath(objectKey) {
   const uploadRoot = getLocalUploadRoot();
-  const target = path.resolve(uploadRoot, record.objectKey);
+  const target = path.resolve(uploadRoot, objectKey);
   const relative = path.relative(uploadRoot, target);
   if (relative.startsWith("..") || path.isAbsolute(relative)) throw new HttpError(403, "文件路径非法");
-  return { record, body: await fs.readFile(target) };
+  return target;
+}
+
+async function putDerivedObject(record, objectKey, body) {
+  if (record.storageProvider === "oss") {
+    await getOssClient().put(objectKey, body, { headers: { "Content-Type": "image/jpeg" } });
+    return;
+  }
+  const target = resolveLocalObjectPath(objectKey);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(target, body);
+}
+
+function isMissingStorageObject(error) {
+  return error?.code === "ENOENT" || error?.code === "NoSuchKey" || error?.code === "NoSuchObject" || error?.status === 404 || error?.statusCode === 404;
 }
 
 async function putObject(objectKey, buffer, mimeType) {

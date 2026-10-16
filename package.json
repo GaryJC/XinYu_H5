@@ -43,6 +43,7 @@
     "pm2": "^7.0.3",
     "react": "latest",
     "react-dom": "latest",
+    "sharp": "^0.34.5",
     "typescript": "latest",
     "vite": "latest"
   },

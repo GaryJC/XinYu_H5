@@ -33,7 +33,7 @@ import {
   listAccessUsers
 } from "../repositories/userRepository.mjs";
 import { HttpError } from "../http/HttpError.mjs";
-import { readStoredFile, saveUploadedFile } from "../storage.mjs";
+import { readStoredFile, readStoredThumbnail, saveUploadedFile } from "../storage.mjs";
 import { requireAnyRole, requireAuthenticatedUser, requireTransitionRole } from "../domain/accessPolicy.mjs";
 import { listLegacyDepartments } from "../repositories/legacyDepartmentRepository.mjs";
 import { assertFileAccess, assertFileReadAccess, attachFileToOrder } from "../repositories/fileRepository.mjs";
@@ -171,15 +171,22 @@ export async function handleApiRequest(req, res, url) {
 
   const fileContentMatch = url.pathname.match(/^\/api\/files\/([^/]+)\/content$/);
   if (fileContentMatch && req.method === "GET") {
+    const started = performance.now();
     await assertFileReadAccess(fileContentMatch[1], currentUser);
-    const { record, body } = await readStoredFile(fileContentMatch[1]);
+    const accessMs = performance.now() - started;
+    const thumbnail = url.searchParams.get("size") === "thumbnail";
+    const { record, body, mimeType } = thumbnail
+      ? await readStoredThumbnail(fileContentMatch[1])
+      : await readStoredFile(fileContentMatch[1]);
     res.statusCode = 200;
-    res.setHeader("Content-Type", record.mimeType || "application/octet-stream");
+    res.setHeader("Content-Type", mimeType || record.mimeType || "application/octet-stream");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Content-Security-Policy", "sandbox");
     res.setHeader("Content-Length", body.byteLength);
     res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(record.originalName || record.id)}"`);
     res.setHeader("Cache-Control", "private, max-age=300");
+    res.setHeader("Vary", "Authorization");
+    res.setHeader("Server-Timing", `file_access;dur=${accessMs.toFixed(1)}, file_storage;dur=${(performance.now() - started - accessMs).toFixed(1)}`);
     res.end(body);
     return true;
   }

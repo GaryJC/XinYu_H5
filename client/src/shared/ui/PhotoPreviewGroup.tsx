@@ -33,7 +33,7 @@ export function PhotoPreviewActions({ source, children }: { source: string; chil
   }
   return <div style={{ maxWidth: "calc(100vw - 32px)", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
     {error && <Alert type="error" title={error} showIcon />}
-    <Button onClick={send} loading={busy}>发送到 / 保存图片</Button>
+    <Button onClick={send} loading={busy} disabled={!source}>发送到 / 保存图片</Button>
     {children}
   </div>;
 }

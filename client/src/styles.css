@@ -157,7 +157,8 @@ body { margin: 0; background: #f5f5f5; }
 .archive-file-gallery { display: flex; flex-wrap: wrap; gap: 12px; }
 .archive-file-card { display: grid; gap: 6px; width: 180px; }
 .archive-file-card .ant-image, .archive-file-card img { border-radius: 6px; object-fit: contain; background: #fafafa; }
-.authenticated-image-error { display: grid; place-items: center; width: 100%; min-height: 120px; padding: 12px; border: 1px dashed #ffccc7; border-radius: 6px; background: #fff2f0; color: #cf1322; font-size: 13px; }
+.authenticated-image { position: relative; max-width: 100%; }
+.authenticated-image-error { position: absolute; inset: 0; display: grid; place-items: center; width: 100%; padding: 12px; border: 1px solid #ffccc7; border-radius: 6px; background: #fff2f0; color: #cf1322; font-size: 13px; }
 .archive-file-card > span { overflow: hidden; color: rgba(0, 0, 0, .45); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .workflow-actions { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px; margin-top: 8px; border: 1px solid #d9d9d9; border-radius: 8px; background: #fafafa; }
 .workflow-actions > div:first-child > strong, .workflow-actions > div:first-child > span { display: block; }

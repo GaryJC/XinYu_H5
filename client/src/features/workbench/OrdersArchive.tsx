@@ -1,4 +1,3 @@
-import { PhotoPreviewGroup } from "../../shared/ui/PhotoPreviewGroup";
 import { SubmittedOrderPhotos } from "../work-order-photos/SubmittedOrderPhotos";
 import { useArchiveLegacyRefresh } from "./useArchiveLegacyRefresh";
 import { WorkOrderPrintButton } from "../work-order-print/WorkOrderPrintButton";
@@ -10,7 +9,7 @@ import { Alert, Button, Card, Collapse, Descriptions, Empty, Grid, Input, Modal,
 import { ChevronRight, PencilLine, Trash2, RefreshCw } from "lucide-react";
 import { WorkOrder, UserProfile } from "../../../../shared/types";
 import { LegacySyncStatusChip, StatusChip } from "../../shared/ui/Status";
-import { AuthenticatedImage } from "../../shared/ui/AuthenticatedImage";
+import { AuthenticatedImage, AuthenticatedImagePreviewGroup } from "../../shared/ui/AuthenticatedImage";
 import { WorkbenchController } from "./useWorkbenchController";
 
 export function OrdersArchive({ controller }: { controller: WorkbenchController }) {
@@ -273,12 +272,12 @@ function DesktopOrderRecords({ order }: { order: WorkOrder }) {
 function FileGallery({ title, files, mobile }: { title: string; files: NonNullable<WorkOrder["files"]>; mobile: boolean }) {
   return <section className="archive-detail-section">
     <h3>{title}</h3>
-    {files.length ? <PhotoPreviewGroup><div className="archive-file-gallery">{files.map((file) => (
+    {files.length ? <AuthenticatedImagePreviewGroup fileIds={files.map(file => file.id)}><div className="archive-file-gallery">{files.map((file) => (
       <div className="archive-file-card" key={file.id}>
         <AuthenticatedImage fileId={file.id} width={mobile ? "100%" : 180} height={mobile ? 160 : 120} alt={file.kind === "signature_image" ? "客户签名" : file.kind === "vehicle_license" ? "行驶证照片" : "其他照片"} />
         <span>{file.originalName || file.createdAt}</span>
       </div>
-    ))}</div></PhotoPreviewGroup> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无图片" />}
+    ))}</div></AuthenticatedImagePreviewGroup> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无图片" />}
   </section>;
 }
 
