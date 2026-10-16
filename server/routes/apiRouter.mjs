@@ -1,3 +1,4 @@
+import { saveWorkOrderPhoto } from "../services/workOrderPhotoService.mjs";
 import { refreshWorkOrderFromLegacy } from "../services/workOrderRefreshService.mjs";
 import { handleDispatchRequest } from "./dispatchRouter.mjs";
 import { executeDispatchAction } from "../services/dispatchService.mjs";
@@ -217,6 +218,13 @@ export async function handleApiRequest(req, res, url) {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     await assertWorkOrderAccess(workOrderMatch[1], currentUser);
     sendJson(res, 200, await deleteDraftWorkOrder(workOrderMatch[1]));
+    return true;
+  }
+
+  const photoMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/photos$/);
+  if (photoMatch && req.method === "POST") {
+    requireAnyRole(currentUser, ["advisor", "manager"]);
+    sendJson(res, 200, await saveWorkOrderPhoto(decodeURIComponent(photoMatch[1]), await readJson(req), currentUser));
     return true;
   }
 

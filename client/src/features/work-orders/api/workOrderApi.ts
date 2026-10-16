@@ -21,6 +21,7 @@ import {
   VehicleReferenceSearchResult,
   WorkOrder,
   WorkOrderDraft,
+  WorkOrderPhotoUpdate,
   WorkOrderStatus
 } from "../../../../../shared/types";
 import { request, setAuthToken } from "../../../shared/api/httpClient";
@@ -34,6 +35,7 @@ export type WorkOrderApi = {
   create(draft: WorkOrderDraft, actor: string): Promise<WorkOrder>;
   update(order: WorkOrder, actor: string, action: string): Promise<WorkOrder>;
   refreshFromRunfeng(id: string): Promise<WorkOrder>;
+  updatePhoto(id: string, photo: WorkOrderPhotoUpdate): Promise<WorkOrder>;
   deleteDraft(id: string): Promise<{ id: string }>;
   transition(id: string, status: WorkOrderStatus, actor: string, action: string, patch?: Partial<WorkOrder>): Promise<WorkOrder>;
   createSignatureToken(id: string, actor: string): Promise<WorkOrder>;
@@ -80,6 +82,9 @@ export const workOrderApi: WorkOrderApi = {
     ]);
     const stages = new Map(tasks.map(task => [task.orderId, task.stage]));
     return orders.map(order => ({ ...order, dispatchStage: stages.get(order.id) }));
+  },
+  updatePhoto(id, photo) {
+    return request(`/api/work-orders/${encodeURIComponent(id)}/photos`, {method:"POST", body:photo});
   },
   refreshFromRunfeng(id) {
     return request(`/api/work-orders/${encodeURIComponent(id)}/refresh-from-runfeng`, { method: "POST" });

@@ -314,6 +314,7 @@ export type WorkOrder = {
     fuelLevel: "空" | "1/4" | "1/2" | "3/4" | "满";
     exteriorIssues: string[];
     preRepairPhotos?: PreRepairPhotos;
+    replacedPhotoIds?: string[];
   };
   faultDescription: string;
   repairItems: RepairItem[];
@@ -414,3 +415,10 @@ export type DispatchDetail = {
   files: Array<Pick<StoredFile,"id"|"orderId"|"kind"|"originalName"|"mimeType"|"sizeBytes"|"createdAt">>;
 };
 export type DispatchPeople = { technicians: UserProfile[]; inspectors: UserProfile[] };
+
+
+export type WorkOrderPhotoUpdate = {
+  fileId: string;
+  replaceFileId?: string;
+  slot: "vehicleLicense" | "front45" | "rear45" | "mileage" | "extra" | "other";
+};

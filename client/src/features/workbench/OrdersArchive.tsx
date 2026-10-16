@@ -1,13 +1,13 @@
+import { SubmittedOrderPhotos } from "../work-order-photos/SubmittedOrderPhotos";
 import { useArchiveLegacyRefresh } from "./useArchiveLegacyRefresh";
 import { WorkOrderPrintButton } from "../work-order-print/WorkOrderPrintButton";
-import { PreRepairPhotos } from "../pre-repair-photos/PreRepairPhotos";
 import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
 import { QuickDispatchDialog } from "../dispatch/QuickDispatchDialog";
 import { dispatchEnabled } from "../dispatch/dispatchAvailability";
 import { useState, type ReactNode } from "react";
 import { Alert, Button, Card, Collapse, Descriptions, Empty, Grid, Image, Input, Modal, Popconfirm, Table } from "antd";
 import { ChevronRight, PencilLine, Trash2, RefreshCw } from "lucide-react";
-import { WorkOrder } from "../../../../shared/types";
+import { WorkOrder, UserProfile } from "../../../../shared/types";
 import { LegacySyncStatusChip, StatusChip } from "../../shared/ui/Status";
 import { AuthenticatedImage } from "../../shared/ui/AuthenticatedImage";
 import { WorkbenchController } from "./useWorkbenchController";
@@ -162,16 +162,15 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
       >
         {refreshReport}
         {deleteError ? <Alert type="error" showIcon title="删除草稿失败" description={deleteError} style={{ marginBottom: 12 }} /> : null}
-        {detailOrder ? <OrderDetail order={detailOrder} isMobile={isMobile} /> : null}
+        {detailOrder ? <OrderDetail key={detailOrder.id} order={detailOrder} isMobile={isMobile} user={currentUser} onUpdated={controller.acceptRefreshedOrder}/> : null}
       </Modal>
       {dispatchEnabled && dispatchOrder && currentUser && <QuickDispatchDialog key={dispatchOrder.id} orderId={dispatchOrder.id} user={currentUser} onClose={() => { setDispatchOrder(undefined); void controller.refreshWorkbench(); }} />}
     </Card>
   );
 }
 
-function OrderDetail({ order, isMobile }: { order: WorkOrder; isMobile: boolean }) {
+function OrderDetail({ order, isMobile, user, onUpdated }: { order: WorkOrder; isMobile: boolean; user?: UserProfile; onUpdated:(order:WorkOrder)=>void }) {
   const signatures = Object.entries(order.signatures).map(([type, name]) => `${type}: ${name}`).join("；") || "-";
-  const vehicleLicenseFiles = (order.files ?? []).filter((file) => file.kind === "vehicle_license");
   const signatureFiles = (order.files ?? []).filter((file) => file.kind === "signature_image");
   const descriptions = [
     { key: "id", label: "委托单号", children: order.id },
@@ -208,8 +207,7 @@ function OrderDetail({ order, isMobile }: { order: WorkOrder; isMobile: boolean 
   return (
     <>
       <Descriptions className="archive-descriptions" bordered size="small" column={isMobile ? 1 : 3} items={descriptions} />
-      <PreRepairPhotos photos={order.inspection.preRepairPhotos} disabled />
-      <FileGallery title="行驶证照片" files={vehicleLicenseFiles} mobile={isMobile} />
+      <SubmittedOrderPhotos order={order} user={user} onUpdated={onUpdated}/>
       <FileGallery title="客户签名" files={signatureFiles} mobile={isMobile} />
       {isMobile ? <MobileOrderRecords order={order} /> : <DesktopOrderRecords order={order} />}
     </>
@@ -276,7 +274,7 @@ function FileGallery({ title, files, mobile }: { title: string; files: NonNullab
     <h3>{title}</h3>
     {files.length ? <Image.PreviewGroup><div className="archive-file-gallery">{files.map((file) => (
       <div className="archive-file-card" key={file.id}>
-        <AuthenticatedImage fileId={file.id} width={mobile ? "100%" : 180} height={mobile ? 160 : 120} alt={file.kind === "signature_image" ? "客户签名" : "行驶证照片"} />
+        <AuthenticatedImage fileId={file.id} width={mobile ? "100%" : 180} height={mobile ? 160 : 120} alt={file.kind === "signature_image" ? "客户签名" : file.kind === "vehicle_license" ? "行驶证照片" : "其他照片"} />
         <span>{file.originalName || file.createdAt}</span>
       </div>
     ))}</div></Image.PreviewGroup> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无图片" />}

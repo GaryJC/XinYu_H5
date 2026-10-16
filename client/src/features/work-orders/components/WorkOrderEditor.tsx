@@ -1,3 +1,4 @@
+import { SubmittedOrderPhotos } from "../../work-order-photos/SubmittedOrderPhotos";
 import { VehicleScanIllustration } from "../../vehicle-identity/VehicleScanIllustration";
 import "../work-order-form.css";
 import { PreRepairPhotos } from "../../pre-repair-photos/PreRepairPhotos";
@@ -182,7 +183,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               validateStatus={fieldError("行驶证") ? "error" : undefined}
               help={fieldError("行驶证")}
             >
-              <div className="ocr-grid">
+              {selectedOrder && selectedOrder.status !== "草稿" ? <SubmittedOrderPhotos key={selectedOrder.id} section="license" order={selectedOrder}
+                user={controller.currentUser} onUpdated={controller.acceptRefreshedOrder}/> : <div className="ocr-grid">
                 <VehicleLicenseOcrControl
                   disabled={!canEditForm}
                   result={vehicleLicenseOcr}
@@ -190,7 +192,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   onScan={scanVehicleLicense}
                   onConfirm={confirmVehicleLicenseOcr}
                 />
-              </div>
+              </div>}
             </Form.Item>
             </>}
 
@@ -332,7 +334,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             </div>
             <TextArea disabled={!canEditForm} label="故障描述 / 客户诉求" value={draft.faultDescription} onChange={(value) => updateDraft({ faultDescription: value })} />
 
-            <PreRepairPhotos photos={draft.inspection.preRepairPhotos} disabled={!canEditForm || Boolean(actionLoading)} controls={controller.preRepairPhotos} errors={formErrors} />
+            {selectedOrder && selectedOrder.status !== "草稿" ? <SubmittedOrderPhotos key={selectedOrder.id} section="repair" order={selectedOrder}
+              user={controller.currentUser} onUpdated={controller.acceptRefreshedOrder}/> : <PreRepairPhotos photos={draft.inspection.preRepairPhotos} disabled={!canEditForm || Boolean(actionLoading)} controls={controller.preRepairPhotos} errors={formErrors} />}
 
             <div className="check-section">
               <Checklist disabled={!canEditForm} title="随车物品" items={belongings} selected={draft.inspection.belongings} onToggle={(value) => toggleArrayField("belongings", value)} />

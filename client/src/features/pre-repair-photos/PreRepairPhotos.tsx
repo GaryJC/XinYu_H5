@@ -4,13 +4,19 @@ import { AuthenticatedImage } from "../../shared/ui/AuthenticatedImage";
 import { ImageSourcePicker } from "../../shared/ui/ImageSourcePicker";
 import { PhotoGuide } from "./PhotoGuide";
 import { photoSlots } from "./photoSlots";
-import type { usePreRepairPhotos } from "./usePreRepairPhotos";
+import type { PhotoSlot } from "./photoSlots";
 import "./photos.css";
 
 type Props = {
   photos?: Photos;
   disabled: boolean;
-  controls?: ReturnType<typeof usePreRepairPhotos>;
+  controls?: {
+    uploading: string; error: string;
+    upload:(slot:PhotoSlot|"extra",file:File)=>Promise<void>;
+    uploadExtras:(files:File[])=>Promise<void>;
+    removeExtra?:(id:string)=>void; removeMileage?:()=>void;
+    replaceExtra?:(id:string,file:File)=>Promise<void>;
+  };
   errors?: string[];
 };
 
@@ -31,14 +37,16 @@ export function PreRepairPhotos({ photos = {}, disabled, controls, errors = [] }
             : <PhotoGuide slot={slot.key} />}</div>
           <p>{slot.hint}</p>
           {!disabled && controls && <ImageSourcePicker disabled={busy} loading={controls.uploading === slot.key} label={`${slot.label}照片`} primaryActionLabel={id ? "重新拍摄" : "拍照上传"} onSelect={(file) => controls.upload(slot.key, file)} />}
-          {!disabled && controls && slot.key === "mileage" && id && <Button type="link" danger disabled={busy} onClick={controls.removeMileage} aria-label="移除公里数照片">移除</Button>}
+          {!disabled && controls?.removeMileage && slot.key === "mileage" && id && <Button type="link" danger disabled={busy} onClick={controls.removeMileage} aria-label="移除公里数照片">移除</Button>}
           {error && <div className="pre-repair-photo-error" role="alert">{error}</div>}
         </div>;
       })}
       {(photos.extra || []).map((id, index) => <div className="pre-repair-photo-card" key={id}>
         <div className="pre-repair-photo-label">额外照片 {index + 1}</div>
         <div className="pre-repair-photo-cover"><AuthenticatedImage fileId={id} alt={`维修前额外照片 ${index + 1}`} width="100%" height={160} /></div>
-        {!disabled && controls && <Button danger disabled={busy} onClick={() => controls.removeExtra(id)} aria-label={`移除额外照片 ${index + 1}`}>移除</Button>}
+        {!disabled && controls?.replaceExtra && <ImageSourcePicker label={`额外照片 ${index + 1}重新上传`} primaryActionLabel="重新上传"
+          disabled={busy} loading={controls.uploading === "extra"} onSelect={file => controls.replaceExtra!(id,file)}/>}
+        {!disabled && controls?.removeExtra && <Button danger disabled={busy} onClick={() => controls.removeExtra?.(id)} aria-label={`移除额外照片 ${index + 1}`}>移除</Button>}
       </div>)}
       {!disabled && controls && <div className="pre-repair-photo-card pre-repair-photo-extra">
         <div className="pre-repair-photo-label">额外照片 <small>选填</small></div>
