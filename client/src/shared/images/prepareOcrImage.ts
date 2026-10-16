@@ -1,5 +1,7 @@
-const targetBytes = 1400 * 1024;
-const maxEdge = 2560;
+const profiles = {
+  ocr: { targetBytes: 1400 * 1024, maxEdge: 2560, qualities: [0.92, 0.86, 0.8] },
+  photo: { targetBytes: 500 * 1024, maxEdge: 1600, qualities: [0.84, 0.76, 0.68] }
+};
 
 function readDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -27,7 +29,11 @@ function encodeJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
 }
 
 // Use Image/canvas rather than createImageBitmap for older DingTalk WebViews.
-export async function prepareOcrImage(file: File) {
+export function prepareOcrImage(file: File) { return prepareImage(file, 'ocr'); }
+export function prepareUploadPhoto(file: File) { return prepareImage(file, 'photo'); }
+
+async function prepareImage(file: File, profile: keyof typeof profiles) {
+  const { targetBytes, maxEdge, qualities } = profiles[profile];
   const started = performance.now();
   const url = URL.createObjectURL(file);
   const canvas = document.createElement("canvas");
@@ -47,14 +53,27 @@ export async function prepareOcrImage(file: File) {
       context.fillStyle = "#fff";
       context.fillRect(0, 0, canvas.width, canvas.height);
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      // Keep small VIN characters readable: retain dimensions and stop at 80% quality.
-      for (const quality of [0.92, 0.86, 0.8]) {
+      // OCR keeps small characters readable; ordinary record photos use smaller files.
+      for (const quality of qualities) {
         const candidate = await encodeJpeg(canvas, quality);
         if (!converted || candidate.size < output.size) {
           output = candidate;
           converted = true;
         }
         if (output.size <= targetBytes) break;
+      }
+      // Detailed photos can still be large at low quality. Reduce dimensions only
+      // for record photos; documents retain their OCR resolution.
+      if (profile === 'photo') {
+        while (output.size > targetBytes && Math.max(canvas.width, canvas.height) > 960) {
+          const scale = Math.max(960 / Math.max(canvas.width, canvas.height), 0.8);
+          canvas.width = Math.max(1, Math.round(canvas.width * scale));
+          canvas.height = Math.max(1, Math.round(canvas.height * scale));
+          context.fillStyle = '#fff';
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          output = await encodeJpeg(canvas, 0.76);
+        }
       }
       if (supported && edge <= maxEdge && output.size >= file.size) {
         output = file;
@@ -72,6 +91,7 @@ export async function prepareOcrImage(file: File) {
   }
   const imageBase64 = await readDataUrl(output);
   console.info("[ocr-image]", {
+    profile,
     durationMs: Math.round(performance.now() - started),
     originalBytes: file.size, outputBytes: output.size, fallback,
     targetExceeded: output.size > targetBytes
