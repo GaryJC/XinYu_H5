@@ -23,7 +23,7 @@ export function validateDispatchRequest(input) {
   }
   if (input.technicianIds !== undefined && (!Array.isArray(input.technicianIds) || input.technicianIds.length>100 || input.technicianIds.some(id=>typeof id!=='string' || !id || id.length>200) || new Set(input.technicianIds).size!==input.technicianIds.length)) fail('维修员工名单无效',400);
   if(input.workHours!==undefined && (typeof input.workHours!=='number' || !Number.isFinite(input.workHours) || input.workHours<=0 || input.workHours>10000 || Math.abs(input.workHours*100-Math.round(input.workHours*100))>0.000001)) fail('工时须大于 0 且不超过 10000 小时，最多两位小数',400);
-  if(input.workHours!==undefined && input.action!=='record-hours') fail('请通过录入工时操作填写',400);
+  if(input.workHours!==undefined && !['inspect','record-hours'].includes(input.action)) fail('请在检验完成时填写工时',400);
   if(input.partsRequirement!==undefined) {if(!['accept','record-parts'].includes(input.action)) fail('配件需求请通过登记入口修改',400);validatePartsRequirement(input.partsRequirement);}
   validateExecution(input);
   if (input.urgent !== undefined && typeof input.urgent !== 'boolean') fail('加急参数无效',400);
@@ -137,6 +137,8 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     if(!canInspect(task,actor) || !['manager','inspector'].includes(actor.role) || (actor.role!=='manager' && task.inspectorId!==actor.id) || (actor.id===task.technicianId || technicianIds(task).includes(actor.id) || (task.participantIds||[]).includes(actor.id)) || next.items.some(i=>i.startedBy===actor.id || i.finishedBy===actor.id)) fail('不能自检，或没有当前任务检验权限',403);
     const rejected=input.rejectedItemIds || [];
     if(rejected.length) reason();
+    else if(input.workHours===undefined) fail('检验通过时请填写实际工时',400);
+    if(rejected.length && input.workHours!==undefined) fail('退回维修时无需填写工时，请在全部检验通过时填写',400);
     if(rejected.some(id=>!next.items.some(i=>i.id===id && i.status==='待检验'))) fail('退回项目不在本次待检验项目中',400);
     for(const current of next.items) {
       if(current.status!=='待检验') continue;
@@ -144,11 +146,11 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
       else { current.status='已完工'; current.inspectedBy=actor.id; current.inspectorName=actor.name; current.inspectedAt=now; }
     }
     if(rejected.length) { next.reworkReason=input.reason; next.rejectedItemIds=rejected; next.stage='维修中'; next.rework=true; next.reworkCount=(task.reworkCount||0)+1; }
-    else { next.stage='维修完成'; next.completedAt=now; next.completedBy=task.technicianId; next.inspectorName=actor.name; next.rework=false; }
+    else { Object.assign(next,{workHours:input.workHours,workHoursRecordedBy:actor.id,workHoursRecordedName:actor.name,workHoursRecordedAt:now}); next.stage='维修完成'; next.completedAt=now; next.completedBy=task.technicianId; next.inspectorName=actor.name; next.rework=false; }
   } else if(action==='record-hours') {
-    requireSchedule(); stage('维修中','暂停','待检验','维修完成');
-    if(task.repairRound && task.stage!=='维修完成') fail('返工期间不能修改原工时');
-    if(task.orderStatus==='完成') fail('已完结工单不能修改工时');
+    if(!canInspect(task,actor) || task.inspectorId!==actor.id) fail('仅本单检验人可补录工时',403);
+    stage('维修完成');
+    if(task.workHours!==undefined) fail('工时已记录，请勿重复录入');
     if(input.workHours===undefined) fail('请填写实际工时',400);
     if(task.workHours!==undefined) reason();
     Object.assign(next,{workHours:input.workHours,workHoursRecordedBy:actor.id,workHoursRecordedName:actor.name,workHoursRecordedAt:now});

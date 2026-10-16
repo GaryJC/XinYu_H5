@@ -20,15 +20,15 @@ export function PartsRequirementDialog({controller:c,accepting,onClose,onUploadi
   const saved=task.partsRequirement;
   const [mode,setMode]=useState<PartsRequirement['mode']|undefined>(saved?.mode);
   const [items,setItems]=useState<PartsRequirement['items']>(saved?.items||[]);
-  const [photoIds,setPhotoIds]=useState<string[]>(saved?.photoIds||[]);
   const [uploads,setUploads]=useState<Upload[]>([]),[error,setError]=useState('');
   const uploading=uploads.some(u=>u.state==='uploading');
   useEffect(()=>{onUploading?.(uploading);return()=>onUploading?.(false);},[uploading,onUploading]);
   const busy=c.busy||uploading;
   const photos=c.detail!.files.filter(f=>f.kind==='repair_parts_photo'&&(f.repairRound||0)===round);
+  const photoIds=photos.map(photo=>photo.id);
   async function upload(row:Upload) {
     setUploads(rows=>rows.map(r=>r.id===row.id?{...r,state:'uploading',error:undefined}:r));
-    try {row.body ||= await prepareOcrImage(row.file);const result=await dispatchApi.uploadPhoto(task.orderId,{...row.body,requestId:row.id,repairRound:round,purpose:'parts'});setPhotoIds(ids=>[...new Set([...ids,result.id])]);await c.refreshDetail();setUploads(rows=>rows.filter(r=>r.id!==row.id));}
+    try {row.body ||= await prepareOcrImage(row.file);await dispatchApi.uploadPhoto(task.orderId,{...row.body,requestId:row.id,repairRound:round,purpose:'parts'});await c.refreshDetail();setUploads(rows=>rows.filter(r=>r.id!==row.id));}
     catch(e){setUploads(rows=>rows.map(r=>r.id===row.id?{...r,state:'failed',error:e instanceof Error?e.message:'照片上传失败'}:r));}
   }
   async function select(file:File) {const row:Upload={id:createRequestId(),file,state:'uploading'};setUploads(rows=>[...rows,row]);await upload(row);}
@@ -51,7 +51,7 @@ export function PartsRequirementDialog({controller:c,accepting,onClose,onUploadi
       </div>)}</Form><Button block onClick={()=>add()} disabled={busy||items.length>=100}>手动添加其他配件</Button>
     </>:null}
     {mode==='photo'?<><ImageSourcePicker label="手写配件清单" primaryActionLabel="拍摄手写配件清单" galleryActionLabel="相册选择" disabled={busy||photoIds.length+uploads.length>=10} loading={uploads.some(u=>u.state==='uploading')} onSelect={select}/>
-      <div className="repair-photo-grid">{photos.map(photo=><div key={photo.id}><AuthenticatedImage fileId={photo.id} alt="手写配件清单" width="100%" height={100}/><Button aria-pressed={photoIds.includes(photo.id)} onClick={()=>setPhotoIds(ids=>ids.includes(photo.id)?ids.filter(id=>id!==photo.id):ids.length<10?[...ids,photo.id]:ids)} disabled={busy}>{photoIds.includes(photo.id)?'已选用 · 取消选用':'选用此照片'}</Button></div>)}</div>
+      <div className="repair-photo-grid">{photos.map(photo=><div key={photo.id}><AuthenticatedImage fileId={photo.id} alt="手写配件清单" width="100%" height={100}/><small>已自动保存</small></div>)}</div>
     </>:null}
     {uploads.map(row=><div key={row.id} role="status">{row.state==='uploading'?'手写清单上传中…':<><Alert type="error" title="清单照片上传失败" description={row.error}/><Button disabled={busy} onClick={()=>void upload(row)}>重试</Button><Button disabled={busy} onClick={()=>setUploads(rows=>rows.filter(r=>r.id!==row.id))}>移除失败照片</Button></>}</div>)}
     {error||c.error?<Alert type="error" showIcon title={error||c.error}/>:null}

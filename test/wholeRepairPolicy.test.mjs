@@ -8,7 +8,7 @@ const second={...inspector,id:'i2'};
 const manager={...inspector,id:'m',role:'manager'};
 const people=[tech,inspector,second,manager];
 const task=()=>({orderId:'o',shopId:'s',technicianId:'t',technicianIds:['t'],stage:'待开工',version:0,items:[{id:1,status:'待开工'},{id:2,status:'已完工',startAt:'old',finishAt:'old',inspectedBy:'i'}]});
-const action=(t,a,u=tech,extra={})=>applyDispatchAction(t,{action:a,expectedVersion:t.version,requestId:randomUUID(),...extra},u,people,'2026-10-14T10:00:00Z');
+const action=(t,a,u=tech,extra={})=>applyDispatchAction(t,{action:a,expectedVersion:t.version,requestId:randomUUID(),...(a==='inspect'&&!extra.rejectedItemIds?.length?{workHours:2.5}:{}),...extra},u,people,'2026-10-14T10:00:00Z');
 test('whole repair preserves passed projects and records actual actor before inspection claim',()=>{
  let t=action(task(),'start-order');assert.equal(t.items[0].status,'维修中');assert.equal(t.items[1].startAt,'old');
  t=action(t,'submit-order');assert.equal(t.stage,'待检验');assert.equal(t.inspectorId,undefined);assert.equal(t.items[0].finishedBy,'t');assert.equal(t.items[1].status,'已完工');

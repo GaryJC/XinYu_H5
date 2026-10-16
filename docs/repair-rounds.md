@@ -11,3 +11,5 @@
 迁移：`202610150003_repair_rounds.sql`。仅本地开发数据库已应用；正式环境需要在启动新服务前按现有迁移流程应用。当前调度通知与临期提醒的未提交改动继续保留；临期去重键加入维修轮次，防止前一轮提醒影响下一轮。
 
 验证：`npm run check`；设置指向本机 PostgreSQL 的 `REPAIR_ROUNDS_TEST_ADMIN_URL` 后运行 `node --test test/repairRounds.integration.test.mjs`，测试创建并清理独立数据库。另运行原有 `dispatch.integration.test.mjs` 回归派工、照片、检验和通知。页面在 375、390、430、1280px 验证；真实钉钉相机、相册、软键盘及正式通知需真机验收，本地仅使用 mock。
+
+工时按维修轮次由检验人在全部检验通过时填写。发起新轮次清空本轮待填工时；原维修及之前轮次的工时保存在快照，不用返工工时覆盖原始结算校验。

@@ -8,10 +8,10 @@ const advisor={...manager,id:'a',role:'advisor'},inspector={...manager,id:'i',ro
 const people=[manager,advisor,tech,inspector],now='2026-10-15T10:00:00Z';
 const completed=()=>({orderId:'wo',shopId:'s',orderStatus:'完成',stage:'维修完成',version:4,technicianId:'t',technicianIds:['t'],firstStartedAt:'2026-10-01T10:00:00Z',completedAt:'2026-10-02T10:00:00Z',workHours:3,participantIds:['t'],items:[{id:1,name:'原项目一',status:'已完工',startedBy:'t',inspectedBy:'i',inspectedAt:'2026-10-02T10:00:00Z'},{id:2,name:'原项目二',status:'已完工'}]});
 const input=()=>({action:'reopen-repair',expectedVersion:4,requestId:randomUUID(),reworkItemIds:[1],additionalItems:['补充项目'],reason:'客户反馈仍有异响',technicianIds:['t'],dueAt:'2026-10-17T10:00:00Z'});
-const act=(t,action,user=tech,extra={})=>applyDispatchAction(t,{action,expectedVersion:t.version,requestId:randomUUID(),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra},user,people,now);
+const act=(t,action,user=tech,extra={})=>applyDispatchAction(t,{action,expectedVersion:t.version,requestId:randomUUID(),...(action==='inspect'&&!extra.rejectedItemIds?.length?{workHours:2.5}:{}),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra},user,people,now);
 test('completed repair reopens selected projects only, with independent fresh progress and original immutable',()=>{
  const original=completed(),copy=structuredClone(original);let task=applyDispatchAction(original,input(),advisor,people,now);
- assert.deepEqual(original,copy);assert.equal(task.orderStatus,'完成');assert.equal(task.repairRound,1);assert.equal(task.stage,'待接单');assert.equal(task.completedAt,undefined);assert.equal(task.firstStartedAt,undefined);assert.equal(task.workHours,3);
+ assert.deepEqual(original,copy);assert.equal(task.orderStatus,'完成');assert.equal(task.repairRound,1);assert.equal(task.stage,'待接单');assert.equal(task.completedAt,undefined);assert.equal(task.firstStartedAt,undefined);assert.equal(task.workHours,undefined);
  assert.deepEqual(task.items.map(i=>[i.id,i.status]),[[1,'待开工'],[-1,'待开工']]);
  assert.throws(()=>act(task,'reopen-repair',manager,{...input(),expectedVersion:task.version}),/仅维修完成/);
  task=act(task,'accept');assert.equal(task.stage,'维修中');task=act(task,'pause',tech,{pauseReason:'待配件'});task=act(task,'resume');task=act(task,'submit-order');

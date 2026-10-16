@@ -24,8 +24,8 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
   const owner=task.executionMode==='outsourced'?controller.manager:workers.includes(user.id) && user.role==='technician';
   const inspect=task.stage==='待检验' && (user.role==='manager'||(user.role==='inspector'&&task.inspectorId===user.id)) && !workers.includes(user.id) && !task.participantIds?.includes(user.id) && !task.items.some(i=>i.startedBy===user.id||i.finishedBy===user.id);
   const actions:DispatchActionName[]=[];
+  if(task.stage==='维修完成' && task.workHours===undefined && task.inspectorId===user.id && ['inspector','manager'].includes(user.role)) actions.push('record-hours');
   if(controller.manager&&!unsigned) {
-    if((!task.repairRound||task.stage==='维修完成') && !task.needsReview && task.orderStatus!=='完成' && ['维修中','暂停','待检验','维修完成'].includes(task.stage)) actions.push('record-hours');
     if(task.needsReview) {if(user.role==='manager') actions.push('reconcile');}
     else {
       if(task.stage==='维修完成') actions.push('reopen-repair');
@@ -75,7 +75,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
       ...(task.executionMode==='outsourced'?[{key:'outsourcingMode',label:'外包施工方式',children:task.outsourcingMode==='offsite'?'车辆外送整包维修':'承包方到店施工'},{key:'fee',label:'约定费用',children:task.agreedFee==null?'未填写':`¥${task.agreedFee.toFixed(2)}`}]:[]),
       {key:'technician',label:task.executionMode==='outsourced'?'承包方':'维修员工',children:task.technicianName||'未指派'},
       {key:'inspector',label:'检验人',children:task.inspectorName||'未指定'},
-      {key:'hours',label:'实际工时',children:task.workHours===undefined?'待调度人员填写':`${task.workHours} 小时`},
+      {key:'hours',label:'实际工时',children:task.workHours===undefined?'待检验员填写':`${task.workHours} 小时`},
       {key:'hoursActor',label:'工时记录',children:task.workHoursRecordedName?`${task.workHoursRecordedName} · ${displayTime(task.workHoursRecordedAt)}`:'未记录'},
       {key:'due',label:'预计完工',children:displayTime(task.dueAt)},
       {key:'assigned',label:'指派时间',children:displayTime(task.assignedAt)},
@@ -116,7 +116,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     <Timeline items={events.map(event=>({children:<div><strong>{event.action==='due-reminder'?'即将到期提醒':actionLabels[event.action as DispatchActionName]||event.action} · {event.actorName}</strong><p>{displayTime(event.at)} · {event.detail.stage}{event.detail.repairRound?` · 返工第 ${event.detail.repairRound} 轮`:""}</p>
       {event.detail.previousTechnicianName&&event.detail.previousTechnicianName!==event.detail.technicianName?<p>{event.detail.previousTechnicianName} → {event.detail.technicianName||'待派工'}</p>:null}
       {['accept','record-parts'].includes(event.action)&&event.detail.partsRequirement?<PartsRequirementSummary value={event.detail.partsRequirement}/>:null}
-      {event.action==='record-hours'?<p>实际工时：{event.detail.previousWorkHours!==undefined?`${event.detail.previousWorkHours} → `:''}{event.detail.workHours} 小时</p>:null}
+      {['record-hours','inspect'].includes(event.action)&&event.detail.workHours!==undefined?<p>实际工时：{event.detail.previousWorkHours!==undefined?`${event.detail.previousWorkHours} → `:''}{event.detail.workHours} 小时</p>:null}
       {event.detail.itemId?<p>项目：{task.items.find(i=>i.id===event.detail.itemId)?.name||event.detail.itemId}</p>:null}
       {event.action==='reopen-repair'?<p>本次项目：{event.detail.items?.map(i=>i.name).join('、')}</p>:null}
       {event.detail.rejectedItemIds?.length?<p>退回项目：{event.detail.rejectedItemIds.map(id=>task.items.find(i=>i.id===id)?.name||id).join('、')}</p>:null}

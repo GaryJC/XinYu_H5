@@ -15,7 +15,7 @@ export function RepairRoundHistory({detail}:{detail:DispatchDetail}) {
       {key:'start',label:'开工',children:displayTime(round.task.firstStartedAt)},
       {key:'submit',label:'提交检验',children:displayTime(round.task.submittedAt)},
       {key:'end',label:'维修完成',children:displayTime(round.completedAt)},
-      {key:'hours',label:round.round?'原单工时（沿用）':'实际工时',children:round.task.workHours===undefined?'未记录':`${round.task.workHours} 小时`}
+      {key:'hours',label:round.round?'本轮实际工时':'实际工时',children:round.task.workHours===undefined?'未记录':`${round.task.workHours} 小时`}
     ]}/>
     <PartsRequirementSummary value={round.task.partsRequirement}/>
     <ul className="repair-round-items">{round.task.items.map(item=><li key={item.id}><div><strong>{item.name}</strong> <Tag>{item.status}</Tag></div><small>开工：{displayTime(item.startAt)} · 提检：{displayTime(item.finishAt)}<br/>检验：{item.inspectorName||'未记录'} · {displayTime(item.inspectedAt)}</small></li>)}</ul>

@@ -12,7 +12,7 @@ export function DispatchActionDialog({action,task,controller,onClose}:{action:Di
   const [additionalItems,setAdditionalItems]=useState<string[]>([]);
   const [technicianIds,setTechnicianIds]=useState<string[]>(task.technicianIds??(task.technicianId?[task.technicianId]:[]));
   const [execution,setExecution]=useState<DispatchExecution>({executionMode:task.executionMode||'internal',serviceUnit:task.serviceUnit,serviceAddress:task.serviceAddress,serviceContact:task.serviceContact,departureAt:reopening?undefined:task.departureAt,expectedReturnAt:reopening?undefined:task.expectedReturnAt,returnedAt:reopening?undefined:task.returnedAt,contractor:task.contractor,outsourcingMode:task.outsourcingMode,agreedFee:reopening?undefined:task.agreedFee,handedOverAt:reopening?undefined:task.handedOverAt,receivedAt:reopening?undefined:task.receivedAt});
-  const [workHours,setWorkHours]=useState<number|null>(task.workHours??null);
+  const [workHours,setWorkHours]=useState<number|null>(action==='inspect'?null:task.workHours??null);
   const [inspectorId,setInspectorId]=useState<string>();
   const [dueAt,setDueAt]=useState(reopening?'':localDateTime(task.dueAt));
   const [urgent,setUrgent]=useState(Boolean(task.urgent));
@@ -30,11 +30,11 @@ export function DispatchActionDialog({action,task,controller,onClose}:{action:Di
     if(scheduling && !dueAt) {setError('请填写预计完工时间');return;}
     if(['submit','reassign-inspection'].includes(action) && !inspectorId) {setError('请选择检验员');return;}
     if((['reopen-repair','decline','cancel','reassign','reconcile','reassign-inspection'].includes(action)||(action==='inspect' && rejectedItemIds.length)) && !reason.trim()) {setError('请填写原因或交接说明');return;}
-    if(action==='record-hours' && (!workHours || workHours<=0)) {setError('请填写大于 0 的实际工时');return;}
+    if((action==='record-hours'||action==='inspect'&&!rejectedItemIds.length) && (!workHours || workHours<=0)) {setError('请填写大于 0 的实际工时');return;}
     if(action==='record-hours' && task.workHours!==undefined && !reason.trim()) {setError('修改工时请填写原因');return;}
     const input:ActionInput={action,note};
     if(reopening) {input.reworkItemIds=reworkItemIds;input.additionalItems=additionalItems.map(n=>n.trim());}
-    if(action==='record-hours') input.workHours=workHours!;
+    if(action==='record-hours'||action==='inspect'&&!rejectedItemIds.length) input.workHours=workHours!;
     if(assign) input.technicianIds=execution.executionMode==='outsourced'?[]:technicianIds;
     if(assign||action==='update') Object.assign(input,execution);
     if(reopening||task.repairRound) delete input.agreedFee;
@@ -52,7 +52,7 @@ export function DispatchActionDialog({action,task,controller,onClose}:{action:Di
         {additionalItems.map((name,index)=><div className="reopen-extra-item" key={index}><Input aria-label={`补充项目 ${index+1}`} value={name} maxLength={200} placeholder="填写补充维修项目名称" onChange={e=>setAdditionalItems(items=>items.map((v,i)=>i===index?e.target.value:v))}/><Button aria-label={`移除补充项目 ${index+1}`} onClick={()=>setAdditionalItems(items=>items.filter((_,i)=>i!==index))}>移除</Button></div>)}
         <Button disabled={additionalItems.length>=50} onClick={()=>setAdditionalItems(items=>[...items,''])}>添加补充项目</Button>
       </FormSection>:null}
-      {action==='record-hours'?<><Alert type="info" title="工时按整单记录，由服务顾问／派单人员填写；未填写不能最终完结。"/><Form.Item label="实际工时（小时）" required><InputNumber aria-label="实际工时" min={0.01} max={10000} precision={2} value={workHours} onChange={setWorkHours}/></Form.Item></>:null}
+      {action==='record-hours'||action==='inspect'&&!rejectedItemIds.length?<><Alert type="info" title="检验通过时填写本轮维修的实际工时，并一并保存。"/><Form.Item label="实际工时（小时）" required><InputNumber aria-label="实际工时" min={0.01} max={10000} precision={2} value={workHours} onChange={value=>{setWorkHours(value);setError('');}}/></Form.Item></>:null}
       {error||controller.error?<Alert type="error" showIcon title={error||controller.error}/>:null}
       {(assign&&!historical)||action==='update'?<FormSection title="执行方式"><DispatchExecutionFields value={execution} onChange={setExecution} allowModeChange={assign} hideFee={reopening||Boolean(task.repairRound)}/></FormSection>:null}
       {assign && <FormSection title="人员安排与说明">

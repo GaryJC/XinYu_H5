@@ -73,10 +73,10 @@ export async function dispatchDetail(actor,id,client=pool) {
 }
 
 export async function assertWorkHoursRecorded(client,orderId) {
-  const {rows}=await client.query(`select dt.stage,case when dt.data ? 'workHours' then dt.data else coalesce(r.snapshot,dt.data) end as data from dispatch_tasks dt left join dispatch_repair_rounds r on r.order_id=dt.order_id and r.round_no=0 where dt.order_id=$1`,[orderId]);
+  const {rows}=await client.query(`select dt.stage,case when coalesce((dt.data->>'repairRound')::integer,0)>0 then coalesce(r.snapshot,dt.data) else dt.data end as data from dispatch_tasks dt left join dispatch_repair_rounds r on r.order_id=dt.order_id and r.round_no=0 where dt.order_id=$1`,[orderId]);
   if(rows[0]?.stage!=='维修完成') throw new HttpError(409,'请先完成维修检验再完结工单');
   const data=rows[0]?.data;
-  if(!Number.isFinite(data?.workHours) || data.workHours<=0 || !data.workHoursRecordedBy || !data.workHoursRecordedAt) throw new HttpError(409,'请先由服务顾问／派单人员在派工台录入实际工时，再完结工单');
+  if(!Number.isFinite(data?.workHours) || data.workHours<=0 || !data.workHoursRecordedBy || !data.workHoursRecordedAt) throw new HttpError(409,'请先由本单检验人补录实际工时，再完结工单');
 }
 
 export async function assertRepairPhotoRecorded(client,task) {

@@ -11,7 +11,7 @@ const people=[manager,advisor,technician,second,inspector];
 const now='2026-09-11T01:00:00.000Z';
 const due='2026-09-12T18:00:00+08:00';
 function initial(){return {orderId:'wo',shopId:'s',stage:'待派工',version:0,items:[{id:1,name:'制动',status:'待派工'},{id:2,name:'保养',status:'待派工'}]};}
-function act(task,action,actor=technician,fields={},at=now){return applyDispatchAction(task,{action,expectedVersion:task.version,requestId:randomUUID(),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...fields},actor,people,at);}
+function act(task,action,actor=technician,fields={},at=now){return applyDispatchAction(task,{action,expectedVersion:task.version,requestId:randomUUID(),...(action==='inspect'&&!fields?.rejectedItemIds?.length?{workHours:2.5}:{}),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...fields},actor,people,at);}
 function assigned(){return act(initial(),'assign',advisor,{technicianId:'t',dueAt:due});}
 function submitted(){let t=act(assigned(),'accept');for(const id of [1,2]){t=act(t,'finish',technician,{itemId:id});}return act(t,'submit',technician,{inspectorId:'i'});}
 
@@ -172,15 +172,17 @@ test('execution validation rejects malformed costs, timestamps and silent mode c
   task=act(task,'update',advisor,{agreedFee:null});assert.equal(task.agreedFee,null);
 });
 
-test('only scheduling staff record positive work hours with amendment audit and closed-order lock',()=>{
-  let task=act(assigned(),'accept');
-  assert.throws(()=>act(task,'record-hours',technician,{workHours:2}),e=>e.status===403);
-  for(const workHours of [0,-1,1.001,'2',Infinity]) assert.throws(()=>act(task,'record-hours',advisor,{workHours}),e=>e.status===400);
-  task=act(task,'record-hours',advisor,{workHours:2.5});
-  assert.equal(task.workHoursRecordedBy,advisor.id);assert.equal(task.workHours,2.5);
-  assert.throws(()=>act(task,'record-hours',advisor,{workHours:3}),e=>e.status===400);
-  task=act(task,'record-hours',manager,{workHours:3,reason:'核对后调整'});
-  assert.equal(task.workHours,3);assert.equal(task.workHoursRecordedBy,manager.id);
-  assert.throws(()=>act({...task,stage:'维修完成',orderStatus:'完成'},'record-hours',advisor,{workHours:4,reason:'调整'}),e=>e.status===409);
-  assert.throws(()=>act(task,'update',advisor,{workHours:5}),e=>e.status===400);
+test('inspection completion requires hours, records inspector, and blocks scheduler-only entry',()=>{
+  const pending=submitted();
+  assert.throws(()=>act(pending,'inspect',inspector,{workHours:undefined}),/请填写实际工时/);
+  for(const workHours of [0,-1,1.001,'2',Infinity]) assert.throws(()=>act(pending,'inspect',inspector,{workHours}),e=>e.status===400);
+  for(const actor of [advisor,technician]) assert.throws(()=>act(pending,'record-hours',actor,{workHours:2}),e=>e.status===403);
+  const done=act(pending,'inspect',inspector,{workHours:3.25});
+  assert.equal(done.workHours,3.25);assert.equal(done.workHoursRecordedBy,inspector.id);assert.equal(done.workHoursRecordedAt,now);
+  assert.throws(()=>act(done,'record-hours',inspector,{workHours:4}),/已记录/);
+  const returned=act(pending,'inspect',inspector,{rejectedItemIds:[1],reason:'漏油'});
+  assert.equal(returned.workHours,undefined);
+  assert.throws(()=>act(pending,'inspect',inspector,{rejectedItemIds:[1],reason:'漏油',workHours:2}),/退回维修时无需/);
+  const legacy={...done,workHours:undefined,workHoursRecordedBy:undefined};
+  assert.equal(act(legacy,'record-hours',inspector,{workHours:2}).workHoursRecordedBy,inspector.id);
 });

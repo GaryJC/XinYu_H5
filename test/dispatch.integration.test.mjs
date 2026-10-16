@@ -54,7 +54,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
     const {transitionWorkOrder,syncWorkOrderToPlatform}=await import('../server/db.mjs');
     const {assertFileReadAccess}=await import('../server/repositories/fileRepository.mjs');
     let task;
-    const body=(action,extra={})=>({action,expectedVersion:task?.version||0,requestId:randomUUID(),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra});
+    const body=(action,extra={})=>({action,expectedVersion:task?.version||0,requestId:randomUUID(),...(action==='inspect'&&!extra.rejectedItemIds?.length?{workHours:2.5}:{}),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra});
     const action=async(user,name,extra={})=>{const result=await service.executeDispatchAction(user,'new',body(name,extra));task=result.task;return result;};
     const dueAt=new Date(Date.now()+86400000).toISOString();
     await t.test('migration preserves ambiguous identities and never invents historical completion times',async()=>{
@@ -140,10 +140,9 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await action(tech2,'start',{itemId:1});await action(tech2,'finish',{itemId:1});await action(tech2,'submit',{inspectorId:'inspector'});
       await action(manager,'inspect',{rejectedItemIds:[]});assert.equal(task.orderStatus,'待结算');
       assert.equal((await service.technicianSummaries(manager)).find(p=>p.id==='tech2').completed,1);
-      await assert.rejects(()=>transitionWorkOrder('new','完成',manager.name,'结算'),e=>e.status===409);
+      assert.equal(task.workHours,2.5);assert.equal(task.workHoursRecordedBy,manager.id);
       await assert.rejects(()=>action(tech2,'record-hours',{workHours:2}),e=>e.status===403);
-      await action(dispatcher,'record-hours',{workHours:2.5});
-      assert.equal(task.workHours,2.5);assert.equal(task.workHoursRecordedBy,dispatcher.id);
+      await assert.rejects(()=>action(dispatcher,'record-hours',{workHours:2.5}),e=>e.status===403);
       await transitionWorkOrder('new','完成',manager.name,'结算',{settlementAmount:0});
       assert.equal((await service.technicianSummaries(manager)).find(p=>p.id==='tech2').completed,1);
       assert.equal((await service.queryDispatchTasks(manager,{technicianId:'tech2',metric:'completed'})).length,1);
@@ -212,7 +211,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
     });
     await t.test('platform sync does not reset a dispatched repair item',async()=>{
       await seed('platform');let local=(await service.dispatchDetail(manager,'platform')).task;
-      async function run(user,action,extra={}){local=(await service.executeDispatchAction(user,'platform',{action,expectedVersion:local.version,requestId:randomUUID(),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra})).task;}
+      async function run(user,action,extra={}){local=(await service.executeDispatchAction(user,'platform',{action,expectedVersion:local.version,requestId:randomUUID(),...(action==='inspect'&&!extra.rejectedItemIds?.length?{workHours:2.5}:{}),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra})).task;}
       await run(dispatcher,'assign',{technicianId:'tech',dueAt});await run(tech,'accept');
       await pool.query("update work_orders set dispatch_no='A12345' where id='platform'");
       await syncWorkOrderToPlatform('platform',manager.name);
@@ -222,7 +221,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
     await t.test('multiple employees share visibility, notifications and one completed order',async()=>{
       await seed('team');
       let team=(await service.executeDispatchAction(advisor,'team',{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianIds:[tech.id,tech2.id],dueAt})).task;
-      const execute=async(actor,action,extra={})=>{team=(await service.executeDispatchAction(actor,'team',{action,expectedVersion:team.version,requestId:randomUUID(),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra})).task;};
+      const execute=async(actor,action,extra={})=>{team=(await service.executeDispatchAction(actor,'team',{action,expectedVersion:team.version,requestId:randomUUID(),...(action==='inspect'&&!extra.rejectedItemIds?.length?{workHours:2.5}:{}),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra})).task;};
       assert.ok((await service.queryDispatchTasks(tech2)).some(t=>t.orderId==='team'));
       const {listWorkOrders}=await import('../server/db.mjs');
       assert.ok((await listWorkOrders('technician',tech2)).some(t=>t.id==='team'));
@@ -299,7 +298,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       const otherInspector={...inspector,id:'inspector2',name:'第二检验员'};
       await seed('whole');
       let whole=(await service.executeDispatchAction(advisor,'whole',{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianId:tech.id,dueAt})).task;
-      const execute=async(actor,action,extra={})=>{whole=(await service.executeDispatchAction(actor,'whole',{action,expectedVersion:whole.version,requestId:randomUUID(),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra})).task;};
+      const execute=async(actor,action,extra={})=>{whole=(await service.executeDispatchAction(actor,'whole',{action,expectedVersion:whole.version,requestId:randomUUID(),...(action==='inspect'&&!extra.rejectedItemIds?.length?{workHours:2.5}:{}),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra})).task;};
       await execute(tech,'accept');
       const {uploadRepairPhoto}=await import('../server/services/repairPhotoService.mjs');
       const {createFileRecord}=await import('../server/repositories/fileRepository.mjs');
@@ -331,7 +330,10 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       const winner=whole.inspectorId===inspector.id?inspector:otherInspector;
       const stored=(await pool.query("select request_body from dispatch_events where order_id='whole' and action='claim-inspection'")).rows[0].request_body;
       await service.executeDispatchAction(winner,'whole',stored);
-      await execute(winner,'inspect');assert.equal(whole.stage,'维修完成');
+      await assert.rejects(()=>execute(winner,'inspect',{workHours:undefined}),/请填写实际工时/);
+      assert.equal((await service.dispatchDetail(manager,'whole')).task.stage,'待检验');
+      await execute(winner,'inspect',{workHours:3.75});assert.equal(whole.stage,'维修完成');
+      assert.equal(whole.workHours,3.75);assert.equal(whole.workHoursRecordedBy,winner.id);
     });
     await t.test('acceptance requires parts, starts repair atomically and validates handwritten photo scope',async()=>{
       await seed('parts-accept');await seed('parts-other');
@@ -378,7 +380,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
     await t.test('roster failures retain submitted tasks and empty audiences are explicit',async()=>{
       await seed('no-roster');
       let local=(await service.executeDispatchAction(advisor,'no-roster',{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianId:tech.id,dueAt})).task;
-      const run=async(actor,action)=>{local=(await service.executeDispatchAction(actor,'no-roster',{action,expectedVersion:local.version,requestId:randomUUID(),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{})})).task;};
+      const run=async(actor,action,extra={})=>{local=(await service.executeDispatchAction(actor,'no-roster',{action,expectedVersion:local.version,requestId:randomUUID(),...(action==='inspect'&&!extra.rejectedItemIds?.length?{workHours:2.5}:{}),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{})})).task;};
       await run(tech,'accept');await progressPhoto('no-roster');await run(tech,'submit-order');
       const {processInspectionNotifications}=await import('../server/workers/inspectionNotifications.mjs');
       const env={APP_ENV:'production',DISPATCH_NOTIFICATION_MODE:'dingtalk',DINGTALK_AGENT_ID:'1',DINGTALK_APP_KEY:'test',DINGTALK_APP_SECRET:'test',DISPATCH_APP_URL:'https://example.com'};
@@ -408,7 +410,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await seed('scheduler-notices');
       let local=(await service.executeDispatchAction(advisor,'scheduler-notices',{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianId:tech.id,dueAt})).task;
       const run=async(actor,action,extra={})=>{
-        const command={action,expectedVersion:local.version,requestId:randomUUID(),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra};
+        const command={action,expectedVersion:local.version,requestId:randomUUID(),...(action==='inspect'&&!extra.rejectedItemIds?.length?{workHours:2.5}:{}),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra};
         local=(await service.executeDispatchAction(actor,'scheduler-notices',command)).task;
         return command;
       };
