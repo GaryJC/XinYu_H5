@@ -1,3 +1,4 @@
+import { assertNoActiveRepair } from './repositories/repairRoundRepository.mjs';
 import {readLicenseExceptions} from './repositories/vehicleLicenseExceptionRepository.mjs';
 import {assertWorkOrderAccess} from './repositories/accessRepository.mjs';
 import { attachPreRepairPhotos } from "./repositories/preRepairPhotoRepository.mjs";
@@ -136,7 +137,7 @@ export async function transitionWorkOrder(id, status, actor, action, patch = {})
     if (!order) throw new HttpError(404, "委托单不存在");
     if (["维修中", "待结算"].includes(status)) throw new HttpError(409, "请使用派工流程操作");
     assertStatusTransition(order.status, status);
-    if(status==="完成") await assertWorkHoursRecorded(client,id);
+    if(status==="完成") {await assertNoActiveRepair(client,id);await assertWorkHoursRecorded(client,id);}
     const safePatch = sanitizeTransitionPatch(status, patch);
     const repairItems = status === "维修中"
       ? order.repairItems.map((item) => ({
@@ -289,6 +290,7 @@ export async function createSettlementForOrder(orderId, actor) {
     const order = await findWorkOrderById(client, orderId, true);
     if (!order) throw new HttpError(404, "委托单不存在");
     assertSettlementAllowed(order.status);
+    await assertNoActiveRepair(client,orderId);
     if (order.settlementStatements.length) return order;
     const amount = Number(order.settlementAmount || order.estimatedFee || order.repairItems.reduce((sum, item) => sum + Number(item.laborFee || 0), 0));
     const id = createId("settle");

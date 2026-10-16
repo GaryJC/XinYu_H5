@@ -1,0 +1,29 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {applyDispatchAction,canInspect} from '../server/domain/dispatchPolicy.mjs';
+const manager={id:'m',name:'管理员',role:'manager',active:true,shopId:'s'};
+const tech={id:'t',name:'技师',role:'technician',active:true,shopId:'s'};
+const advisor={...manager,id:'a',role:'advisor'},inspector={...manager,id:'i',role:'inspector'};
+const people=[manager,advisor,tech,inspector],now='2026-10-15T10:00:00Z';
+const completed=()=>({orderId:'wo',shopId:'s',orderStatus:'完成',stage:'维修完成',version:4,technicianId:'t',technicianIds:['t'],firstStartedAt:'2026-10-01T10:00:00Z',completedAt:'2026-10-02T10:00:00Z',workHours:3,participantIds:['t'],items:[{id:1,name:'原项目一',status:'已完工',startedBy:'t',inspectedBy:'i',inspectedAt:'2026-10-02T10:00:00Z'},{id:2,name:'原项目二',status:'已完工'}]});
+const input=()=>({action:'reopen-repair',expectedVersion:4,requestId:randomUUID(),reworkItemIds:[1],additionalItems:['补充项目'],reason:'客户反馈仍有异响',technicianIds:['t'],dueAt:'2026-10-17T10:00:00Z'});
+const act=(t,action,user=tech,extra={})=>applyDispatchAction(t,{action,expectedVersion:t.version,requestId:randomUUID(),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra},user,people,now);
+test('completed repair reopens selected projects only, with independent fresh progress and original immutable',()=>{
+ const original=completed(),copy=structuredClone(original);let task=applyDispatchAction(original,input(),advisor,people,now);
+ assert.deepEqual(original,copy);assert.equal(task.orderStatus,'完成');assert.equal(task.repairRound,1);assert.equal(task.stage,'待接单');assert.equal(task.completedAt,undefined);assert.equal(task.firstStartedAt,undefined);assert.equal(task.workHours,3);
+ assert.deepEqual(task.items.map(i=>[i.id,i.status]),[[1,'待开工'],[-1,'待开工']]);
+ assert.throws(()=>act(task,'reopen-repair',manager,{...input(),expectedVersion:task.version}),/仅维修完成/);
+ task=act(task,'accept');assert.equal(task.stage,'维修中');task=act(task,'pause',tech,{pauseReason:'待配件'});task=act(task,'resume');task=act(task,'submit-order');
+ assert.equal(canInspect(task,{...tech,role:'inspector'}),false);
+ task=act(task,'claim-inspection',inspector);task=act(task,'inspect',inspector,{rejectedItemIds:[-1],reason:'仍有渗漏'});
+ assert.equal(task.repairRound,1);assert.equal(task.items[0].status,'已完工');task=act(task,'start-order');assert.equal(task.items[0].status,'已完工');task=act(task,'submit-order');task=act(task,'claim-inspection',inspector);task=act(task,'inspect',inspector);
+ assert.equal(task.stage,'维修完成');assert.ok(task.items.every(i=>i.status==='已完工'));
+ task=applyDispatchAction(task,{...input(),expectedVersion:task.version,reworkItemIds:[],additionalItems:['第二轮新增']},manager,people,now);assert.equal(task.repairRound,2);assert.equal(task.items[0].id,-2);
+});
+test('reopening enforces permissions, version, mandatory reason, projects and future deadline',()=>{
+ for(const fields of [{reason:' '},{reworkItemIds:[],additionalItems:[]},{reworkItemIds:[999]},{reworkItemIds:[1,1]},{additionalItems:[' ']},{dueAt:now},{expectedVersion:0}]) assert.throws(()=>applyDispatchAction(completed(),{...input(),...fields},manager,people,now));
+ for(const actor of [tech,inspector,{...manager,active:false},{...manager,shopId:'other'}]) assert.throws(()=>applyDispatchAction(completed(),input(),actor,people,now));
+ for(const execution of [{executionMode:'field'},{executionMode:'outsourced'}]) assert.throws(()=>applyDispatchAction(completed(),{...input(),...execution},manager,people,now));
+ const task=applyDispatchAction(completed(),{...input(),executionMode:'outsourced',contractor:'承包方',outsourcingMode:'onsite',technicianIds:[]},manager,people,now);assert.equal(task.executionMode,'outsourced');assert.equal(task.stage,'待接单');
+});

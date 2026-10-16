@@ -21,7 +21,7 @@ export function messageBody(notification, recipient, env=process.env) {
   const escape=value=>String(value||'').replace(/[\\`*_{}\[\]<>#|]/g,' ');
   return {agent_id:Number(env.DINGTALK_AGENT_ID),userid_list:recipient,to_all_user:false,
     msg:{msgtype:'markdown',markdown:{title:`${notification.kind} · ${data.plate}`,
-      text:`### ${escape(notification.kind)} · ${escape(data.plate)}\n\n${escape(data.dispatchNo || data.orderId)}\n\n${escape(data.summary)}\n\n预计完工：${due}${data.reason?`\n\n${escape(data.reason)}`:''}\n\n[查看维修任务](${url.toString()})`}}};
+      text:`### ${escape(notification.kind)} · ${escape(data.plate)}\n\n${escape(data.dispatchNo || data.orderId)}\n\n${escape(data.summary)}${data.actorName?`\n\n操作人：${escape(data.actorName)}`:''}${data.notice?`\n\n${escape(data.notice)}`:''}\n\n预计完工：${due}${data.reason?`\n\n${escape(data.reason)}`:''}\n\n[查看维修任务](${url.toString()})`}}};
 }
 export async function sendWorkNotification(notification, recipient, {env=process.env,fetcher=fetch,token=getDingTalkAccessToken,buildMessage=messageBody}={}) {
   const mode=notificationConfiguration(env);

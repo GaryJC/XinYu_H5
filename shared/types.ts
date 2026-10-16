@@ -204,9 +204,10 @@ export type PreRepairPhotos = {
 };
 
 export type StoredFile = {
+  repairRound?: number;
   id: string;
   orderId?: string;
-  kind: "repair_progress_photo" | "vehicle_license" | "repair_order_photo" | "damage_photo" | "signature_image" | "other";
+  kind: "repair_parts_photo" | "repair_progress_photo" | "vehicle_license" | "repair_order_photo" | "damage_photo" | "signature_image" | "other";
   storageProvider: "oss" | "local";
   bucket: string;
   objectKey: string;
@@ -380,7 +381,13 @@ export type DispatchItem = {
   startAt?: string; finishAt?: string; startedBy?: string; finishedBy?: string;
   inspectorName?: string; inspectedBy?: string; inspectedAt?: string; pickedAt?: string;
 };
+export type RepairPhotoUploadRequest = {requestId:string;fileName:string;mimeType:string;imageBase64:string;repairRound?:number;purpose?:"progress"|"parts"};
+export type PartsRequirement = { mode:"none"|"list"|"photo"; items:Array<{name:string;quantity:number;unit:string}>; photoIds:string[]; recordedBy?:string; recordedName?:string; recordedAt?:string };
 export type DispatchTask = DispatchExecution & {
+  partsRequirement?:PartsRequirement;
+  vehicleModel?:string; vehicleMileage?:string; customerName?:string; advisor?:string;
+  repairRound?: number; roundReason?: string; roundOpenedAt?: string; roundOpenedBy?: string; roundOpenedName?: string;
+  repairCatalog?: Array<{id:number;name:string}>;
   reworkReason?: string; rejectedItemIds?: number[]; inspectionClaimedAt?: string;
   workHours?: number; workHoursRecordedBy?: string; workHoursRecordedName?: string; workHoursRecordedAt?: string;
   technicianIds?: string[]; participantIds?: string[];
@@ -395,14 +402,16 @@ export type DispatchTask = DispatchExecution & {
   plate: string; dispatchNo: string; arrivalDate: string; orderStatus: WorkOrderStatus;
   faultDescription: string; overdue: boolean;
 };
-export type DispatchActionName = "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
+export type DispatchActionName = "record-parts" | "reopen-repair" | "retry-scheduler-notifications" | "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
 export type DispatchActionRequest = DispatchExecution & {
+  partsRequirement?:PartsRequirement;
+  reworkItemIds?: number[]; additionalItems?: string[];
   workHours?: number;
   technicianIds?: string[];
   action: DispatchActionName; expectedVersion: number; requestId: string;
   technicianId?: string; inspectorId?: string; itemId?: number; rejectedItemIds?: number[];
   dueAt?: string; urgent?: boolean; note?: string; reason?: string; pauseReason?: string;
-  notificationId?: string;
+  notificationId?: string; notificationJobId?: string;
 };
 export type DispatchMetric = "pendingAccept" | "unstarted" | "working" | "paused" | "inspection" | "completed" | "overdue" | "rework";
 export type TechnicianSummary = {
@@ -415,11 +424,16 @@ export type DispatchNotification = {
 };
 export type DispatchEvent = {
   id: string; actorName: string; action: string; at: string;
-  detail: { workHours?: number; previousWorkHours?: number; note?: string; reason?: string; technicianName?: string; previousTechnicianName?: string; dueAt?: string; previousDueAt?: string; urgent?: boolean; stage: DispatchStage; itemId?: number; rejectedItemIds?: number[]; pauseReason?: string };
+  detail: { partsRequirement?:PartsRequirement; repairRound?:number; items?:DispatchItem[]; reworkItemIds?:number[]; additionalItems?:string[]; workHours?: number; previousWorkHours?: number; note?: string; reason?: string; technicianName?: string; previousTechnicianName?: string; dueAt?: string; previousDueAt?: string; urgent?: boolean; stage: DispatchStage; itemId?: number; rejectedItemIds?: number[]; pauseReason?: string };
 };
+export type RepairRound = { round:number; task:DispatchTask; reason:string; openedBy?:string; openedName:string; openedAt?:string; completedAt?:string; closed:boolean };
 export type DispatchDetail = {
+  repairRounds?: RepairRound[];
+  schedulerNotifications?: Array<{eventId:string;kind:string;status:string;error:string}>;
   inspectionNotification?: {status: string; error: string};
   task: DispatchTask; events: DispatchEvent[]; notifications: DispatchNotification[];
-  files: Array<Pick<StoredFile,"id"|"orderId"|"kind"|"originalName"|"mimeType"|"sizeBytes"|"createdAt"|"uploadedBy"|"uploadedName">>;
+  files: Array<Pick<StoredFile,"id"|"orderId"|"kind"|"originalName"|"mimeType"|"sizeBytes"|"createdAt"|"uploadedBy"|"uploadedName"|"repairRound">>;
 };
 export type DispatchPeople = { technicians: UserProfile[]; inspectors: UserProfile[] };
+
+export type RepairTaskCounts = { pendingAccept: number; inProgress: number; inspection: number; completed: number };

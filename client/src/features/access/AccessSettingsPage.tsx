@@ -34,7 +34,7 @@ export function AccessSettingsPage({users}:{users:UserProfile[]}){
     {c.error?<Alert type="error" showIcon title="权限数据读取失败" description={c.error} action={<Button disabled={c.loading} onClick={()=>void c.refresh()}>重试</Button>}/>:null}
     <Card className="access-main-card"><Tabs items={[
       {key:'employees',label:'员工识别结果',children:employeePanel},
-      {key:'roles',label:'页面与权限',children:<div className="access-section"><div className="access-section-heading"><div><h3>四种固定角色</h3><p>请在钉钉中按下方准确名称创建并分配角色，任选一个对应名称即可。无需填写角色 ID，部门在钉钉管理。员工打开应用即可免登录进入对应页面。</p></div></div>{rolesPanel}<Alert type="info" showIcon title="多角色只生效一个" description="优先级：门店管理员 → 服务顾问 / 派单员 / 调度员 → 检验员 → 维修工 / 维修技师。不是将多个角色的权限相加。"/></div>}
+      {key:'roles',label:'页面与权限',children:<div className="access-section"><div className="access-section-heading"><div><h3>四种固定角色</h3><p>请在钉钉中按下方准确名称创建并分配角色，任选一个对应名称即可。无需填写角色 ID，部门在钉钉管理。员工打开应用即可免登录进入对应页面。</p></div></div>{rolesPanel}<Alert type="info" showIcon title="多角色只生效一个" description="优先级：门店管理员 → 服务顾问 → 检验员 → 维修工 / 维修技师。不是将多个角色的权限相加。"/></div>}
     ]}/></Card>
     <Drawer open={Boolean(employee)} onClose={()=>setSelected(undefined)} title={employee?`${employee.name} · 当前权限`:'员工权限'} size={mobile?'100%':480}>
       {employee?<div className="access-section"><Space wrap><Tag color="blue">{roleLabels[employee.role]}</Tag>{statusTag(employee)}</Space>

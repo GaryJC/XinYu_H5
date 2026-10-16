@@ -2,7 +2,7 @@ import roleDefinitions from "../../../../shared/dingtalkRoles.json";
 export { roleDefinitions };
 import type { RoleKey } from '../../../../shared/types';
 import { dispatchEnabled } from '../dispatch/dispatchAvailability';
-export const roleLabels:Record<RoleKey,string>={manager:'门店管理员',advisor:'服务顾问 / 派单员',technician:'维修工 / 维修技师',inspector:'检验员'};
+export const roleLabels:Record<RoleKey,string>={manager:'门店管理员',advisor:'服务顾问',technician:'维修工 / 维修技师',inspector:'检验员'};
 export const roleOptions=Object.entries(roleLabels).map(([value,label])=>({value,label}));
 const fullRoleDescriptions:Record<RoleKey,{scope:string;abilities:string;limits:string}>={
   manager:{scope:'本店工单与人员',abilities:'开单、派工、录入工时、检验、结算与查看员工权限',limits:'不能检验本人参与维修的项目'},

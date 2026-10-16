@@ -7,7 +7,7 @@ import { measureStage } from "./http/requestTiming.mjs";
 
 let ossClient;
 
-const allowedFileKinds = new Set(["repair_progress_photo", "vehicle_license", "repair_order_photo", "damage_photo", "signature_image", "other"]);
+const allowedFileKinds = new Set(["repair_parts_photo", "repair_progress_photo", "vehicle_license", "repair_order_photo", "damage_photo", "signature_image", "other"]);
 const allowedImageMimeTypes = new Set([
   "image/jpeg",
   "image/png",

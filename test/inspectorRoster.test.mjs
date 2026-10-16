@@ -24,3 +24,13 @@ test('repair photos reject MIME spoofing, missing request identity and excessive
  assert.throws(()=>validateRepairPhoto({requestId:'valid-request',mimeType:'image/jpeg',imageBase64:Buffer.from('<script>').toString('base64')}));
  assert.throws(()=>validateRepairPhoto({requestId:'valid-request',mimeType:'image/png',imageBase64:'A'.repeat(13*1024*1024)}));
 });
+
+test('scheduler roster selects only service advisors and managers and preserves store and disabled status',async()=>{
+ const {listDingTalkRoleMembers}=await import('../server/integrations/dingtalk/inspectorRoster.mjs');
+ const result=await listDingTalkRoleMembers(['advisor','manager'],{token:async()=>'',fetcher:async(url,request)=>({ok:true,json:async()=>({errcode:0,result:url.pathname.endsWith('/list')?{list:[{roles:[{id:1,name:'派单员'},{id:2,name:'调度员'},{id:3,name:'服务顾问'},{id:4,name:'门店管理员'},{id:5,name:'检验员'}]}],hasMore:false}:{list:[{userid:String(JSON.parse(request.body).role_id)}],hasMore:false}})})});
+ assert.deepEqual(result.ids,['3','4']);
+ const {syncSchedulerRoster}=await import('../server/integrations/dingtalk/schedulerRoster.mjs');
+ const profiles=['服务顾问','门店管理员','服务顾问','服务顾问'].map((name,index)=>({userId:String(index),active:true,roles:[{id:String(index),name}]}));
+ const audience=await syncSchedulerRoster('s',{list:async()=>({ids:['0','1','2','3'],accessToken:''}),profile:async({userId})=>profiles[Number(userId)],find:async id=>id==='0'?undefined:{id,active:id!=='2',shopId:id==='3'?'other':'s'},snapshot:async()=>{},upsert:async({profile,mapping,existingUser})=>({id:profile.userId,role:mapping.role,shopId:mapping.shopId,active:profile.active&&existingUser?.active!==false})});
+ assert.deepEqual(audience,['0','1']);
+});

@@ -164,7 +164,7 @@ export async function handleApiRequest(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/files") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     const body = await readJson(req);
-    if (body.kind === "repair_progress_photo") throw new HttpError(400, "维修照片请通过维修任务上传");
+    if (["repair_parts_photo","repair_progress_photo"].includes(body.kind)) throw new HttpError(400, "维修照片请通过维修任务上传");
     if (body.orderId) await assertWorkOrderAccess(body.orderId, currentUser);
     sendJson(res, 201, await saveUploadedFile({ ...body, uploadedBy: currentUser.id }));
     return true;

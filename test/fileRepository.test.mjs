@@ -55,3 +55,21 @@ test("advisors can view files from every work order but cannot modify another ad
     (error) => error instanceof HttpError && error.status === 403
   );
 });
+
+
+test("assigned mechanics can preview reception photos without access to other shops or identity documents", async () => {
+  const mechanic = {id:"tech", role:"technician", shopId:"shop-hq"};
+  const file = {shop_id:"shop-hq",technician_id:"tech",technician_ids:["tech","partner"],kind:"repair_order_photo"};
+  const database = {query: async () => ({rows:[file]})};
+  for(const kind of ["repair_order_photo","damage_photo"]) {
+    file.kind=kind;
+    await assert.doesNotReject(()=>assertFileReadAccess("photo",mechanic,database));
+    await assert.doesNotReject(()=>assertFileReadAccess("photo",{...mechanic,id:"partner"},database));
+    await assert.rejects(()=>assertFileReadAccess("photo",{...mechanic,id:"unassigned"},database),e=>e.status===403);
+    await assert.rejects(()=>assertFileReadAccess("photo",{...mechanic,shopId:"other"},database),e=>e.status===403);
+  }
+  for(const kind of ["vehicle_license","signature_image"]) {
+    file.kind=kind;
+    await assert.rejects(()=>assertFileReadAccess("photo",mechanic,database),e=>e.status===403);
+  }
+});

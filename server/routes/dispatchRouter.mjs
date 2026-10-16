@@ -2,11 +2,12 @@ import { uploadRepairPhoto } from '../services/repairPhotoService.mjs';
 import { readJson, sendJson } from '../http/response.mjs';
 import { requireAnyRole } from '../domain/accessPolicy.mjs';
 import { DISPATCH_ROLES } from '../domain/dispatchPolicy.mjs';
-import { queryDispatchTasks, technicianSummaries, dispatchPeople, dispatchDetail, executeDispatchAction } from '../services/dispatchService.mjs';
+import { myRepairCounts, queryDispatchTasks, technicianSummaries, dispatchPeople, dispatchDetail, executeDispatchAction } from '../services/dispatchService.mjs';
 export async function handleDispatchRequest(req,res,url,actor) {
   if(!url.pathname.startsWith('/api/dispatch/')) return false;
   requireAnyRole(actor,DISPATCH_ROLES);
   const query=Object.fromEntries(url.searchParams);
+  if(req.method==='GET' && url.pathname==='/api/dispatch/my-counts') {sendJson(res,200,await myRepairCounts(actor));return true;}
   if(req.method==='GET' && url.pathname==='/api/dispatch/tasks') { sendJson(res,200,await queryDispatchTasks(actor,query)); return true; }
   if(req.method==='GET' && url.pathname==='/api/dispatch/technicians') { sendJson(res,200,await technicianSummaries(actor,query)); return true; }
   if(req.method==='GET' && url.pathname==='/api/dispatch/people') {

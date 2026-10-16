@@ -4,16 +4,16 @@ import { getDingTalkUserProfile, resolveDingTalkOrganizationMapping } from './or
 import definitions from '../../../shared/dingtalkRoles.json' with { type:'json' };
 import { findUserByDingTalkUserId, upsertUserFromDingTalk, saveDingTalkUserSnapshot } from '../../repositories/userRepository.mjs';
 
-export async function listInspectorRoleMembers({fetcher=fetch,token=getDingTalkAccessToken}={}) {
+export async function listDingTalkRoleMembers(roleKeys,{fetcher=fetch,token=getDingTalkAccessToken}={}) {
   const accessToken=await token();
   async function call(path,body) {
     const url=new URL(`https://oapi.dingtalk.com/topapi/role/${path}`);url.searchParams.set('access_token',accessToken);
     const response=await fetcher(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(10000)});
     const data=await response.json();
-    if(!response.ok || data.errcode!==0 || !data.result) throw new Error('获取钉钉检验员角色失败，请检查通讯录授权');
+    if(!response.ok || data.errcode!==0 || !data.result) throw new Error('获取钉钉角色失败，请检查通讯录授权');
     return data.result;
   }
-  const names=definitions.find(r=>r.role==='inspector').names;
+  const names=definitions.filter(r=>roleKeys.includes(r.role)).flatMap(r=>r.names);
   const roles=[];
   for(let offset=0,pages=0;;pages++) {
     if(pages>=1000) throw new Error('钉钉角色分页过多');
@@ -34,6 +34,7 @@ export async function listInspectorRoleMembers({fetcher=fetch,token=getDingTalkA
   }
   return {ids:[...ids],accessToken};
 }
+export const listInspectorRoleMembers=options=>listDingTalkRoleMembers(['inspector'],options);
 export async function syncInspectorRoster(shopId,{list=listInspectorRoleMembers,profile=getDingTalkUserProfile,find=findUserByDingTalkUserId,upsert=upsertUserFromDingTalk,snapshot=saveDingTalkUserSnapshot,database=pool}={}) {
   const {ids,accessToken}=await list();
   const eligible=[];

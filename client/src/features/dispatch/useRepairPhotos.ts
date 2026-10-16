@@ -3,7 +3,7 @@ import { prepareOcrImage } from '../../shared/images/prepareOcrImage';
 import { createRequestId } from '../../shared/api/requestId';
 import { dispatchApi } from './dispatchApi';
 import type { DispatchController } from './useDispatchController';
-type Upload = { id:string; file:File; state:'uploading'|'failed'; error?:string; body?:Awaited<ReturnType<typeof prepareOcrImage>> };
+type Upload = { repairRound:number; id:string; file:File; state:'uploading'|'failed'; error?:string; body?:Awaited<ReturnType<typeof prepareOcrImage>> };
 export function useRepairPhotos(controller:DispatchController,onBlocked:(blocked:boolean)=>void) {
   const [uploads,setUploads]=useState<Upload[]>([]);
   const pending=useRef<Upload[]>([]),mounted=useRef(true);
@@ -15,11 +15,11 @@ export function useRepairPhotos(controller:DispatchController,onBlocked:(blocked
     update(pending.current.map(p=>p.id===row.id?{...p,state:'uploading',error:undefined}:p));
     try {
       row.body ||= await prepareOcrImage(row.file);
-      await dispatchApi.uploadPhoto(orderId,{...row.body,requestId:row.id});
+      await dispatchApi.uploadPhoto(orderId,{...row.body,requestId:row.id,repairRound:row.repairRound});
       await controller.refreshDetail();
       update(pending.current.filter(p=>p.id!==row.id));
     } catch(error) {update(pending.current.map(p=>p.id===row.id?{...row,state:'failed',error:error instanceof Error?error.message:'上传失败'}:p));}
   }
-  async function select(file:File) {const row:Upload={id:createRequestId(),file,state:'uploading'};update([...pending.current,row]);await upload(row);}
+  async function select(file:File) {const row:Upload={repairRound:controller.detail!.task.repairRound||0,id:createRequestId(),file,state:'uploading'};update([...pending.current,row]);await upload(row);}
   return {uploads,select,retry:upload,remove:(id:string)=>update(pending.current.filter(p=>p.id!==id))};
 }

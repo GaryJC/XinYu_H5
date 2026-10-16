@@ -1,15 +1,16 @@
+import { readRepairRounds } from './repairRoundRepository.mjs';
 import { pool } from '../database/pool.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 import { assertDispatchAccess, canInspect, dispatchMetric } from '../domain/dispatchPolicy.mjs';
 const projection = `select wo.id as order_id, wo.shop_id, wo.vehicle_plate, wo.dispatch_no, wo.arrival_date,
-  wo.status as order_status, wo.fault_description, wo.technician as legacy_technician,
+  wo.vehicle_model,wo.vehicle_mileage,wo.customer_name,wo.advisor,wo.status as order_status, wo.fault_description, wo.technician as legacy_technician,
   dt.technician_id, dt.inspector_id, dt.stage, dt.version, dt.data,
   coalesce((select jsonb_agg(jsonb_build_object('id',ri.client_item_id,'name',ri.name,
     'status',ri.status,'startAt',nullif(ri.start_at,''),'finishAt',nullif(ri.finish_at,'')) order by ri.item_no)
     from repair_items ri where ri.order_id=wo.id),'[]'::jsonb) as repair_items
   from work_orders wo left join dispatch_tasks dt on dt.order_id=wo.id`;
 export function mapTask(row) {
-  const task = { items:row.repair_items, ...row.data, orderId:row.order_id, shopId:row.shop_id,
+  const task = { items:row.repair_items, ...row.data, vehicleModel:row.vehicle_model||'',vehicleMileage:row.vehicle_mileage||'',customerName:row.customer_name||'',advisor:row.advisor||'', orderId:row.order_id, shopId:row.shop_id,
     technicianId:row.technician_id || undefined, inspectorId:row.inspector_id || undefined,
     stage:['草稿','待客户签字'].includes(row.order_status)?row.order_status:row.stage || (['待结算','完成'].includes(row.order_status)?'维修完成':row.order_status==='维修中'?'维修中':'待派工'),
     version:row.version || 0, plate:row.vehicle_plate, dispatchNo:row.dispatch_no || '', arrivalDate:row.arrival_date,
@@ -38,11 +39,15 @@ export async function dispatchPeople(actor, client=pool) {
   return rows.map(r=>({id:r.id,name:r.name,role:r.role,active:r.active,shopId:r.shop_id,inspectorRoleMember:r.inspector_role_member}));
 }
 export async function saveDispatchTask(client, task) {
-  const {orderId,shopId,technicianId,inspectorId,stage,version,plate,dispatchNo,arrivalDate,orderStatus,faultDescription,overdue,...data}=task;
+  const {orderId,shopId,technicianId,inspectorId,stage,version,plate,dispatchNo,arrivalDate,orderStatus,faultDescription,overdue,repairCatalog,vehicleModel,vehicleMileage,customerName,advisor,...data}=task;
   await client.query(`insert into dispatch_tasks(order_id,shop_id,technician_id,inspector_id,stage,version,data)
     values($1,$2,$3,$4,$5,$6,$7) on conflict(order_id) do update set technician_id=excluded.technician_id,
     inspector_id=excluded.inspector_id,stage=excluded.stage,version=excluded.version,data=excluded.data,updated_at=now()`,
     [orderId,shopId,technicianId||null,inspectorId||null,stage,version,JSON.stringify(data)]);
+  if(task.repairRound) {
+    await client.query('update work_orders set updated_at=now() where id=$1',[orderId]);
+    return; // Commercial fields and original repair_items are immutable during subsequent rounds.
+  }
   const started=task.firstStartedAt || task.startHistoryUnknown || task.items.some(i=>i.startAt || ['维修中','待检验','已完工'].includes(i.status));
   const status=stage==='维修完成'?(orderStatus==='完成'?'完成':'待结算'):started?'维修中':'待派工';
   await client.query(`update work_orders set status=$2,technician=$3,inspector=$4,updated_at=now() where id=$1`,[orderId,status,task.technicianName||'待派工',task.inspectorName||'待检验']);
@@ -54,15 +59,27 @@ export async function dispatchDetail(actor,id,client=pool) {
   const {rows:notifications}=await client.query(`select n.id,n.kind,n.status,n.error,n.created_at,n.attempts,n.task_id,u.name
     from dispatch_notifications n join users u on u.id=n.recipient_id where n.order_id=$1
     ${['manager','advisor'].includes(actor.role)?'':'and n.recipient_id=$2'} order by n.created_at desc`,['manager','advisor'].includes(actor.role)?[id]:[id,actor.id]);
-  const {rows:files}=await client.query("select id,kind,original_name,mime_type,size_bytes,created_at,uploaded_by,(select name from users where users.id=files.uploaded_by) as uploaded_name from files where order_id=$1 and kind in ('repair_progress_photo','repair_order_photo','damage_photo','other') order by created_at",[id]);
+  const {rows:files}=await client.query("select repair_round,id,kind,original_name,mime_type,size_bytes,created_at,uploaded_by,(select name from users where users.id=files.uploaded_by) as uploaded_name from files where order_id=$1 and kind in ('repair_parts_photo','repair_progress_photo','repair_order_photo','damage_photo','other') order by created_at",[id]);
   const {rows:jobs}=await client.query('select status,error from dispatch_inspection_notifications where order_id=$1 order by event_id desc limit 1',[id]);
-  return {task,inspectionNotification:jobs[0],events:events.map(r=>({id:String(r.id),actorName:r.actor_name,action:r.action,detail:r.detail,at:r.at.toISOString()})),
+  const schedulerNotifications=['manager','advisor'].includes(actor.role)?(await client.query('select event_id::text as "eventId",kind,status,error from dispatch_scheduler_notifications where order_id=$1 order by event_id desc limit 20',[id])).rows:undefined;
+  const repairRounds=await readRepairRounds(client,id);
+  const catalog=new Map();
+  for(const r of repairRounds) for(const i of r.task.items) catalog.set(i.id,{id:i.id,name:i.name});
+  for(const i of task.items) catalog.set(i.id,{id:i.id,name:i.name});
+  task.repairCatalog=[...catalog.values()];
+  return {task,repairRounds,schedulerNotifications,inspectionNotification:jobs[0],events:events.map(r=>({id:String(r.id),actorName:r.actor_name,action:r.action,detail:r.detail,at:r.at.toISOString()})),
     notifications:notifications.map(r=>({id:r.id,kind:r.kind,status:r.status,error:r.error,createdAt:r.created_at.toISOString(),attempts:r.attempts,taskId:r.task_id,recipientName:r.name})),
-    files:files.map(r=>({uploadedBy:r.uploaded_by,uploadedName:r.uploaded_name,id:r.id,orderId:id,kind:r.kind,originalName:r.original_name,mimeType:r.mime_type,sizeBytes:Number(r.size_bytes),createdAt:r.created_at.toISOString()}))};
+    files:files.map(r=>({repairRound:r.repair_round,uploadedBy:r.uploaded_by,uploadedName:r.uploaded_name,id:r.id,orderId:id,kind:r.kind,originalName:r.original_name,mimeType:r.mime_type,sizeBytes:Number(r.size_bytes),createdAt:r.created_at.toISOString()}))};
 }
 
 export async function assertWorkHoursRecorded(client,orderId) {
-  const {rows}=await client.query('select data from dispatch_tasks where order_id=$1',[orderId]);
+  const {rows}=await client.query(`select dt.stage,case when dt.data ? 'workHours' then dt.data else coalesce(r.snapshot,dt.data) end as data from dispatch_tasks dt left join dispatch_repair_rounds r on r.order_id=dt.order_id and r.round_no=0 where dt.order_id=$1`,[orderId]);
+  if(rows[0]?.stage!=='维修完成') throw new HttpError(409,'请先完成维修检验再完结工单');
   const data=rows[0]?.data;
   if(!Number.isFinite(data?.workHours) || data.workHours<=0 || !data.workHoursRecordedBy || !data.workHoursRecordedAt) throw new HttpError(409,'请先由服务顾问／派单人员在派工台录入实际工时，再完结工单');
+}
+
+export async function assertRepairPhotoRecorded(client,task) {
+  const {rows}=await client.query("select 1 from files where order_id=$1 and kind='repair_progress_photo' and coalesce(repair_round,0)=$2 limit 1",[task.orderId,task.repairRound||0]);
+  if(!rows.length) throw new HttpError(409,'请先上传至少一张本轮维修照片，再提交完工');
 }

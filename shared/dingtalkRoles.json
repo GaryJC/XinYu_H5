@@ -11,9 +11,7 @@
   {
     "role": "advisor",
     "names": [
-      "服务顾问",
-      "派单员",
-      "调度员"
+      "服务顾问"
     ],
     "homeRoute": "order-create",
     "page": "委托开单（可进入派工台）",

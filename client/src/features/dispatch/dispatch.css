@@ -108,21 +108,15 @@
 .repair-photos .file-button .ant-btn{height:44px;border-radius:8px;font-size:16px}
 .technician-detail>.ant-tag{align-self:flex-start}
 
-/* Distinct category colors with a stronger selected state. */
-.technician-page .ant-segmented{background:transparent;padding:0}
-.technician-page .ant-segmented-group{gap:8px}
-.technician-page .ant-segmented-thumb{display:none}
-.technician-page .ant-segmented-item{border-radius:8px;box-shadow:inset 0 0 0 1px currentColor;transition:background .15s,color .15s}
-.technician-page .repair-category-pending{background:#fff7e6;color:#8c5700}
-.technician-page .repair-category-working{background:#eaf3ff;color:#165dba}
-.technician-page .repair-category-inspection{background:#e6f7f7;color:#0c7478}
-.technician-page .repair-category-completed{background:#eef8e8;color:#367523}
-.technician-page .repair-category-pending.ant-segmented-item-selected{background:#ad6800;color:#fff}
-.technician-page .repair-category-working.ant-segmented-item-selected{background:#1677ff;color:#fff}
-.technician-page .repair-category-inspection.ant-segmented-item-selected{background:#087f84;color:#fff}
-.technician-page .repair-category-completed.ant-segmented-item-selected{background:#3c842a;color:#fff}
-.technician-page .ant-segmented-item-selected{box-shadow:0 2px 6px #0002;font-weight:600}
-.technician-page .ant-segmented-item:hover:not(.ant-segmented-item-selected){filter:brightness(.97)}
+/* Quiet tabs: one shared surface, underline and weight indicate selection. */
+.technician-page .repair-task-tabs{background:#fff;padding:0;border-radius:10px;box-shadow:inset 0 -1px #e5e9ef}
+.technician-page .repair-task-tabs .ant-segmented-group{gap:0}
+.technician-page .repair-task-tabs .ant-segmented-thumb{opacity:0;box-shadow:none}
+.technician-page .repair-task-tabs .ant-segmented-item{position:relative;background:transparent;border-radius:0;color:#657085;box-shadow:none;min-width:0}
+.technician-page .repair-task-tabs .repair-tab-active{color:#263247;font-weight:600}
+.technician-page .repair-task-tabs .repair-tab-active .ant-segmented-item-label::before{opacity:1;top:auto;pointer-events:none;content:'';position:absolute;bottom:0;left:16%;right:16%;height:3px;background:#1677ff;border-radius:3px 3px 0 0}
+.technician-page .repair-task-tabs .ant-segmented-item-label{position:relative;min-height:48px;padding:4px 6px;white-space:normal;line-height:1.5;overflow-wrap:anywhere}
+@media(max-width:767px){.technician-page .repair-task-tabs .ant-segmented-group{gap:0}.technician-page .repair-task-tabs .ant-segmented-item-label{font-size:13px;padding:6px 2px}}
 .technician-flags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
 .technician-page .ant-tag,.technician-detail .ant-tag{padding:3px 10px;margin:0;border-radius:6px;line-height:20px}
 .technician-action-buttons{display:flex;gap:12px}
@@ -131,3 +125,22 @@
 .repair-decline-button:not(:disabled){background:#fff1f0}
 .repair-pause-button:not(:disabled){background:#fff7e6}
 @media(max-width:767px){.technician-page .ant-segmented-group{gap:6px}.technician-page .ant-segmented-item-label{padding:0 4px}.technician-action-buttons{gap:8px}}
+
+.reopen-project-options { display:flex; flex-direction:column; gap:12px; }
+.reopen-project-options .ant-checkbox-wrapper { min-height:44px; align-items:center; margin-inline-start:0; overflow-wrap:anywhere; }
+.reopen-extra-item { display:flex; gap:8px; margin-bottom:12px; }
+.reopen-extra-item .ant-input { min-width:0; }
+.repair-round-items { padding-left:0; list-style:none; }
+.repair-round-items li { padding:12px 0; border-bottom:1px solid #edf0f5; overflow-wrap:anywhere; }
+.repair-round-items small { color:#66758d; }
+.parts-mode-options { display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
+.parts-mode-options .ant-radio-wrapper { min-height:44px; align-items:center; margin-inline-end:0; }
+.parts-shortcuts { display:grid; gap:16px; margin-bottom:20px; }
+.parts-shortcuts h3 { margin:0 0 8px; font-size:14px; font-weight:600; color:#526079; }
+.parts-shortcuts .ant-btn { min-height:44px; }
+.parts-entry { padding:12px 0; border-bottom:1px solid #edf0f5; }
+.parts-entry .ant-form-item { margin-bottom:12px; }
+.parts-entry-quantity { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:8px; align-items:end; }
+.parts-entry-quantity .ant-input-number { width:100%; }
+.parts-entry-quantity > .ant-btn { margin-bottom:12px; }
+.dispatch-sheet-summary .ant-descriptions-item-content { overflow-wrap:anywhere; }
