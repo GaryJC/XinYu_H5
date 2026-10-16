@@ -1,0 +1,45 @@
+.parts-requirement-modal .ant-modal-title{font-size:18px;line-height:1.5}
+.parts-requirement-modal .ant-modal-body{padding-top:8px;scrollbar-gutter:stable}
+.parts-dialog-intro{margin:0 0 18px}
+.parts-dialog-intro>strong{font-size:14px;margin-right:12px}
+.parts-dialog-intro>span{font-size:12px;color:#788497}
+.parts-dialog-intro p{margin:8px 0 0;font-size:12px;line-height:1.7;color:#788497}
+.parts-dialog-modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;margin-bottom:20px}
+.parts-dialog-modes .ant-radio-button-wrapper{text-align:center;padding-inline:4px;height:42px;line-height:40px;font-size:13px}
+.parts-list-workflow{display:flex;flex-direction:column;gap:24px}
+.parts-section-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;min-height:32px}
+.parts-section-heading h3{margin:0;font-size:14px;font-weight:600}
+.parts-section-heading h3 span{margin-left:6px;font-size:12px;font-weight:400;color:#788497}
+.parts-section-heading>span{font-size:12px;color:#788497}
+.parts-section-heading .ant-btn{font-size:13px;padding-inline:0;min-height:32px}
+.parts-selected .ant-table-cell{padding:8px 4px!important;font-size:12px}
+.parts-selected .ant-table-thead>tr>th{color:#657085;background:#f5f7fa;font-weight:500}
+.parts-selected .ant-input,.parts-selected .ant-input-number{width:100%;font-size:14px;border-radius:6px;min-height:38px}
+.parts-selected .ant-input-number-input{padding-inline:8px;height:36px}
+.parts-selected .ant-btn{padding:4px;width:28px;min-width:28px;height:38px}
+.parts-selected .parts-section-heading .ant-btn{width:auto;padding:0}
+.parts-empty-selection{padding:22px 12px;border:1px dashed #dce2ea;background:#fafbfd;border-radius:8px;color:#788497;text-align:center;font-size:13px;line-height:1.7}
+.parts-catalog.ant-collapse{background:#fff;border-color:#e8ecf1}
+.parts-catalog .ant-collapse-header{font-size:13px;align-items:center!important;padding:12px 14px!important}
+.parts-catalog-count{font-size:12px;color:#788497}
+.parts-catalog .ant-collapse-content-box{padding:0 14px 14px!important}
+.parts-catalog-options{display:flex;flex-wrap:wrap;gap:8px}
+.parts-catalog-options .ant-btn{font-size:13px;height:36px;min-height:36px;padding-inline:10px;box-shadow:none}
+.parts-catalog-options .is-selected.ant-btn:disabled{background:#edf5ff;border-color:#bdd8ff;color:#3579c7}
+.parts-none-state{display:flex;gap:12px;padding:20px;border:1px solid #dceadf;background:#f4faf6;border-radius:10px;font-size:14px;color:#307649}
+.parts-none-state>.anticon{margin-top:3px}
+.parts-none-state p{margin:6px 0 0;font-size:12px;line-height:1.7;color:#657085}
+.parts-photo-section{padding:16px;background:#f7f9fc;border:1px solid #e8ecf1;border-radius:10px}
+.parts-photo-hint{font-size:12px;line-height:1.7;color:#788497;margin:0 0 16px}
+.parts-photo-section .repair-photo-grid{margin-top:16px}
+.parts-requirement-modal .ant-alert{margin-top:16px}
+.parts-requirement-modal .ant-modal-footer{margin-top:20px;padding-top:16px;border-top:1px solid #edf0f4}
+@media(max-width:575px){
+ .parts-requirement-modal .ant-modal-container{padding:20px 16px 16px}
+ .parts-requirement-modal .ant-modal-title{font-size:17px;padding-right:20px}
+ .parts-requirement-modal .ant-modal-body{max-height:calc(100dvh - 180px)!important}
+ .parts-requirement-modal .ant-modal-footer{display:grid!important;grid-template-columns:80px minmax(0,1fr);gap:10px}
+ .parts-requirement-modal .ant-modal-footer>.ant-btn{margin:0!important;padding-inline:8px;font-size:14px;min-height:44px}
+ .parts-list-workflow{gap:20px}
+ .parts-selected .ant-input{padding-inline:6px}
+}

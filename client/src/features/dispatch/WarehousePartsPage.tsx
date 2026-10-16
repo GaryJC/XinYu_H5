@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Alert, Button, Card, Drawer, Empty, Input, Select, Space, Tag } from 'antd';
 import type { DispatchController } from './useDispatchController';
-import { PartsRequirementSummary } from './PartsRequirementSummary';
-import { actionLabels, displayTime } from './dispatchLabels';
+import { WarehousePartsDetail } from './WarehousePartsDetail';
+import './warehouse.css';
+import { displayTime } from './dispatchLabels';
 
 export function WarehousePartsPage({controller:c}:{controller:DispatchController}) {
   const [status,setStatus]=useState('pending');
@@ -22,21 +23,11 @@ export function WarehousePartsPage({controller:c}:{controller:DispatchController
       <p>申请人：{task.partsRequirement?.recordedName || '未记录'} · {displayTime(task.partsRequirement?.recordedAt)}</p>
       <Button onClick={()=>c.select(task.orderId)}>查看申请</Button>
     </Card>)}
-    <Drawer title="配件申请详情" open={Boolean(c.selectedId)} onClose={()=>c.select()} size={560} styles={{wrapper:{maxWidth:'100vw'}}}>
+    <Drawer destroyOnHidden title="配件申请详情" className="warehouse-drawer" open={Boolean(c.selectedId)} onClose={()=>c.select()} size={600} styles={{wrapper:{maxWidth:'100vw'}}}
+      footer={detail?<div className="warehouse-footer"><p>确认仅作申请留痕，不代表出库或入库</p><Button block size="large" type={parts && parts.mode!=='none' && !parts.confirmedAt?'primary':'default'} loading={c.busy} onClick={()=>{if(parts && parts.mode!=='none' && !parts.confirmedAt) void c.act({action:'confirm-parts'});else c.select();}}>{parts && parts.mode!=='none' && !parts.confirmedAt?'确认配件申请':'关闭详情'}</Button></div>:null}>
       {c.error?<Alert type="error" showIcon title={c.error}/>:null}
-      {!detail?<p role="status">正在加载申请…</p>:<>
-        <h3>{detail.task.plate} · {detail.task.dispatchNo || detail.task.orderId}</h3>
-        <p>托修单位：{detail.task.customerName || '未填写'} · 车型：{detail.task.vehicleModel || '未填写'}</p>
-        <p>主修人：{detail.task.technicianName || '未记录'}</p>
-        <PartsRequirementSummary value={parts}/>
-        {parts && parts.mode!=='none' && !parts.confirmedAt?<Button type="primary" loading={c.busy} onClick={()=>void c.act({action:'confirm-parts'})}>确认配件申请</Button>:null}
-        <h3>申请与确认记录</h3>
-        {detail.events.filter(e=>['accept','record-parts','confirm-parts'].includes(e.action)).map(event=><Card size="small" key={event.id}>
-          <p>{actionLabels[event.action as keyof typeof actionLabels]} · {event.actorName} · {displayTime(event.at)}</p>
-          <p>{event.detail.repairRound?`返工第 ${event.detail.repairRound} 轮`:'首次维修'}</p>
-          <PartsRequirementSummary value={event.detail.partsRequirement}/>
-        </Card>)}
-      </>}
+      {!detail?<p role="status">正在加载申请…</p>:<WarehousePartsDetail detail={detail}/>}
+
     </Drawer>
   </section>;
 }

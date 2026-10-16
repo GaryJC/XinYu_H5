@@ -1,3 +1,5 @@
+import { TaskOverview } from './TaskOverview';
+import './task-detail.css';
 import { RepairPhotoPanel } from './RepairPhotoPanel';
 import { DispatchSheetSummary } from './DispatchSheetSummary';
 import { PartsRequirementDialog } from './PartsRequirementDialog';
@@ -52,8 +54,8 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     try {const blob=await requestBlob(`/api/files/${encodeURIComponent(id)}/content`);const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);}
     catch(e){controller.setError(e instanceof Error?e.message:'附件加载失败');}
   }
-  return <div className="dispatch-detail">
-    <div><Space wrap><Tag>{executionLabels[task.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(task)}</Tag>{task.urgent?<Tag color="red">加急</Tag>:null}{task.overdue?<Tag color="red">超期</Tag>:null}{task.repairRound?<Tag color="orange">返工第 {task.repairRound} 轮</Tag>:null}{task.rework&&!task.repairRound?<Tag color="orange">返工第 {task.reworkCount} 次</Tag>:null}</Space></div>
+  return <div className={`dispatch-detail task-detail-layout${actions.length?" has-task-actions":""}`}>
+    <TaskOverview task={task}><Space wrap><Tag>{executionLabels[task.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(task)}</Tag>{task.urgent?<Tag color="red">加急</Tag>:null}{task.overdue?<Tag color="red">超期</Tag>:null}{task.repairRound?<Tag color="orange">返工第 {task.repairRound} 轮</Tag>:null}{task.rework&&!task.repairRound?<Tag color="orange">返工第 {task.reworkCount} 次</Tag>:null}</Space></TaskOverview>
     {task.stage==='维修完成'&&task.orderStatus!=='完成'&&task.workHours===undefined?<Alert type="warning" showIcon title="待调度人员录入工时" description="检验已通过，请由服务顾问／派单人员录入实际工时后再完结工单。"/>:null}
     {unsigned?<Alert type="info" showIcon title="客户签字后才能派工" description="请在委托开单中完成工单与客户签字，签字后即可从派工台安排维修。"/>:null}
     {task.needsReview?<Alert type="warning" title="历史任务待核对" description="历史记录未能完整确认人员或进度；管理员核对后才能继续，不补造历史时间。"/>:null}
@@ -62,10 +64,24 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     {task.stage==='暂停'?<Alert type="warning" title={`暂停：${task.pauseReason}`} description={`${task.pauseNote||''} · 自 ${displayTime(task.pausedAt)}，已暂停 ${Math.max(0,Math.floor((Date.now()-Date.parse(task.pausedAt||''))/60000))} 分钟`}/>:null}
     {task.stage==='待检验'?<Alert type="info" title={task.inspectorName?`已由 ${task.inspectorName} 接手检验`:'等待检验员领取'}/>:null}
     {controller.error?<Alert type="error" showIcon title={controller.error}/>:null}
-    <Space wrap>{actions.map(action=><Button key={action} type={['reopen-repair','assign','accept','submit','inspect','claim-inspection'].includes(action)?'primary':'default'} loading={controller.busy} disabled={controller.busy||photoBlocked} onClick={()=>{
-      if(action==='accept')setPartsDialog(true);else if(['resume','reoffer','remind','claim-inspection','retry-inspection-notifications'].includes(action)) void controller.act({action});else setDialog(action);
-    }}>{actionLabels[action]}</Button>)}</Space>
-    <p className="dispatch-muted">{task.executionMode==='outsourced'?'承包方':'维修员工'}：{task.technicianName||"待指派"} · 预计完工：{displayTime(task.dueAt)}</p>
+    <section className="task-projects">
+    <h3>维修项目 · {task.items.filter(i=>['待检验','已完工'].includes(i.status)).length}/{task.items.length} 已提报或通过</h3>
+    {task.items.map(item=><Card key={item.id} size="small" title={item.name} extra={<Tag>{item.status}</Tag>}>
+      <div className="dispatch-item-times"><span>开工：{displayTime(item.startAt)}</span><span>完工提报：{displayTime(item.finishAt)}</span><span>检验：{item.inspectorName||'未检验'} · {displayTime(item.inspectedAt)}</span><span>领料确认：{displayTime(item.pickedAt)}</span></div>
+      {owner&&!unsigned&&!task.needsReview&&['待开工','维修中'].includes(task.stage)?<Space wrap>
+        {['待开工','待派工','待领料'].includes(item.status)?<Button loading={controller.busy} disabled={controller.busy} aria-label={`开工：${item.name}`} onClick={()=>void controller.act({action:'start',itemId:item.id})}>开工</Button>:null}
+        {item.status==='维修中'?<Button type="primary" loading={controller.busy} disabled={controller.busy} aria-label={`项目完成：${item.name}`} onClick={()=>void controller.act({action:'finish',itemId:item.id})}>项目完成</Button>:null}
+        {!item.pickedAt?<Button loading={controller.busy} disabled={controller.busy} onClick={()=>void controller.act({action:'pick',itemId:item.id})}>确认领料</Button>:null}
+      </Space>:null}
+    </Card>)}
+    <p className="dispatch-muted">领料仅为领取记录，不代表库存扣减；无需配件的维修可直接开工。</p>
+    </section>
+    <PartsRequirementSummary value={task.partsRequirement}/>
+    {owner?<RepairPhotoPanel controller={controller} editable={!unsigned&&!task.needsReview&&['待开工','维修中','暂停'].includes(task.stage)} onBlocked={setPhotoBlocked}/>:null}
+    {owner&&['待开工','维修中','暂停'].includes(task.stage)?<Button onClick={()=>setPartsDialog(true)} disabled={controller.busy}>登记配件需求</Button>:null}
+    {files.length?<><h3>维修附件</h3><Space wrap>{files.map(file=>file.mimeType.startsWith('image/')?<AuthenticatedImage key={file.id} fileId={file.id} alt={file.originalName} width={140} height={100}/>:<Button key={file.id} onClick={()=>void openFile(file.id,file.originalName)}>{file.originalName}</Button>)}</Space></>:null}
+    {controller.manager&&detail.inspectionNotification&&detail.inspectionNotification.status!=='ready'&&detail.inspectionNotification.status!=='obsolete'?<Alert type={detail.inspectionNotification.error?'warning':'info'} title={detail.inspectionNotification.error||'正在安排检验通知'} description="工单已进入待检验队列，可重试检验通知。"/>:null}
+    {controller.manager?detail.schedulerNotifications?.filter(job=>job.error).map(job=><Alert key={job.eventId} type="warning" showIcon title={`${job.kind}通知未完成`} description={job.error} action={<Button loading={controller.busy} disabled={controller.busy} onClick={()=>void controller.act({action:'retry-scheduler-notifications',notificationJobId:job.eventId})}>重试</Button>}/>):null}
     <Collapse size="small" items={[{key:"info",label:"任务信息与关键时间",children:<Descriptions column={1} size="small" items={[
       {key:'number',label:'委托单',children:task.orderId},
       {key:'dispatch',label:'派工号',children:task.dispatchNo||'待业务平台回填'},
@@ -87,24 +103,9 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
       {key:'note',label:'派工备注',children:task.note||'—'},
       {key:'submission',label:'提报说明',children:task.submissionNote||'—'}
     ]}/>}]}/>
-    <DispatchSheetSummary task={task} files={files}/>
-    <PartsRequirementSummary value={task.partsRequirement}/>
-    {owner?<RepairPhotoPanel controller={controller} editable={!unsigned&&!task.needsReview&&['待开工','维修中','暂停'].includes(task.stage)} onBlocked={setPhotoBlocked}/>:null}
-    {owner&&['待开工','维修中','暂停'].includes(task.stage)?<Button onClick={()=>setPartsDialog(true)} disabled={controller.busy}>登记配件需求</Button>:null}
-    <h3>维修项目 · {task.items.filter(i=>['待检验','已完工'].includes(i.status)).length}/{task.items.length} 已提报或通过</h3>
-    {task.items.map(item=><Card key={item.id} size="small" title={item.name} extra={<Tag>{item.status}</Tag>}>
-      <div className="dispatch-item-times"><span>开工：{displayTime(item.startAt)}</span><span>完工提报：{displayTime(item.finishAt)}</span><span>检验：{item.inspectorName||'未检验'} · {displayTime(item.inspectedAt)}</span><span>领料确认：{displayTime(item.pickedAt)}</span></div>
-      {owner&&!unsigned&&!task.needsReview&&['待开工','维修中'].includes(task.stage)?<Space wrap>
-        {['待开工','待派工','待领料'].includes(item.status)?<Button loading={controller.busy} disabled={controller.busy} aria-label={`开工：${item.name}`} onClick={()=>void controller.act({action:'start',itemId:item.id})}>开工</Button>:null}
-        {item.status==='维修中'?<Button type="primary" loading={controller.busy} disabled={controller.busy} aria-label={`项目完成：${item.name}`} onClick={()=>void controller.act({action:'finish',itemId:item.id})}>项目完成</Button>:null}
-        {!item.pickedAt?<Button loading={controller.busy} disabled={controller.busy} onClick={()=>void controller.act({action:'pick',itemId:item.id})}>确认领料</Button>:null}
-      </Space>:null}
-    </Card>)}
-    <p className="dispatch-muted">领料仅为领取记录，不代表库存扣减；无需配件的维修可直接开工。</p>
-    {files.length?<><h3>维修附件</h3><Space wrap>{files.map(file=>file.mimeType.startsWith('image/')?<AuthenticatedImage key={file.id} fileId={file.id} alt={file.originalName} width={140} height={100}/>:<Button key={file.id} onClick={()=>void openFile(file.id,file.originalName)}>{file.originalName}</Button>)}</Space></>:null}
-    {controller.manager&&detail.inspectionNotification&&detail.inspectionNotification.status!=='ready'&&detail.inspectionNotification.status!=='obsolete'?<Alert type={detail.inspectionNotification.error?'warning':'info'} title={detail.inspectionNotification.error||'正在安排检验通知'} description="工单已进入待检验队列，可重试检验通知。"/>:null}
-    {controller.manager?detail.schedulerNotifications?.filter(job=>job.error).map(job=><Alert key={job.eventId} type="warning" showIcon title={`${job.kind}通知未完成`} description={job.error} action={<Button loading={controller.busy} disabled={controller.busy} onClick={()=>void controller.act({action:'retry-scheduler-notifications',notificationJobId:job.eventId})}>重试</Button>}/>):null}
+    <Collapse items={[{key:"sheet",label:"完整派工单与接车照片",children:<DispatchSheetSummary task={task} files={files}/>}]} />
     <RepairRoundHistory detail={detail}/>
+    <Collapse items={[{key:"history",label:"通知与操作记录",children:<>
     <h3>通知记录</h3>
     <p className="dispatch-muted">消息发送成功不代表维修工已接单。结果未知时不会自动重发。</p>
     {!notifications.length?<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无通知记录"/>:notifications.map(n=><div className="dispatch-notification" key={n.id}>
@@ -123,6 +124,10 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
       {event.detail.dueAt?<p>预计完工：{displayTime(event.detail.dueAt)}{event.detail.urgent?' · 加急':''}</p>:null}
       {event.detail.pauseReason?<p>{event.detail.pauseReason}</p>:null}
       {event.detail.reason?<p>{event.detail.reason}</p>:null}{event.detail.note?<p>{event.detail.note}</p>:null}</div>}))}/>
+    </>}]} />
+    {actions.length?<div className="task-detail-actions"><Space wrap>{actions.map(action=><Button key={action} type={['reopen-repair','assign','accept','submit','inspect','claim-inspection'].includes(action)?'primary':'default'} loading={controller.busy} disabled={controller.busy||photoBlocked} onClick={()=>{
+      if(action==='accept')setPartsDialog(true);else if(['resume','reoffer','remind','claim-inspection','retry-inspection-notifications'].includes(action)) void controller.act({action});else setDialog(action);
+    }}>{actionLabels[action]}</Button>)}</Space></div>:null}
     {partsDialog?<PartsRequirementDialog controller={controller} accepting={task.stage==='待接单'} onClose={()=>setPartsDialog(false)}/>:null}
     {dialog?<DispatchActionDialog key={`${task.orderId}-${dialog}`} action={dialog} task={task} controller={controller} onClose={()=>setDialog(undefined)}/>:null}
   </div>;

@@ -56,7 +56,7 @@ export function DispatchPage({user,view}:{user:UserProfile;view:string}) {
       {title:'预计完工',dataIndex:'dueAt',render:displayTime},
       {title:'操作',key:'action',render:(_,t)=><Button onClick={()=>c.select(t.orderId)}>详情</Button>}
     ]}/>}
-    <Drawer open={Boolean(c.selectedId)} onClose={()=>{if(!c.busy)c.select(undefined);}} title={c.detail?`${c.detail.task.plate} · 维修任务`:'维修任务'} size={mobile?'100%':700} destroyOnHidden>
+    <Drawer className="repair-task-drawer" open={Boolean(c.selectedId)} onClose={()=>{if(!c.busy)c.select(undefined);}} title={c.detail?`${c.detail.task.plate} · 维修任务`:'维修任务'} size={mobile?'100%':700} destroyOnHidden>
       {c.detail||c.selectedId?<DispatchTaskDetail key={c.detail?.task.orderId||c.selectedId} controller={c} user={user}/>:null}
     </Drawer>
   </section>;

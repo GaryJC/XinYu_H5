@@ -1,3 +1,5 @@
+import { TaskOverview } from './TaskOverview';
+import './task-detail.css';
 import { DispatchSheetSummary } from './DispatchSheetSummary';
 import { PartsRequirementDialog } from './PartsRequirementDialog';
 import { PartsRequirementSummary } from './PartsRequirementSummary';
@@ -26,8 +28,7 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
     if(dialog==='decline') {if(await c.act({action:dialog,reason:reason==='其他'?note:reason}))setDialog(undefined);}
   }
   return <div className="technician-detail">
-    <RepairStatusTag status={taskStatusLabel(task)}/>
-    <p className="dispatch-muted">预计完工：{displayTime(task.dueAt)}</p>
+    <TaskOverview task={task}><RepairStatusTag status={taskStatusLabel(task)}/></TaskOverview>
     {c.error?<Alert type="error" showIcon title={c.error}/>:null}
     {task.needsReview?<Alert type="warning" title="请联系服务顾问核对任务后再维修"/>:null}
     {task.feedback?<Alert type="warning" title="已反馈无法接单，等待服务顾问处理" description={task.feedback}/>:null}
@@ -36,13 +37,13 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
     {task.repairRound&&task.rework&&task.rejectedItemIds?.length?<Alert type="error" showIcon title="本轮检验退回，请重新维修指定项目" description={task.reworkReason}/>:null}
     {task.rework&&!task.repairRound?<Alert type="warning" title="需要返工" description={task.reworkReason||'请查看退回维修项目'}/>:null}
     {task.stage==='待检验'?<Alert type="info" title={task.inspectorName?`${task.inspectorName}已接手检验`:'已提交，等待检验员领取'}/>:null}
-    <DispatchSheetSummary task={task} files={c.detail!.files}/>
     <section><h3>主要作业与增修项目</h3><ul className="technician-items">{task.items.map(item=><li key={item.id}><span>{item.name}{item.id<0?<Tag>增修项目</Tag>:null}</span>{task.rejectedItemIds?.includes(item.id)&&item.status!=='已完工'?<Tag color="orange">退回维修</Tag>:<RepairStatusTag status={item.status}/>}</li>)}</ul></section>
     {task.faultDescription?<section><h3>故障描述</h3><p>{task.faultDescription}</p></section>:null}
     {task.note?<section><h3>派工备注</h3><p>{task.note}</p></section>:null}
     <PartsRequirementSummary value={task.partsRequirement}/>
     {editable&&['待开工','维修中','暂停'].includes(task.stage)?<Button block disabled={c.busy||blocked} onClick={()=>setPartsDialog(true)}>补充／修改配件需求</Button>:null}
     <RepairPhotoPanel controller={c} editable={canPhoto} onBlocked={photoBlocked}/>
+    <Collapse items={[{key:"sheet",label:"完整派工单与接车照片",children:<DispatchSheetSummary task={task} files={c.detail!.files}/>}]} />
     <Collapse items={[{key:'more',label:'更多信息',children:<><p>委托单：{task.orderId}</p><p>接单：{displayTime(task.acceptedAt)}</p><p>开工：{displayTime(task.firstStartedAt)}</p>{c.detail!.events.map(e=><p key={e.id}>{displayTime(e.at)} · {e.actorName} · {actionLabels[e.action as keyof typeof actionLabels]||e.action} · {e.detail.stage}{e.detail.reason?` · ${e.detail.reason}`:''}</p>)}</>}]} />
     {primary&&editable&&!task.needsReview?<div className="technician-action-bar"><div className="technician-action-buttons">
       {['待接单','待开工','维修中'].includes(task.stage)?<Button className={task.stage==='待接单'?'repair-decline-button':'repair-pause-button'} danger={task.stage==='待接单'} color={task.stage==='待接单'?'danger':'orange'} variant="outlined" onClick={()=>{setNote('');setReason(task.stage==='待接单'?'时间冲突':'待配件');setDialog(task.stage==='待接单'?'decline':'pause');}} disabled={c.busy||blocked||Boolean(task.feedback)}>{task.stage==='待接单'?'无法接单':'暂停维修'}</Button>:null}
