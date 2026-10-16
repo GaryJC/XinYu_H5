@@ -4,7 +4,7 @@ import { PreRepairPhotos } from "../../pre-repair-photos/PreRepairPhotos";
 import { DraftDispatchFields } from "../../dispatch/DraftDispatchFields";
 import { dispatchEnabled } from "../../dispatch/dispatchAvailability";
 import { FileSignature, LockKeyhole, Maximize2, Minimize2, Plus, Save, Send, Trash2 } from "lucide-react";
-import { Alert, Button, DatePicker, Form, Grid, Input, Select, Tooltip } from "antd";
+import { Alert, Button, DatePicker, Form, Grid, Input, Radio, Select, Tooltip } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import { WorkOrder, WorkOrderDraft } from "../../../../../shared/types";
@@ -169,6 +169,13 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               onManualLicenseLookup={lookupVehicleLicenseForDevelopment}
             />
 
+            <Form.Item label="是否军车">
+              <Radio.Group aria-label="是否军车" disabled={!canEditForm} value={draft.vehicle.isMilitary === true}
+                onChange={event => setDraft(current => ({...current, vehicle:{...current.vehicle, isMilitary:event.target.value === true}}))}>
+                <Radio value={false}>否</Radio><Radio value={true}>是</Radio>
+              </Radio.Group>
+            </Form.Item>
+            {draft.vehicle.isMilitary ? <Alert type="info" showIcon title="军车无需上传行驶证" style={{marginBottom:16}}/> : <>
             <Form.Item
               className="ocr-form-item"
               label="行驶证照片（选填）"
@@ -185,6 +192,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 />
               </div>
             </Form.Item>
+            </>}
 
             <div className="field-grid">
               <Field required error={fieldError("车牌号码")} disabled={!canEditForm} label="车牌号码" value={draft.vehicle.plate} onChange={(value) => updateVehicle("plate", value)} />

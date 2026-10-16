@@ -294,6 +294,7 @@ export type WorkOrder = {
   technician: string;
   inspector: string;
   vehicle: {
+    isMilitary?: boolean;
     plate: string;
     vin: string;
     mileage: string;

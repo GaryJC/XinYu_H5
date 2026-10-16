@@ -73,6 +73,7 @@ test("signing requires the legacy model and organization codes used by Runfeng",
 });
 
 test("signing permits orders without a vehicle-license attachment", () => {
+  assert.doesNotThrow(() => assertOrderReadyForSignature({ ...readyOrder, vehicle: {...readyOrder.vehicle, isMilitary: true}, files: [] }));
   assert.doesNotThrow(() => assertOrderReadyForSignature({ ...readyOrder, files: [] }));
   assert.doesNotThrow(() => assertOrderReadyForSignature({ ...readyOrder, files: undefined }));
 });

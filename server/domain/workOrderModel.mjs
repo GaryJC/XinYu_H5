@@ -36,7 +36,8 @@ export function workOrderValues(order) {
     order.feeNote || "",
     order.platformOrderNo || null,
     parseDate(order.createdAt),
-    parseDate(order.updatedAt)
+    parseDate(order.updatedAt),
+    order.vehicle?.isMilitary === true
   ];
 }
 
@@ -62,6 +63,7 @@ export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecord
     technician: row.technician,
     inspector: row.inspector,
     vehicle: {
+      isMilitary: row.vehicle_is_military === true,
       plate: row.vehicle_plate,
       vin: row.vehicle_vin,
       mileage: row.vehicle_mileage,

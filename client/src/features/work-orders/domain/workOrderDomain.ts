@@ -46,6 +46,7 @@ export function createEmptyDraft(advisor = ""): WorkOrderDraft {
     technician: "待派工",
     inspector: "待检验",
     vehicle: {
+      isMilitary: false,
       plate: "",
       vin: "",
       mileage: "",

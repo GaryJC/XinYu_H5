@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildTrend, countBy, createOrderFromDraft, createOrderId, repairActionText, workOrderValues } from "../server/domain/workOrderModel.mjs";
+import { buildTrend, countBy, createOrderFromDraft, createOrderId, repairActionText, rowToWorkOrder, workOrderValues } from "../server/domain/workOrderModel.mjs";
 
 test("countBy aggregates values without database state", () => {
   const result = countBy(
@@ -29,7 +29,7 @@ test("repair actions have stable audit labels", () => {
 
 test("PostgreSQL work-order values preserve the legacy model code", () => {
   const values = workOrderValues({ vehicle: { modelLegacyCode: "DZXPST" } });
-  assert.equal(values.length, 34);
+  assert.equal(values.length, 35);
   assert.equal(values[17], "DZXPST");
 });
 
@@ -56,4 +56,20 @@ test("new work orders ignore client-controlled workflow fields", () => {
   assert.deepEqual(order.signatures, {});
   assert.equal(order.repairItems[0].status, "待派工");
   assert.equal(order.repairItems[0].owner, "待派工");
+});
+
+
+test("military vehicle flag is persisted as a boolean and defaults false for older orders", () => {
+  assert.equal(workOrderValues({ vehicle: { isMilitary: true } }).at(-1), true);
+  assert.equal(workOrderValues({ vehicle: { isMilitary: false } }).at(-1), false);
+  assert.equal(workOrderValues({}).at(-1), false);
+  assert.equal(workOrderValues({ vehicle: { isMilitary: "false" } }).at(-1), false);
+});
+
+
+test("reloaded orders retain military selection while historical orders default to civilian", () => {
+  const reload = value => rowToWorkOrder({ vehicle_is_military: value }, [], [], [], [], [], [], []);
+  assert.equal(reload(true).vehicle.isMilitary, true);
+  assert.equal(reload(false).vehicle.isMilitary, false);
+  assert.equal(reload(undefined).vehicle.isMilitary, false);
 });
