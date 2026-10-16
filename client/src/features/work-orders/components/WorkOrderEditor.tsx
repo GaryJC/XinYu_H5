@@ -4,10 +4,10 @@ import "../work-order-form.css";
 import { PreRepairPhotos } from "../../pre-repair-photos/PreRepairPhotos";
 import { DraftDispatchFields } from "../../dispatch/DraftDispatchFields";
 import { dispatchEnabled } from "../../dispatch/dispatchAvailability";
-import { FileSignature, LockKeyhole, Maximize2, Minimize2, Plus, Save, Send, Trash2 } from "lucide-react";
+import { LockKeyhole, Plus, Save, Send, Trash2 } from "lucide-react";
 import { Alert, Button, DatePicker, Form, Grid, Input, Radio, Select, Tooltip } from "antd";
 import dayjs from "dayjs";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { WorkOrder, WorkOrderDraft } from "../../../../../shared/types";
 import { canCreateOrder, canSendSignature } from "../domain/permissions";
 import { Checklist, Field, TextArea } from "../../../shared/ui/FormControls";
@@ -19,17 +19,11 @@ import { VehicleReferenceTags } from "../../vehicle-identity/VehicleReferenceTag
 import { CreateVehicleReferenceButton } from "../../vehicle-identity/CreateVehicleReferenceButton";
 import { WorkbenchController } from "../../workbench/useWorkbenchController";
 import { belongings, exteriorIssues } from "../../workbench/workbenchConfig";
-import { SignaturePad } from "../../signature/SignaturePad";
-import { Summary } from "../../../shared/ui/FormControls";
-import { FormActionBar, FormDialog, FormSection, FormSurface } from "../../../shared/ui/BusinessForm";
-import { sumLabor } from "../domain/workOrderDomain";
+import { WorkOrderSignatureDialog } from "../../signature/WorkOrderSignatureDialog";
+import { FormActionBar, FormSection, FormSurface } from "../../../shared/ui/BusinessForm";
 
 export function WorkOrderEditor({ controller }: { controller: WorkbenchController }) {
   const [signatureSession, setSignatureSession] = useState<{ token: string; order: WorkOrder }>();
-  const [signatureImage, setSignatureImage] = useState("");
-  const [signatureSubmitting, setSignatureSubmitting] = useState(false);
-  const [signatureResult, setSignatureResult] = useState("");
-  const [landscapeSignature, setLandscapeSignature] = useState(false);
   const [showSignatureValidation, setShowSignatureValidation] = useState(false);
   const [modelCreateRequest, setModelCreateRequest] = useState<{ key: number; name: string }>();
   const [organizationCreateRequest, setOrganizationCreateRequest] = useState<{ key: number; name: string }>();
@@ -50,7 +44,6 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const canResumeSignature = Boolean(selectedOrder?.status === "待客户签字" && selectedOrder.signatureToken && !selectedOrder.signatureTokenUsed);
   const signatureDisabled = Boolean(controller.preRepairPhotos.uploading) || !canResumeSignature && (!canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder)));
   const signatureDisabledReason = selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) ? `当前状态“${selectedOrder.status}”不能再次发起签字` : "";
-  const signatureCompleted = signatureResult.includes("已保存");
   const signatureUploaded = Boolean(selectedOrder?.signatures.customer);
   const signatureUploadDescription = selectedOrder?.legacySyncStatus === "synced"
     ? `委托单已同步至润丰${selectedOrder.dispatchNo ? `，派工号：${selectedOrder.dispatchNo}` : ""}。`
@@ -60,53 +53,19 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
         ? "签字和委托单已上传，润丰正在处理。"
         : "签字和委托单已上传，正在等待润丰系统拉取。";
 
-  useEffect(() => {
-    if (!landscapeSignature) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [landscapeSignature]);
-
   async function handleSendSignature() {
     if (canResumeSignature && selectedOrder?.signatureToken) {
-      setSignatureImage("");
-      setSignatureResult("");
       setSignatureSession({ token: selectedOrder.signatureToken, order: selectedOrder });
       return;
     }
     const session = await sendSignature();
     if (session) {
       setShowSignatureValidation(false);
-      setSignatureImage("");
-      setSignatureResult("");
       setSignatureSession(session);
       return;
     }
     setShowSignatureValidation(true);
     scrollToFirstFormError();
-  }
-
-  async function handleCompleteSignature() {
-    if (!signatureSession || !signatureImage) return;
-    setSignatureSubmitting(true);
-    try {
-      await completeSignature(signatureSession.order, signatureSession.token, signatureImage);
-      setSignatureResult("客户签字已保存，委托单已进入润丰待拉取队列。");
-    } catch (error) {
-      setSignatureResult(error instanceof Error ? error.message : "签字保存失败");
-    } finally {
-      setSignatureSubmitting(false);
-    }
-  }
-
-  function closeSignatureModal() {
-    if (signatureSubmitting) return;
-    setSignatureSession(undefined);
-    setLandscapeSignature(false);
-    setSignatureImage("");
-    setSignatureResult("");
   }
 
   return (
@@ -443,62 +402,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               </FormActionBar>
 
           </Form>
-          <FormDialog
-            rootClassName="signature-confirm-modal"
-            open={Boolean(signatureSession)}
-            title="机动车维修委托确认"
-            width={isMobile ? "calc(100vw - 24px)" : 760}
-            closable={!signatureSubmitting}
-            mask={{ closable: false }}
-            onCancel={closeSignatureModal}
-            footer={[
-              <Button key="close" disabled={signatureSubmitting} onClick={closeSignatureModal}>{signatureCompleted ? "完成" : "取消"}</Button>,
-              <Button key="sign" type="primary" icon={<FileSignature size={16} />} loading={signatureSubmitting} disabled={!signatureImage || signatureCompleted} onClick={handleCompleteSignature}>
-                {signatureCompleted ? "已签字" : "确认签字"}
-              </Button>
-            ]}
-          >
-            {signatureSession ? (
-              <Form layout="vertical" requiredMark>
-                {signatureResult ? <Alert className="signature-message" type={signatureCompleted ? "success" : "error"} showIcon title={signatureResult} /> : <Alert className="signature-message" type="info" showIcon title="请客户核对委托信息并在下方手写签名。" />}
-                <div className="summary-grid">
-                  <Summary label="委托单号" value={signatureSession.order.id} />
-                  <Summary label="车牌号码" value={signatureSession.order.vehicle.plate} />
-                  <Summary label="车主名称/所属单位" value={signatureSession.order.customer.name} />
-                  <Summary label="车型" value={signatureSession.order.vehicle.model || "-"} />
-                  <Summary label="预计费用" value={`¥${signatureSession.order.estimatedFee || sumLabor(signatureSession.order.repairItems)}`} />
-                  <Summary label="旧件处置" value={signatureSession.order.oldPartsHandling} />
-                </div>
-                <div className="public-items">
-                  {signatureSession.order.repairItems.map((item) => <div key={item.id}><span>{item.name}</span><strong>¥{item.laborFee}</strong></div>)}
-                </div>
-                <Form.Item
-                  className="field"
-                  label={(
-                    <span className="signature-field-label">
-                      电子签名
-                      <Button type="link" size="small" icon={<Maximize2 size={15} />} disabled={signatureSubmitting || signatureCompleted} onClick={() => setLandscapeSignature(true)}>横屏签字</Button>
-                    </span>
-                  )}
-                  required
-                >
-                  <SignaturePad value={signatureImage} disabled={signatureSubmitting || signatureCompleted} onChange={setSignatureImage} />
-                </Form.Item>
-              </Form>
-            ) : null}
-          </FormDialog>
-          {landscapeSignature && signatureSession ? (
-            <div className="signature-landscape-overlay" role="dialog" aria-modal="true" aria-label="横屏签字">
-              <div className="signature-landscape-header">
-                <div>
-                  <strong>请客户横向签名</strong>
-                  <span>{signatureSession.order.vehicle.plate} · {signatureSession.order.customer.name}</span>
-                </div>
-                <Button type="primary" icon={<Minimize2 size={16} />} onClick={() => setLandscapeSignature(false)}>完成横屏签字</Button>
-              </div>
-              <SignaturePad landscapeMode value={signatureImage} disabled={signatureSubmitting || signatureCompleted} onChange={setSignatureImage} />
-            </div>
-          ) : null}
+          {signatureSession && <WorkOrderSignatureDialog key={signatureSession.token} session={signatureSession}
+            completeSignature={completeSignature} onClose={() => setSignatureSession(undefined)} />}
           </FormSurface>
   );
 }

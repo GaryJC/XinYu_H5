@@ -1,0 +1,47 @@
+import { useRef, useState } from "react";
+import type { UserProfile, WorkOrder } from "../../../../shared/types";
+import { workOrderApi } from "../work-orders/api/workOrderApi";
+import type { SignatureSession } from "./WorkOrderSignatureDialog";
+
+export function useArchiveSignature(user: UserProfile | undefined, onUpdated: (order: WorkOrder) => void, onSigned: () => void) {
+  const [session, setSession] = useState<SignatureSession>();
+  const [error, setError] = useState("");
+  const [starting, setStarting] = useState(false);
+  const running = useRef(false);
+  function canSign(order: WorkOrder) {
+    return Boolean(user && ["advisor", "manager"].includes(user.role)
+      && (user.role === "manager" || order.advisor === user.name)
+      && !order.signatures.customer && ["草稿", "待客户签字"].includes(order.status));
+  }
+  async function start(order: WorkOrder) {
+    if (running.current || !canSign(order)) return;
+    running.current = true;
+    setStarting(true);
+    setError("");
+    try {
+      const updated = order.status === "草稿"
+        ? await workOrderApi.createSignatureToken(order.id, user!.name)
+        : order.signatureToken ? await workOrderApi.findByToken(order.signatureToken) : undefined;
+      if (!updated || updated.id !== order.id || updated.status !== "待客户签字" || !updated.signatureToken || updated.signatureTokenUsed) {
+        throw new Error("签字会话不存在、已失效或已完成，请刷新委托单后重试。");
+      }
+      onUpdated(updated);
+      setSession({ order: updated, token: updated.signatureToken });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "发起签字失败");
+    } finally {
+      running.current = false;
+      setStarting(false);
+    }
+  }
+  async function completeSignature(order: WorkOrder, token: string, imageBase64: string) {
+    const file = await workOrderApi.uploadFile({ orderId: order.id, kind: "signature_image",
+      fileName: `signature-${order.id}.png`, mimeType: "image/png", imageBase64 });
+    const signed = await workOrderApi.signByToken(token, order.customer.name || "客户签名", file.id);
+    onUpdated(signed);
+    onSigned();
+    return signed;
+  }
+  return { session, error, starting, canSign, start, completeSignature,
+    close: () => setSession(undefined), clearError: () => setError("") };
+}

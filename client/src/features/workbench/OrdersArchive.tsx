@@ -1,3 +1,5 @@
+import { WorkOrderSignatureDialog } from "../signature/WorkOrderSignatureDialog";
+import { useArchiveSignature } from "../signature/useArchiveSignature";
 import { SubmittedOrderPhotos } from "../work-order-photos/SubmittedOrderPhotos";
 import { useArchiveLegacyRefresh } from "./useArchiveLegacyRefresh";
 import { WorkOrderPrintButton } from "../work-order-print/WorkOrderPrintButton";
@@ -17,6 +19,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
     searchTerm, setSearchTerm, searchedOrders, selectedId, selectOrder, setActiveNav,
     role, currentUser, deleteDraft, actionLoading
   } = controller;
+  const signature = useArchiveSignature(currentUser, controller.acceptRefreshedOrder, controller.refreshArchiveSummary);
   const [detailOrderId, setDetailOrderId] = useState<string>();
   const detailOrder = controller.orders.find(order => order.id === detailOrderId);
   const legacyRefresh = useArchiveLegacyRefresh(currentUser, controller.acceptRefreshedOrder, controller.refreshArchiveSummary);
@@ -38,6 +41,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
     selectOrder(order);
     setDeleteError("");
     legacyRefresh.clearReport();
+    signature.clearError();
     setDetailOrderId(order.id);
   }
 
@@ -136,6 +140,8 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
         onCancel={() => setDetailOrderId(undefined)}
         footer={(
           <div className="archive-detail-actions">
+            {detailOrder && signature.canSign(detailOrder) && <Button type="primary" loading={signature.starting}
+              onClick={() => void signature.start(detailOrder)}>{detailOrder.status === "草稿" ? "发起签字" : "继续签字"}</Button>}
             {detailOrder && legacyRefresh.canRefresh(detailOrder) && <Button icon={<RefreshCw size={16}/>} loading={Boolean(legacyRefresh.progress)}
               disabled={Boolean(legacyRefresh.progress)} onClick={() => void legacyRefresh.refresh([detailOrder])}>从润丰更新</Button>}
             {detailOrder && <WorkOrderPrintButton order={detailOrder} />}
@@ -161,9 +167,12 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
         styles={{ body: { maxHeight: isMobile ? "calc(100vh - 132px)" : "72vh", overflowY: "auto" } }}
       >
         {refreshReport}
+        {signature.error && <Alert type="error" showIcon title="发起签字失败" description={signature.error} style={{ marginBottom: 12 }} />}
         {deleteError ? <Alert type="error" showIcon title="删除草稿失败" description={deleteError} style={{ marginBottom: 12 }} /> : null}
         {detailOrder ? <OrderDetail key={detailOrder.id} order={detailOrder} isMobile={isMobile} user={currentUser} onUpdated={controller.acceptRefreshedOrder}/> : null}
       </Modal>
+      {signature.session && <WorkOrderSignatureDialog key={signature.session.token} session={signature.session}
+        completeSignature={signature.completeSignature} onClose={signature.close} />}
       {dispatchEnabled && dispatchOrder && currentUser && <QuickDispatchDialog key={dispatchOrder.id} orderId={dispatchOrder.id} user={currentUser} onClose={() => { setDispatchOrder(undefined); void controller.refreshWorkbench(); }} />}
     </Card>
   );
