@@ -5,7 +5,7 @@ import { dispatchEnabled } from '../dispatch/dispatchAvailability';
 export const roleLabels:Record<RoleKey,string>={warehouse:'仓管',manager:'门店管理员',advisor:'服务顾问',technician:'维修工 / 维修技师',inspector:'检验员'};
 export const roleOptions=Object.entries(roleLabels).map(([value,label])=>({value,label}));
 const fullRoleDescriptions:Record<RoleKey,{scope:string;abilities:string;limits:string}>={
-  warehouse:{scope:'本店配件申请',abilities:'查看清单、照片并确认申请',limits:'不能派工、维修、检验或结算；暂不处理出入库'},
+  warehouse:{scope:'本店配件申请',abilities:'查看清单、备料通知及确认配件出库',limits:'不能派工、检验或结算；出库后自动推进维修进度'},
   manager:{scope:'本店工单与人员',abilities:'开单、派工、录入工时、检验、结算与查看员工权限',limits:'不能检验本人参与维修的项目'},
   advisor:{scope:'本店工单、维修任务与人员负荷',abilities:'开单、客户签字、派工、改派、录入工时；处理本人负责工单的结算',limits:'不能执行检验或查看员工权限'},
   technician:{scope:'分配给本人的维修任务',abilities:'接单、领料、开工、暂停、完成项目与提报检验',limits:'不能派工、填写工时或执行检验'},

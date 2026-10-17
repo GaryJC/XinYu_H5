@@ -93,3 +93,27 @@ test('parts notifications reject recipients who lost warehouse or shop membershi
    assert.equal(sent,false);assert.equal(result.status,'failed');
  }
 });
+
+test('pickup and issue notices check the current request, round, handler and handover state',async()=>{
+ const {validatePartsPickupNotification:validate}=await import('../server/repositories/partsRequirementRepository.mjs');
+ const user={id:'t',active:true,role:'technician',shopId:'s'};
+ const row={order_id:'o',recipient_id:'t',kind:'配件可领取',payload:{shopId:'s',repairRound:1,partsRecordedAt:'at',partsRevision:3}};
+ const task={stage:'待开工',technician_id:'t',data:{repairRound:1,technicianIds:['t'],partsRequirement:{mode:'list',recordedAt:'at',revision:3,preparedAt:'ready'}}};
+ const database={query:async()=>({rows:[task]})};
+ assert.equal(await validate(row,user,database),true);
+ for(const patch of [{active:false},{role:'inspector'},{shopId:'other'}])assert.equal(await validate(row,{...user,...patch},database),false);
+ task.data.partsRequirement.revision=4;assert.equal(await validate(row,user,database),false);task.data.partsRequirement.revision=3;
+ task.data.repairRound=2;assert.equal(await validate(row,user,database),false);task.data.repairRound=1;
+ task.data.technicianIds=['other'];assert.equal(await validate(row,user,database),false);task.data.technicianIds=['t'];
+ task.data.partsRequirement.issuedAt='issued';assert.equal(await validate(row,user,database),false);
+ assert.equal(await validate({...row,kind:'配件已出库'},user,database),true);
+ task.stage='待派工';assert.equal(await validate({...row,kind:'配件已出库'},user,database),false);
+});
+test('obsolete pickup messages are canceled before sending; database failures remain retryable',async()=>{
+ const row={...notification,kind:'配件可领取',previous_status:'pending'};
+ let sent=0,finished;
+ const deps={claim:async()=>row,recipient:async()=>({active:true}),send:async()=>{sent++;return {status:'sent'};},finish:async(_,r)=>{finished=r;}};
+ await processNotification({...deps,validateParts:async()=>false});assert.equal(sent,0);assert.equal(finished.retryable,false);
+ await processNotification({...deps,validateParts:async()=>{throw new Error('db unavailable');}});assert.equal(sent,0);assert.equal(finished.retryable,true);
+ await processNotification({...deps,validateParts:async()=>true});assert.equal(sent,1);
+});

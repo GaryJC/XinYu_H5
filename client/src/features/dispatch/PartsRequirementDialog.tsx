@@ -1,5 +1,5 @@
 import { useEffect,useState } from 'react';
-import { Alert,Button,Collapse,Input,InputNumber,Radio,Table } from 'antd';
+import { Alert,Button,Checkbox,Collapse,Input,InputNumber,Radio,Table } from 'antd';
 import { DeleteOutlined, PlusOutlined, CheckOutlined } from '@ant-design/icons';
 import './parts-requirement.css';
 import type { PartsRequirement } from '../../../../shared/types';
@@ -19,18 +19,19 @@ const commonPartsGroups: {label:string;parts:[string,string][]}[]=[
 type Upload={id:string;file:File;state:'uploading'|'failed';error?:string;body?:Awaited<ReturnType<typeof prepareOcrImage>>};
 export function PartsRequirementDialog({controller:c,accepting,onClose,onUploading}:{controller:DispatchController;accepting:boolean;onClose:()=>void;onUploading?:(value:boolean)=>void}) {
   const task=c.detail!.task,round=task.repairRound||0;
-  const saved=task.partsRequirement;
+  const adding=Boolean(!accepting&&task.partsRequirement?.issuedAt);
+  const saved=adding?undefined:task.partsRequirement;
   const [mode,setMode]=useState<PartsRequirement['mode']|undefined>(saved?.mode);
   const [items,setItems]=useState<PartsRequirement['items']>(saved?.items||[]);
+  const [photoIds,setPhotoIds]=useState<string[]>(saved?.photoIds||[]);
   const [uploads,setUploads]=useState<Upload[]>([]),[error,setError]=useState('');
   const uploading=uploads.some(u=>u.state==='uploading');
   useEffect(()=>{onUploading?.(uploading);return()=>onUploading?.(false);},[uploading,onUploading]);
   const busy=c.busy||uploading;
   const photos=c.detail!.files.filter(f=>f.kind==='repair_parts_photo'&&(f.repairRound||0)===round);
-  const photoIds=photos.map(photo=>photo.id);
   async function upload(row:Upload) {
     setUploads(rows=>rows.map(r=>r.id===row.id?{...r,state:'uploading',error:undefined}:r));
-    try {row.body ||= await prepareOcrImage(row.file);await dispatchApi.uploadPhoto(task.orderId,{...row.body,requestId:row.id,repairRound:round,purpose:'parts'});await c.refreshDetail();setUploads(rows=>rows.filter(r=>r.id!==row.id));}
+    try {row.body ||= await prepareOcrImage(row.file);const photo=await dispatchApi.uploadPhoto(task.orderId,{...row.body,requestId:row.id,repairRound:round,purpose:'parts'});setPhotoIds(ids=>ids.includes(photo.id)?ids:[...ids,photo.id]);await c.refreshDetail();setUploads(rows=>rows.filter(r=>r.id!==row.id));}
     catch(e){setUploads(rows=>rows.map(r=>r.id===row.id?{...r,state:'failed',error:e instanceof Error?e.message:'照片上传失败'}:r));}
   }
   async function select(file:File) {const row:Upload={id:createRequestId(),file,state:'uploading'};setUploads(rows=>[...rows,row]);await upload(row);}
@@ -43,8 +44,8 @@ export function PartsRequirementDialog({controller:c,accepting,onClose,onUploadi
     if(await c.act({action:accepting?'accept':'record-parts',partsRequirement:requirement}))onClose();
   }
   function add(name='',unit='个'){setMode('list');setItems(rows=>rows.some(i=>name&&i.name===name)?rows:rows.length<100?[...rows,{name,quantity:1,unit}]:rows);}
-  return <FormDialog rootClassName="parts-requirement-modal" open title={accepting?'确认接单 · 登记所需配件':'登记所需配件'} okText={accepting?'确认接单并开始维修':'保存配件需求'} onOk={()=>void confirm()} confirmLoading={c.busy} okButtonProps={{disabled:busy}} cancelButtonProps={{disabled:busy}} closable={!busy} mask={{closable:false}} onCancel={()=>{if(!busy)onClose();}}>
-    <div className="parts-dialog-intro"><strong>{task.plate}</strong><span>{task.dispatchNo || task.orderId}</span><p>{accepting?'确认接单后开始维修，有配件需求将发送仓管确认。':'更新后将重新发送仓管确认。'}仅登记申请，不扣减库存。</p></div>
+  return <FormDialog rootClassName="parts-requirement-modal" open title={accepting?'确认接单 · 登记所需配件':adding?'追加配件申请':'修改配件需求'} okText={accepting?(mode==='none'?'接单并开始维修':'接单并提交配件需求'):'发送仓库'} onOk={()=>void confirm()} confirmLoading={c.busy} okButtonProps={{disabled:busy}} cancelButtonProps={{disabled:busy}} closable={!busy} mask={{closable:false}} onCancel={()=>{if(!busy)onClose();}}>
+    <div className="parts-dialog-intro"><strong>{task.plate}</strong><span>{task.dispatchNo || task.orderId}</span><p>{accepting?'需要配件时进入待开工，仓管确认出库后自动开工；无需配件直接开工。':adding?'填写本次追加的配件，已出库清单保留在历史记录中。':'修改后将重新通知仓库备料，原备料结果失效。'}</p></div>
     <Radio.Group className="parts-dialog-modes" optionType="button" buttonStyle="solid" aria-label="配件登记方式" value={mode} disabled={busy} onChange={e=>{setMode(e.target.value);setError('');}} options={[{value:'none',label:'无需配件'},{value:'list',label:'填写配件'},{value:'photo',label:'清单照片'}]}/>
     {mode==='none'?<div className="parts-none-state"><CheckOutlined/><div><strong>本次维修无需配件</strong><p>后续需要时，可在维修任务中补充申请。</p></div></div>:null}
     {mode==='list'?<div className="parts-list-workflow">
@@ -61,8 +62,8 @@ export function PartsRequirementDialog({controller:c,accepting,onClose,onUploadi
         <Collapse className="parts-catalog" defaultActiveKey={['保养与耗材']} items={commonPartsGroups.map(group=>({key:group.label,label:group.label,extra:<span className="parts-catalog-count">{group.parts.length} 项</span>,children:<div className="parts-catalog-options">{group.parts.map(([name,unit])=>{const selected=items.some(item=>item.name===name);return <Button key={name} icon={selected?<CheckOutlined/>:<PlusOutlined/>} className={selected?'is-selected':''} onClick={()=>add(name,unit)} disabled={busy||selected||items.length>=100}>{name}</Button>;})}</div>}))}/>
       </section>
     </div>:null}
-    {mode==='photo'?<div className="parts-photo-section"><div className="parts-section-heading"><h3>手写配件清单</h3><span>{photoIds.length} / 10 张</span></div><p className="parts-photo-hint">请拍清配件名称、数量和单位，仓管将按照片确认。</p><ImageSourcePicker label="手写配件清单" primaryActionLabel="拍摄手写配件清单" galleryActionLabel="相册选择" disabled={busy||photoIds.length+uploads.length>=10} loading={uploads.some(u=>u.state==='uploading')} onSelect={select}/>
-      <div className="repair-photo-grid">{photos.map(photo=><div key={photo.id}><AuthenticatedImage fileId={photo.id} alt="手写配件清单" width="100%" height={100}/><small>已自动保存</small></div>)}</div>
+    {mode==='photo'?<div className="parts-photo-section"><div className="parts-section-heading"><h3>手写配件清单</h3><span>{photoIds.length} / 10 张</span></div><p className="parts-photo-hint">请拍清配件名称、数量和单位，仓管将按选中的照片备料。</p><ImageSourcePicker label="手写配件清单" primaryActionLabel="拍摄手写配件清单" galleryActionLabel="相册选择" disabled={busy||photoIds.length+uploads.length>=10} loading={uploads.some(u=>u.state==='uploading')} onSelect={select}/>
+      <div className="repair-photo-grid">{photos.map(photo=><div key={photo.id}><AuthenticatedImage fileId={photo.id} alt="手写配件清单" width="100%" height={100}/><Checkbox checked={photoIds.includes(photo.id)} disabled={busy||(!photoIds.includes(photo.id)&&photoIds.length>=10)} onChange={e=>setPhotoIds(ids=>e.target.checked?[...ids,photo.id]:ids.filter(id=>id!==photo.id))}>用于本次申请</Checkbox></div>)}</div>
     </div>:null}
     {uploads.map(row=><div key={row.id} role="status">{row.state==='uploading'?'手写清单上传中…':<><Alert type="error" title="清单照片上传失败" description={row.error}/><Button disabled={busy} onClick={()=>void upload(row)}>重试</Button><Button disabled={busy} onClick={()=>setUploads(rows=>rows.filter(r=>r.id!==row.id))}>移除失败照片</Button></>}</div>)}
     {error||c.error?<Alert type="error" showIcon title={error||c.error}/>:null}

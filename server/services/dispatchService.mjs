@@ -115,6 +115,8 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
       await client.query(`insert into dispatch_inspection_notifications(event_id,order_id) values($1,$2) on conflict do nothing`,[event.id,id]);
     }
     if(['accept','record-parts'].includes(input.action) && next.partsRequirement.mode!=='none') people.filter(p=>p.active && p.role==='warehouse').forEach(p=>add(p.id,'配件申请'));
+    if(input.action==='confirm-parts') addHandlers(next,'配件可领取');
+    if(input.action==='issue-parts') addHandlers(next,'配件已出库');
     if(input.action==='submit' || input.action==='reassign-inspection') add(next.inspectorId,'待检验');
     if(input.action==='inspect' && next.stage==='维修中') addHandlers(next,'退回返工');
     if(input.action==='remind') {
@@ -127,5 +129,5 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
       add(recipient,'人工催办');
       }
     }
-    for(const {recipient,kind} of recipients) await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),id,event.id,recipient,kind,JSON.stringify({shopId:next.shopId,repairRound:next.repairRound||0,orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,reason:input.reason||''})]);
+    for(const {recipient,kind} of recipients) await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),id,event.id,recipient,kind,JSON.stringify({shopId:next.shopId,repairRound:next.repairRound||0,orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,partsRecordedAt:next.partsRequirement?.recordedAt,partsRevision:next.partsRequirement?.revision,notice:input.action==='confirm-parts'?'配件已备齐，请到仓库领取。':input.action==='issue-parts'?'仓管已确认配件交接出库，待开工任务已自动开工。':'',reason:input.reason||''})]);
 }

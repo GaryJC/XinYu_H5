@@ -10,7 +10,7 @@ import type { UserProfile } from '../../../../shared/types';
 import type { DispatchController } from './useDispatchController';
 import { FormDialog } from '../../shared/ui/BusinessForm';
 import { RepairPhotoPanel } from './RepairPhotoPanel';
-import { actionLabels,displayTime,taskStatusLabel } from './dispatchLabels';
+import { dispatchEventLabel,displayTime,taskStatusLabel } from './dispatchLabels';
 export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{controller:DispatchController;user:UserProfile;onPhotoBlocked:(blocked:boolean)=>void}) {
   const [partsDialog,setPartsDialog]=useState(false);
   const [dialog,setDialog]=useState<'submit-order'|'pause'|'decline'>();
@@ -20,8 +20,9 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
   const hasRepairPhoto=c.detail!.files.some(f=>f.kind==='repair_progress_photo'&&(f.repairRound||0)===(task.repairRound||0));
   const editable=!task.needsReview && (task.technicianIds??[task.technicianId]).includes(user.id);
   const canPhoto=editable&&['待开工','维修中','暂停'].includes(task.stage);
-  const primary=task.stage==='待接单'&&!task.feedback?'accept':task.stage==='暂停'?'resume':['待开工','维修中'].includes(task.stage)?'submit-order':undefined;
-  const label=primary==='accept'?'确认接单':primary==='resume'?'继续维修':'提交完工';
+  const waitingForParts=Boolean(task.partsRequirement&&task.partsRequirement.mode!=='none'&&!task.partsRequirement.issuedAt);
+  const primary=task.stage==='待接单'&&!task.feedback?'accept':task.stage==='暂停'?'resume':task.stage==='待开工'&&!waitingForParts?'start-order':task.stage==='维修中'&&!waitingForParts?'submit-order':undefined;
+  const label=primary==='accept'?'确认接单':primary==='resume'?'继续维修':primary==='start-order'?'开始维修':'提交完工';
   async function confirm() {
     if(dialog==='submit-order') {if(!hasRepairPhoto||blocked)return;if(await c.act({action:dialog,note}))setDialog(undefined);}
     if(dialog==='pause') {if(await c.act({action:dialog,pauseReason:reason,note}))setDialog(undefined);}
@@ -40,14 +41,18 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
     <section><h3>主要作业与增修项目</h3><ul className="technician-items">{task.items.map(item=><li key={item.id}><span>{item.name}{item.id<0?<Tag>增修项目</Tag>:null}</span>{task.rejectedItemIds?.includes(item.id)&&item.status!=='已完工'?<Tag color="orange">退回维修</Tag>:<RepairStatusTag status={item.status}/>}</li>)}</ul></section>
     {task.faultDescription?<section><h3>故障描述</h3><p>{task.faultDescription}</p></section>:null}
     {task.note?<section><h3>派工备注</h3><p>{task.note}</p></section>:null}
+    {task.stage==='待开工'&&waitingForParts?<Alert type="info" showIcon title={task.partsRequirement?.preparedAt?'配件已备齐，请到仓库领取':'已接单，等待仓库备料'} description="交接时由仓管确认出库，系统将自动开始维修。"/>:null}
+    {task.stage==='维修中'&&waitingForParts?<Alert type="info" showIcon title={task.partsRequirement?.preparedAt?'追加配件已备齐，请到仓库领取':'追加配件等待仓库备料'} description="维修进度保持维修中，本次配件出库后可提交完工。"/>:null}
     <PartsRequirementSummary value={task.partsRequirement}/>
-    {editable&&['待开工','维修中','暂停'].includes(task.stage)?<Button block disabled={c.busy||blocked} onClick={()=>setPartsDialog(true)}>补充／修改配件需求</Button>:null}
+    <Collapse items={[{key:'parts-history',label:'配件申请与出库记录',children:c.detail!.events.filter(e=>['accept','record-parts','confirm-parts','issue-parts'].includes(e.action)&&e.detail.partsRequirement).map(e=><section key={e.id}><p>{displayTime(e.at)} · {e.actorName} · {dispatchEventLabel(e)}</p><PartsRequirementSummary value={e.detail.partsRequirement}/></section>)}]}/>
+
+    {editable&&['待开工','维修中','暂停'].includes(task.stage)?<Button block disabled={c.busy||blocked} onClick={()=>setPartsDialog(true)}>{task.partsRequirement?.issuedAt?"追加配件申请":"补充／修改配件需求"}</Button>:null}
     <RepairPhotoPanel controller={c} editable={canPhoto} onBlocked={photoBlocked}/>
     <Collapse items={[{key:"sheet",label:"完整派工单与接车照片",children:<DispatchSheetSummary task={task} files={c.detail!.files}/>}]} />
-    <Collapse items={[{key:'more',label:'更多信息',children:<><p>委托单：{task.orderId}</p><p>接单：{displayTime(task.acceptedAt)}</p><p>开工：{displayTime(task.firstStartedAt)}</p>{c.detail!.events.map(e=><p key={e.id}>{displayTime(e.at)} · {e.actorName} · {actionLabels[e.action as keyof typeof actionLabels]||e.action} · {e.detail.stage}{e.detail.reason?` · ${e.detail.reason}`:''}</p>)}</>}]} />
-    {primary&&editable&&!task.needsReview?<div className="technician-action-bar"><div className="technician-action-buttons">
+    <Collapse items={[{key:'more',label:'更多信息',children:<><p>委托单：{task.orderId}</p><p>接单：{displayTime(task.acceptedAt)}</p><p>开工：{displayTime(task.firstStartedAt)}</p>{c.detail!.events.map(e=><p key={e.id}>{displayTime(e.at)} · {e.actorName} · {dispatchEventLabel(e)} · {e.detail.stage}{e.detail.reason?` · ${e.detail.reason}`:''}</p>)}</>}]} />
+    {(primary||['待开工','维修中'].includes(task.stage))&&editable&&!task.needsReview?<div className="technician-action-bar"><div className="technician-action-buttons">
       {['待接单','待开工','维修中'].includes(task.stage)?<Button className={task.stage==='待接单'?'repair-decline-button':'repair-pause-button'} danger={task.stage==='待接单'} color={task.stage==='待接单'?'danger':'orange'} variant="outlined" onClick={()=>{setNote('');setReason(task.stage==='待接单'?'时间冲突':'待配件');setDialog(task.stage==='待接单'?'decline':'pause');}} disabled={c.busy||blocked||Boolean(task.feedback)}>{task.stage==='待接单'?'无法接单':'暂停维修'}</Button>:null}
-      <Button type="primary" block loading={c.busy} disabled={c.busy||blocked} onClick={()=>{if(primary==='accept'){setPartsDialog(true);}else if(primary==='submit-order'){setNote('');setDialog(primary);}else void c.act({action:primary});}}>{label}</Button></div>{blocked?<span>请等待照片上传完成，或处理失败照片</span>:null}</div>:null}
+      {primary?<Button type="primary" block loading={c.busy} disabled={c.busy||blocked} onClick={()=>{if(primary==='accept'){setPartsDialog(true);}else if(primary==='submit-order'){setNote('');setDialog(primary);}else void c.act({action:primary});}}>{label}</Button>:null}</div>{blocked?<span>请等待照片上传完成，或处理失败照片</span>:null}</div>:null}
     {partsDialog?<PartsRequirementDialog controller={c} accepting={task.stage==='待接单'} onUploading={photoBlocked} onClose={()=>setPartsDialog(false)}/>:null}
     {dialog?<FormDialog open title={dialog==='submit-order'?'确认维修完成？':dialog==='pause'?'暂停维修':'无法接单'} okText={dialog==='submit-order'?'确认提交':'确认'} onOk={()=>void confirm()} confirmLoading={c.busy} okButtonProps={{disabled:dialog==='submit-order'&&(!hasRepairPhoto||blocked)}} onCancel={()=>{if(!c.busy)setDialog(undefined);}} cancelButtonProps={{disabled:c.busy}} closable={!c.busy} mask={{closable:false}}>
       {dialog==='submit-order'?<p>提交前须上传至少一张本轮维修照片，完工说明选填。提交后由检验员检查。</p>:<Select aria-label="问题原因" style={{width:'100%',marginBottom:16}} value={reason} onChange={setReason} options={(dialog==='pause'?['待配件','待客户确认','技术问题','其他']:['时间冲突','无法维修此项目','其他']).map(value=>({value,label:value}))}/>}

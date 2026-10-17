@@ -119,12 +119,24 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.ok(results.every(r=>r.status==='fulfilled'));
       assert.equal((await pool.query("select 1 from dispatch_events where order_id='warehouse-order' and action='confirm-parts'")).rowCount,1);
       const confirmed=await service.dispatchDetail(warehouse,'warehouse-order');
-      assert.equal(confirmed.task.partsRequirement.confirmedBy,'warehouse');
+      assert.equal(confirmed.task.partsRequirement.preparedBy,'warehouse');
       await assert.rejects(()=>run(warehouse,'confirm-parts',accepted.task.version),e=>e.status===409);
       await assert.rejects(()=>service.dispatchDetail({...warehouse,shopId:'other'},'warehouse-order'),e=>e.status===403);
       const updated=await run(tech,'record-parts',confirmed.task.version,{partsRequirement:{...requirement,items:[{name:'滤芯',quantity:1,unit:'个'}]}});
-      assert.equal(updated.task.partsRequirement.confirmedAt,undefined);
-      assert.ok(updated.events.some(e=>e.action==='confirm-parts' && e.detail.partsRequirement.confirmedBy==='warehouse'));
+      assert.equal(updated.task.partsRequirement.preparedAt,undefined);
+      assert.ok(updated.events.some(e=>e.action==='confirm-parts' && e.detail.partsRequirement.preparedBy==='warehouse'));
+      // The modified batch invalidates the old preparation and its pending pickup notice.
+      await assert.rejects(()=>run(warehouse,'issue-parts',updated.task.version),e=>e.status===409);
+      const ready=await run(warehouse,'confirm-parts',updated.task.version);
+      const issue={action:'issue-parts',expectedVersion:ready.task.version,requestId:randomUUID()};
+      const issued=await Promise.all([service.executeDispatchAction(warehouse,'warehouse-order',issue),service.executeDispatchAction(warehouse,'warehouse-order',issue)]);
+      assert.equal(issued[0].task.stage,'维修中');assert.equal(issued[0].task.partsRequirement.issuedBy,'warehouse');
+      assert.ok(issued[0].task.items.every(i=>i.startedBy===tech.id));
+      assert.equal((await pool.query("select 1 from dispatch_events where order_id='warehouse-order' and action='issue-parts'")).rowCount,1);
+      assert.equal((await pool.query("select 1 from dispatch_notifications where order_id='warehouse-order' and kind='配件已出库'")).rowCount,1);
+      const added=await run(tech,'record-parts',issued[0].task.version,{partsRequirement:requirement});
+      assert.equal(added.task.stage,'维修中');assert.equal(added.task.partsRequirement.batch,2);assert.equal(added.task.partsRequirement.issuedAt,undefined);
+      assert.ok(added.events.some(e=>e.action==='issue-parts'&&e.detail.partsRequirement.items[0].name==='滤芯'));
       assert.equal((await pool.query("select 1 from outbound_orders where order_id='warehouse-order'")).rowCount,0);
     });
     await seed('new');
@@ -227,6 +239,18 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal((await fetch(base+'/api/admin/access-users')).status,401);
       const advisorToken=createTokenForUser(advisor.id);await createAuthSession({token:advisorToken,userId:advisor.id,expiresAt:new Date(Date.now()+3600000)});
       assert.equal((await fetch(base+'/api/admin/access-users',{headers:{Authorization:`Bearer ${advisorToken}`}})).status,403);
+
+      // Warehouse search keeps authentication and order access checks before legacy reads.
+      assert.equal((await fetch(base+'/api/dispatch/tasks/warehouse-order/parts-stock?query=机油')).status,401);
+      assert.equal((await call('/api/dispatch/tasks/absent/parts-stock/warehouses')).status,404);
+      assert.equal((await call('/api/dispatch/tasks/warehouse-order/parts-stock?query=')).status,400);
+      assert.equal((await fetch(base+'/api/dispatch/tasks/warehouse-order/parts-stock?query=机油',{headers:{Authorization:`Bearer ${advisorToken}`}})).status,403);
+      const sqlHost=process.env.SQLSERVER_HOST;
+      try {
+        delete process.env.SQLSERVER_HOST;
+        assert.equal((await call('/api/dispatch/tasks/warehouse-order/parts-stock?query=机油')).status,503);
+        assert.equal((await call('/api/dispatch/tasks/warehouse-order/parts-stock/warehouses')).status,503);
+      } finally {if(sqlHost===undefined)delete process.env.SQLSERVER_HOST;else process.env.SQLSERVER_HOST=sqlHost;}
 
       await pool.query("update users set active=false where id='manager'");
       assert.equal((await call('/api/dispatch/tasks')).status,401);
@@ -383,12 +407,15 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       const before=(await pool.query("select count(*) from dispatch_events where order_id='parts-accept'")).rows[0].count;
       const input=command({partsRequirement:{mode:'photo',items:[],photoIds:[photo.id]}});
       const responses=await Promise.all([service.executeDispatchAction(tech,'parts-accept',input),service.executeDispatchAction(tech,'parts-accept',input)]);
-      local=responses[0].task;assert.equal(local.stage,'维修中');assert.equal(local.acceptedAt,local.firstStartedAt);assert.ok(local.items.every(i=>i.status==='维修中'&&i.startedBy===tech.id));
+      local=responses[0].task;assert.equal(local.stage,'待开工');assert.equal(local.firstStartedAt,undefined);assert.ok(local.items.every(i=>i.status==='待开工'));
       assert.equal(local.partsRequirement.recordedBy,tech.id);assert.deepEqual(local.partsRequirement.photoIds,[photo.id]);
       assert.equal(Number((await pool.query("select count(*) from dispatch_events where order_id='parts-accept'")).rows[0].count),Number(before)+1);
       assert.equal(local.vehicleModel,'五菱');assert.equal(local.vehicleMileage,'57162');assert.equal(local.customerName,'托修单位测试');assert.equal(local.dispatchNo,'A67469');
       local=(await service.executeDispatchAction(tech,'parts-accept',{action:'record-parts',expectedVersion:local.version,requestId:randomUUID(),partsRequirement:{mode:'list',items:[{name:'机油',quantity:4,unit:'升'}],photoIds:[]}})).task;
-      assert.equal(local.partsRequirement.items[0].quantity,4);assert.equal(local.stage,'维修中');
+      assert.equal(local.partsRequirement.items[0].quantity,4);assert.equal(local.stage,'待开工');
+      const warehouse={id:'warehouse',name:'仓管',role:'warehouse',shopId:'shop-hq',active:true};
+      for(const action of ['confirm-parts','issue-parts']) local=(await service.executeDispatchAction(warehouse,'parts-accept',{action,expectedVersion:local.version,requestId:randomUUID()})).task;
+      assert.equal(local.stage,'维修中');assert.ok(local.items.every(i=>i.startedBy===tech.id));
       assert.equal((await pool.query("select count(*) from files where id=$1",[photo.id])).rows[0].count,'1');
       await assert.rejects(()=>service.executeDispatchAction(tech,'parts-accept',{action:'submit-order',expectedVersion:local.version,requestId:randomUUID()}),/本轮维修照片/);
       await progressPhoto('parts-accept');

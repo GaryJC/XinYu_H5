@@ -28,5 +28,6 @@ test('ownership, current role, version, self-inspection and administrative reass
  assert.throws(()=>applyDispatchAction(t,{action:'claim-inspection',expectedVersion:stale,requestId:randomUUID()},second,people),e=>[403,409].includes(e.status));
  assert.throws(()=>action(t,'reassign-inspection',manager,{inspectorId:'i2'}),e=>e.status===400);
  assert.equal(action(t,'reassign-inspection',manager,{inspectorId:'i2',reason:'交班'}).inspectorId,'i2');
- assert.equal(action(task(),'submit-order').stage,'待检验');
+ assert.throws(()=>action(task(),'submit-order'),e=>e.status===409);
+ assert.equal(action(action(task(),'start-order'),'submit-order').stage,'待检验');
 });

@@ -1,3 +1,4 @@
+import { WarehouseStockSearch } from './WarehouseStockSearch';
 import { TaskOverview } from './TaskOverview';
 import './task-detail.css';
 import { RepairPhotoPanel } from './RepairPhotoPanel';
@@ -12,7 +13,7 @@ import type { DispatchActionName,UserProfile } from '../../../../shared/types';
 import { AuthenticatedImage } from '../../shared/ui/AuthenticatedImage';
 import { requestBlob } from '../../shared/api/httpClient';
 import type { DispatchController } from './useDispatchController';
-import { actionLabels,displayTime,notificationLabels,taskStatusLabel } from './dispatchLabels';
+import { dispatchEventLabel, actionLabels,displayTime,notificationLabels,taskStatusLabel } from './dispatchLabels';
 import { DispatchActionDialog } from './DispatchActionDialog';
 export function DispatchTaskDetail({controller,user}:{controller:DispatchController;user:UserProfile}) {
   const [photoBlocked,setPhotoBlocked]=useState(false);
@@ -25,6 +26,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
   const workers=task.technicianIds??(task.technicianId?[task.technicianId]:[]);
   const owner=task.executionMode==='outsourced'?controller.manager:workers.includes(user.id) && user.role==='technician';
   const inspect=task.stage==='待检验' && (user.role==='manager'||(user.role==='inspector'&&task.inspectorId===user.id)) && !workers.includes(user.id) && !task.participantIds?.includes(user.id) && !task.items.some(i=>i.startedBy===user.id||i.finishedBy===user.id);
+  const waitingForParts=Boolean(task.partsRequirement&&task.partsRequirement.mode!=='none'&&!task.partsRequirement.issuedAt);
   const actions:DispatchActionName[]=[];
   if(task.stage==='维修完成' && task.workHours===undefined && task.inspectorId===user.id && ['inspector','manager'].includes(user.role)) actions.push('record-hours');
   if(controller.manager&&!unsigned) {
@@ -43,7 +45,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     if(task.stage==='待接单'&&!task.feedback) actions.push('accept','decline');
     if(['待开工','维修中'].includes(task.stage)) actions.push('pause');
     if(task.stage==='暂停') actions.push('resume');
-    if(task.stage==='维修中'&&task.items.length&&task.items.every(i=>['待检验','已完工'].includes(i.status))) actions.push('submit');
+    if(!waitingForParts&&task.stage==='维修中'&&task.items.length&&task.items.every(i=>['待检验','已完工'].includes(i.status))) actions.push('submit');
   }
   const independent=!workers.includes(user.id)&&!task.participantIds?.includes(user.id)&&!task.items.some(i=>i.startedBy===user.id||i.finishedBy===user.id);
   if(task.stage==='待检验'&&!task.inspectorId&&independent&&['inspector','manager'].includes(user.role)&&!task.needsReview) actions.push('claim-inspection');
@@ -68,17 +70,17 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     <h3>维修项目 · {task.items.filter(i=>['待检验','已完工'].includes(i.status)).length}/{task.items.length} 已提报或通过</h3>
     {task.items.map(item=><Card key={item.id} size="small" title={item.name} extra={<Tag>{item.status}</Tag>}>
       <div className="dispatch-item-times"><span>开工：{displayTime(item.startAt)}</span><span>完工提报：{displayTime(item.finishAt)}</span><span>检验：{item.inspectorName||'未检验'} · {displayTime(item.inspectedAt)}</span><span>领料确认：{displayTime(item.pickedAt)}</span></div>
-      {owner&&!unsigned&&!task.needsReview&&['待开工','维修中'].includes(task.stage)?<Space wrap>
+      {owner&&!waitingForParts&&!unsigned&&!task.needsReview&&['待开工','维修中'].includes(task.stage)?<Space wrap>
         {['待开工','待派工','待领料'].includes(item.status)?<Button loading={controller.busy} disabled={controller.busy} aria-label={`开工：${item.name}`} onClick={()=>void controller.act({action:'start',itemId:item.id})}>开工</Button>:null}
         {item.status==='维修中'?<Button type="primary" loading={controller.busy} disabled={controller.busy} aria-label={`项目完成：${item.name}`} onClick={()=>void controller.act({action:'finish',itemId:item.id})}>项目完成</Button>:null}
-        {!item.pickedAt?<Button loading={controller.busy} disabled={controller.busy} onClick={()=>void controller.act({action:'pick',itemId:item.id})}>确认领料</Button>:null}
       </Space>:null}
     </Card>)}
-    <p className="dispatch-muted">领料仅为领取记录，不代表库存扣减；无需配件的维修可直接开工。</p>
+    <p className="dispatch-muted">需要配件的任务由仓管确认出库后自动开工；无需配件直接开工。</p>
     </section>
     <PartsRequirementSummary value={task.partsRequirement}/>
+    {user.role==='manager'&&(task.partsRequirement||task.hasPartsHistory)?<WarehouseStockSearch key={`stock-${task.orderId}`} orderId={task.orderId} requirement={task.partsRequirement}/>:null}
     {owner?<RepairPhotoPanel controller={controller} editable={!unsigned&&!task.needsReview&&['待开工','维修中','暂停'].includes(task.stage)} onBlocked={setPhotoBlocked}/>:null}
-    {owner&&['待开工','维修中','暂停'].includes(task.stage)?<Button onClick={()=>setPartsDialog(true)} disabled={controller.busy}>登记配件需求</Button>:null}
+    {owner&&['待开工','维修中','暂停'].includes(task.stage)?<Button onClick={()=>setPartsDialog(true)} disabled={controller.busy}>{task.partsRequirement?.issuedAt?"追加配件申请":"补充／修改配件需求"}</Button>:null}
     {files.length?<><h3>维修附件</h3><Space wrap>{files.map(file=>file.mimeType.startsWith('image/')?<AuthenticatedImage key={file.id} fileId={file.id} alt={file.originalName} width={140} height={100}/>:<Button key={file.id} onClick={()=>void openFile(file.id,file.originalName)}>{file.originalName}</Button>)}</Space></>:null}
     {controller.manager&&detail.inspectionNotification&&detail.inspectionNotification.status!=='ready'&&detail.inspectionNotification.status!=='obsolete'?<Alert type={detail.inspectionNotification.error?'warning':'info'} title={detail.inspectionNotification.error||'正在安排检验通知'} description="工单已进入待检验队列，可重试检验通知。"/>:null}
     {controller.manager?detail.schedulerNotifications?.filter(job=>job.error).map(job=><Alert key={job.eventId} type="warning" showIcon title={`${job.kind}通知未完成`} description={job.error} action={<Button loading={controller.busy} disabled={controller.busy} onClick={()=>void controller.act({action:'retry-scheduler-notifications',notificationJobId:job.eventId})}>重试</Button>}/>):null}
@@ -114,9 +116,9 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
       {controller.manager&&n.status==='failed'?<Button size="small" loading={controller.busy} disabled={controller.busy} onClick={()=>void controller.act({action:'retry-notification',notificationId:n.id})}>重试通知</Button>:null}
     </div>)}
     <h3>操作与交接记录</h3>
-    <Timeline items={events.map(event=>({children:<div><strong>{event.action==='due-reminder'?'即将到期提醒':actionLabels[event.action as DispatchActionName]||event.action} · {event.actorName}</strong><p>{displayTime(event.at)} · {event.detail.stage}{event.detail.repairRound?` · 返工第 ${event.detail.repairRound} 轮`:""}</p>
+    <Timeline items={events.map(event=>({children:<div><strong>{event.action==='due-reminder'?'即将到期提醒':dispatchEventLabel(event)} · {event.actorName}</strong><p>{displayTime(event.at)} · {event.detail.stage}{event.detail.repairRound?` · 返工第 ${event.detail.repairRound} 轮`:""}</p>
       {event.detail.previousTechnicianName&&event.detail.previousTechnicianName!==event.detail.technicianName?<p>{event.detail.previousTechnicianName} → {event.detail.technicianName||'待派工'}</p>:null}
-      {['accept','record-parts'].includes(event.action)&&event.detail.partsRequirement?<PartsRequirementSummary value={event.detail.partsRequirement}/>:null}
+      {['accept','record-parts','confirm-parts','issue-parts'].includes(event.action)&&event.detail.partsRequirement?<PartsRequirementSummary value={event.detail.partsRequirement}/>:null}
       {['record-hours','inspect'].includes(event.action)&&event.detail.workHours!==undefined?<p>实际工时：{event.detail.previousWorkHours!==undefined?`${event.detail.previousWorkHours} → `:''}{event.detail.workHours} 小时</p>:null}
       {event.detail.itemId?<p>项目：{task.items.find(i=>i.id===event.detail.itemId)?.name||event.detail.itemId}</p>:null}
       {event.action==='reopen-repair'?<p>本次项目：{event.detail.items?.map(i=>i.name).join('、')}</p>:null}
