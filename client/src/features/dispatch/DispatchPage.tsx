@@ -3,7 +3,7 @@ import { TechnicianRepairPage } from './TechnicianRepairPage';
 import { useRef } from 'react';
 import { DispatchWorkloadBoard } from './DispatchWorkloadBoard';
 import { executionLabels } from './DispatchExecutionFields';
-import { Alert,Button,Card,Checkbox,Drawer,Empty,Grid,Input,Select,Space,Table,Tag } from 'antd';
+import { Alert,Button,Card,Checkbox,Drawer,Empty,Grid,Input,Segmented,Select,Space,Table,Tag } from 'antd';
 import type { DispatchMetric,DispatchTask,UserProfile } from '../../../../shared/types';
 import { useDispatchController } from './useDispatchController';
 import { DispatchTaskDetail } from './DispatchTaskDetail';
@@ -13,6 +13,8 @@ export function DispatchPage({user,view}:{user:UserProfile;view:string}) {
   const c=useDispatchController(user,view), mobile=!Grid.useBreakpoint().md;
   const update=(key:string,value:string|undefined)=>c.setFilters(f=>({...f,[key]:value}));
   const taskHeading=useRef<HTMLHeadingElement>(null);
+  const inspection=view==='检验任务';
+  const inspectionStatuses=[{value:'',label:'全部未完结'},{value:'待检验',label:'待检验'},{value:'维修完成',label:'已检验'},{value:'完成',label:'已完结'}];
   const chosen=c.summaries.find(s=>s.id===c.filters.technicianId);
   function badges(t:DispatchTask) {return <Space className="dispatch-badges" size={[8,8]} wrap><Tag>{executionLabels[t.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(t)}</Tag>{t.urgent?<Tag color="red">加急</Tag>:null}{t.overdue?<Tag color="red">超期</Tag>:null}{t.repairRound?<Tag color="orange">返工第 {t.repairRound} 轮</Tag>:t.rework?<Tag color="orange">返工</Tag>:null}{t.feedback?<Tag color="orange">无法接单</Tag>:null}{t.needsReview?<Tag>待核对</Tag>:null}</Space>;}
   if(user.role==='warehouse') return <WarehousePartsPage controller={c}/>;
@@ -23,8 +25,8 @@ export function DispatchPage({user,view}:{user:UserProfile;view:string}) {
     <Card size="small" className="dispatch-filter-card">
       <div className="dispatch-filters">
       <label>搜索<Input.Search aria-label="搜索派工任务" placeholder="车牌 / 委托单号 / 派工号" allowClear onSearch={value=>update('search',value)}/></label>
-      <label>工单状态<Select aria-label="工单状态筛选" value={c.filters.stage||''} onChange={value=>c.setFilters(f=>({...f,stage:value||undefined,metric:undefined}))} options={statusFilters} popupMatchSelectWidth={220}/></label>
-      <label>执行方式<Select aria-label="筛选执行方式" allowClear placeholder="全部方式" value={c.filters.executionMode} onChange={value=>update('executionMode',value)} options={Object.entries(executionLabels).map(([value,label])=>({value,label}))}/></label>
+      {inspection?<div className="dispatch-inspection-status"><Segmented block className="repair-task-tabs" aria-label="工单状态筛选" value={c.filters.stage||''} onChange={value=>c.setFilters(f=>({...f,stage:value||undefined,metric:undefined}))} options={inspectionStatuses.map(option=>({...option,className:(c.filters.stage||'')===option.value?'repair-tab-active':undefined}))}/></div>:<label>工单状态<Select aria-label="工单状态筛选" value={c.filters.stage||''} onChange={value=>c.setFilters(f=>({...f,stage:value||undefined,metric:undefined}))} options={statusFilters} popupMatchSelectWidth={220}/></label>}
+      <div className="dispatch-execution-filter"><span id="dispatch-execution-filter-label">执行方式</span><Checkbox.Group aria-labelledby="dispatch-execution-filter-label" value={c.filters.executionMode?.split(',')||[]} onChange={values=>update('executionMode',values.length?values.join(','):undefined)} options={Object.entries(executionLabels).map(([value,label])=>({value,label}))}/><span className="dispatch-muted">可多选，不选表示全部方式</span></div>
 
       {c.manager?<label>维修工<Select aria-label="筛选维修工" allowClear placeholder="全部维修工" value={c.filters.technicianId} onChange={value=>{c.setFilters(f=>({...f,technicianId:value,metric:undefined}));}} options={c.summaries.map(p=>({value:p.id,label:`${personDisplayName(p,c.summaries)}${p.active?'':'（停用）'}`}))}/></label>:null}
       </div><div className="dispatch-filter-actions"><div className="dispatch-filter-toggles"><Checkbox checked={c.filters.urgent==='true'} onChange={e=>update('urgent',e.target.checked?'true':undefined)}>仅加急</Checkbox>

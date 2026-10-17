@@ -5,3 +5,7 @@ export function partsStatus(parts?:PartsRequirement) {
 export function canProcessParts(task:DispatchTask) {
   return Boolean(!task.needsReview && task.acceptedAt && ['待开工','维修中','暂停'].includes(task.stage) && task.partsRequirement && task.partsRequirement.mode!=='none' && !task.partsRequirement.issuedAt);
 }
+
+export function isSupplementalParts(parts?:PartsRequirement) {
+  return (parts?.batch ?? 1)>1;
+}

@@ -382,7 +382,7 @@ export type DispatchItem = {
   inspectorName?: string; inspectedBy?: string; inspectedAt?: string; pickedAt?: string;
 };
 export type RepairPhotoUploadRequest = {requestId:string;fileName:string;mimeType:string;imageBase64:string;repairRound?:number;purpose?:"progress"|"parts"};
-export type PartsRequirement = { revision?:number; batch?:number; preparedBy?:string; preparedName?:string; preparedAt?:string; issuedBy?:string; issuedName?:string; issuedAt?:string; recipientIds?:string[]; recipientName?:string; confirmedBy?:string; confirmedName?:string; confirmedAt?:string; mode:"none"|"list"|"photo"; items:Array<{name:string;quantity:number;unit:string}>; photoIds:string[]; recordedBy?:string; recordedName?:string; recordedAt?:string };
+export type PartsRequirement = { sourcePhotoIds?:string[]; revision?:number; batch?:number; preparedBy?:string; preparedName?:string; preparedAt?:string; issuedBy?:string; issuedName?:string; issuedAt?:string; recipientIds?:string[]; recipientName?:string; confirmedBy?:string; confirmedName?:string; confirmedAt?:string; mode:"none"|"list"|"photo"; items:Array<{name:string;quantity:number;unit:string}>; photoIds:string[]; recordedBy?:string; recordedName?:string; recordedAt?:string };
 export type DispatchTask = DispatchExecution & {
   hasPartsHistory?:boolean;
   partsRequirement?:PartsRequirement;
@@ -403,7 +403,7 @@ export type DispatchTask = DispatchExecution & {
   plate: string; dispatchNo: string; arrivalDate: string; orderStatus: WorkOrderStatus;
   faultDescription: string; overdue: boolean;
 };
-export type DispatchActionName = "issue-parts" | "confirm-parts" | "record-parts" | "reopen-repair" | "retry-scheduler-notifications" | "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
+export type DispatchActionName = "edit-parts" | "issue-parts" | "confirm-parts" | "record-parts" | "reopen-repair" | "retry-scheduler-notifications" | "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
 export type DispatchActionRequest = DispatchExecution & {
   partsRequirement?:PartsRequirement;
   reworkItemIds?: number[]; additionalItems?: string[];
@@ -443,3 +443,6 @@ export type RunfengWarehouse = {id:number;departmentCode:string;departmentName:s
 export type RunfengStock = {departmentCode:string;departmentName:string;warehouse:string;location:string;quantity:number|null};
 export type RunfengPart = {code:string;name:string;specification:string;manufacturer:string;models:string;unit:string;referenceCode:string;stocks:RunfengStock[]};
 export type RunfengStockSearchResult = {items:RunfengPart[];hasMore:boolean;query:string;warehouseId?:number;inStockOnly:boolean;source:"润丰";queriedAt:string};
+
+export type VehicleHistoricalPart = {code:string;name:string;specification:string;unit:string;manufacturer:string;quantity:number;lastUsedAt:string;dispatchNo:string;repairOrderId:string;vehicleModel:string};
+export type VehiclePartsHistory = {status:"found"|"no_history"|"no_parts";items:VehicleHistoricalPart[];hasMore:boolean;plate:string;source:"润丰";queriedAt:string};

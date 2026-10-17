@@ -1,3 +1,4 @@
+import { findVehiclePartsHistory } from '../repositories/runfengVehiclePartsRepository.mjs';
 import { pool } from '../database/pool.mjs';
 import { hasSqlServerConfig } from '../config/sqlServerConfig.mjs';
 import { HttpError } from '../http/HttpError.mjs';
@@ -21,6 +22,7 @@ async function authorize(actor,orderId,{getTask=getDispatchTask,database=pool,co
   const task=await getTask(database,orderId,actor);
   if(['草稿','待客户签字'].includes(task.orderStatus)||(!task.partsRequirement&&!task.hasPartsHistory))throw new HttpError(409,'登记配件需求后可检索润丰仓库');
   if(!configured())throw new HttpError(503,'润丰仓库检索尚未配置，请联系管理员');
+  return task;
 }
 export async function warehouseStockOptions(actor,orderId,deps={}) {
   await authorize(actor,orderId,deps);
@@ -34,4 +36,26 @@ export async function searchWarehouseStock(actor,orderId,input,deps={}) {
     const result=await (deps.findParts||findRunfengParts)(filters);
     return {...result,query:filters.query,warehouseId:filters.warehouseId,inStockOnly:filters.inStockOnly,source:'润丰',queriedAt:new Date().toISOString()};
   }catch{throw new HttpError(502,'润丰配件检索失败，请稍后重试');}
+}
+
+export function normalizeHistoryPlate(value) {
+  const plate=String(value??'').trim().toUpperCase().replace(/[ -]/g,'');
+  if(!plate||plate.length>20)throw new HttpError(409,'工单车牌未填写或无效，无法匹配历史用料');
+  return plate;
+}
+export async function warehouseVehiclePartsHistory(actor,orderId,deps={}) {
+  const task=await authorize(actor,orderId,deps),plate=normalizeHistoryPlate(task.plate);
+  try {
+    const history=await (deps.findHistory||findVehiclePartsHistory)({plate,excludeDispatch:task.dispatchNo});
+    return {...history,plate,source:'润丰',queriedAt:new Date().toISOString()};
+  }catch{throw new HttpError(502,'润丰历史用料查询失败，请稍后重试');}
+}
+export async function warehouseHistoricalPartStock(actor,orderId,input,deps={}) {
+  if(typeof input.code!=='string'||!input.code.trim()||input.code.trim().length>20)throw new HttpError(400,'请选择本车历史使用过的货号');
+  const code=input.code.trim(),history=await warehouseVehiclePartsHistory(actor,orderId,deps);
+  if(!history.items.some(item=>item.code.toUpperCase()===code.toUpperCase()))throw new HttpError(409,'该货号不在本车历史用料中，请刷新后重新选择');
+  try {
+    const result=await (deps.findParts||findRunfengParts)({query:code,tokens:[code],inStockOnly:false,exactCodeOnly:true});
+    return {...result,query:code,inStockOnly:false,source:'润丰',queriedAt:new Date().toISOString()};
+  }catch{throw new HttpError(502,'历史型号库存查询失败，请稍后重试');}
 }

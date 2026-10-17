@@ -11,10 +11,12 @@ export { dispatchPeople, dispatchDetail };
 export const metricKeys=['pendingAccept','unstarted','working','paused','inspection','completed','overdue','rework'];
 export async function queryDispatchTasks(actor, query={}) {
   const range=completionRange(query.from,query.to);
+  const executionModes=query.executionMode?query.executionMode.split(','):[];
+  if(executionModes.some(mode=>!['internal','field','outsourced'].includes(mode))) throw new HttpError(400,'执行方式筛选无效');
   const tasks=await listDispatchTasks(actor);
   return tasks.filter(t=> {
     if(query.technicianId && !technicianIds(t).includes(query.technicianId)) return false;
-    if(query.executionMode && (t.executionMode||'internal')!==query.executionMode) return false;
+    if(executionModes.length && !executionModes.includes(t.executionMode||'internal')) return false;
     if(query.stage==='进行中' && !['待开工','维修中','暂停'].includes(t.stage)) return false;
     if(query.stage==='完成') { if(t.orderStatus!=='完成' || hasActiveRepairRound(t)) return false; }
     else if(query.stage==='待结算') { if(t.orderStatus!=='待结算' || hasActiveRepairRound(t)) return false; }
@@ -63,7 +65,8 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
     const previous=await client.query('select request_body from dispatch_events where order_id=$1 and actor_id=$2 and request_id=$3',[id,actor.id,input.requestId]);
     if(previous.rows[0]) {
       // JSONB normalizes key order. Compare canonical values rather than raw serialization.
-      const canonical=o=>JSON.stringify(Object.fromEntries(Object.entries(o).sort(([a],[b])=>a.localeCompare(b))));
+      const normalize=value=>Array.isArray(value)?value.map(normalize):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>[key,normalize(item)])):value;
+      const canonical=value=>JSON.stringify(normalize(value));
       if(canonical(previous.rows[0].request_body)!==canonical(input)) throw new HttpError(409,'请求编号已用于其他操作');
       return;
     }
@@ -115,6 +118,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
       await client.query(`insert into dispatch_inspection_notifications(event_id,order_id) values($1,$2) on conflict do nothing`,[event.id,id]);
     }
     if(['accept','record-parts'].includes(input.action) && next.partsRequirement.mode!=='none') people.filter(p=>p.active && p.role==='warehouse').forEach(p=>add(p.id,'配件申请'));
+    if(input.action==='edit-parts') addHandlers(next,'配件需求已调整');
     if(input.action==='confirm-parts') addHandlers(next,'配件可领取');
     if(input.action==='issue-parts') addHandlers(next,'配件已出库');
     if(input.action==='submit' || input.action==='reassign-inspection') add(next.inspectorId,'待检验');
@@ -129,5 +133,5 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
       add(recipient,'人工催办');
       }
     }
-    for(const {recipient,kind} of recipients) await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),id,event.id,recipient,kind,JSON.stringify({shopId:next.shopId,repairRound:next.repairRound||0,orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,partsRecordedAt:next.partsRequirement?.recordedAt,partsRevision:next.partsRequirement?.revision,notice:input.action==='confirm-parts'?'配件已备齐，请到仓库领取。':input.action==='issue-parts'?'仓管已确认配件交接出库，待开工任务已自动开工。':'',reason:input.reason||''})]);
+    for(const {recipient,kind} of recipients) await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),id,event.id,recipient,kind,JSON.stringify({shopId:next.shopId,repairRound:next.repairRound||0,orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,partsRecordedAt:next.partsRequirement?.recordedAt,partsRevision:next.partsRequirement?.revision,notice:input.action==='edit-parts'?'仓管已整理配件需求，请查看最新清单。':input.action==='confirm-parts'?'配件已备齐，请到仓库领取。':input.action==='issue-parts'?'仓管已确认配件交接出库，待开工任务已自动开工。':'',reason:input.reason||''})]);
 }

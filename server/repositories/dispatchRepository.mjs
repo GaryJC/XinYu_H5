@@ -4,7 +4,7 @@ import { HttpError } from '../http/HttpError.mjs';
 import { assertDispatchAccess, canInspect, dispatchMetric } from '../domain/dispatchPolicy.mjs';
 const projection = `select wo.id as order_id, wo.shop_id, wo.vehicle_plate, wo.dispatch_no, wo.arrival_date,
   wo.vehicle_model,wo.vehicle_mileage,wo.customer_name,wo.advisor,wo.status as order_status, wo.fault_description, wo.technician as legacy_technician,
-  exists(select 1 from dispatch_events e where e.order_id=wo.id and e.action in ('accept','record-parts') and e.detail->'partsRequirement' is not null) as has_parts_history,
+  exists(select 1 from dispatch_events e where e.order_id=wo.id and e.action in ('accept','record-parts','edit-parts') and e.detail->'partsRequirement' is not null) as has_parts_history,
   dt.technician_id, dt.inspector_id, dt.stage, dt.version, dt.data,
   coalesce((select jsonb_agg(jsonb_build_object('id',ri.client_item_id,'name',ri.name,
     'status',ri.status,'startAt',nullif(ri.start_at,''),'finishAt',nullif(ri.finish_at,'')) order by ri.item_no)

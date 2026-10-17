@@ -109,14 +109,14 @@
 .technician-detail>.ant-tag{align-self:flex-start}
 
 /* Quiet tabs: one shared surface, underline and weight indicate selection. */
-.technician-page .repair-task-tabs{background:#fff;padding:0;border-radius:10px;box-shadow:inset 0 -1px #e5e9ef}
-.technician-page .repair-task-tabs .ant-segmented-group{gap:0}
-.technician-page .repair-task-tabs .ant-segmented-thumb{opacity:0;box-shadow:none}
-.technician-page .repair-task-tabs .ant-segmented-item{position:relative;background:transparent;border-radius:0;color:#657085;box-shadow:none;min-width:0}
-.technician-page .repair-task-tabs .repair-tab-active{color:#263247;font-weight:600}
-.technician-page .repair-task-tabs .repair-tab-active .ant-segmented-item-label::before{opacity:1;top:auto;pointer-events:none;content:'';position:absolute;bottom:0;left:16%;right:16%;height:3px;background:#1677ff;border-radius:3px 3px 0 0}
-.technician-page .repair-task-tabs .ant-segmented-item-label{position:relative;min-height:48px;padding:4px 6px;white-space:normal;line-height:1.5;overflow-wrap:anywhere}
-@media(max-width:767px){.technician-page .repair-task-tabs .ant-segmented-group{gap:0}.technician-page .repair-task-tabs .ant-segmented-item-label{font-size:13px;padding:6px 2px}}
+.dispatch-page .repair-task-tabs{background:#fff;padding:0;border-radius:10px;box-shadow:inset 0 -1px #e5e9ef}
+.dispatch-page .repair-task-tabs .ant-segmented-group{gap:0}
+.dispatch-page .repair-task-tabs .ant-segmented-thumb{opacity:0;box-shadow:none}
+.dispatch-page .repair-task-tabs .ant-segmented-item{position:relative;background:transparent;border-radius:0;color:#657085;box-shadow:none;min-width:0}
+.dispatch-page .repair-task-tabs .repair-tab-active{color:#263247;font-weight:600}
+.dispatch-page .repair-task-tabs .repair-tab-active .ant-segmented-item-label::before{opacity:1;top:auto;pointer-events:none;content:'';position:absolute;bottom:0;left:16%;right:16%;height:3px;background:#1677ff;border-radius:3px 3px 0 0}
+.dispatch-page .repair-task-tabs .ant-segmented-item-label{position:relative;display:flex;align-items:center;justify-content:center;text-align:center;min-height:48px;padding:4px 6px;white-space:normal;line-height:1.5;overflow-wrap:anywhere}
+@media(max-width:767px){.dispatch-page .repair-task-tabs .ant-segmented-group{gap:0}.dispatch-page .repair-task-tabs .ant-segmented-item-label{font-size:13px;padding:6px 2px}}
 .technician-flags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
 .technician-page .ant-tag,.technician-detail .ant-tag{padding:3px 10px;margin:0;border-radius:6px;line-height:20px}
 .technician-action-buttons{display:flex;gap:12px}
@@ -144,3 +144,8 @@
 .parts-entry-quantity .ant-input-number { width:100%; }
 .parts-entry-quantity > .ant-btn { margin-bottom:12px; }
 .dispatch-sheet-summary .ant-descriptions-item-content { overflow-wrap:anywhere; }
+
+.dispatch-filters>.dispatch-inspection-status,.dispatch-filters>.dispatch-execution-filter{grid-column:1/-1;width:100%;min-width:0}
+.dispatch-execution-filter{display:flex;flex-direction:column;gap:10px}
+.dispatch-execution-filter .ant-checkbox-group{display:flex;flex-wrap:wrap;gap:8px 16px}
+.dispatch-execution-filter .ant-checkbox-wrapper{min-height:36px;align-items:center;margin:0}

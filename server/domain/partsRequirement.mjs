@@ -8,6 +8,7 @@ export function validatePartsRequirement(value) {
   return {mode:value.mode,items:items.map(i=>({name:i.name.trim(),quantity:i.quantity,unit:i.unit.trim()})),photoIds};
 }
 export function beginPendingItems(next,actor,now) {
+  if(!actor?.id)throw new HttpError(409,'维修负责人未明确，请联系服务顾问核对后再开工');
   for(const item of next.items) if(['待开工','待派工','待领料'].includes(item.status)) {
     item.status='维修中';item.startAt ||= now;item.startedBy=actor.id;delete item.finishAt;
   }

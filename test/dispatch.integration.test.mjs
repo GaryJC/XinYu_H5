@@ -139,6 +139,26 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.ok(added.events.some(e=>e.action==='issue-parts'&&e.detail.partsRequirement.items[0].name==='滤芯'));
       assert.equal((await pool.query("select 1 from outbound_orders where order_id='warehouse-order'")).rowCount,0);
     });
+    await t.test('warehouse edits persist audited changes and reset preparation atomically',async()=>{
+      const warehouse={id:'warehouse',name:'仓管',role:'warehouse',shopId:'shop-hq',active:true};
+      await seed('warehouse-edit');
+      const run=(user,action,version,extra={})=>service.executeDispatchAction(user,'warehouse-edit',{action,expectedVersion:version,requestId:randomUUID(),...extra});
+      await run(manager,'assign',0,{technicianId:tech.id,dueAt});
+      const accepted=await run(tech,'accept',1,{partsRequirement:{mode:'list',items:[{name:'机油',quantity:4,unit:'升'}]}});
+      const ready=await run(warehouse,'confirm-parts',accepted.task.version);
+      const command={action:'edit-parts',expectedVersion:ready.task.version,requestId:randomUUID(),partsRequirement:{mode:'list',items:[{name:'机油 SN5W30',quantity:4,unit:'升'},{name:'机油滤清器',quantity:1,unit:'只'}]}};
+      const [updated]=await Promise.all([service.executeDispatchAction(warehouse,'warehouse-edit',command),service.executeDispatchAction(warehouse,'warehouse-edit',command)]);
+      await service.executeDispatchAction(warehouse,'warehouse-edit',{...command,partsRequirement:{items:command.partsRequirement.items.map(i=>({unit:i.unit,quantity:i.quantity,name:i.name})),mode:'list'}});
+      await assert.rejects(()=>service.executeDispatchAction(warehouse,'warehouse-edit',{...command,partsRequirement:{...command.partsRequirement,items:[{name:'different',quantity:1,unit:'个'}]}}),e=>e.status===409);
+      assert.equal(updated.task.partsRequirement.items.length,2);assert.equal(updated.task.partsRequirement.preparedAt,undefined);assert.equal(updated.task.stage,'待开工');
+      assert.equal((await pool.query("select 1 from dispatch_events where order_id='warehouse-edit' and action='edit-parts'")).rowCount,1);
+      assert.equal((await pool.query("select 1 from dispatch_notifications where order_id='warehouse-edit' and kind='配件需求已调整' and recipient_id='tech'")).rowCount,1);
+      assert.ok(updated.events.some(e=>e.action==='confirm-parts'&&e.detail.partsRequirement.preparedAt));
+      await assert.rejects(()=>run(warehouse,'issue-parts',updated.task.version),e=>e.status===409);
+      await assert.rejects(()=>run(warehouse,'edit-parts',ready.task.version,{partsRequirement:{mode:'none'}}),e=>e.status===409);
+      const none=await run(warehouse,'edit-parts',updated.task.version,{partsRequirement:{mode:'none'}});
+      assert.equal(none.task.stage,'维修中');assert.ok(none.task.items.every(i=>i.startedBy===tech.id));assert.ok(!none.task.participantIds.includes('warehouse'));
+    });
     await seed('new');
     await t.test('only one of two concurrent initial assignments commits; retry is idempotent',async()=>{
       const command=body('assign',{technicianId:tech.id,dueAt});
@@ -245,11 +265,16 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal((await call('/api/dispatch/tasks/absent/parts-stock/warehouses')).status,404);
       assert.equal((await call('/api/dispatch/tasks/warehouse-order/parts-stock?query=')).status,400);
       assert.equal((await fetch(base+'/api/dispatch/tasks/warehouse-order/parts-stock?query=机油',{headers:{Authorization:`Bearer ${advisorToken}`}})).status,403);
+      assert.equal((await fetch(base+'/api/dispatch/tasks/warehouse-order/parts-history')).status,401);
+      assert.equal((await call('/api/dispatch/tasks/absent/parts-history')).status,404);
+      assert.equal((await call('/api/dispatch/tasks/warehouse-order/parts-history/stock?code=')).status,400);
+      assert.equal((await fetch(base+'/api/dispatch/tasks/warehouse-order/parts-history',{headers:{Authorization:`Bearer ${advisorToken}`}})).status,403);
       const sqlHost=process.env.SQLSERVER_HOST;
       try {
         delete process.env.SQLSERVER_HOST;
         assert.equal((await call('/api/dispatch/tasks/warehouse-order/parts-stock?query=机油')).status,503);
         assert.equal((await call('/api/dispatch/tasks/warehouse-order/parts-stock/warehouses')).status,503);
+        assert.equal((await call('/api/dispatch/tasks/warehouse-order/parts-history')).status,503);
       } finally {if(sqlHost===undefined)delete process.env.SQLSERVER_HOST;else process.env.SQLSERVER_HOST=sqlHost;}
 
       await pool.query("update users set active=false where id='manager'");
@@ -316,6 +341,12 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       for(const [id,status] of [['board-draft','草稿'],['board-signature','待客户签字'],['board-unassigned','已委托'],['board-unsettled','待结算'],['board-closed','完成']]) await seed(id,status);
       const ids=async query=>(await service.queryDispatchTasks(advisor,query)).map(t=>t.orderId);
       const all=await ids({});
+      const internal=await ids({executionMode:'internal'}),field=await ids({executionMode:'field'}),outsourced=await ids({executionMode:'outsourced'});
+      assert.ok(internal.length&&field.length&&outsourced.length,'all execution modes have fixtures');
+      assert.deepEqual((await ids({executionMode:'internal,field'})).sort(),[...new Set([...internal,...field])].sort());
+      assert.deepEqual((await ids({executionMode:'internal,field,outsourced'})).sort(),[...all].sort());
+      assert.deepEqual((await ids({executionMode:'field,outsourced',search:'draft-'})).sort(),[...new Set([...field,...outsourced])].filter(id=>id.includes('draft-')).sort());
+      await assert.rejects(()=>ids({executionMode:'field,invalid'}),e=>e.status===400);
       for(const id of ['board-draft','board-signature','board-unassigned','board-unsettled']) assert.ok(all.includes(id),id);
       assert.ok(!all.includes('board-closed'));
       assert.deepEqual((await ids({stage:'草稿'})).filter(id=>id.startsWith('board-')),['board-draft']);

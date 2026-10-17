@@ -122,3 +122,34 @@ test('old application confirmations are not treated as preparation or issue',()=
  assert.throws(()=>applyDispatchAction(task,request(task,'issue-parts'),warehouse,[tech]),/先确认备料/);
  const ready=applyDispatchAction(task,request(task,'confirm-parts'),warehouse,[tech]);assert.ok(ready.partsRequirement.preparedAt);
 });
+
+test('warehouse can add, edit and delete unissued requirements, invalidating preparation and forged metadata',()=>{
+ const task=withParts(),ready=applyDispatchAction(task,request(task,'confirm-parts'),warehouse,[tech]),before=structuredClone(ready);
+ const parts={mode:'list',items:[{name:'机油 SN5W30',quantity:4,unit:'升'},{name:'滤清器',quantity:1,unit:'只'}],photoIds:[],issuedAt:'forged',preparedAt:'forged'};
+ const edited=applyDispatchAction(ready,request(ready,'edit-parts',{partsRequirement:parts}),warehouse,[tech]);
+ assert.deepEqual(ready,before);assert.equal(edited.stage,'待开工');assert.equal(edited.partsRequirement.items.length,2);assert.equal(edited.partsRequirement.recordedBy,'w');assert.equal(edited.partsRequirement.preparedAt,undefined);assert.equal(edited.partsRequirement.issuedAt,undefined);
+ assert.throws(()=>applyDispatchAction(edited,request(edited,'issue-parts'),warehouse,[tech]),/先确认备料/);
+ const removed=applyDispatchAction(edited,request(edited,'edit-parts',{partsRequirement:{...parts,items:parts.items.slice(1)}}),warehouse,[tech]);assert.equal(removed.partsRequirement.items.length,1);assert.equal(removed.partsRequirement.items[0].name,'滤清器');
+ const none=applyDispatchAction(removed,request(removed,'edit-parts',{partsRequirement:{mode:'none'}}),warehouse,[tech]);
+ assert.equal(none.stage,'维修中');assert.equal(none.items[0].startedBy,'t');assert.ok(!none.participantIds.includes('w'));
+});
+test('warehouse cannot alter issued history, act across stores, or forge clear-list photos',()=>{
+ const task=withParts();
+ for(const user of [tech,{...warehouse,active:false},{...warehouse,shopId:'other'},{...warehouse,role:'manager'}])assert.throws(()=>applyDispatchAction(task,request(task,'edit-parts',{partsRequirement:{mode:'none'}}),user,[tech]),e=>e.status===403);
+ const ready=applyDispatchAction(task,request(task,'confirm-parts'),warehouse,[tech]);
+ const issued=applyDispatchAction(ready,request(ready,'issue-parts'),warehouse,[tech]);
+ assert.throws(()=>applyDispatchAction(issued,request(issued,'edit-parts',{partsRequirement:{mode:'none'}}),warehouse,[tech]),/已出库/);
+ assert.throws(()=>applyDispatchAction(task,request(task,'edit-parts',{partsRequirement:{mode:'photo',photoIds:['other-photo']}}),warehouse,[tech]),e=>e.status===400);
+ const photoTask={...task,partsRequirement:{mode:'photo',items:[],photoIds:['original-photo']}};
+ const transcribed=applyDispatchAction(photoTask,request(photoTask,'edit-parts',{partsRequirement:{mode:'list',items:[{name:'机油',quantity:1,unit:'桶'}],sourcePhotoIds:['forged-photo']}}),warehouse,[tech]);
+ assert.deepEqual(transcribed.partsRequirement.sourcePhotoIds,['original-photo']);
+ const updated=applyDispatchAction(transcribed,request(transcribed,'edit-parts',{partsRequirement:{mode:'none'}}),warehouse,[tech]);assert.deepEqual(updated.partsRequirement.sourcePhotoIds,['original-photo']);
+});
+
+test('outsourced start keeps the scheduling owner after warehouse transcription',()=>{
+ const task={...withParts(),executionMode:'outsourced',technicianIds:[],technicianId:undefined,assignedBy:'advisor',partsRequirement:{mode:'list',items:[{name:'机油',quantity:1,unit:'桶'}],photoIds:[],recordedBy:'w'}};
+ const edited=applyDispatchAction(task,request(task,'edit-parts',{partsRequirement:{mode:'none'}}),warehouse,[]);
+ assert.equal(edited.items[0].startedBy,'advisor');assert.ok(!edited.participantIds.includes('w'));
+ const ready=applyDispatchAction(task,request(task,'confirm-parts'),warehouse,[]),issued=applyDispatchAction(ready,request(ready,'issue-parts'),warehouse,[]);
+ assert.equal(issued.items[0].startedBy,'advisor');assert.ok(!issued.participantIds.includes('w'));
+});

@@ -1,7 +1,7 @@
 import type { DispatchActionName,DispatchMetric,DispatchStage,DispatchTask,DispatchEvent } from '../../../../shared/types';
 export const stages:DispatchStage[]=['待派工','待接单','待开工','维修中','暂停','待检验','维修完成'];
 export const metrics:Record<DispatchMetric,string>={pendingAccept:'待接单',unstarted:'尚未开工',working:'正在维修',paused:'暂停',inspection:'待检验',completed:'已完成',overdue:'超期',rework:'返工'};
-export const actionLabels:Record<DispatchActionName,string>={'issue-parts':'确认出库','confirm-parts':'备料完成','record-parts':'登记配件需求','reopen-repair':'发起返工','retry-scheduler-notifications':'重试派工通知','start-order':'开始维修','submit-order':'提交完工','claim-inspection':'开始检验','reassign-inspection':'重新分配检验','retry-inspection-notifications':'重试检验通知','record-hours':'录入工时',assign:'指派维修工',reassign:'改派',reoffer:'重新发起接单',cancel:'撤销派工',accept:'确认接单',decline:'无法接单',start:'开工',finish:'项目完成',pick:'确认领料',pause:'暂停维修',resume:'恢复维修',submit:'提报检验',inspect:'检验处理',update:'调整派工信息',remind:'催办','retry-notification':'重试通知',reconcile:'核对历史任务'};
+export const actionLabels:Record<DispatchActionName,string>={'edit-parts':'仓管整理配件需求','issue-parts':'确认出库','confirm-parts':'备料完成','record-parts':'登记配件需求','reopen-repair':'发起返工','retry-scheduler-notifications':'重试派工通知','start-order':'开始维修','submit-order':'提交完工','claim-inspection':'开始检验','reassign-inspection':'重新分配检验','retry-inspection-notifications':'重试检验通知','record-hours':'录入工时',assign:'指派维修工',reassign:'改派',reoffer:'重新发起接单',cancel:'撤销派工',accept:'确认接单',decline:'无法接单',start:'开工',finish:'项目完成',pick:'确认领料',pause:'暂停维修',resume:'恢复维修',submit:'提报检验',inspect:'检验处理',update:'调整派工信息',remind:'催办','retry-notification':'重试通知',reconcile:'核对历史任务'};
 export const notificationLabels={pending:'待发送',accepted:'平台受理',sent:'发送成功',failed:'发送失败',unknown:'结果未知'};
 export function displayTime(value?:string) {if(!value) return '未记录';const time=new Date(value);return Number.isFinite(time.getTime())?time.toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):value;}
 export function localDateTime(value?:string) {return value?new Date(Date.parse(value)+8*3600000).toISOString().slice(0,16):'';}
@@ -25,6 +25,10 @@ export function taskStatusLabel(task:DispatchTask) {
 }
 
 export function dispatchEventLabel(event:Pick<DispatchEvent,'action'|'detail'>) {
+  if((event.detail.partsRequirement?.batch??1)>1) {
+    const labels:Record<string,string>={'record-parts':'登记补料','edit-parts':'仓管整理补料需求','confirm-parts':'补料完成','issue-parts':'补料出库'};
+    if(labels[event.action]) return labels[event.action];
+  }
   if(event.action==='confirm-parts'&&!event.detail.partsRequirement?.preparedAt) return '确认配件申请（历史）';
   return actionLabels[event.action as DispatchActionName]||event.action;
 }

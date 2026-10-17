@@ -1,4 +1,4 @@
-import { warehouseStockOptions,searchWarehouseStock } from '../services/warehouseStockService.mjs';
+import { warehouseVehiclePartsHistory,warehouseHistoricalPartStock,warehouseStockOptions,searchWarehouseStock } from '../services/warehouseStockService.mjs';
 import { uploadRepairPhoto } from '../services/repairPhotoService.mjs';
 import { readJson, sendJson } from '../http/response.mjs';
 import { requireAnyRole } from '../domain/accessPolicy.mjs';
@@ -14,6 +14,11 @@ export async function handleDispatchRequest(req,res,url,actor) {
   if(req.method==='GET' && url.pathname==='/api/dispatch/people') {
     const people=await dispatchPeople(actor);
     sendJson(res,200,{technicians:people.filter(p=>p.active && p.role==='technician'),inspectors:people.filter(p=>p.active && (p.role==='manager'||p.inspectorRoleMember!==false) && ['inspector','manager'].includes(p.role) && p.id!==actor.id)}); return true;
+  }
+  const history=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)\/parts-history(\/stock)?$/);
+  if(history&&req.method==='GET') {
+    const id=decodeURIComponent(history[1]);
+    sendJson(res,200,history[2]?await warehouseHistoricalPartStock(actor,id,query):await warehouseVehiclePartsHistory(actor,id));return true;
   }
   const stock=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)\/parts-stock(\/warehouses)?$/);
   if(stock&&req.method==='GET') {
