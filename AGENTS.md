@@ -30,3 +30,7 @@
 - Run `npm run check` before deployment.
 - Keep `.env.local` and `.env.production` out of Git.
 - Refactors must preserve existing API paths and user-visible behavior unless the task says otherwise.
+
+## Git
+
+- Do not push changes automatically. Push only when the user explicitly requests it.

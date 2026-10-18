@@ -16,12 +16,12 @@ export function messageBody(notification, recipient, env=process.env) {
   const url=new URL(env.DISPATCH_APP_URL);
   const corpId=env.DINGTALK_CORP_ID?.trim() || env.VITE_DINGTALK_CORP_ID?.trim();
   if(corpId) url.searchParams.set('corpid',corpId);
-  url.searchParams.set('dispatchOrder',data.orderId);
+  url.searchParams.set(data.paperOrder ? 'paperOrder' : 'dispatchOrder',data.orderId);
   const due=data.dueAt?new Date(data.dueAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'未设置';
   const escape=value=>String(value||'').replace(/[\\`*_{}\[\]<>#|]/g,' ');
   return {agent_id:Number(env.DINGTALK_AGENT_ID),userid_list:recipient,to_all_user:false,
-    msg:{msgtype:'markdown',markdown:{title:`${notification.kind} · ${data.plate}`,
-      text:`### ${escape(notification.kind)} · ${escape(data.plate)}\n\n${escape(data.dispatchNo || data.orderId)}\n\n${escape(data.summary)}\n\n预计完工：${due}${data.reason?`\n\n${escape(data.reason)}`:''}\n\n[查看维修任务](${url.toString()})`}}};
+    msg:{msgtype:'markdown',markdown:{title:`${notification.kind} · ${data.plate || data.orderId}`,
+      text:`### ${escape(notification.kind)} · ${escape(data.plate || data.orderId)}\n\n${escape(data.dispatchNo || data.orderId)}\n\n${escape(data.summary)}\n\n${data.paperOrder ? '创建人已上传纸质委托书照片' : `预计完工：${due}`}${data.reason?`\n\n${escape(data.reason)}`:''}\n\n[${data.paperOrder ? "查看纸质委托书" : "查看维修任务"}](${url.toString()})`}}};
 }
 export async function sendWorkNotification(notification, recipient, {env=process.env,fetcher=fetch,token=getDingTalkAccessToken}={}) {
   const mode=notificationConfiguration(env);

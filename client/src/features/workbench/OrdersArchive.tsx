@@ -1,4 +1,7 @@
+import { PaperOrderResolution } from "../work-orders/components/PaperOrderResolution";
 import { WorkOrderSignatureDialog } from "../signature/WorkOrderSignatureDialog";
+import { CustomerVehicleEditor, CustomerVehicleUpdateNotice } from "../customer-vehicle-update/CustomerVehicleEditor";
+import { CustomerVehicleUpdateTag } from "../customer-vehicle-update/CustomerVehicleUpdateTag";
 import { useArchiveSignature } from "../signature/useArchiveSignature";
 import { SubmittedOrderPhotos } from "../work-order-photos/SubmittedOrderPhotos";
 import { useArchiveLegacyRefresh } from "./useArchiveLegacyRefresh";
@@ -7,7 +10,7 @@ import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
 import { QuickDispatchDialog } from "../dispatch/QuickDispatchDialog";
 import { dispatchEnabled } from "../dispatch/dispatchAvailability";
 import { useState, type ReactNode } from "react";
-import { Alert, Button, Card, Collapse, Descriptions, Empty, Grid, Input, Modal, Popconfirm, Table } from "antd";
+import { Alert, Button, Card, Collapse, Descriptions, Empty, Grid, Input, Modal, Popconfirm, Table, Tag } from "antd";
 import { ChevronRight, PencilLine, Trash2, RefreshCw } from "lucide-react";
 import { WorkOrder, UserProfile } from "../../../../shared/types";
 import { LegacySyncStatusChip, StatusChip } from "../../shared/ui/Status";
@@ -20,7 +23,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
     role, currentUser, deleteDraft, actionLoading
   } = controller;
   const signature = useArchiveSignature(currentUser, controller.acceptRefreshedOrder, controller.refreshArchiveSummary);
-  const [detailOrderId, setDetailOrderId] = useState<string>();
+  const [detailOrderId, setDetailOrderId] = useState<string | undefined>(()=>new URLSearchParams(location.search).get("paperOrder") || undefined);
   const detailOrder = controller.orders.find(order => order.id === detailOrderId);
   const legacyRefresh = useArchiveLegacyRefresh(currentUser, controller.acceptRefreshedOrder, controller.refreshArchiveSummary);
   // The archive API returns the full authorized list; search and table pagination
@@ -32,7 +35,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
     description={legacyRefresh.report.failures.length ? <ul style={{ paddingLeft: 18, marginBottom: 0 }}>{legacyRefresh.report.failures.map(failure =>
       <li key={failure.id}>{failure.id}：{failure.message}</li>)}</ul> : "已更新本地数据库，可查看最新详情或打印。"} /> : null;
   const [dispatchOrder, setDispatchOrder] = useState<WorkOrder>();
-  const canAssign = (order: WorkOrder) => dispatchEnabled && ["advisor","manager"].includes(role) && workOrderDisplayStatus(order) === "待派工" && (!order.technician || order.technician === "待派工");
+  const canAssign = (order: WorkOrder) => dispatchEnabled && ["advisor","manager"].includes(role) && order.shop.id===currentUser?.shopId && workOrderDisplayStatus(order) === "待派工" && (!order.technician || order.technician === "待派工");
   const [deleteError, setDeleteError] = useState("");
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
@@ -52,7 +55,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
   }
 
   const canManageDraft = Boolean(
-    detailOrder?.status === "草稿"
+    detailOrder?.status === "草稿" && detailOrder.shop.id === currentUser?.shopId
     && (role === "manager" || detailOrder.advisor === currentUser?.name)
   );
 
@@ -74,6 +77,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
           <p>点击任一委托单可查看完整归档内容。</p>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minWidth: 0, maxWidth: "100%" }}>
+        <Button onClick={() => void controller.refreshWorkbench()}>刷新列表</Button>
         {["advisor", "manager"].includes(role) && <Button icon={<RefreshCw size={16}/>} loading={Boolean(legacyRefresh.progress)}
           disabled={!refreshTargets.length || Boolean(legacyRefresh.progress)} onClick={() => void legacyRefresh.refresh(refreshTargets)}>
           {legacyRefresh.progress ? `正在更新 ${legacyRefresh.progress.done}/${legacyRefresh.progress.total}` : `全部从润丰更新（${refreshTargets.length}）`}
@@ -94,6 +98,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
                   <span className="archive-order-statuses">
                     <StatusChip status={workOrderDisplayStatus(order)} />
                     <OrderLegacySyncStatus order={order} />
+                    {order.paperOrder && <Tag color="orange">纸质委托书</Tag>}
                   </span>
                 </div>
                 <span className="archive-order-owner">{order.customer.name || "未登记车主"}</span>
@@ -123,7 +128,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
             { title: "车主", render: (_, order) => order.customer.name || "-" },
             { title: "服务顾问", dataIndex: "advisor" },
             { title: "维修技师", dataIndex: "technician" },
-            { title: "业务状态", render: (_, order) => <StatusChip status={workOrderDisplayStatus(order)} /> },
+            { title: "业务状态", render: (_, order) => <><StatusChip status={workOrderDisplayStatus(order)} />{order.paperOrder && <Tag color="orange">纸质委托书</Tag>}</> },
             { title: "润丰同步", render: (_, order) => <OrderLegacySyncStatus order={order} /> },
             { title: "金额", render: (_, order) => order.settlementAmount || order.estimatedFee ? `¥${order.settlementAmount || order.estimatedFee}` : "-" },
             { title: "更新时间", dataIndex: "updatedAt", width: 145 }
@@ -145,6 +150,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
             {detailOrder && legacyRefresh.canRefresh(detailOrder) && <Button icon={<RefreshCw size={16}/>} loading={Boolean(legacyRefresh.progress)}
               disabled={Boolean(legacyRefresh.progress)} onClick={() => void legacyRefresh.refresh([detailOrder])}>从润丰更新</Button>}
             {detailOrder && <WorkOrderPrintButton order={detailOrder} />}
+
             {canManageDraft && detailOrder ? (
               <Popconfirm
                 title="确认删除这张草稿？"
@@ -164,8 +170,12 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
             <Button onClick={() => setDetailOrderId(undefined)}>关闭</Button>
           </div>
         )}
-        styles={{ body: { maxHeight: isMobile ? "calc(100vh - 132px)" : "72vh", overflowY: "auto" } }}
+        styles={{ body: { maxHeight: isMobile ? "calc(100vh - 220px)" : "72vh", overflowY: "auto" } }}
       >
+        {detailOrder && <PaperOrderResolution key={`paper-${detailOrder.id}`} order={detailOrder} user={currentUser} onUpdated={controller.acceptRefreshedOrder} onEdit={resumeDraft}/>}
+        {detailOrder && <div style={{ marginBottom: 12 }}><CustomerVehicleEditor key={`${detailOrder.id}-${currentUser?.id}`} order={detailOrder} user={currentUser}
+          disabled={Boolean(legacyRefresh.progress)} onUpdated={order => { controller.acceptRefreshedOrder(order); controller.refreshArchiveSummary(); }} /></div>}
+        {detailOrder && <CustomerVehicleUpdateNotice order={detailOrder} />}
         {refreshReport}
         {signature.error && <Alert type="error" showIcon title="发起签字失败" description={signature.error} style={{ marginBottom: 12 }} />}
         {deleteError ? <Alert type="error" showIcon title="删除草稿失败" description={deleteError} style={{ marginBottom: 12 }} /> : null}
@@ -179,6 +189,14 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
 }
 
 function OrderDetail({ order, isMobile, user, onUpdated }: { order: WorkOrder; isMobile: boolean; user?: UserProfile; onUpdated:(order:WorkOrder)=>void }) {
+  if (order.paperOrder?.mode === "pending") return <>
+    <Descriptions bordered size="small" column={isMobile ? 1 : 3} items={[
+      {key:"id",label:"委托单号",children:order.id},
+      {key:"advisor",label:"服务顾问",children:order.advisor},
+      {key:"created",label:"创建时间",children:order.createdAt}
+    ]}/>
+    <SubmittedOrderPhotos order={order} user={user} onUpdated={onUpdated} section="other"/>
+  </>;
   const signatures = Object.entries(order.signatures).map(([type, name]) => `${type}: ${name}`).join("；") || "-";
   const signatureFiles = (order.files ?? []).filter((file) => file.kind === "signature_image");
   const descriptions = [
@@ -225,7 +243,7 @@ function OrderDetail({ order, isMobile, user, onUpdated }: { order: WorkOrder; i
 
 function OrderLegacySyncStatus({ order }: { order: WorkOrder }) {
   if (order.status === "草稿") return null;
-  return <LegacySyncStatusChip status={order.legacySyncStatus} />;
+  return <><LegacySyncStatusChip status={order.legacySyncStatus} /><CustomerVehicleUpdateTag order={order} /></>;
 }
 
 function MobileOrderRecords({ order }: { order: WorkOrder }) {

@@ -3,7 +3,7 @@
 H5 委托单以 PostgreSQL 为主库。保存草稿时只写 `work_orders`，不会创建同步事件。
 客户完成签字后，系统在同一个 PostgreSQL 事务中把委托单状态改为 `已委托`，并向
 `legacy_sync_outbox` 写入一条 `pending` 事件，不再由 H5 直接写 SQL Server。
-后续保存、派工、维修和结算状态变化不会再次加入润丰同步队列。
+后续草稿保存、派工、维修和结算状态变化不会再次加入润丰同步队列。启用已同步单四项更正后，专用编辑操作产生新的 `updated` 事件；详见 [更新对接说明](./runfeng-customer-vehicle-update.md)。
 
 因此两类状态应分开理解：
 
@@ -32,7 +32,7 @@ from claim_legacy_sync_events('runfeng-production', 20);
 - `event_id`：幂等键，同一个事件不得在 SQL Server 重复创建；
 - `order_id`：H5 委托单号；
 - `revision`：委托单版本；
-- `event_type`：当前固定为 `created`，代表一张新接车单；
+- `event_type`：`created` 创建接车单；`updated` 仅更正四项信息及车辆档案，禁止新建维修单（默认关闭）；
 - `payload`：版本化的完整委托单 JSON；
 - `legacy_reid`、`legacy_document_no`、`legacy_dispatch_no`：已有旧系统关联，
   成功回填后用于关联旧系统记录。
@@ -172,7 +172,9 @@ grant execute on function fail_legacy_sync_events(text, jsonb)
 
 - `event_id` 是消费幂等键；
 - `created` 必须在 SQL Server 事务内生成真实 `dh` 和 `pgd`；
-- 当前 H5 不发送修改或取消事件；
+- `updated` 必须保留原 `reid/dh/pgd`，使用四项字段白名单更新当前单和车辆档案；
+- 四项信息以钉钉确认值为准，新单遇到已有车牌也适用；
+- H5 暂不发送取消事件；
 - SQL Server 事务提交失败时不得 ACK；
 - 不允许通过 `MAX(pgd) + 1` 在 PostgreSQL 侧预生成 A 系列派工号；
 - 日志中不得记录完整手机号、客户姓名、VIN 或整个 `payload`。

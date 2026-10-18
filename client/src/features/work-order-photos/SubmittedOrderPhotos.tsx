@@ -6,7 +6,7 @@ import { PreRepairPhotos } from "../pre-repair-photos/PreRepairPhotos";
 import { useOrderPhotoUpload } from "./useOrderPhotoUpload";
 
 export function SubmittedOrderPhotos({order, user, onUpdated, section = "all"}: {
-  order: WorkOrder; user?: UserProfile; onUpdated:(order: WorkOrder)=>void; section?:"all"|"license"|"repair";
+  order: WorkOrder; user?: UserProfile; onUpdated:(order: WorkOrder)=>void; section?:"all"|"license"|"repair"|"other";
 }) {
   const upload = useOrderPhotoUpload(order.id, user?.id, onUpdated);
   const canUpload = order.status !== "草稿" && user?.active && user.shopId === order.shop.id
@@ -36,8 +36,8 @@ export function SubmittedOrderPhotos({order, user, onUpdated, section = "all"}: 
   return <>
     {upload.error && <Alert type="error" showIcon title={upload.error} style={{marginTop:12}}/>}
     {upload.success && <Alert type="success" showIcon title="照片已保存" style={{marginTop:12}}/>}
-    {section !== "license" && <PreRepairPhotos photos={order.inspection.preRepairPhotos} disabled={!canUpload} controls={controls}/>}
-    {section !== "repair" && gallery("vehicleLicense", "行驶证照片")}
-    {section === "all" && gallery("other", "其他照片")}
+    {["all","repair"].includes(section) && <PreRepairPhotos required={!order.paperOrder} photos={order.inspection.preRepairPhotos} disabled={!canUpload} controls={controls}/>}
+    {["all","license"].includes(section) && gallery("vehicleLicense", "行驶证照片")}
+    {["all","other"].includes(section) && gallery("other", "其他照片")}
   </>;
 }

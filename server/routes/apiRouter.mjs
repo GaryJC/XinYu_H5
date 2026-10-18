@@ -1,4 +1,6 @@
+import { resolvePaperOrder, submitPaperDingTalkOrder } from "../services/paperOrderService.mjs";
 import { saveWorkOrderPhoto } from "../services/workOrderPhotoService.mjs";
+import { updateCustomerVehicle } from "../services/customerVehicleUpdateService.mjs";
 import { refreshWorkOrderFromLegacy } from "../services/workOrderRefreshService.mjs";
 import { handleDispatchRequest } from "./dispatchRouter.mjs";
 import { executeDispatchAction } from "../services/dispatchService.mjs";
@@ -225,6 +227,23 @@ export async function handleApiRequest(req, res, url) {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     await assertWorkOrderAccess(workOrderMatch[1], currentUser);
     sendJson(res, 200, await deleteDraftWorkOrder(workOrderMatch[1]));
+    return true;
+  }
+
+  const paperMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/paper-order\/(resolve|submit)$/);
+  if (paperMatch && req.method === "POST") {
+    requireAnyRole(currentUser, ["advisor", "manager"]);
+    const id = decodeURIComponent(paperMatch[1]);
+    sendJson(res, 200, paperMatch[2] === "resolve"
+      ? await resolvePaperOrder(id, await readJson(req), currentUser)
+      : await submitPaperDingTalkOrder(id, currentUser));
+    return true;
+  }
+
+  const customerVehicleMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/customer-vehicle$/);
+  if (customerVehicleMatch && req.method === "PATCH") {
+    requireAnyRole(currentUser, ["advisor", "manager"]);
+    sendJson(res, 200, await updateCustomerVehicle(decodeURIComponent(customerVehicleMatch[1]), await readJson(req), currentUser));
     return true;
   }
 

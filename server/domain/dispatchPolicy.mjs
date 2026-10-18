@@ -6,7 +6,7 @@ const fail = (message, status = 409) => { throw new HttpError(status, message); 
 export function assertDispatchAccess(task, actor) {
   if (!actor?.active || !DISPATCH_ROLES.includes(actor.role) || task.shopId !== actor.shopId) fail('无权访问该门店任务',403);
   if (scheduling.includes(actor.role)) return;
-  if (['草稿','待客户签字'].includes(task.orderStatus)) fail('客户尚未签字，无权访问该维修任务',403);
+  if (['草稿','待客户签字','待处理纸质委托书'].includes(task.orderStatus)) fail('客户尚未签字，无权访问该维修任务',403);
   if (actor.role === 'technician' && technicianIds(task).includes(actor.id)) return;
   if (actor.role === 'inspector' && task.inspectorId === actor.id) return;
   fail('任务已改派或不属于当前员工',403);
@@ -30,7 +30,7 @@ export function validateDispatchRequest(input) {
 export function applyDispatchAction(task, input, actor, people, now = new Date().toISOString()) {
   validateDispatchRequest(input);
   assertDispatchAccess(task,actor);
-  if (['草稿','待客户签字'].includes(task.orderStatus) || ['草稿','待客户签字'].includes(task.stage)) fail('客户签字后才能执行派工操作');
+  if (['草稿','待客户签字','待处理纸质委托书'].includes(task.orderStatus) || ['草稿','待客户签字','待处理纸质委托书'].includes(task.stage)) fail('客户签字后才能执行派工操作');
   if (task.version !== input.expectedVersion) fail('任务已更新，请刷新后重试');
   const next = structuredClone(task);
   const action = input.action;

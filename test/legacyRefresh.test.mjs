@@ -21,7 +21,8 @@ test("initial unique-name matching preserves local project identity and progress
   assert.equal(result.items[0].existing.start_at, item.start_at);
   assert.equal(result.fields.arrival_date, "2026-10-15");
   assert.equal(result.fields.estimated_fee, 120);
-  for (const protectedField of ["status", "advisor", "shop_id", "signatures", "inspection", "settlement_amount"]) assert.ok(!(protectedField in result.fields));
+  for (const protectedField of ["status", "advisor", "shop_id", "signatures", "inspection", "settlement_amount",
+    "customer_contact", "customer_phone", "customer_name", "customer_legacy_code", "vehicle_model", "vehicle_model_legacy_code"]) assert.ok(!(protectedField in result.fields));
 });
 test("stable source ids allow later rename and reorder without losing execution history", () => {
   const source = snapshot(); source.items[0].hh = "调整后的维修名称";

@@ -2,6 +2,7 @@ export type RoleKey = "advisor" | "technician" | "inspector" | "manager";
 export type DevelopmentPersonaKey = RoleKey | "unassigned" | "disabled";
 
 export type WorkOrderStatus =
+  | "待处理纸质委托书"
   | "草稿"
   | "待客户签字"
   | "已委托"
@@ -276,7 +277,15 @@ export type WorkOrderDispatchPlan = DispatchExecution & {
   activatedAt?: string;
 };
 
+export type PaperOrder = { mode: "pending" | "dingtalk" | "runfeng"; photoIds: string[] };
+export type PaperOrderResolution = { mode: "dingtalk" } | { mode: "runfeng"; dispatchNo: string };
+
 export type WorkOrder = {
+  paperOrder?: PaperOrder;
+  customerVehicleEditEnabled?: boolean;
+  customerVehicleLinkComplete?: boolean;
+  customerVehicleUpdatedAt?: string;
+  customerVehicleUpdatedBy?: string;
   dispatchStage?: DispatchStage;
   dispatchPlan?: WorkOrderDispatchPlan | null;
   id: string;
@@ -422,4 +431,14 @@ export type WorkOrderPhotoUpdate = {
   fileId: string;
   replaceFileId?: string;
   slot: "vehicleLicense" | "front45" | "rear45" | "mileage" | "extra" | "other";
+};
+
+export type WorkOrderCustomerVehicleUpdate = {
+  expectedRevision: number;
+  contact: string;
+  phone: string;
+  model: string;
+  modelLegacyCode: string;
+  organization: string;
+  organizationLegacyCode: string;
 };

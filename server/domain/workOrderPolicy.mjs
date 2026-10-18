@@ -82,7 +82,7 @@ export function assertSettlementAllowed(status) {
 }
 
 export function assertPlatformSyncAllowed(order) {
-  if (["草稿", "待客户签字"].includes(order.status)) {
+  if (["草稿", "待客户签字", "待处理纸质委托书"].includes(order.status)) {
     throw new HttpError(409, "客户完成签字后才能同步维修平台");
   }
   if (order.platformOrderNo) throw new HttpError(409, `委托单已同步维修平台：${order.platformOrderNo}`);

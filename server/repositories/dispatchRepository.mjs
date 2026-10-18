@@ -27,7 +27,7 @@ export async function getDispatchTask(client, id, actor, lock=false) {
 export async function listDispatchTasks(actor, client=pool) {
   if(!actor?.active || !['manager','advisor','technician','inspector'].includes(actor.role)) throw new HttpError(403,'无权访问派工模块');
   const restriction=actor.role==='technician'?"and (dt.technician_id=$2 or dt.data->'technicianIds' ? $2)":actor.role==='inspector'?'and dt.inspector_id=$2':'';
-  const {rows}=await client.query(`${projection} where wo.shop_id=$1 ${restriction}
+  const {rows}=await client.query(`${projection} where wo.shop_id=$1 and wo.status <> '待处理纸质委托书' ${restriction}
     order by coalesce((dt.data->>'urgent')::boolean,false) desc,
       nullif(dt.data->>'dueAt','')::timestamptz asc nulls last, wo.arrival_date asc, wo.id asc`,
     restriction?[actor.shopId,actor.id]:[actor.shopId]);

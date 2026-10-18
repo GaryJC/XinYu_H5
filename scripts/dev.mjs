@@ -6,7 +6,7 @@ const vitePort = process.env.VITE_PORT || "5173";
 const startLocalApi = process.env.START_LOCAL_API !== "false";
 
 const commands = [["vite", ["--host", viteHost, "--port", vitePort]]];
-if (startLocalApi) commands.unshift(["node", ["server/server.mjs"]]);
+if (startLocalApi) commands.unshift(["node", ["--watch", "server/server.mjs"]]);
 
 process.env.API_PORT = apiPort;
 process.env.API_PROXY_TARGET ||= `http://localhost:${apiPort}`;

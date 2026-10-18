@@ -73,6 +73,10 @@ export async function attachFileToOrder(fileId, orderId, runTransaction = transa
 
 export async function assertFileReadAccess(fileId, user, database = pool) {
   const file = await findFileAccess(fileId, database);
+  if (user.active && user.id && ["advisor", "manager"].includes(user.role) && file.paper_order && file.shop_id !== user.shopId) {
+    const notification = await database.query("select 1 from dispatch_notifications where order_id=$1 and recipient_id=$2 and kind='纸质委托书已创建' limit 1", [file.order_id, user.id]);
+    if (notification.rows.length) return;
+  }
   if (!user.shopId || file.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店文件");
   if (user.role === "manager") return;
   if (user.role === "advisor" && (file.uploaded_by === user.id || file.advisor)) return;
@@ -94,7 +98,7 @@ export async function assertFileAccess(fileId, user, database = pool) {
 async function findFileAccess(fileId, database) {
   const { rows } = await database.query(
     `
-      select f.uploaded_by, f.order_id, f.kind, wo.advisor, wo.status, coalesce(wo.shop_id,u.shop_id) as shop_id, dt.technician_id, dt.data->'technicianIds' as technician_ids, dt.inspector_id
+      select f.uploaded_by, f.order_id, f.kind, wo.advisor, wo.status, wo.paper_order, coalesce(wo.shop_id,u.shop_id) as shop_id, dt.technician_id, dt.data->'technicianIds' as technician_ids, dt.inspector_id
       from files f
       left join work_orders wo on wo.id = f.order_id
       left join users u on u.id=f.uploaded_by

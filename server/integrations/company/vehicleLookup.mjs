@@ -53,7 +53,7 @@ export async function lookupVehicleInCompanySystem({ plate, vin, model, owner } 
       found: true,
       status: "found",
       vehicle: publicVehicle(vehicleResolution.vehicle),
-      message: "已从公司系统匹配到现有车辆，继续使用原车型和所属单位"
+      message: "已匹配到现有车辆，请确认车型和所属单位；同步以钉钉确认的信息为准"
     };
   }
 

@@ -1,8 +1,8 @@
 # 鑫宇 H5 与润丰维修系统轮询对接说明
 
-版本：1.0  
+版本：1.1（四项更正需消费者适配后启用）
 对接方式：PostgreSQL Outbox 轮询  
-适用范围：H5 客户签字后的维修委托单创建、车型/所属单位/车辆档案复用或新增、润丰单号回填
+适用范围：H5 客户签字后的维修委托单创建、车型/所属单位/车辆档案复用或新增、润丰单号回填，以及已同步单四项更正。新增协议和上线条件见 [四项更正对接说明](./runfeng-customer-vehicle-update.md)。
 
 ## 1. 对接目标
 
@@ -12,7 +12,7 @@ PostgreSQL 中生成一条待处理事件。润丰同步程序轮询领取事件
 
 本方案中：
 
-- H5 API **不直接写入**润丰 `qxwxb/qxwxmxb/qxclxxb/cxb/khxxb`；
+- 委托单创建和四项更正通过队列交给润丰，不直接写 `qxwxb/qxwxmxb/qxclxxb`；已有“新增车型/所属单位”操作会直接创建或复用 `cxb/khxxb`，不重命名共享档案；
 - 草稿不会进入润丰队列；
 - 客户签字后事件状态为 `pending`，H5 显示“润丰：待拉取”；
 - 润丰领取后状态为 `processing`，H5 显示“润丰：拉取中”；
@@ -71,7 +71,7 @@ processing（拉取中）
     └─ SQL Server 回滚     → fail → failed（同步失败，延迟后可重新领取）
 ```
 
-保存草稿或修改草稿不会产生事件。当前正式业务只产生 `event_type = created` 的首次创建事件。
+保存草稿或修改草稿不会产生事件。签字产生 `created`；启用四项更正后，专用编辑产生 `updated`。两者消费行为必须分开，`updated` 不创建维修单或改动项目、金额、业务状态。
 
 ## 5. 领取事件
 
@@ -102,7 +102,7 @@ from claim_legacy_sync_events('runfeng-production', 20);
 | `event_id` | 全局事件编号，也是润丰幂等键 |
 | `order_id` | H5 委托单号 |
 | `revision` | 同一委托单的同步版本 |
-| `event_type` | 当前为 `created` |
+| `event_type` | `created` 创建，`updated` 四项更正（默认关闭） |
 | `payload_version` | 当前为 `1` |
 | `payload` | 完整委托单 JSON |
 | `attempt_count` | 已领取次数 |
@@ -219,7 +219,7 @@ from claim_legacy_sync_events('runfeng-production', 20);
 1. 车牌命中已有车辆：优先复用该车辆；
 2. VIN 命中已有车辆：复用该车辆；
 3. 车牌和 VIN 分别指向不同车辆：停止处理并回填错误，不得自动合并；
-4. 已有车辆必须继续使用其现存 `qxclxxb.cx` 和 `qxclxxb.ssdw`，不能用 OCR 名称覆盖；
+4. 已有车辆复用车辆身份，车型、所属单位、联系人和联系方式以员工在钉钉确认的 payload 为准；车型和单位必须按编码核验，不直接以 OCR 原文覆盖共享主数据；
 5. 均未命中时，按下一节创建新主数据及车辆档案。
 
 ## 9. 新增车型、所属单位和车辆档案
@@ -238,11 +238,10 @@ H5 允许员工录入润丰不存在的车型和所属单位：
 BEGIN TRANSACTION
 
 1. 再查 qxclxxb（车牌/VIN）
-2. 若为新车辆：
-   a. 按 modelLegacyCode 查询 cxb.bh
-   b. 按 customer.legacyCode 查询 khxxb.bm
-   c. 复用同名编码或创建缺失主数据
-   d. 创建 qxclxxb 车辆档案
+2. 无论新旧车辆，都按 modelLegacyCode / customer.legacyCode 核验或创建主数据
+   a. 编码存在时要求名称一致，不重命名共享档案
+   b. 新车辆创建 qxclxxb；已有车辆更新四项信息及车型/单位关联
+   c. 同车旧事件不得覆盖较新档案（见四项更正对接说明）
 3. 使用润丰完整保存逻辑创建 qxwxb
 4. 创建 qxwxmxb 项目明细
 5. 记录 event_id 与生成的 reid/dh/pgd

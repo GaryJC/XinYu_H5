@@ -1,3 +1,4 @@
+import { assertPaperPhotoIds, attachPaperPhotos, enqueuePaperNotifications } from "./repositories/paperOrderRepository.mjs";
 import { attachDraftVehicleLicense } from "./repositories/draftVehicleLicenseRepository.mjs";
 import { attachPreRepairPhotos } from "./repositories/preRepairPhotoRepository.mjs";
 import { assertPreRepairPhotosReady } from "./domain/preRepairPhotos.mjs";
@@ -71,15 +72,21 @@ export async function createWorkOrder(draft, actor, actorUser) {
   if (!draft || typeof draft !== "object" || Array.isArray(draft)) {
     throw new HttpError(400, "缺少有效的委托单草稿");
   }
+  if (draft.paperOrder) assertPaperPhotoIds(draft.paperOrder);
   return transaction(async (client) => {
     const order = {
       ...createOrderFromDraft(draft),
-      dispatchNo: ""
+      dispatchNo: "",
+      ...(draft.paperOrder ? { status: "待处理纸质委托书", vehicle: {}, customer: {}, department: { code: "", name: "" }, faultDescription: "", estimatedFee: 0, settlementAmount: 0, feeNote: "", estimatedDeliveryAt: "", repairItems: [], dispatchPlan: null, signatures: {}, inspection: { belongings: [], fuelLevel: "1/2", exteriorIssues: [] } } : {})
     };
     await upsertWorkOrder(client, order);
+    if (order.paperOrder) {
+      await attachPaperPhotos(client, order, actorUser?.id);
+      await enqueuePaperNotifications(client, order);
+    }
     await attachPreRepairPhotos(client, order, actorUser?.id);
     await attachDraftVehicleLicense(client, order, actorUser?.id);
-    await saveDispatchPlan(client, order, actorUser, draft.dispatchPlan);
+    await saveDispatchPlan(client, order, actorUser, order.dispatchPlan);
     await addAudit(client, order.id, actor, "创建委托单草稿");
     return findWorkOrderById(client, order.id);
   });
@@ -93,6 +100,7 @@ export async function updateWorkOrder(order, actor, action, actorUser) {
     const next = {
       ...existing,
       ...order,
+      paperOrder: existing.paperOrder,
       id: existing.id,
       createdAt: existing.createdAt,
       advisor: existing.advisor,
@@ -155,6 +163,7 @@ export async function createSignatureTokenForOrder(id, actor) {
     const order = await findWorkOrderById(client, id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
     if (order.status !== "草稿") throw new HttpError(409, `当前状态“${order.status}”不能发起签字`);
+    if (order.paperOrder) throw new HttpError(409, "纸质委托书无需电子签字，请提交纸质委托单");
     assertOrderReadyForSignature(order);
     assertPreRepairPhotosReady(order);
     const token = createSignatureToken(id);
@@ -442,7 +451,7 @@ async function hydrateOrders(rows, client = pool) {
   }));
 }
 
-async function upsertWorkOrder(client, order) {
+export async function upsertWorkOrder(client, order) {
   await client.query(
     `
       insert into work_orders (
@@ -452,7 +461,7 @@ async function upsertWorkOrder(client, order) {
         customer_name, customer_legacy_code, customer_phone, customer_contact, customer_address,
         inspection, fault_description, estimated_fee, old_parts_handling,
         estimated_delivery_at, settlement_amount, fee_note, platform_order_no,
-        created_at, updated_at, vehicle_is_military
+        created_at, updated_at, paper_order, vehicle_is_military
       ) values (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10, $11, $12, $13,
@@ -460,7 +469,7 @@ async function upsertWorkOrder(client, order) {
         $20, $21, $22, $23, $24,
         $25::jsonb, $26, $27, $28,
         $29, $30, $31, $32,
-        $33, $34, $35
+        $33, $34, $35::jsonb, $36
       )
       on conflict (id) do update set
         status = excluded.status,
@@ -476,6 +485,7 @@ async function upsertWorkOrder(client, order) {
         shop_address = excluded.shop_address,
         shop_phone = excluded.shop_phone,
         vehicle_is_military = excluded.vehicle_is_military,
+        paper_order = excluded.paper_order,
         vehicle_plate = excluded.vehicle_plate,
         vehicle_vin = excluded.vehicle_vin,
         vehicle_mileage = excluded.vehicle_mileage,
@@ -582,6 +592,11 @@ export function roleFilter(role, user) {
   const base = "where wo.shop_id = $1";
   if (role === "technician") return { where: `${base} and exists (select 1 from dispatch_tasks dt where dt.order_id=wo.id and (dt.technician_id=$2 or dt.data->'technicianIds' ? $2))`, params: [user.shopId,user.id] };
   if (role === "inspector") return { where: `${base} and exists (select 1 from dispatch_tasks dt where dt.order_id=wo.id and dt.inspector_id=$2)`, params: [user.shopId,user.id] };
+  if (user.id && ["advisor", "manager"].includes(role)) return {
+    where: `where (wo.shop_id = $1 or (wo.paper_order is not null and exists (
+      select 1 from dispatch_notifications n where n.order_id=wo.id and n.recipient_id=$2 and n.kind='纸质委托书已创建'
+    )))`, params: [user.shopId, user.id]
+  };
   return { where: base, params: [user.shopId] };
 }
 

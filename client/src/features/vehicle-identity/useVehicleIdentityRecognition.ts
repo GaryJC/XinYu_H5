@@ -180,7 +180,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
   };
 }
 
-function applyVehicleLookup(draft: WorkOrderDraft, history: VehicleHistoryLookupResult) {
+export function applyVehicleLookup(draft: WorkOrderDraft, history: VehicleHistoryLookupResult) {
   if (history.found && history.vehicle) {
     const organizationName = history.vehicle.organization?.name || "";
     return {
@@ -189,15 +189,15 @@ function applyVehicleLookup(draft: WorkOrderDraft, history: VehicleHistoryLookup
         ...draft.vehicle,
         plate: history.vehicle.plate || draft.vehicle.plate,
         vin: history.vehicle.vin || draft.vehicle.vin,
-        model: history.vehicle.model || draft.vehicle.model,
-        modelLegacyCode: history.vehicle.modelLegacyCode || ""
+        model: draft.vehicle.modelLegacyCode ? draft.vehicle.model : history.vehicle.model || draft.vehicle.model,
+        modelLegacyCode: draft.vehicle.modelLegacyCode || history.vehicle.modelLegacyCode || ""
       },
-      customer: organizationName
+      customer: organizationName && !draft.customer.legacyCode
         ? {
             ...draft.customer,
             name: organizationName,
             legacyCode: history.vehicle.organization?.code || "",
-            contact: organizationName
+            contact: draft.customer.contact || organizationName
           }
         : draft.customer
     };
@@ -228,7 +228,7 @@ function applyReferenceCandidate(draft: WorkOrderDraft, kind: "model" | "organiz
       ...draft.customer,
       name: candidate.value,
       legacyCode: candidate.code || "",
-      contact: candidate.value
+      contact: draft.customer.contact || candidate.value
     }
   };
 }

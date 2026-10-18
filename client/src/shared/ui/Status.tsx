@@ -2,6 +2,7 @@ import { DispatchStage, LegacySyncStatus, WorkOrderStatus } from "../../../../sh
 import { Card, Statistic, Tag } from "antd";
 
 const statusColor: Record<WorkOrderStatus | DispatchStage, string> = {
+  待处理纸质委托书: "orange",
   草稿: "default",
   待客户签字: "gold",
   已委托: "cyan",

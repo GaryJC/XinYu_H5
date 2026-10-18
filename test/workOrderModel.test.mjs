@@ -29,7 +29,7 @@ test("repair actions have stable audit labels", () => {
 
 test("PostgreSQL work-order values preserve the legacy model code", () => {
   const values = workOrderValues({ vehicle: { modelLegacyCode: "DZXPST" } });
-  assert.equal(values.length, 35);
+  assert.equal(values.length, 36);
   assert.equal(values[17], "DZXPST");
 });
 

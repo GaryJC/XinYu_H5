@@ -1,4 +1,5 @@
 import { HttpError } from "../http/HttpError.mjs";
+import { assertPaperPhotoIds } from "./paperOrderRepository.mjs";
 import { preRepairPhotoIds } from "../domain/preRepairPhotos.mjs";
 
 const slots = {
@@ -50,6 +51,16 @@ export async function updateWorkOrderPhoto(client, id, input, actor) {
     else photos[input.slot] = file.id;
     preRepairPhotoIds(photos);
     inspection.preRepairPhotos = photos;
+  }
+  const replacesPaperPhoto = order.paper_order?.photoIds?.includes(input.replaceFileId);
+  const addsPendingPaperPhoto = order.paper_order?.mode === "pending" && !input.replaceFileId;
+  if (input.slot === "other" && (replacesPaperPhoto || addsPendingPaperPhoto)) {
+    const photoIds = replacesPaperPhoto
+      ? order.paper_order.photoIds.map(photoId => photoId === input.replaceFileId ? file.id : photoId)
+      : [...order.paper_order.photoIds, file.id];
+    const paper = { ...order.paper_order, photoIds: [...new Set(photoIds)] };
+    assertPaperPhotoIds(paper);
+    await client.query("update work_orders set paper_order=$2::jsonb where id=$1", [id, JSON.stringify(paper)]);
   }
   await client.query("update files set order_id=$2 where id=$1", [file.id, id]);
   await client.query("update ocr_records set order_id=$2 where file_id=$1 and (order_id is null or order_id=$2)", [file.id, id]);

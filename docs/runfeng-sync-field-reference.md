@@ -1,8 +1,9 @@
 # `legacy_sync_outbox` 与润丰字段对应关系
 
 H5 以 PostgreSQL 为主库。草稿不进入同步队列；客户完成签字后，系统创建一条
-`legacy_sync_outbox.status = 'pending'` 事件，由润丰程序轮询处理。H5 API 不直接写
-`qxwxb`、`qxwxmxb`、`qxclxxb`、`cxb` 或 `khxxb`。
+`legacy_sync_outbox.status = 'pending'` 事件，由润丰程序轮询处理。委托单创建和更正不直接写
+`qxwxb`、`qxwxmxb`、`qxclxxb`；独立的新增车型/单位操作会直接创建或复用 `cxb/khxxb`。
+四项更正协议和启用条件见 [更新对接说明](./runfeng-customer-vehicle-update.md)。
 
 ## 队列与回填字段
 
@@ -11,7 +12,7 @@ H5 以 PostgreSQL 为主库。草稿不进入同步队列；客户完成签字�
 | `event_id` | 同步事件和幂等键 | 消费端保存并防止同一事件重复插单 |
 | `order_id` | H5 委托单号 | 业务来源标识，不得作为 `reid/dh/pgd` |
 | `revision` | 同一委托单的同步版本 | 按版本顺序处理 |
-| `event_type` | 当前为 `created` | 创建维修单 |
+| `event_type` | `created` / `updated` | 创建维修单 / 更正当前单及车辆档案四项信息 |
 | `payload` | 完整委托单 JSON | 拆分写入润丰业务表 |
 | `status` | `pending/processing/synced/failed` | 由领取和 ACK/失败函数维护 |
 | `legacy_reid` | 润丰主记录标识 | 成功后回填 `qxwxb.reid` |
@@ -43,19 +44,19 @@ ACK 成功后，数据库函数同步更新 `work_orders.legacy_reid`、
 
 ## 已有车辆与新增主数据
 
-H5 在录单时仍直接读取润丰主数据用于匹配，但不会写入润丰：
+H5 在录单时读取润丰主数据用于匹配，并提供独立的新增车型/单位能力：
 
-- 优先按车牌或 VIN 匹配 `qxclxxb`；已有车辆继续使用其现存车型和所属单位编码；
+- 优先按车牌或 VIN 匹配 `qxclxxb`；已有车辆复用身份，四项信息以员工在钉钉确认的内容为准；
 - 车型和所属单位使用 AutoComplete，可选择已有 `cxb`/`khxxb` 项；
 - 找不到时允许员工新增。H5 根据中文名称生成拼音首字母默认编码：车型默认大写、
   所属单位默认小写，员工可以修改；
 - 编码输入停止 350ms 后查询润丰，已被任何主数据占用时要求修改；
 - 确认后的名称和编码分别保存在 PostgreSQL，并随 payload 一起交给润丰消费者。
 
-润丰消费者处理新车辆时必须在同一个 SQL Server 事务内：
+润丰消费者处理 `created` 新委托单时必须在同一个 SQL Server 事务内：
 
 1. 再次按车牌或 VIN 查询 `qxclxxb`，防止轮询等待期间其他员工已经建档；
-2. 已有车辆复用现存 `qxclxxb.cx` 和 `qxclxxb.ssdw`；
+2. 已有车辆也按 payload 核验车型、单位编码，更新四项信息及车辆关联；不得重命名共享车型或单位档案；
 3. 新车辆按 `modelLegacyCode` 查询 `cxb.bh`。不存在时创建车型；如果编码已被不同名称
    占用，则回滚并通过失败接口提示员工修改；
 4. 按 `customer.legacyCode` 查询 `khxxb.bm`，同样执行复用、创建或冲突回滚；

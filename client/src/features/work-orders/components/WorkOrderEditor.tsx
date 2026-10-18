@@ -1,3 +1,6 @@
+import { PaperOrderPhotos } from "./PaperOrderPhotos";
+import { CustomerVehicleUpdateTag } from "../../customer-vehicle-update/CustomerVehicleUpdateTag";
+import { PaperOrderResolution } from "./PaperOrderResolution";
 import { SubmittedOrderPhotos } from "../../work-order-photos/SubmittedOrderPhotos";
 import { VehicleScanIllustration } from "../../vehicle-identity/VehicleScanIllustration";
 import "../work-order-form.css";
@@ -38,6 +41,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     vehicleHistory, vehicleHistoryLoading, vehicleHistoryError, scanVehicleIdentifier,
     lookupVehicleLicenseForDevelopment, selectVehicleReference, departments, departmentError
   } = controller;
+  const paperOnly = draft.paperOrder?.mode === "pending";
+  const paperDingTalk = draft.paperOrder?.mode === "dingtalk";
   const showLegacySyncStatus = Boolean(selectedOrder && selectedOrder.status !== "草稿");
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
   const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "编码", "选择已有"].some((phrase) => error.includes(phrase)));
@@ -74,25 +79,34 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             <div className="panel-header">
               <div>
                 <h2>{selectedOrder ? "委托开单" : "新建委托开单"}</h2>
-                <p>先识别车辆，再完善接车与维修信息。</p>
+                <p>{paperOnly ? "上传纸质委托书照片，创建后选择开单方式。" : "先识别车辆，再完善接车与维修信息。"}</p>
               </div>
               <div className="button-row">
                 <Button className="new-order-button" color="primary" variant="outlined" icon={<Plus size={16} />} onClick={startNewOrder} disabled={!canCreateOrder(role)}>新建委托</Button>
               </div>
             </div>
 
+            <Form.Item label="委托书形式">
+              <Radio.Group aria-label="使用纸质委托书" value={Boolean(draft.paperOrder)} disabled={Boolean(selectedOrder) || !canEditForm || controller.paperPhotos.uploading}
+                onChange={event=>updateDraft({paperOrder:event.target.value ? {mode:"pending",photoIds:[]} : undefined})}>
+                <Radio value={false}>电子委托书</Radio><Radio value={true}>使用纸质委托书</Radio>
+              </Radio.Group>
+            </Form.Item>
+
             <dl className="order-form-summary" aria-label="委托单摘要">
               <div><dt>委托单号</dt><dd>{selectedOrder?.id || "新建草稿"}</dd></div>
               <div><dt>服务顾问</dt><dd>{draft.advisor || "根据钉钉账号自动填写"}</dd></div>
-              <div><dt>派工号</dt><dd>{draft.dispatchNo || "同步成功后自动回填"}</dd></div>
+              <div><dt>派工号</dt><dd>{draft.dispatchNo || (paperOnly ? "待选择开单方式" : "同步成功后自动回填")}</dd></div>
             </dl>
+
+            {selectedOrder && <CustomerVehicleUpdateTag order={selectedOrder} />}
 
             {selectedOrder?.platformOrderNo ? (
               <Alert className="platform-sync-state" type="success" showIcon title={`已同步平台工单：${selectedOrder.platformOrderNo}`} />
             ) : null}
 
             {showLegacySyncStatus && selectedOrder?.legacySyncStatus === "pending" ? (
-              <Alert className="platform-sync-state" type="info" showIcon title="委托单已完成签字，等待润丰系统拉取" />
+              <Alert className="platform-sync-state" type="info" showIcon title={selectedOrder.customerVehicleUpdatedAt ? "修改已保存，等待润丰更新" : draft.paperOrder ? "纸质委托单已提交，等待润丰系统拉取" : "委托单已完成签字，等待润丰系统拉取"} />
             ) : null}
 
             {showLegacySyncStatus && selectedOrder?.legacySyncStatus === "processing" ? (
@@ -114,10 +128,17 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             {!canEditForm ? (
               <div className="readonly-banner">
                 <LockKeyhole size={16} />
-                {canResumeSignature ? "当前委托单内容已锁定，但可以继续完成已发起的客户签字。" : "当前角色只能查看此委托单，字段编辑、OCR 和签字发起已锁定。"}
+                {paperOnly ? "纸质委托书已创建，请在下方选择开单方式。" : canResumeSignature ? "当前委托单内容已锁定，但可以继续完成已发起的客户签字。" : "当前角色只能查看此委托单，字段编辑、OCR 和签字发起已锁定。"}
               </div>
             ) : null}
 
+            {draft.paperOrder && <FormSection title="纸质委托书照片">
+              <PaperOrderPhotos ids={draft.paperOrder.photoIds} disabled={!canEditForm || Boolean(selectedOrder)} controls={controller.paperPhotos}/>
+              {paperOnly && <p className="paper-order-help">只需上传委托书照片。创建后可在详情中选择关联润丰派工单，或在钉钉补全开单。</p>}
+              {selectedOrder?.paperOrder?.mode==="pending" && <PaperOrderResolution order={selectedOrder} user={controller.currentUser}
+                onUpdated={order=>{controller.acceptRefreshedOrder(order);controller.selectOrder(order);}} onEdit={controller.selectOrder}/>}
+            </FormSection>}
+            {!paperOnly && <>
             <FormSection title="车辆识别与资料" description="先查询车辆档案；行驶证照片及 OCR 确认均为选填。">
             <VehicleIdentityRecognition
               disabled={!canEditForm}
@@ -295,7 +316,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             <TextArea disabled={!canEditForm} label="故障描述 / 客户诉求" value={draft.faultDescription} onChange={(value) => updateDraft({ faultDescription: value })} />
 
             {selectedOrder && selectedOrder.status !== "草稿" ? <SubmittedOrderPhotos key={selectedOrder.id} section="repair" order={selectedOrder}
-              user={controller.currentUser} onUpdated={controller.acceptRefreshedOrder}/> : <PreRepairPhotos photos={draft.inspection.preRepairPhotos} disabled={!canEditForm || Boolean(actionLoading)} controls={controller.preRepairPhotos} errors={formErrors} />}
+              user={controller.currentUser} onUpdated={controller.acceptRefreshedOrder}/> : !draft.paperOrder && <PreRepairPhotos photos={draft.inspection.preRepairPhotos} disabled={!canEditForm || Boolean(actionLoading)} controls={controller.preRepairPhotos} errors={formErrors} />}
 
             <div className="check-section">
               <Checklist disabled={!canEditForm} title="随车物品" items={belongings} selected={draft.inspection.belongings} onToggle={(value) => toggleArrayField("belongings", value)} />
@@ -371,7 +392,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               technician={selectedOrder?.technician} onChange={dispatchPlan=>updateDraft({dispatchPlan})}
               onOpen={()=>controller.openDispatch(selectedOrder!.id)}/>}
 
-            <div className="workflow-actions">
+            </>}
+            {!draft.paperOrder && <div className="workflow-actions">
               <div>
                 <strong>完成开单流程</strong>
                 {signatureUploaded ? (
@@ -393,12 +415,14 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   />
                 ) : null}
               </div>
-            </div>
+            </div>}
               <FormActionBar label="委托开单操作">
-                <Button size="large" icon={<Save size={16} />} onClick={saveDraft} loading={actionLoading === "save"} disabled={!canEditForm || Boolean(controller.preRepairPhotos.uploading)}>保存草稿</Button>
-                <Tooltip title={signatureDisabledReason}>
+                {(!paperOnly || !draft.paperOrder) && <Button size="large" icon={<Save size={16} />} onClick={saveDraft} loading={actionLoading === "save"} disabled={!canEditForm || Boolean(controller.preRepairPhotos.uploading)}>保存草稿</Button>}
+                {draft.paperOrder ? <Button className={paperOnly ? "paper-order-create-action" : undefined} size="large" type="primary" loading={actionLoading==="save"}
+                  disabled={!canEditForm || controller.paperPhotos.uploading || Boolean(controller.preRepairPhotos.uploading)} onClick={()=>void controller.submitPaperOrder()}>
+                  {paperDingTalk ? "提交委托单（免签字）" : "创建纸质委托书"}</Button> : <Tooltip title={signatureDisabledReason}>
                   <span><Button size="large" color="blue" variant="solid" icon={<Send size={17} />} onClick={handleSendSignature} loading={actionLoading === "signature"} disabled={signatureDisabled}>{canResumeSignature ? "继续签字" : "发起签字"}</Button></span>
-                </Tooltip>
+                </Tooltip>}
               </FormActionBar>
 
           </Form>

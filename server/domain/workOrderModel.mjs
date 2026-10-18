@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { customerVehicleEditEnabled } from "../config/customerVehicleEdit.mjs";
 
 export function workOrderValues(order) {
   const inspection = order.inspection || { belongings: [], fuelLevel: "1/2", exteriorIssues: [] };
@@ -37,12 +38,14 @@ export function workOrderValues(order) {
     order.platformOrderNo || null,
     parseDate(order.createdAt),
     parseDate(order.updatedAt),
+    order.paperOrder ? JSON.stringify(order.paperOrder) : null,
     order.vehicle?.isMilitary === true
   ];
 }
 
 export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecords, syncRecords, outboundOrders, settlements, files = []) {
   return {
+    paperOrder: row.paper_order || undefined,
     id: row.id,
     dispatchNo: row.dispatch_no || "",
     arrivalDate: row.arrival_date || "",
@@ -104,6 +107,10 @@ export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecord
     legacySyncRevision: Number(row.legacy_sync_revision || 0),
     legacySyncedAt: row.legacy_synced_at ? formatDate(row.legacy_synced_at) : undefined,
     legacySyncError: row.legacy_sync_error || undefined,
+    customerVehicleEditEnabled: customerVehicleEditEnabled(),
+    customerVehicleLinkComplete: Boolean(row.legacy_reid && row.legacy_document_no && /^[ABFJ][0-9]+$/.test(row.dispatch_no || "")),
+    customerVehicleUpdatedAt: row.customer_vehicle_updated_at ? formatDate(row.customer_vehicle_updated_at) : undefined,
+    customerVehicleUpdatedBy: row.customer_vehicle_updated_by || undefined,
     ocrRecords: ocrRecords.map(rowToOcrRecord),
     platformSyncRecords: syncRecords.map((item) => ({
       id: item.id,
@@ -177,6 +184,7 @@ export function createOrderFromDraft(draft) {
   const at = nowString();
   return {
     ...draft,
+    paperOrder: draft.paperOrder ? { mode: "pending", photoIds: draft.paperOrder.photoIds } : undefined,
     status: "草稿",
     technician: "待派工",
     inspector: "待检验",
@@ -224,6 +232,7 @@ export function createId(prefix) {
 
 export function rowToOcrRecord(row) {
   return {
+    paperOrder: row.paper_order || undefined,
     id: row.id,
     orderId: row.order_id || undefined,
     field: row.field,

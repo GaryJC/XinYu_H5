@@ -8,8 +8,8 @@ const filename = new URL("../client/src/features/signature/useArchiveSignature.t
 const compiled = ts.transpileModule(readFileSync(filename, "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText;
-const user = { role: "advisor", name: "张三" };
-const pending = { id: "old-order", advisor: "张三", status: "待客户签字", signatureToken: "old-token", signatures: {}, customer: { name: "车主" } };
+const user = { role: "advisor", name: "张三", shopId: "shop-hq" };
+const pending = { shop: { id: "shop-hq" }, id: "old-order", advisor: "张三", status: "待客户签字", signatureToken: "old-token", signatures: {}, customer: { name: "车主" } };
 
 function setup(api = {}, account = user) {
   const state = [], updates = [];
@@ -57,7 +57,7 @@ test("archive permits the owning advisor or manager and hides signing for signed
   assert.equal(h.actions.canSign({ ...pending, advisor: "李四" }), false);
   assert.equal(h.actions.canSign({ ...pending, signatures: { customer: "已签字" } }), false);
   assert.equal(h.actions.canSign({ ...pending, status: "已委托" }), false);
-  assert.equal(setup({}, { role: "manager", name: "经理" }).actions.canSign(pending), true);
+  assert.equal(setup({}, { role: "manager", name: "经理", shopId: "shop-hq" }).actions.canSign(pending), true);
   assert.equal(setup({}, { role: "technician", name: "张三" }).actions.canSign(pending), false);
 });
 
@@ -93,4 +93,10 @@ test("upload failures never submit a signature or refresh the order", async () =
   assert.equal(signs, 0);
   assert.equal(h.updates.length, 0);
   assert.equal(h.summaryRefreshes, 0);
+});
+
+test("paper orders and cross-shop records never offer electronic signing",()=>{
+  const h=setup();
+  assert.equal(h.actions.canSign({...pending,paperOrder:{mode:"dingtalk",photoIds:["photo"]}}),false);
+  assert.equal(h.actions.canSign({...pending,shop:{id:"other"}}),false);
 });

@@ -21,7 +21,9 @@ import {
   VehicleReferenceSearchResult,
   WorkOrder,
   WorkOrderDraft,
+  PaperOrderResolution,
   WorkOrderPhotoUpdate,
+  WorkOrderCustomerVehicleUpdate,
   WorkOrderStatus
 } from "../../../../../shared/types";
 import { request, setAuthToken } from "../../../shared/api/httpClient";
@@ -42,8 +44,11 @@ export type WorkOrderApi = {
   list(role: RoleKey): Promise<WorkOrder[]>;
   create(draft: WorkOrderDraft, actor: string): Promise<WorkOrder>;
   update(order: WorkOrder, actor: string, action: string): Promise<WorkOrder>;
+  resolvePaperOrder(id: string, change: PaperOrderResolution): Promise<WorkOrder>;
+  submitPaperOrder(id: string): Promise<WorkOrder>;
   refreshFromRunfeng(id: string): Promise<WorkOrder>;
   updatePhoto(id: string, photo: WorkOrderPhotoUpdate): Promise<WorkOrder>;
+  updateCustomerVehicle(id: string, change: WorkOrderCustomerVehicleUpdate): Promise<WorkOrder>;
   deleteDraft(id: string): Promise<{ id: string }>;
   transition(id: string, status: WorkOrderStatus, actor: string, action: string, patch?: Partial<WorkOrder>): Promise<WorkOrder>;
   createSignatureToken(id: string, actor: string): Promise<WorkOrder>;
@@ -95,6 +100,15 @@ export const workOrderApi: WorkOrderApi = {
   },
   updatePhoto(id, photo) {
     return request(`/api/work-orders/${encodeURIComponent(id)}/photos`, {method:"POST", body:photo});
+  },
+  updateCustomerVehicle(id, change) {
+    return request(`/api/work-orders/${encodeURIComponent(id)}/customer-vehicle`, { method: "PATCH", body: change });
+  },
+  resolvePaperOrder(id, change) {
+    return request(`/api/work-orders/${encodeURIComponent(id)}/paper-order/resolve`, {method:"POST",body:change});
+  },
+  submitPaperOrder(id) {
+    return request(`/api/work-orders/${encodeURIComponent(id)}/paper-order/submit`, {method:"POST"});
   },
   refreshFromRunfeng(id) {
     return request(`/api/work-orders/${encodeURIComponent(id)}/refresh-from-runfeng`, { method: "POST" });

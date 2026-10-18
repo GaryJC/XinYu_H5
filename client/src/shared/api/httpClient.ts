@@ -8,7 +8,7 @@ let imageCacheToken = "";
 let imageCacheGeneration = 0;
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   skipAuth?: boolean;
 };

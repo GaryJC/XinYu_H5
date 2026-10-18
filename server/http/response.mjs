@@ -29,7 +29,7 @@ export function sendJson(res, status, body) {
   writeTimingHeaders(res);
   res.statusCode = status;
   res.setHeader("Access-Control-Allow-Origin", process.env.CORS_ORIGIN || "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (body == null) return res.end();
   res.setHeader("Content-Type", "application/json; charset=utf-8");

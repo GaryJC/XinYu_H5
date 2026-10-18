@@ -2,7 +2,8 @@ import { executeSqlServerTransaction } from "../database/sqlServerPool.mjs";
 import { HttpError } from "../http/HttpError.mjs";
 
 export const LEGACY_ORDER_QUERY = `select top 2 reid, dh, wd, pgd, bzxx, ch, cx, lc, jcrq, jhrq,
-  sxr, lxr, lxdh, ssdw, wxnr, fyhj from dbo.qxwxb
+  sxr, lxr, lxdh, ssdw, wxnr, fyhj, bm,
+  (select top 1 RTRIM(d.mc) from dbo.bmxxb d where RTRIM(d.bm)=RTRIM(qxwxb.bm)) as department_name from dbo.qxwxb
   where (@reid is not null and reid=@reid and dh=@dh)
      or (@reid is null and RTRIM(bzxx)=@marker)`;
 export const LEGACY_ITEMS_QUERY = `select reid, Xh, hh, je from dbo.qxwxmxb
@@ -13,7 +14,9 @@ export const LEGACY_ITEMS_QUERY = `select reid, Xh, hh, je from dbo.qxwxmxb
 export async function readLegacyWorkOrder(order, runTransaction = executeSqlServerTransaction) {
   return runTransaction(async execute => {
     const linked = order.legacy_reid != null && order.legacy_document_no != null;
-    const result = await execute(LEGACY_ORDER_QUERY, (request, sql) => {
+    const byDispatch = order.paperDispatchNo;
+    const result = await execute(byDispatch ? LEGACY_ORDER_QUERY.slice(0, LEGACY_ORDER_QUERY.indexOf("  where")) + " where RTRIM(pgd)=@dispatchNo" : LEGACY_ORDER_QUERY, (request, sql) => {
+      if (byDispatch) request.input("dispatchNo", sql.VarChar(50), byDispatch);
       request.input("reid", sql.Int, linked ? Number(order.legacy_reid) : null);
       request.input("dh", sql.Int, linked ? Number(order.legacy_document_no) : null);
       request.input("marker", sql.VarChar(50), `H5:${order.id}`);

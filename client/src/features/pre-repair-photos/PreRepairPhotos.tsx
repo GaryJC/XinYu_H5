@@ -9,6 +9,7 @@ import "./photos.css";
 
 type Props = {
   photos?: Photos;
+  required?: boolean;
   disabled: boolean;
   controls?: {
     uploading: string; error: string;
@@ -20,18 +21,18 @@ type Props = {
   errors?: string[];
 };
 
-export function PreRepairPhotos({ photos = {}, disabled, controls, errors = [] }: Props) {
+export function PreRepairPhotos({ photos = {}, disabled, controls, errors = [], required = true }: Props) {
   const busy = Boolean(controls?.uploading);
   return <section className="pre-repair-photos" aria-label="车辆维修前照片">
-    <div className="pre-repair-photos-heading"><h3>车辆维修前照片</h3><span>{photoSlots.filter((slot) => slot.required && photos[slot.key]).length}/2 必传</span></div>
-    <p>请拍摄车辆左前方与右后方，覆盖车头、车尾和两侧全貌；公里数照片可选上传。</p>
+    <div className="pre-repair-photos-heading"><h3>车辆维修前照片</h3><span>{required ? `${photoSlots.filter((slot) => slot.required && photos[slot.key]).length}/2 必传` : "选填"}</span></div>
+    <p>{required ? "请拍摄车辆左前方与右后方，覆盖车头、车尾和两侧全貌；公里数照片可选上传。" : "已提供纸质委托书，维修前照片可按需补充，无需重复上传。"}</p>
     {controls?.error && <Alert type="error" showIcon message={controls.error} />}
     <AuthenticatedImagePreviewGroup fileIds={[...photoSlots.map((slot) => photos[slot.key]).filter((id): id is string => Boolean(id)), ...(photos.extra || [])]}><div className="pre-repair-photo-grid">
       {photoSlots.map((slot) => {
         const id = photos[slot.key];
         const error = errors.find((message) => message.includes(slot.label));
         return <div key={slot.key} className={`pre-repair-photo-card${error ? " has-error" : ""}`}>
-          <div className="pre-repair-photo-label"><span>{slot.required && <b aria-hidden="true">*</b>} {slot.label}</span><small>{id ? "已上传" : slot.required ? "必传" : "选填"}</small></div>
+          <div className="pre-repair-photo-label"><span>{required && slot.required && <b aria-hidden="true">*</b>} {slot.label}</span><small>{id ? "已上传" : required && slot.required ? "必传" : "选填"}</small></div>
           <div className="pre-repair-photo-cover">{id
             ? <AuthenticatedImage fileId={id} alt={`${slot.label}维修前照片`} width="100%" height={160} />
             : <PhotoGuide slot={slot.key} />}</div>

@@ -46,9 +46,8 @@ export function buildLegacyRefresh(snapshot, existingItems, hasExecution) {
   return { fields: {
     dispatch_no: text(h.pgd), arrival_date: legacyDate(h.jcrq), estimated_delivery_at: legacyDate(h.jhrq),
     vehicle_plate: text(h.ch), vehicle_mileage: text(h.lc),
-    ...(v ? { vehicle_vin: text(v.sbdm), vehicle_model: text(v.model_name), vehicle_model_legacy_code: text(v.model_code) } : { vehicle_model: text(h.cx) }),
-    customer_legacy_code: text(h.ssdw), ...(c ? { customer_name: text(c.mc), customer_address: text(c.jydz) } : {}),
-    customer_contact: text(h.lxr) || text(h.sxr), customer_phone: text(h.lxdh),
+    ...(v ? { vehicle_vin: text(v.sbdm) } : {}),
+    ...(c ? { customer_address: text(c.jydz) } : {}),
     fault_description: text(h.wxnr), estimated_fee: money(h.fyhj)
   }, items, removed };
 }

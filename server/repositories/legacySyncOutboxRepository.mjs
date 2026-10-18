@@ -11,6 +11,7 @@ export const INSERT_LEGACY_SYNC_EVENT_QUERY = `
 `;
 
 export async function enqueueLegacySyncEvent(client, order, eventType = "updated") {
+  if (order.paperOrder?.mode === "pending" || order.paperOrder?.mode === "runfeng" && eventType !== "updated") return;
   const eventId = randomUUID();
   const revisionResult = await client.query(
     `
@@ -115,6 +116,7 @@ export function buildLegacySyncPayload({ eventId, revision, eventType, order }) 
       estimatedDeliveryAt: order.estimatedDeliveryAt || "",
       settlementAmount: Number(order.settlementAmount || 0),
       feeNote: order.feeNote || "",
+      ...(order.paperOrder ? { paperOrder: order.paperOrder, signatureExemption: "纸质委托书" } : {}),
       signatures: order.signatures || {},
       platformOrderNo: order.platformOrderNo || null,
       createdAt: order.createdAt || "",

@@ -1,3 +1,4 @@
+import { usePaperOrderPhotos } from "../work-orders/hooks/usePaperOrderPhotos";
 import { usePreRepairPhotos } from "../pre-repair-photos/usePreRepairPhotos";
 import { missingPhotoErrors } from "../pre-repair-photos/photoSlots";
 import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
@@ -30,6 +31,7 @@ export function useWorkbenchController() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { draft, setDraft, resetDraft, updateDraft, updateVehicle, updateCustomer, updateRepairItem, toggleArrayField } = useWorkOrderDraft();
   const preRepairPhotos = usePreRepairPhotos(setDraft);
+  const paperPhotos = usePaperOrderPhotos(setDraft);
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [apiError, setApiError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -62,7 +64,7 @@ export function useWorkbenchController() {
   const visibleNavItems = useMemo(() => navItems.filter((item) => item.roles.includes(role) && (dispatchEnabled || !isDispatchNavigation(item.label))), [role]);
   const canEditForm = canCreateOrder(role) && (
     !selectedOrder || (
-      selectedOrder.status === "草稿"
+      selectedOrder.status === "草稿" && selectedOrder.shop.id === currentUser?.shopId
       && (role === "manager" || selectedOrder.advisor === currentUser?.name)
     )
   );
@@ -96,6 +98,7 @@ export function useWorkbenchController() {
   useEffect(() => {
     const generation = ++sessionGeneration.current;
     preRepairPhotos.reset();
+    paperPhotos.reset();
     if (!currentUser) {
       setOrders([]);
       setDashboard(undefined);
@@ -135,6 +138,7 @@ export function useWorkbenchController() {
       } else {
         setSelectedId(null);
         preRepairPhotos.reset();
+        paperPhotos.reset();
         resetDraft(undefined, currentUser?.name || "");
       }
     } catch (error) {
@@ -142,6 +146,7 @@ export function useWorkbenchController() {
       setOrders([]);
       setSelectedId(null);
       preRepairPhotos.reset();
+      paperPhotos.reset();
       resetDraft(undefined, currentUser?.name || "");
       setApiError(error instanceof Error ? error.message : "后端 API 暂时不可用");
     }
@@ -226,8 +231,9 @@ export function useWorkbenchController() {
   function applyAuthenticatedUser(user: UserProfile) {
     const nextRole = user.role;
     setRole(nextRole);
+    const paperLink = new URLSearchParams(location.search).has("paperOrder");
     const dispatchLink = new URLSearchParams(location.search).has("dispatchOrder");
-    const landing = nextRole === "technician" ? "我的维修" : nextRole === "inspector" ? "检验任务" : (dispatchLink && ["advisor", "manager"].includes(nextRole)) ? "派工台" : user.homeRoute === "order-create" ? "委托开单" : "工作台";
+    const landing = paperLink && ["advisor","manager"].includes(nextRole) ? "工作台" : nextRole === "technician" ? "我的维修" : nextRole === "inspector" ? "检验任务" : (dispatchLink && ["advisor", "manager"].includes(nextRole)) ? "派工台" : user.homeRoute === "order-create" ? "委托开单" : "工作台";
     setActiveNav(!dispatchEnabled && isDispatchNavigation(landing) ? "工作台" : landing);
     setDraft((current) => ({ ...current, advisor: user.name }));
   }
@@ -259,6 +265,7 @@ export function useWorkbenchController() {
     resetDraft(order);
     setFormErrors([]);
     preRepairPhotos.reset();
+    paperPhotos.reset();
     resetOcr(order.ocrRecords, order.inspection.vehicleLicenseFileId || order.files?.find(file => file.kind === "vehicle_license")?.id);
     resetVehicleIdentityRecognition();
   }
@@ -268,12 +275,13 @@ export function useWorkbenchController() {
     resetDraft(undefined, currentUser?.name || "");
     setFormErrors([]);
     preRepairPhotos.reset();
+    paperPhotos.reset();
     resetOcr();
     resetVehicleIdentityRecognition();
   }
 
   async function saveDraft() {
-    if (preRepairPhotos.isUploading() || isVehicleLicenseUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
+    if (preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
     if (!canCreateOrder(role)) {
       setFormErrors(["当前角色不能创建或编辑委托单"]);
       return;
@@ -307,6 +315,7 @@ export function useWorkbenchController() {
       await workOrderApi.deleteDraft(order.id);
       setSelectedId(null);
       preRepairPhotos.reset();
+      paperPhotos.reset();
       resetDraft(undefined, currentUser?.name || "");
       await loadOrders(role, null);
       await loadDashboard(role);
@@ -319,7 +328,7 @@ export function useWorkbenchController() {
   }
 
   async function sendSignature() {
-    if (preRepairPhotos.isUploading() || isVehicleLicenseUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
+    if (preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
     const errors = validateBeforeSignature();
     if (errors.length) {
       setFormErrors(errors);
@@ -344,8 +353,27 @@ export function useWorkbenchController() {
     }
   }
 
+  async function submitPaperOrder() {
+    if (paperPhotos.isUploading() || preRepairPhotos.isUploading() || isVehicleLicenseUploading()) {setFormErrors(["照片正在上传，请等待上传完成"]);return;}
+    if (!draft.paperOrder?.photoIds.length) {setFormErrors(["请上传纸质委托书照片"]);return;}
+    const completing=draft.paperOrder.mode==="dingtalk";
+    if(completing) {
+      const errors=validateBeforeSignature();
+      if(errors.length) {setFormErrors(errors);return;}
+    }
+    setActionLoading("save");setFormErrors([]);
+    try {
+      const cleaned={...draft,repairItems:filterEmptyRepairItems(draft.repairItems)};
+      const saved=selectedOrder ? await workOrderApi.update({...selectedOrder,...cleaned},actor,"保存纸质委托单") : await workOrderApi.create(cleaned,actor);
+      const updated=completing ? await workOrderApi.submitPaperOrder(saved.id) : saved;
+      await loadOrders(role,updated.id);
+      await loadDashboard();
+    } catch(error) {setFormErrors([actionError(error,"纸质委托书提交失败")]);}
+    finally {setActionLoading("");}
+  }
+
   function validateBeforeSignature() {
-    const errors = [...validateWorkOrderDraft(draft), ...missingPhotoErrors(draft.inspection.preRepairPhotos)];
+    const errors = [...validateWorkOrderDraft(draft), ...(draft.paperOrder ? [] : missingPhotoErrors(draft.inspection.preRepairPhotos))];
     if (!draft.vehicle.modelLegacyCode.trim()) {
       errors.push("车型尚未确认，请从搜索结果中选择，或新增车型并确认编码");
     }
@@ -376,7 +404,8 @@ export function useWorkbenchController() {
   return {
     acceptRefreshedOrder: (updated: WorkOrder) => {
       setOrders(previous => previous.map(order => order.id === updated.id
-        ? { ...updated, dispatchStage: order.dispatchStage } : order));
+        ? { ...updated, dispatchStage: updated.dispatchStage ?? order.dispatchStage } : order));
+      if (selectedId === updated.id) resetDraft(updated);
     },
     refreshArchiveSummary: () => { void loadDashboard(); },
     refreshWorkbench: async () => { await Promise.all([loadOrders(), loadDashboard()]); },
@@ -392,6 +421,8 @@ export function useWorkbenchController() {
     ocrState,
     formErrors,
     preRepairPhotos,
+    paperPhotos,
+    submitPaperOrder,
     apiError,
     searchTerm,
     setSearchTerm,
