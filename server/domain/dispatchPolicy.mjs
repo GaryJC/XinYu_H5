@@ -1,3 +1,4 @@
+import {validateRepairItemEdits,editRepairItems} from './repairItemEditing.mjs';
 import { validatePartsRequirement,beginPendingItems,assertPartsIssued } from './partsRequirement.mjs';
 import { reopenRepairTask,validateReopenItems } from './repairRounds.mjs';
 import { HttpError } from '../http/HttpError.mjs';
@@ -17,7 +18,8 @@ export function assertDispatchAccess(task, actor) {
 }
 export function validateDispatchRequest(input) {
   validateReopenItems(input||{});
-  const actions = ['edit-parts','issue-parts','confirm-parts','record-parts','reopen-repair','start-order','submit-order','claim-inspection','reassign-inspection','retry-inspection-notifications','retry-scheduler-notifications','record-hours','assign','reassign','reoffer','cancel','accept','decline','start','finish','pick','pause','resume','submit','inspect','update','remind','retry-notification','reconcile'];
+  validateRepairItemEdits(input||{});
+  const actions = ['edit-repair-items','edit-parts','issue-parts','confirm-parts','record-parts','reopen-repair','start-order','submit-order','claim-inspection','reassign-inspection','retry-inspection-notifications','retry-scheduler-notifications','record-hours','assign','reassign','reoffer','cancel','accept','decline','start','finish','pick','pause','resume','submit','inspect','update','remind','retry-notification','reconcile'];
   if (!input || !actions.includes(input.action) || !Number.isInteger(input.expectedVersion) || input.expectedVersion < 0 || typeof input.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(input.requestId)) fail('操作参数无效：需要版本号及唯一请求编号',400);
   for (const key of ['note','reason','pauseReason','technicianId','inspectorId','notificationId','notificationJobId']) {
     if (input[key] !== undefined && (typeof input[key] !== 'string' || input[key].length > 2000)) fail('文本参数无效',400);
@@ -136,9 +138,13 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     pending.forEach(i=>{i.status='维修中';i.startAt=now;i.startedBy=actor.id;i.finishAt=undefined;});
     next.firstStartedAt ||= now; next.stage='维修中';
     next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])];
+  } else if(action==='edit-repair-items') {
+    requireOwner(); stage('待开工','维修中','暂停');
+    editRepairItems(next,input.repairItems,actor,now);
   } else if(action==='submit-order') {
     requireOwner(); stage('维修中');
     assertPartsIssued(task);
+    if(input.repairItems!==undefined)editRepairItems(next,input.repairItems,actor,now);
     if(!next.items.length) fail('没有维修项目');
     if(next.items.some(i=>['待开工','待派工','待领料'].includes(i.status))) fail('全部维修项目开工后才能提交完工');
     if(next.items.some(i=>!['维修中','待检验','已完工'].includes(i.status))) fail('维修项目状态异常');

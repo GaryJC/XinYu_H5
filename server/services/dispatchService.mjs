@@ -78,14 +78,14 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
       const {rows:jobs}=await client.query('select status,error from dispatch_inspection_notifications where order_id=$1 order by event_id desc limit 1',[id]);
       if(task.inspectorId || !jobs[0]?.error || jobs[0].status==='ready') throw new HttpError(409,'当前无需重试检验员通知');
     }
-    if(input.action==='reopen-repair') task.repairCatalog=await repairCatalog(client,task);
+    if(input.action==='reopen-repair'||input.action==='edit-repair-items'||input.repairItems!==undefined) task.repairCatalog=await repairCatalog(client,task);
     const next=applyDispatchAction(task,input,currentActor,people);
     if(['submit-order','submit'].includes(input.action)) await assertRepairPhotoRecorded(client,task);
     if(['accept','record-parts'].includes(input.action))await assertPartsPhotos(client,task,next.partsRequirement);
     await saveRepairRound(client,task,next,currentActor,input.action);
     await saveDispatchTask(client,next);
     if(input.action==='assign') await markDispatchPlan(client,id);
-    const detail={partsRequirement:next.partsRequirement,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
+    const detail={previousItems:input.repairItems?task.items:undefined,partsRequirement:next.partsRequirement,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
       technicianName:next.technicianName,previousTechnicianName:task.technicianName,inspectorName:next.inspectorName,dueAt:next.dueAt,urgent:next.urgent,previousDueAt:task.dueAt};
     const {rows:[event]}=await client.query(`insert into dispatch_events(order_id,actor_id,actor_name,request_id,request_body,action,detail) values($1,$2,$3,$4,$5,$6,$7) returning id`,[id,actor.id,actor.name,input.requestId,JSON.stringify(input),input.action,JSON.stringify(detail)]);
     await client.query('insert into audit_logs(order_id,actor,action) values($1,$2,$3)',[id,actor.name,`派工：${input.action}${input.reason?` · ${input.reason}`:''}`]);

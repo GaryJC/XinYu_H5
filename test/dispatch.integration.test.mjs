@@ -337,6 +337,27 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         } else assert.deepEqual(task.technicianIds,[tech.id,tech2.id]);
       }
     });
+    await t.test('repair project edits retain prices and IDs and roll back together with rejected completion',async()=>{
+      const id='editable-repair-items';await seed(id);
+      let local=(await service.executeDispatchAction(advisor,id,{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianIds:[tech.id],dueAt:new Date(Date.now()+86400000).toISOString()})).task;
+      local=(await service.executeDispatchAction(tech,id,{action:'accept',expectedVersion:local.version,requestId:randomUUID(),partsRequirement:{mode:'none'}})).task;
+      await pool.query('update repair_items set labor_fee=123 where order_id=$1 and client_item_id=1',[id]);
+      const repairItems=[...local.items.map(item=>({id:item.id,name:`修改${item.name}`})),{name:'增修检查'}];
+      const request={action:'edit-repair-items',expectedVersion:local.version,requestId:randomUUID(),repairItems};
+      local=(await service.executeDispatchAction(tech,id,request)).task;await service.executeDispatchAction(tech,id,request);
+      assert.equal(local.items.length,3);assert.equal(local.items[2].id,-1);
+      const stored=(await pool.query('select client_item_id,name,labor_fee from repair_items where order_id=$1 order by item_no',[id])).rows;
+      assert.equal(stored.length,3);assert.equal(Number(stored[0].labor_fee),123);assert.equal(stored[2].name,'增修检查');assert.equal(Number(stored[2].labor_fee),0);
+      const completionRows=local.items.map(item=>({id:item.id,name:item.name+'完工核对'}));
+      await assert.rejects(()=>service.executeDispatchAction(tech,id,{action:'submit-order',expectedVersion:local.version,requestId:randomUUID(),repairItems:completionRows}),/本轮维修照片/);
+      assert.equal((await service.dispatchDetail(tech,id)).task.items[0].name,repairItems[0].name);
+      assert.equal((await pool.query('select name from repair_items where order_id=$1 and client_item_id=1',[id])).rows[0].name,repairItems[0].name);
+      await progressPhoto(id);
+      local=(await service.executeDispatchAction(tech,id,{action:'submit-order',expectedVersion:local.version,requestId:randomUUID(),repairItems:completionRows})).task;
+      assert.equal(local.stage,'待检验');assert.equal(local.items[0].name,completionRows[0].name);assert.ok(local.items.every(item=>item.status==='待检验'));
+      const events=(await service.dispatchDetail(tech,id)).events.filter(e=>e.action==='edit-repair-items');assert.equal(events.length,1);assert.equal(events[0].detail.previousItems[0].name,'项目1');
+      await pool.query("update dispatch_inspection_notifications set status='obsolete' where order_id=$1",[id]);
+    });
     await t.test('dispatch board includes every open order and filters workflow stages',async()=>{
       for(const [id,status] of [['board-draft','草稿'],['board-signature','待客户签字'],['board-unassigned','已委托'],['board-unsettled','待结算'],['board-closed','完成']]) await seed(id,status);
       const ids=async query=>(await service.queryDispatchTasks(advisor,query)).map(t=>t.orderId);

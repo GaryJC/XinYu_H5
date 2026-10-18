@@ -403,8 +403,10 @@ export type DispatchTask = DispatchExecution & {
   plate: string; dispatchNo: string; arrivalDate: string; orderStatus: WorkOrderStatus;
   faultDescription: string; overdue: boolean;
 };
-export type DispatchActionName = "edit-parts" | "issue-parts" | "confirm-parts" | "record-parts" | "reopen-repair" | "retry-scheduler-notifications" | "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
+export type RepairItemEdit = {id?:number;name:string};
+export type DispatchActionName = "edit-repair-items" | "edit-parts" | "issue-parts" | "confirm-parts" | "record-parts" | "reopen-repair" | "retry-scheduler-notifications" | "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
 export type DispatchActionRequest = DispatchExecution & {
+  repairItems?:RepairItemEdit[];
   partsRequirement?:PartsRequirement;
   reworkItemIds?: number[]; additionalItems?: string[];
   workHours?: number;
@@ -425,7 +427,7 @@ export type DispatchNotification = {
 };
 export type DispatchEvent = {
   id: string; actorName: string; action: string; at: string;
-  detail: { partsRequirement?:PartsRequirement; repairRound?:number; items?:DispatchItem[]; reworkItemIds?:number[]; additionalItems?:string[]; workHours?: number; previousWorkHours?: number; note?: string; reason?: string; technicianName?: string; previousTechnicianName?: string; dueAt?: string; previousDueAt?: string; urgent?: boolean; stage: DispatchStage; itemId?: number; rejectedItemIds?: number[]; pauseReason?: string };
+  detail: { previousItems?:DispatchItem[]; partsRequirement?:PartsRequirement; repairRound?:number; items?:DispatchItem[]; reworkItemIds?:number[]; additionalItems?:string[]; workHours?: number; previousWorkHours?: number; note?: string; reason?: string; technicianName?: string; previousTechnicianName?: string; dueAt?: string; previousDueAt?: string; urgent?: boolean; stage: DispatchStage; itemId?: number; rejectedItemIds?: number[]; pauseReason?: string };
 };
 export type RepairRound = { round:number; task:DispatchTask; reason:string; openedBy?:string; openedName:string; openedAt?:string; completedAt?:string; closed:boolean };
 export type DispatchDetail = {
