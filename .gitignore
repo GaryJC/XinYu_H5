@@ -15,3 +15,6 @@ vite.config.d.ts
 
 # Persistent npm cache on Windows deployment hosts
 .npm-cache/
+
+# Standalone deployment process manager (survives npm ci)
+.deploy-tools/

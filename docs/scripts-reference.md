@@ -333,13 +333,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\apps\XinYu_H5\scripts
 
 执行顺序：
 
-1. `npm.cmd ci --include=dev`
-2. `npm.cmd run check`
-3. `npm.cmd run migrate`
-4. SQL Server 连接检查
-5. 使用项目本地 `node_modules\.bin\pm2.cmd` 执行 `startOrReload`
-6. 最多等待 30 秒检查 `/api/health`
-7. `pm2 save`
+1. 校验端口，按锁文件版本在 `.deploy-tools` 准备独立 PM2
+2. 停止指定名称且工作目录匹配的应用，等待进程退出释放 DLL
+3. `npm.cmd ci --include=dev`
+4. `npm.cmd run check`
+5. `npm.cmd run migrate` 和 SQL Server 连接检查
+6. 使用 `.deploy-tools\node_modules\.bin\pm2.cmd` 执行 `startOrReload`
+7. 最多等待 30 秒检查 `/api/health`，成功后 `pm2 save`
 
 任何一步失败都会让部署返回非零退出码。
 

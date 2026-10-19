@@ -152,8 +152,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\apps\XinYu_H5\scripts
 ```
 
 `START_LOCAL_API` 仅供 `npm run dev` 使用，生产环境不需要设置。
-Windows 部署脚本使用项目依赖中的 PM2，并把进程空间固定在
-`C:\apps\XinYu_H5\.pm2`，不依赖某个 Windows 用户的全局 npm 目录。
+Windows 部署脚本按锁文件中的版本将 PM2 安装到 `<AppPath>\.deploy-tools`，该目录独立于应用的 `node_modules`。进程空间固定在 `<AppPath>\.pm2`，不依赖某个 Windows 用户的全局 npm 目录。安装依赖前只停止指定名称且工作目录匹配的应用，并等待旧进程退出，避免 Windows 锁住 Sharp/libvips DLL 导致 `npm ci` 报 EPERM。首次部署尚无进程时可直接继续。
 
 ### 云效构建制品
 
@@ -275,3 +274,11 @@ Windows 部署在安装依赖前运行 `scripts/clean-obsolete-deployment-files.
 部署包采用覆盖解压时，Git 已删除的文件可能残留。脚本会清理明确列出的旧文件，包括已退役的 `test/legacyWorkOrderRepository.test.mjs`；它引用已移除的 `ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY`，残留时会导致检查失败。该清理不触碰配置、上传文件、PM2 数据或当前测试。
 
 如果旧版本已因这一残留文件部署失败，可以在服务器应用目录执行新版清理脚本后重跑部署。不要通过跳过 `npm run check` 绕过失败。
+
+### Windows Sharp DLL 被占用导致安装失败
+
+`npm ci` 删除 `@img` 下的 `libvips*.dll`（例如 `libvips-42.dll`）时返回 EPERM，常见原因是旧服务仍加载该 DLL。部署脚本会在安装应用依赖前准备独立 PM2、停止目标应用并等待退出，随后执行安装、检查、迁移和启动。即使上一次安装已损坏应用 `node_modules`，独立 PM2 仍可用于停止服务。
+
+这是原目录停服部署，依赖安装至健康检查成功之间服务不可用。中间步骤失败时保持停服并返回错误，修正问题后重新部署；不要直接启动依赖可能不完整的目录。其他目录下的同名应用会使部署拒绝继续，不会被自动停止。不要使用 `taskkill /IM node.exe /F` 清理整台服务器的 Node 进程。若确认服务已退出仍报 EPERM，再检查杀毒软件占用及目录权限。
+
+发布修复时必须同时包含 `scripts/deploy-windows.ps1` 和 `scripts/stop-deployment-app.mjs`；只重跑旧部署包仍会按旧顺序安装。`<AppPath>\.deploy-tools`、`.pm2` 和 `.npm-cache` 应跨部署保留。
