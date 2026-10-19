@@ -85,6 +85,9 @@ from claim_legacy_sync_events('runfeng-production', 20);
 `consumer_id` 必须是非空且稳定的程序实例标识。ACK 和失败回填必须使用领取时相同的
 `consumer_id`。
 
+超时重领保留 `event_id`；必须以它幂等处理，已提交的维修单只补 ACK，不能重复建单。
+同名消费者的旧 ACK 无法区分领取批次，SQL Server 端需要并发互斥。
+
 领取函数会原子地执行以下操作：
 
 - 只选择到达 `available_at` 的 `pending/failed` 事件；
@@ -92,6 +95,7 @@ from claim_legacy_sync_events('runfeng-production', 20);
 - 同一个 `order_id` 按 `revision` 顺序处理；
 - 把状态更新为 `processing`；
 - 设置 `locked_by/locked_at`；
+- 领取前将满 10 分钟未回填的 `processing` 恢复为 `pending` 后重领（API 也每分钟检查）；
 - `attempt_count + 1`；
 - 返回完整事件和 JSON payload。
 

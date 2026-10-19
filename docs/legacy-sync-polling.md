@@ -51,8 +51,21 @@ from claim_legacy_sync_events('runfeng-production', 20);
 中已提供的编码，不要再次根据名称生成编码。完整规则见
 [`runfeng-sync-field-reference.md`](./runfeng-sync-field-reference.md)。
 
-领取使用 `FOR UPDATE SKIP LOCKED`，支持多个消费者并行工作。消费者崩溃后，
-管理员可以将长时间处于 `processing` 的事件标记为失败或重新入队。
+领取使用 `FOR UPDATE SKIP LOCKED`，支持多个消费者并行工作。
+`processing` 自 `locked_at` 起满 10 分钟后自动恢复为 `pending`，清除领取人和领取时间，
+保留原 `event_id`、版本、payload、润丰关联和累计领取次数。API 服务启动时及每分钟检查一次；
+每次领取也会先恢复超时事件，因此即使 API 暂停，润丰下一次轮询仍可重新领取。
+恢复为待拉取后，当前版本的 H5 展示状态也更新；后续版本仍需等待前一版本成功 ACK。
+
+这是至少一次投递：润丰必须按 `event_id` 幂等处理。重复领取时，若原事务已经提交，
+应查询原单并补 ACK，禁止再次建单。超过 10 分钟仍在执行的旧任务也可能与重试重叠；
+不同消费者的旧 ACK 会被拒绝，但同名 `consumer_id` 的兼容接口无法区分两次领取，
+消费者应在 SQL Server 端保证幂等及并发互斥。
+
+部署时先执行 `npm run migrate`，再重启 API 服务。此迁移不会立即批量重置事件，
+下一次服务检查或润丰领取时开始恢复已超时事件。
+本地隔离数据库验证：
+`LEGACY_SYNC_TEST_ADMIN_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres node --test test/legacySyncRecovery.integration.test.mjs`。
 
 ## 批量成功 ACK（推荐）
 
