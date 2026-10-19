@@ -43,12 +43,14 @@ test("a locked process or failed PM2 stop prevents installation", async () => {
   await assert.rejects(() => stopDeploymentApp(broken, options), /stop failed/);
   assert.equal(broken.disconnected, true);
 });
-test("deployment prepares isolated PM2 and stops the app before npm ci", async () => {
+test("deployment prepares and checks a release before activating it", async () => {
   const script = await readFile(new URL("../scripts/deploy-windows.ps1", import.meta.url), "utf8");
-  assert.ok(script.indexOf("--prefix") < script.indexOf("stop-deployment-app.mjs"));
-  assert.ok(script.indexOf("stop-deployment-app.mjs") < script.indexOf("npm.cmd ci"));
-  assert.match(script, /\.deploy-tools/);
+  assert.ok(script.indexOf("prepare-deployment-release.mjs") < script.indexOf("npm.cmd ci"));
+  assert.ok(script.indexOf("Push-Location $releasePath") < script.indexOf("npm.cmd ci"));
   assert.ok(script.indexOf("npm.cmd ci") < script.indexOf("npm.cmd run check"));
   assert.ok(script.indexOf("npm.cmd run check") < script.indexOf("npm.cmd run migrate"));
-  assert.ok(script.indexOf("npm.cmd run migrate") < script.indexOf("startOrReload"));
+  assert.ok(script.indexOf("npm.cmd run migrate") < script.indexOf("activate-deployment-release.mjs"));
+  assert.doesNotMatch(script, /stop-deployment-app|startOrReload/);
+  assert.match(script, /FileShare\]::None/);
+  assert.match(script, /deploymentLock.Dispose/);
 });

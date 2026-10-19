@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$AppPath = (Resolve-Path -LiteralPath $AppPath).Path
 Set-Location $AppPath
 $env:PM2_HOME = Join-Path $AppPath ".pm2"
 $env:PM2_PROCESS_NAME = $ProcessName
@@ -39,71 +40,45 @@ function Invoke-Native {
     }
 }
 
-# Keep deployment PM2 outside node_modules: npm ci removes that directory, and
-# a previous interrupted installation may have already damaged the project CLI.
-$deploymentToolsPath = Join-Path $AppPath ".deploy-tools"
-$pm2Version = (& node.exe -p "require('./package-lock.json').packages['node_modules/pm2'].version").Trim()
-if ($LASTEXITCODE -ne 0 -or $pm2Version -notmatch '^\d+\.\d+\.\d+$') {
-    throw "Could not read the locked PM2 version"
-}
+# Hold the lock through preparation and activation, so two pipeline runs cannot switch concurrently.
+$deploymentLock = $null
+try {
+    $deploymentLock = [System.IO.File]::Open((Join-Path $AppPath ".deployment.lock"), [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+    $preparedJson = & node.exe scripts/prepare-deployment-release.mjs "$AppPath" "$ProcessName" "$Port"
+    if ($LASTEXITCODE -ne 0) { throw "Release preparation failed; previous application remains running" }
+    $prepared = $preparedJson | ConvertFrom-Json
+    $releasePath = $prepared.releasePath
+    $pm2Version = $prepared.pm2Version
+    if ($pm2Version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid locked PM2 version" }
+    Write-Host "Preparing release $($prepared.releaseId); previous application remains running."
 
-$configuredPort = (& node.exe --env-file=.env.production -p 'process.env.API_PORT || "8787"').Trim()
-if ($LASTEXITCODE -ne 0) { throw "Could not read API_PORT from .env.production" }
-if ($configuredPort -ne [string]$Port) {
-    throw "Port mismatch: deployment uses $Port, .env.production uses $configuredPort"
-}
+    $deploymentToolsPath = Join-Path $AppPath ".deploy-tools"
+    Invoke-Native {
+        npm.cmd install --prefix "$deploymentToolsPath" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund --prefer-offline --cache "$NpmCachePath" "pm2@$pm2Version"
+    } "Deployment PM2 preparation failed"
 
-Invoke-Native {
-    npm.cmd install --prefix "$deploymentToolsPath" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund --prefer-offline --cache "$NpmCachePath" "pm2@$pm2Version"
-} "Deployment PM2 preparation failed"
-$pm2Command = Join-Path $deploymentToolsPath "node_modules\.bin\pm2.cmd"
-if (-not (Test-Path -LiteralPath $pm2Command -PathType Leaf)) {
-    throw "Deployment PM2 command was not found: $pm2Command"
-}
-Invoke-Native {
-    node.exe scripts/stop-deployment-app.mjs "$AppPath" "$ProcessName" (Join-Path $deploymentToolsPath "node_modules\pm2")
-} "Application stop before dependency installation failed"
-
-Invoke-Native { node.exe scripts/clean-obsolete-deployment-files.mjs } "Obsolete deployment file cleanup failed"
-Invoke-Native { npm.cmd ci --include=dev --no-audit --no-fund --prefer-offline --cache "$NpmCachePath" --loglevel=http } "npm ci failed"
-Invoke-Native { cmd.exe /d /c "npm.cmd run check 2>&1" } "Application check or build failed"
-Invoke-Native { npm.cmd run migrate } "PostgreSQL migration failed"
-
-if (-not $SkipSqlServerCheck) {
-    $env:SQLSERVER_CHECK_LIST_TABLES = "false"
+    Push-Location $releasePath
     try {
-        Invoke-Native { npm.cmd run sqlserver:check } "SQL Server connection check failed"
-    }
-    finally {
-        Remove-Item Env:SQLSERVER_CHECK_LIST_TABLES -ErrorAction SilentlyContinue
-    }
-}
-
-Invoke-Native {
-    & $pm2Command startOrReload ecosystem.config.cjs --only $ProcessName --silent --no-color
-} "PM2 start or reload failed"
-
-$healthy = $false
-for ($attempt = 1; $attempt -le 30; $attempt++) {
-    try {
-        $response = Invoke-RestMethod `
-            -Uri "http://127.0.0.1:$Port/api/health" `
-            -TimeoutSec 2
-        if ($response.ok -eq $true) {
-            $healthy = $true
-            break
+        Invoke-Native { node.exe scripts/clean-obsolete-deployment-files.mjs } "Obsolete deployment file cleanup failed"
+        Invoke-Native { npm.cmd ci --include=dev --no-audit --no-fund --prefer-offline --cache "$NpmCachePath" --loglevel=http } "npm ci failed"
+        Invoke-Native { cmd.exe /d /c "npm.cmd run check 2>&1" } "Application check or build failed"
+        # Migrations must be compatible with the still-running previous version.
+        Invoke-Native { npm.cmd run migrate } "PostgreSQL migration failed"
+        if (-not $SkipSqlServerCheck) {
+            $env:SQLSERVER_CHECK_LIST_TABLES = "false"
+            try {
+                Invoke-Native { npm.cmd run sqlserver:check } "SQL Server connection check failed"
+            }
+            finally { Remove-Item Env:SQLSERVER_CHECK_LIST_TABLES -ErrorAction SilentlyContinue }
         }
     }
-    catch {
-        # Keep retrying while the service starts.
-    }
-    Start-Sleep -Seconds 1
-}
+    finally { Pop-Location }
 
-if (-not $healthy) {
-    & $pm2Command logs $ProcessName --lines 50 --nostream --no-color
-    throw "API health check failed"
+    Write-Host "Release prepared; switching application on port $Port."
+    Invoke-Native {
+        node.exe scripts/activate-deployment-release.mjs "$releasePath" (Join-Path $deploymentToolsPath "node_modules\pm2")
+    } "Prepared release activation failed"
 }
-
-Invoke-Native { & $pm2Command save --silent --no-color } "PM2 state save failed"
-Write-Host "Deployment succeeded: $AppPath, port $Port"
+finally {
+    if ($deploymentLock) { $deploymentLock.Dispose() }
+}

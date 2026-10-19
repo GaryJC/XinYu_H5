@@ -18,3 +18,8 @@ vite.config.d.ts
 
 # Standalone deployment process manager (survives npm ci)
 .deploy-tools/
+
+# Prepared Windows releases and deployment lock
+.releases/
+.deployment.lock
+.dist-next-*/

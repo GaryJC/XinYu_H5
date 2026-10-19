@@ -127,9 +127,7 @@ pm2 startup
 Windows Server 部署到 `C:\apps\XinYu_H5` 时，在 PowerShell 中使用：
 
 ```powershell
-Set-Location C:\apps\XinYu_H5
-pm2 startOrReload ecosystem.config.cjs --only xinyu-h5
-pm2 save
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\apps\XinYu_H5\scripts\deploy-windows.ps1
 ```
 
 同一台 Windows ECS 上的独立测试实例可使用不同目录、进程名和端口：
@@ -152,7 +150,25 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\apps\XinYu_H5\scripts
 ```
 
 `START_LOCAL_API` 仅供 `npm run dev` 使用，生产环境不需要设置。
-Windows 部署脚本按锁文件中的版本将 PM2 安装到 `<AppPath>\.deploy-tools`，该目录独立于应用的 `node_modules`。进程空间固定在 `<AppPath>\.pm2`，不依赖某个 Windows 用户的全局 npm 目录。安装依赖前只停止指定名称且工作目录匹配的应用，并等待旧进程退出，避免 Windows 锁住 Sharp/libvips DLL 导致 `npm ci` 报 EPERM。首次部署尚无进程时可直接继续。
+Windows 部署脚本在 `<AppPath>/.releases/<版本>` 独立目录安装依赖、运行检查和迁移，
+准备期间旧服务继续运行。准备成功后才停止旧进程，在原端口启动新版本；健康检查必须同时
+匹配新版本标识，失败时尝试恢复上一版 PM2 启动配置。固定端口切换仍有短暂中断，
+不属于双实例零停机发布。数据库迁移在旧服务运行时执行，必须向后兼容；回退应用不会撤销迁移。
+
+PM2 工具位于 `<AppPath>/.deploy-tools`，进程空间固定在 `<AppPath>/.pm2`。
+后续发版继续调用部署脚本，不要手动用根目录 `ecosystem.config.cjs` 覆盖版本目录的启动配置；
+日常重启可在同一 `PM2_HOME` 下使用 `pm2 restart <进程名>`。
+`.env.production` 从根目录复制到版本目录；不复制 `.env.local`。
+上传目录保持指向根目录原有位置，版本内 `server/data` 为指向共享数据的目录联接，
+默认或相对 `LOCAL_UPLOAD_ROOT` 转为根目录下的绝对路径。前端使用新版本构建的 `dist`；
+根目录 `dist` 在健康检查成功后改为指向新版本的目录联接，兼容固定 Nginx/IIS 静态目录，
+并保留上一版本的哈希静态资源供已打开页面加载。`STATIC_DIR` 在版本运行配置中固定为该版本的 `dist`。
+
+云效解压步骤必须保留 `.releases`、`.deploy-tools`、`.pm2`、`.npm-cache`、`.env.production` 和 `server/data`。
+版本目录及原静态目录备份不自动删除，清理时避开正在运行及需要回退的版本。
+部署锁阻止同一目录内两个部署脚本并发切换，但不保护云效外层的并发解压；流水线应禁止并发部署同一环境。
+首次从根目录旧部署过渡时，云效已覆盖的旧源码不能恢复，回退只能尝试用原目录启动；
+完成一次版本目录部署后，后续旧版本代码和依赖均独立保留。
 
 ### 云效构建制品
 
@@ -277,8 +293,14 @@ Windows 部署在安装依赖前运行 `scripts/clean-obsolete-deployment-files.
 
 ### Windows Sharp DLL 被占用导致安装失败
 
-`npm ci` 删除 `@img` 下的 `libvips*.dll`（例如 `libvips-42.dll`）时返回 EPERM，常见原因是旧服务仍加载该 DLL。部署脚本会在安装应用依赖前准备独立 PM2、停止目标应用并等待退出，随后执行安装、检查、迁移和启动。即使上一次安装已损坏应用 `node_modules`，独立 PM2 仍可用于停止服务。
+`npm ci` 删除 `@img` 下的 `libvips*.dll`（例如 `libvips-42.dll`）时返回 EPERM，
+常见原因是旧服务仍加载该 DLL。新版部署在全新版本目录安装依赖，不再删除旧服务使用的依赖，
+因此无需在安装、构建期间停服。安装、检查、连接检查失败时旧服务不停止；
+只有准备完成后的端口切换需要短暂停服。若新版本健康检查失败，会尝试恢复旧版并报告部署失败；
+回退也失败时会明确报告两次错误。
 
-这是原目录停服部署，依赖安装至健康检查成功之间服务不可用。中间步骤失败时保持停服并返回错误，修正问题后重新部署；不要直接启动依赖可能不完整的目录。其他目录下的同名应用会使部署拒绝继续，不会被自动停止。不要使用 `taskkill /IM node.exe /F` 清理整台服务器的 Node 进程。若确认服务已退出仍报 EPERM，再检查杀毒软件占用及目录权限。
-
-发布修复时必须同时包含 `scripts/deploy-windows.ps1` 和 `scripts/stop-deployment-app.mjs`；只重跑旧部署包仍会按旧顺序安装。`<AppPath>\.deploy-tools`、`.pm2` 和 `.npm-cache` 应跨部署保留。
+发布时必须重新构建部署包，包含 `scripts/deploy-windows.ps1`、
+`scripts/prepare-deployment-release.mjs` 和 `scripts/activate-deployment-release.mjs`。
+不要重用旧制品，不要使用 `taskkill /IM node.exe /F` 清理整台服务器的 Node 进程。
+本机隔离 PM2 切换及回退验证：
+`DEPLOYMENT_PM2_TEST=true node --test test/deploymentRelease.integration.test.mjs`。

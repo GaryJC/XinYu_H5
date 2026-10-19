@@ -333,13 +333,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\apps\XinYu_H5\scripts
 
 执行顺序：
 
-1. 校验端口，按锁文件版本在 `.deploy-tools` 准备独立 PM2
-2. 停止指定名称且工作目录匹配的应用，等待进程退出释放 DLL
-3. `npm.cmd ci --include=dev`
-4. `npm.cmd run check`
-5. `npm.cmd run migrate` 和 SQL Server 连接检查
-6. 使用 `.deploy-tools\node_modules\.bin\pm2.cmd` 执行 `startOrReload`
-7. 最多等待 30 秒检查 `/api/health`，成功后 `pm2 save`
+1. 获取部署锁，校验端口，复制源码和生产配置到独立 `.releases/<版本>`，复用上传目录
+2. 在 `.deploy-tools` 准备 PM2，旧应用继续运行
+3. 在新版本目录执行 `npm.cmd ci --include=dev`
+4. 在新版本目录执行 `npm.cmd run check`
+5. 执行向后兼容的 `npm.cmd run migrate` 和 SQL Server 连接检查
+6. 保留旧静态资源，停止旧应用，在原端口启动准备好的新版本
+7. 检查 `/api/health` 及新版本响应标识，更新根目录静态联接并保存 PM2 状态
+
+安装和检查失败不停止旧服务；切换失败尝试恢复上一版，流水线仍返回失败。
+固定端口切换会短暂中断；回退应用不回退数据库迁移。
+版本目录保留，不自动删除；云效解压不得清空 `.releases`、上传目录和其他持久目录。
 
 任何一步失败都会让部署返回非零退出码。
 

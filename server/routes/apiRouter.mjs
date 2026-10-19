@@ -44,6 +44,7 @@ import { confirmOcrRecord, createOcrRecord } from "../repositories/ocrRecordRepo
 
 export async function handleApiRequest(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/health") {
+    if (process.env.DEPLOYMENT_RELEASE) res.setHeader("X-Deployment-Release", process.env.DEPLOYMENT_RELEASE);
     sendJson(res, 200, await healthCheck());
     return true;
   }
