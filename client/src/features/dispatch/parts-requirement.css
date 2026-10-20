@@ -43,3 +43,18 @@
  .parts-list-workflow{gap:20px}
  .parts-selected .ant-input{padding-inline:6px}
 }
+
+.parts-selected .ant-btn[aria-label^="移除配件"]{min-width:44px;min-height:44px}
+@media(max-width:575px){.parts-selected .ant-table-cell{padding:6px 2px!important}}
+
+@media(max-width:575px){
+ .parts-selected .ant-table table,.parts-selected .ant-table-tbody{display:block;width:100%!important}
+ .parts-selected .ant-table colgroup,.parts-selected .ant-table-thead{display:none}
+ .parts-selected .ant-table-tbody>tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px;gap:8px;padding:12px 0;border-bottom:1px solid #e8ecf1}
+ .parts-selected .ant-table-tbody>tr>td{display:block;border:0!important;min-width:0}
+ .parts-selected .ant-table-tbody>tr>td:first-child{grid-column:1/-1}
+ .parts-selected .ant-table-tbody>tr>td:nth-child(2)::before{content:'数量';display:block;margin-bottom:4px;color:#526079}
+ .parts-selected .ant-table-tbody>tr>td:nth-child(3)::before{content:'单位';display:block;margin-bottom:4px;color:#526079}
+ .parts-selected .ant-table-tbody>tr>td:last-child{align-self:end}
+ .parts-selected .ant-input,.parts-selected .ant-input-number{width:100%!important;min-height:44px}
+}

@@ -100,7 +100,7 @@ export function useWorkbenchController() {
   useEffect(() => {
     const generation = ++sessionGeneration.current;
     preRepairPhotos.reset();
-    if (!currentUser) {
+    if (!currentUser || (currentUser.role === "technician" && !currentUser.legacyEmployeeCode)) {
       setOrders([]);
       setDashboard(undefined);
       setUsers([]);
@@ -115,7 +115,7 @@ export function useWorkbenchController() {
     return () => {
       if (sessionGeneration.current === generation) sessionGeneration.current += 1;
     };
-  }, [currentUser?.id]);
+  }, [currentUser?.id, currentUser?.legacyEmployeeCode]);
 
   useEffect(() => {
     if (!visibleNavItems.some((item) => item.label === activeNav)) {
@@ -441,6 +441,7 @@ export function useWorkbenchController() {
     dashboard,
     users,
     currentUser,
+    setCurrentUser,
     departments,
     departmentError,
     actionLoading,

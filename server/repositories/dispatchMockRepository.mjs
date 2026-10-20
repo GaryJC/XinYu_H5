@@ -8,7 +8,7 @@ export async function seedTechnicianMocks(client) {
   await client.query("select pg_advisory_xact_lock(hashtext('repair-demo-fixtures-v2'))");
   const shopId='shop-hq';
   const people=[
-    {id:'u_dev_technician',name:'维修工（测试）',role:'technician',active:true,shopId},
+    {id:'u_dev_technician',name:'李富强',role:'technician',active:true,shopId},
     {id:'u_dev_advisor',name:'张三（测试）',role:'advisor',active:true,shopId},
     {id:'u_dev_inspector',name:'检验员（测试）',role:'inspector',active:true,shopId},
     {id:'u_dev_manager',name:'Gary（测试）',role:'manager',active:true,shopId}

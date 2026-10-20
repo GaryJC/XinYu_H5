@@ -1,10 +1,11 @@
+import {resolveRepairResponsibilities} from './repairResponsibilities.mjs';
 import {validateRepairItemEdits,editRepairItems} from './repairItemEditing.mjs';
 import { validatePartsRequirement,beginPendingItems,assertPartsIssued } from './partsRequirement.mjs';
 import { reopenRepairTask,validateReopenItems } from './repairRounds.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 export const DISPATCH_ROLES = ['manager','advisor','technician','inspector','warehouse'];
 export const technicianIds = task => task.technicianIds ?? (task.technicianId ? [task.technicianId] : []);
-export const canInspect = (task, actor) => actor?.active && (actor.role==='manager'||actor.inspectorRoleMember!==false) && ['inspector','manager'].includes(actor.role) && actor.shopId===task.shopId && !technicianIds(task).includes(actor.id) && !(task.participantIds||[]).includes(actor.id) && !task.items.some(i=>i.startedBy===actor.id || i.finishedBy===actor.id);
+export const canInspect = (task, actor) => actor?.active && (actor.role==='manager'||actor.inspectorRoleMember!==false) && ['inspector','manager'].includes(actor.role) && actor.shopId===task.shopId && !technicianIds(task).includes(actor.id) && !(task.participantIds||[]).includes(actor.id) && !task.items.some(i=>i.responsibleId===actor.id || i.startedBy===actor.id || i.finishedBy===actor.id);
 const scheduling = ['manager','advisor'];
 const fail = (message, status = 409) => { throw new HttpError(status, message); };
 export function assertDispatchAccess(task, actor) {
@@ -67,6 +68,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     Object.assign(next,execution,{technicianIds:ids});
     if(action==='reconcile' && task.stage==='维修完成') {
       Object.assign(next,{technicianId:worker.id,technicianName:worker.name,needsReview:false,version:task.version+1});
+      resolveRepairResponsibilities(next,people);
       return next;
     }
     if (!input.dueAt) fail('请填写预计完工时间',400);
@@ -85,10 +87,11 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     if(task.feedback) fail('已反馈无法接单，请等待服务顾问处理');
     if(action==='decline') { reason(); next.feedback=input.reason.trim(); }
     else {
-      const parts=validatePartsRequirement(input.partsRequirement);
-      next.partsRequirement={...parts,recordedBy:actor.id,recordedName:actor.name,recordedAt:now,revision:task.version+1};
+      // Reassignment changes the handler, not the material handover.
+      const parts=task.partsRequirement||validatePartsRequirement(input.partsRequirement);
+      if(!task.partsRequirement)next.partsRequirement={...parts,recordedBy:actor.id,recordedName:actor.name,recordedAt:now,revision:task.version+1,batch:1};
       next.acceptedAt=now;
-      if(parts.mode==='none') beginPendingItems(next,actor,now);
+      if(parts.mode==='none'||parts.issuedAt) beginPendingItems(next,actor,now);
       else next.stage='待开工';
     }
   } else if(action==='record-parts'||action==='edit-parts') {
@@ -141,12 +144,15 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   } else if(action==='edit-repair-items') {
     requireOwner(); stage('待开工','维修中','暂停');
     editRepairItems(next,input.repairItems,actor,now);
+    resolveRepairResponsibilities(next,people,{rejectInvalid:true});
   } else if(action==='submit-order') {
     requireOwner(); stage('维修中');
     assertPartsIssued(task);
     if(input.repairItems!==undefined)editRepairItems(next,input.repairItems,actor,now);
+    resolveRepairResponsibilities(next,people,{required:true});
     if(!next.items.length) fail('没有维修项目');
-    if(next.items.some(i=>['待开工','待派工','待领料'].includes(i.status))) fail('全部维修项目开工后才能提交完工');
+    const unstarted=next.items.filter(i=>['待开工','待派工','待领料'].includes(i.status));
+    if(unstarted.length) fail(task.rework?`退回项目尚未开工：${unstarted.map(i=>i.name).join('、')}，请先点击开始返工`:'全部维修项目开工后才能提交完工');
     if(next.items.some(i=>!['维修中','待检验','已完工'].includes(i.status))) fail('维修项目状态异常');
     next.items.filter(i=>i.status==='维修中').forEach(i=>{i.status='待检验';i.finishAt=now;i.finishedBy=actor.id;});
     next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])];
@@ -165,7 +171,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   } else if(['start','finish','pick'].includes(action)) {
     requireOwner(); stage('待开工','维修中'); assertPartsIssued(task);const current=item();
     if(action==='start') { if(!['待开工','待派工','待领料'].includes(current.status)) fail('该项目不能开工'); current.status='维修中'; current.startAt ||= now; current.startedBy=actor.id; next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])]; next.firstStartedAt ||= now; next.stage='维修中'; }
-    if(action==='finish') { if(current.status!=='维修中') fail('请先开工'); current.status='待检验'; current.finishAt=now; current.finishedBy=actor.id; next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])]; }
+    if(action==='finish') { resolveRepairResponsibilities(next,people,{required:true});if(current.status!=='维修中') fail('请先开工'); current.status='待检验'; current.finishAt=now; current.finishedBy=actor.id; next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])]; }
     if(action==='pick') { if(current.pickedAt) fail('已确认领料'); current.pickedAt=now; }
   } else if(action==='pause') {
     requireOwner(); stage('待开工','维修中');
@@ -175,26 +181,26 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   } else if(action==='resume') {
     requireOwner(); stage('暂停'); next.stage=task.resumeStage || '维修中'; next.pausedAt=undefined; next.pauseReason=undefined; next.pauseNote=undefined;
   } else if(action==='submit') {
-    requireOwner(); stage('维修中');assertPartsIssued(task);
+    requireOwner(); stage('维修中');assertPartsIssued(task);resolveRepairResponsibilities(next,people,{required:true});
     if(!next.items.length || next.items.some(i=>!['待检验','已完工'].includes(i.status))) fail('全部维修项目完成后才能提报');
     const inspector=person(input.inspectorId,['inspector','manager']);
     if(!canInspect(task,inspector) || technicianIds(task).includes(inspector.id) || (task.participantIds||[]).includes(inspector.id) || next.items.some(i=>i.startedBy===inspector.id || i.finishedBy===inspector.id)) fail('不能选择维修工本人检验',403);
     next.inspectorId=inspector.id; next.inspectorName=inspector.name; next.stage='待检验'; next.submittedAt=now; next.submissionNote=input.note || '';
   } else if(action==='inspect') {
     stage('待检验');
-    if(!canInspect(task,actor) || !['manager','inspector'].includes(actor.role) || (actor.role!=='manager' && task.inspectorId!==actor.id) || (actor.id===task.technicianId || technicianIds(task).includes(actor.id) || (task.participantIds||[]).includes(actor.id)) || next.items.some(i=>i.startedBy===actor.id || i.finishedBy===actor.id)) fail('不能自检，或没有当前任务检验权限',403);
+    if(!canInspect(task,actor) || !['manager','inspector'].includes(actor.role) || (actor.role!=='manager' && task.inspectorId!==actor.id) || (actor.id===task.technicianId || technicianIds(task).includes(actor.id) || (task.participantIds||[]).includes(actor.id)) || next.items.some(i=>i.responsibleId===actor.id || i.startedBy===actor.id || i.finishedBy===actor.id)) fail('不能自检，或没有当前任务检验权限',403);
     const rejected=input.rejectedItemIds || [];
+    if(!rejected.length)resolveRepairResponsibilities(next,people,{required:true});
     if(rejected.length) reason();
-    else if(input.workHours===undefined) fail('检验通过时请填写实际工时',400);
     if(rejected.length && input.workHours!==undefined) fail('退回维修时无需填写工时，请在全部检验通过时填写',400);
     if(rejected.some(id=>!next.items.some(i=>i.id===id && i.status==='待检验'))) fail('退回项目不在本次待检验项目中',400);
     for(const current of next.items) {
       if(current.status!=='待检验') continue;
-      if(rejected.includes(current.id)) { current.status='待开工'; current.finishAt=undefined; }
-      else { current.status='已完工'; current.inspectedBy=actor.id; current.inspectorName=actor.name; current.inspectedAt=now; }
+      if(rejected.includes(current.id)) { current.status='待开工'; current.finishAt=undefined; current.rejectionReason=input.reason.trim(); }
+      else { delete current.rejectionReason; current.status='已完工'; current.inspectedBy=actor.id; current.inspectorName=actor.name; current.inspectedAt=now; }
     }
     if(rejected.length) { next.reworkReason=input.reason; next.rejectedItemIds=rejected; next.stage='维修中'; next.rework=true; next.reworkCount=(task.reworkCount||0)+1; }
-    else { Object.assign(next,{workHours:input.workHours,workHoursRecordedBy:actor.id,workHoursRecordedName:actor.name,workHoursRecordedAt:now}); next.stage='维修完成'; next.completedAt=now; next.completedBy=task.technicianId; next.inspectorName=actor.name; next.rework=false; }
+    else { if(input.workHours!==undefined) Object.assign(next,{workHours:input.workHours,workHoursRecordedBy:actor.id,workHoursRecordedName:actor.name,workHoursRecordedAt:now}); next.stage='维修完成'; next.completedAt=now; next.completedBy=task.technicianId; next.inspectorId=actor.id; next.inspectorName=actor.name; next.rework=false; }
   } else if(action==='record-hours') {
     if(!canInspect(task,actor) || task.inspectorId!==actor.id) fail('仅本单检验人可补录工时',403);
     stage('维修完成');
@@ -214,6 +220,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   } else if(['remind','retry-notification'].includes(action)) {
     requireSchedule(); if(action==='remind' && ['待派工','维修完成'].includes(task.stage)) fail('当前任务没有待处理人');
   }
+  if(['assign','reassign','reconcile','reopen-repair','accept','edit-repair-items'].includes(action))resolveRepairResponsibilities(next,people);
   next.version += 1;
   return next;
 }

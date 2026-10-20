@@ -1,8 +1,10 @@
 import { request } from '../../shared/api/httpClient';
-import type { VehiclePartsHistory, RunfengWarehouse, RunfengStockSearchResult, RepairPhotoUploadRequest, RepairTaskCounts, DispatchActionRequest, DispatchDetail, DispatchPeople, DispatchTask, TechnicianSummary } from '../../../../shared/types';
+import type { ResolveRepairWritebackRequest, VehiclePartsHistory, RunfengWarehouse, RunfengStockSearchResult, RepairPhotoUploadRequest, RepairTaskCounts, DispatchActionRequest, DispatchDetail, DispatchPeople, DispatchTask, TechnicianSummary } from '../../../../shared/types';
 export type DispatchFilters = {executionMode?:string;search?:string;technicianId?:string;stage?:string;metric?:string;urgent?:string;overdue?:string;from?:string;to?:string};
 function query(filters: DispatchFilters) { return new URLSearchParams(Object.entries(filters).filter(([,v])=>Boolean(v)) as [string,string][]).toString(); }
 export const dispatchApi={
+  resolveRepairWriteback:(id:string,body:ResolveRepairWritebackRequest)=>request<{ok:boolean}>(`/api/dispatch/tasks/${encodeURIComponent(id)}/repair-writeback/resolve`,{method:'POST',body}),
+  retryRepairWriteback:(id:string)=>request<{ok:boolean}>(`/api/dispatch/tasks/${encodeURIComponent(id)}/repair-writeback/retry`,{method:'POST',body:{}}),
   vehiclePartsHistory:(id:string)=>request<VehiclePartsHistory>(`/api/dispatch/tasks/${encodeURIComponent(id)}/parts-history`),
   historicalPartStock:(id:string,code:string)=>request<RunfengStockSearchResult>(`/api/dispatch/tasks/${encodeURIComponent(id)}/parts-history/stock?${new URLSearchParams({code})}`),
   stockWarehouses:(id:string)=>request<{warehouses:RunfengWarehouse[]}>(`/api/dispatch/tasks/${encodeURIComponent(id)}/parts-stock/warehouses`),

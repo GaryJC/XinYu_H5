@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {validatePartsRequirement} from '../server/domain/partsRequirement.mjs';
 import {applyDispatchAction} from '../server/domain/dispatchPolicy.mjs';
 const tech={id:'t',name:'维修工',role:'technician',active:true,shopId:'s'};
-const waiting=()=>({orderId:'o',shopId:'s',stage:'待接单',orderStatus:'待派工',version:1,technicianIds:['t'],items:[{id:1,name:'维修',status:'待开工'},{id:2,name:'已通过项目',status:'已完工',startAt:'2026-10-01',inspectedBy:'i'}]});
+const waiting=()=>({orderId:'o',shopId:'s',stage:'待接单',orderStatus:'待派工',version:1,technicianIds:['t'],items:[{id:1,name:'维修',status:'待开工'},{id:2,name:'已通过项目',responsibleId:'t',responsibleName:'维修工',status:'已完工',startAt:'2026-10-01',inspectedBy:'i'}]});
 const input=(partsRequirement)=>({action:'accept',expectedVersion:1,requestId:randomUUID(),partsRequirement});
 test('acceptance requiring parts waits for issue without overwriting inspected projects',()=>{
  const task=waiting(),original=structuredClone(task),now='2026-10-15T12:00:00Z';
@@ -152,4 +152,20 @@ test('outsourced start keeps the scheduling owner after warehouse transcription'
  assert.equal(edited.items[0].startedBy,'advisor');assert.ok(!edited.participantIds.includes('w'));
  const ready=applyDispatchAction(task,request(task,'confirm-parts'),warehouse,[]),issued=applyDispatchAction(ready,request(ready,'issue-parts'),warehouse,[]);
  assert.equal(issued.items[0].startedBy,'advisor');assert.ok(!issued.participantIds.includes('w'));
+});
+
+
+test('reassigned acceptance preserves issued batches instead of requesting material twice',()=>{
+ const advisor={id:'a',name:'顾问',role:'advisor',active:true,shopId:'s'},replacement={...tech,id:'t2'};
+ const original={...withParts(),stage:'维修中',firstStartedAt:'2026-10-01T12:00:00Z',partsRequirement:{...withParts().partsRequirement,batch:3,preparedAt:'2026-10-02',issuedAt:'2026-10-03',recipientIds:['t']}};
+ const reassigned=applyDispatchAction(original,request(original,'reassign',{technicianIds:['t2'],dueAt:'2027-01-01T12:00:00Z',reason:'换班'}),advisor,[advisor,replacement]);
+ const accepted=applyDispatchAction(reassigned,request(reassigned,'accept',{partsRequirement:{mode:'none'}}),replacement,[replacement]);
+ assert.equal(accepted.stage,'维修中');assert.equal(accepted.firstStartedAt,original.firstStartedAt);
+ assert.deepEqual(accepted.partsRequirement,original.partsRequirement);assert.equal(accepted.partsRequirement.batch,3);
+});
+test('reassigned acceptance cannot bypass an unissued requirement by selecting no material',()=>{
+ const original={...waiting(),partsRequirement:{mode:'list',items:[{name:'机油',quantity:4,unit:'升'}],photoIds:[],preparedAt:'2026-10-18',batch:2}};
+ const accepted=applyDispatchAction(original,request(original,'accept',{partsRequirement:{mode:'none'}}),tech,[tech]);
+ assert.equal(accepted.stage,'待开工');assert.deepEqual(accepted.partsRequirement,original.partsRequirement);
+ assert.throws(()=>applyDispatchAction(accepted,request(accepted,'start-order'),tech,[tech]),/等待仓管/);
 });

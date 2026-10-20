@@ -3,7 +3,7 @@ import {readLicenseExceptions} from './repositories/vehicleLicenseExceptionRepos
 import {assertWorkOrderAccess} from './repositories/accessRepository.mjs';
 import { attachPreRepairPhotos } from "./repositories/preRepairPhotoRepository.mjs";
 import { assertPreRepairPhotosReady } from "./domain/preRepairPhotos.mjs";
-import { assertWorkHoursRecorded } from './repositories/dispatchRepository.mjs';
+import { assertInspectionCompleted } from './repositories/dispatchRepository.mjs';
 import { saveDispatchPlan, readDispatchPlans } from './repositories/dispatchPlanRepository.mjs';
 import { activateDispatchPlan } from './services/dispatchPlanService.mjs';
 import { pool, transaction } from "./database/pool.mjs";
@@ -137,7 +137,7 @@ export async function transitionWorkOrder(id, status, actor, action, patch = {})
     if (!order) throw new HttpError(404, "委托单不存在");
     if (["维修中", "待结算"].includes(status)) throw new HttpError(409, "请使用派工流程操作");
     assertStatusTransition(order.status, status);
-    if(status==="完成") {await assertNoActiveRepair(client,id);await assertWorkHoursRecorded(client,id);}
+    if(status==="完成") {await assertNoActiveRepair(client,id);await assertInspectionCompleted(client,id);}
     const safePatch = sanitizeTransitionPatch(status, patch);
     const repairItems = status === "维修中"
       ? order.repairItems.map((item) => ({

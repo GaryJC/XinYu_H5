@@ -1,3 +1,4 @@
+import {startRepairWritebacks} from './workers/repairWritebackWorker.mjs';
 import {startVehicleLicenseExceptionNotifications} from './workers/vehicleLicenseExceptionNotifications.mjs';
 import { startDispatchNotifications } from "./workers/dispatchNotifications.mjs";
 import path from "node:path";
@@ -12,6 +13,7 @@ import { handleApiRequest } from "./routes/apiRouter.mjs";
 import { withRequestTiming } from "./http/requestTiming.mjs";
 
 const config = serverConfig();
+const stopRepairWritebacks = startRepairWritebacks();
 const stopNotifications = startDispatchNotifications();
 const stopLicenseNotifications = startVehicleLicenseExceptionNotifications();
 const distDir = path.resolve(config.distDir);
@@ -48,6 +50,7 @@ server.listen(config.port, "0.0.0.0", () => {
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {
     server.close(async () => {
+      await stopRepairWritebacks();
       await stopNotifications();
       await stopLicenseNotifications();
       await Promise.all([closePool(), closeSqlServerPool()]);

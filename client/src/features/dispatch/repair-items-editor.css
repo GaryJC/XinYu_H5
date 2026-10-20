@@ -29,3 +29,5 @@
 .technician-completion-dialog .ant-modal-body>section>h3{font-size:15px;margin:0 0 12px}
 .repair-completion-note{display:flex;flex-direction:column;gap:8px;margin-top:24px;font-size:14px;font-weight:500;color:#526079}
 .repair-completion-note .ant-input{font-weight:400}
+
+.repair-item-owner{display:flex;align-items:center;gap:12px;margin-top:12px;color:#778399;font-size:13px}.repair-item-owner>span{flex-shrink:0}

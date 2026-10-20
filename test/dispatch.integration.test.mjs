@@ -45,6 +45,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
     await pool.query(await fs.readFile('supabase/migrations/202609110001_dispatch_management.sql','utf8'));
     await pool.query(await fs.readFile('supabase/migrations/202609110002_advisor_dispatch_plans.sql','utf8'));
     for(const file of files.filter(f=>f>'202609110002_advisor_dispatch_plans.sql')) await pool.query(await fs.readFile(`supabase/migrations/${file}`,'utf8'));
+    await pool.query("update users set legacy_employee_code='027',legacy_employee_name=name,legacy_employee_department='test',legacy_employee_bound_at=now() where role='technician'");
     dispatcher.role='advisor';
     const service=await import('../server/services/dispatchService.mjs');
     async function progressPhoto(id,round=0,kind='repair_progress_photo'){const file=randomUUID();await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by,repair_round) values($1,$2,$3,'local','','fixture','image/png',8,$4,$5)",[file,id,kind,tech.id,round]);return file;}
@@ -302,6 +303,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,original_name,mime_type,size_bytes,uploaded_by) values($1,'team','repair_order_photo','local','','test','repair.png','image/png',1,$2)",[file,advisor.id]);
       await assertFileReadAccess(file,tech2);
       await execute(tech2,'accept');
+      await execute(tech2,'edit-repair-items',{repairItems:team.items.map((i,n)=>({id:i.id,name:i.name,responsibleId:n?tech.id:tech2.id}))});
       await execute(tech2,'finish',{itemId:1});
       await execute(tech,'finish',{itemId:2});
       await assert.rejects(()=>execute(tech2,'submit',{inspectorId:inspector.id}),/本轮维修照片/);
@@ -429,10 +431,10 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       const winner=whole.inspectorId===inspector.id?inspector:otherInspector;
       const stored=(await pool.query("select request_body from dispatch_events where order_id='whole' and action='claim-inspection'")).rows[0].request_body;
       await service.executeDispatchAction(winner,'whole',stored);
-      await assert.rejects(()=>execute(winner,'inspect',{workHours:undefined}),/请填写实际工时/);
-      assert.equal((await service.dispatchDetail(manager,'whole')).task.stage,'待检验');
-      await execute(winner,'inspect',{workHours:3.75});assert.equal(whole.stage,'维修完成');
-      assert.equal(whole.workHours,3.75);assert.equal(whole.workHoursRecordedBy,winner.id);
+      await execute(winner,'inspect',{workHours:undefined});assert.equal(whole.stage,'维修完成');
+      assert.equal(whole.workHours,undefined);assert.equal(whole.workHoursRecordedBy,undefined);
+      const {assertInspectionCompleted}=await import('../server/repositories/dispatchRepository.mjs');
+      await assertInspectionCompleted(pool,'whole');
     });
     await t.test('acceptance requires parts, starts repair atomically and validates handwritten photo scope',async()=>{
       await seed('parts-accept');await seed('parts-other');
@@ -581,6 +583,63 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       const queued=(await pool.query("select * from dispatch_notifications where order_id='last-hour' and kind='即将到期'")).rows[0];
       assert.equal(await validateDueReminder(queued,tech,{now}),false);
     });
+    await t.test('inspection writebacks are atomic, immutable, idempotent and recover after failure',async()=>{
+      const id='writeback-case';await seed(id);
+      let local=(await service.executeDispatchAction(advisor,id,{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianIds:[tech.id],dueAt})).task;
+      const execute=async(actor,action,extra={})=>{const request={action,expectedVersion:local.version,requestId:randomUUID(),...extra};local=(await service.executeDispatchAction(actor,id,request)).task;return request;};
+      await execute(tech,'accept',{partsRequirement:{mode:'none'}});await progressPhoto(id);await execute(tech,'submit-order');await execute(inspector,'claim-inspection');
+      await execute(inspector,'inspect',{rejectedItemIds:[1],reason:'返工'});
+      assert.equal((await pool.query('select count(*) from repair_writebacks where order_id=$1',[id])).rows[0].count,'0');
+      await execute(tech,'start',{itemId:1});await execute(tech,'submit-order');await execute(inspector,'claim-inspection');
+      await pool.query("update users set legacy_employee_code=null,legacy_employee_name=null,legacy_employee_department=null,legacy_employee_bound_at=null where id=$1",[tech.id]);
+      const version=local.version;
+      await assert.rejects(()=>execute(inspector,'inspect',{workHours:2}),/绑定润丰/);
+      assert.equal((await service.dispatchDetail(manager,id)).task.version,version);
+      assert.equal((await pool.query('select count(*) from repair_writebacks where order_id=$1',[id])).rows[0].count,'0');
+      await pool.query("update users set legacy_employee_code='027',legacy_employee_name=name,legacy_employee_department='test',legacy_employee_bound_at=now() where id=$1",[tech.id]);
+      const inspectRequest=await execute(inspector,'inspect',{workHours:2});await service.executeDispatchAction(inspector,id,inspectRequest);
+      let jobs=(await pool.query('select * from repair_writebacks where order_id=$1',[id])).rows;
+      assert.equal(jobs.length,1);assert.equal(jobs[0].snapshot.items.length,2);assert.ok(jobs[0].snapshot.items.every(i=>i.employeeCode==='027'));
+      assert.equal((await service.dispatchDetail(manager,id)).repairWriteback.repairRound,0);
+      const originalSnapshot=JSON.stringify(jobs[0].snapshot);
+      await pool.query("update users set legacy_employee_code='099' where id=$1",[tech.id]);
+      assert.equal(JSON.stringify((await pool.query('select snapshot from repair_writebacks where order_id=$1',[id])).rows[0].snapshot),originalSnapshot);
+      await pool.query("update users set legacy_employee_code='027' where id=$1",[tech.id]);
+      // Run only this fixture through the worker. No real SQL Server calls.
+      await pool.query("update repair_writebacks set next_attempt_at=now()+interval '1 day' where order_id<>$1 and status='pending'",[id]);
+      const {drainRepairWritebacks}=await import('../server/workers/repairWritebackWorker.mjs');
+      await drainRepairWritebacks({write:async()=>{throw new Error('must not be called without legacy identifiers');}});
+      let job=(await pool.query('select * from repair_writebacks where order_id=$1',[id])).rows[0];assert.equal(job.attempts,0);assert.match(job.error,/等待润丰/);
+      await pool.query("update work_orders set dispatch_no='A123',department_code='01',legacy_reid=111,legacy_document_no=222 where id=$1",[id]);
+      await pool.query('update repair_writebacks set attempts=4,next_attempt_at=now() where order_id=$1',[id]);
+      await drainRepairWritebacks({write:async()=>{throw new Error('模拟断线');}});
+      job=(await pool.query('select * from repair_writebacks where order_id=$1',[id])).rows[0];assert.equal(job.status,'failed');assert.equal((await service.dispatchDetail(manager,id)).task.stage,'维修完成');
+      const {retryRepairWriteback}=await import('../server/services/repairWritebackService.mjs');
+      await assert.rejects(()=>retryRepairWriteback(advisor,id),e=>e.status===403);
+      await assert.rejects(()=>retryRepairWriteback(outside,id),e=>e.status===403);
+      await retryRepairWriteback(manager,id);
+      const previousAllowlist=process.env.RUNFENG_REPAIR_WRITEBACK_DISPATCH_ALLOWLIST;
+      process.env.RUNFENG_REPAIR_WRITEBACK_DISPATCH_ALLOWLIST='A67527';
+      try{await drainRepairWritebacks({write:async()=>{throw new Error('unallowlisted job must not be processed');}});assert.equal((await pool.query('select status from repair_writebacks where order_id=$1',[id])).rows[0].status,'pending');}
+      finally{if(previousAllowlist===undefined)delete process.env.RUNFENG_REPAIR_WRITEBACK_DISPATCH_ALLOWLIST;else process.env.RUNFENG_REPAIR_WRITEBACK_DISPATCH_ALLOWLIST=previousAllowlist;}
+      let calls=0;const write=async snapshot=>{calls++;assert.equal(snapshot.documentNo,222);assert.equal(snapshot.items[0].employeeCode,'027');};
+      await Promise.all([drainRepairWritebacks({write}),drainRepairWritebacks({write})]);assert.equal(calls,1);
+      assert.equal((await pool.query('select status from repair_writebacks where order_id=$1',[id])).rows[0].status,'synced');
+      assert.equal(JSON.stringify((await pool.query('select snapshot from repair_writebacks where order_id=$1',[id])).rows[0].snapshot),originalSnapshot);
+      // A later repair round replaces the full accumulated list, not just its selected subset.
+      await execute(advisor,'reopen-repair',{reworkItemIds:[1],additionalItems:['增修项目'],technicianIds:[tech.id],dueAt,reason:'复修'});
+      await execute(tech,'accept',{partsRequirement:{mode:'none'}});await progressPhoto(id,1);await execute(tech,'submit-order');await execute(inspector,'claim-inspection');
+      await execute(inspector,'inspect',{rejectedItemIds:[1],reason:'二轮部分退回'});
+      assert.equal((await pool.query('select count(*) from repair_writebacks where order_id=$1',[id])).rows[0].count,'1');
+      const returned=await service.dispatchDetail(manager,id);assert.equal(returned.task.repairRound,1);assert.equal(returned.task.stage,'维修中');assert.equal(returned.repairWriteback.repairRound,0);
+      const passed=structuredClone(local.items.filter(i=>i.status==='已完工'));
+      await assert.rejects(()=>execute(tech,'submit-order'),/退回项目尚未开工/);
+      await execute(tech,'start-order');assert.deepEqual(local.items.filter(i=>i.status==='已完工'),passed);await execute(tech,'submit-order');await execute(inspector,'claim-inspection');await execute(inspector,'inspect',{workHours:1});
+      assert.equal((await service.dispatchDetail(manager,id)).repairWriteback.repairRound,1);
+      jobs=(await pool.query('select * from repair_writebacks where order_id=$1 order by id',[id])).rows;
+      assert.equal(jobs.length,2);assert.equal(jobs[1].snapshot.items.length,3);assert.ok(jobs[1].snapshot.items.some(i=>i.id===2));
+      await pool.query("update repair_writebacks set next_attempt_at=now()+interval '1 day' where order_id=$1 and status='pending'",[id]);
+    });
     if(process.env.DISPATCH_UI_TEST==='true') await t.test('desktop and mobile UI complete assignment, acceptance, repair and inspection',async()=>{
       const {chromium}=await import(process.env.DISPATCH_PLAYWRIGHT_MODULE||'playwright');
       const {createTokenForUser}=await import('../server/auth.mjs');
@@ -602,7 +661,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         const managerPage=await pageFor(manager);
         await managerPage.locator('.ant-drawer-close').click();
         await managerPage.locator('.ant-drawer-section').waitFor({state:'hidden'});
-        const selectStatus=async label=>{await managerPage.getByRole('combobox',{name:'工单状态筛选'}).click();await managerPage.locator('.ant-select-dropdown:visible .ant-select-item-option-content').filter({hasText:new RegExp(`^${label}$`)}).click();};
+        const selectStatus=async label=>{await managerPage.getByRole('tab',{name:label,exact:true}).click();};
         await selectStatus('未派工');
         await managerPage.locator('.dispatch-page .ant-table').last().getByText('ui-filter-unassigned',{exact:true}).waitFor();
         await selectStatus('待结算');

@@ -1,3 +1,4 @@
+import {RepairContext} from './RepairContext';
 import { WarehouseDispatchNumber } from './WarehouseDispatchNumber';
 import { WarehousePartsEditor } from './WarehousePartsEditor';
 import { useState } from 'react';
@@ -28,7 +29,8 @@ export function WarehousePartsDetail({detail,controller}:{detail:DispatchDetail;
   const canEdit=Boolean(controller&&!controller.busy&&!task.needsReview&&task.acceptedAt&&['待开工','维修中','暂停'].includes(task.stage)&&!parts?.issuedAt);
   return <div className="warehouse-detail">
     <section className="warehouse-order" aria-label="申请工单信息">
-      <div className="warehouse-order-heading"><h2>{task.plate}</h2><Tag color={parts?.issuedAt?'green':parts && parts.mode!=='none'?'gold':'default'}>{partsStatus(parts)}</Tag>{isSupplementalParts(parts)?<Tag color="blue">补料</Tag>:null}</div>
+      <div className="warehouse-order-heading"><h2>{task.plate}</h2><Tag color={parts?.issuedAt?'green':parts && parts.mode!=='none'?'gold':'default'}>{partsStatus(parts)}</Tag><RepairContext task={task}/></div>
+      {task.repairRound&&task.roundReason?<p>返工原因：{task.roundReason}</p>:null}
       <WarehouseDispatchNumber value={task.dispatchNo}/>
       <Collapse className="warehouse-order-more" items={[{key:'details',label:'查看委托单其他详情',children:<Descriptions size="small" column={1} colon={false} items={[
         {key:'order',label:'委托单号',children:task.orderId},

@@ -1,3 +1,7 @@
+import {RepairWritebackStatus} from './RepairWritebackStatus';
+import {InspectionItems,PassedInspectionItems} from './InspectionItems';
+import {useInspectionDraft} from './useInspectionDraft';
+import type {InspectionReview} from './inspectionReview';
 import { WarehouseStockSearch } from './WarehouseStockSearch';
 import { TaskOverview } from './TaskOverview';
 import './task-detail.css';
@@ -20,6 +24,8 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
   const [partsDialog,setPartsDialog]=useState(false);
   const [dialog,setDialog]=useState<DispatchActionName>();
   const detail=controller.detail;
+  const inspectionDraft=useInspectionDraft(detail?.task);
+  const [inspectionReview,setInspectionReview]=useState<InspectionReview>();
   if(!detail) return <>{controller.error?<Alert type="error" title={controller.error}/>:null}<Empty description="正在加载任务，或当前账号已无权访问"/></>;
   const {task,events,notifications,files}=detail;
   const unsigned=['草稿','待客户签字'].includes(task.orderStatus);
@@ -28,7 +34,6 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
   const inspect=task.stage==='待检验' && (user.role==='manager'||(user.role==='inspector'&&task.inspectorId===user.id)) && !workers.includes(user.id) && !task.participantIds?.includes(user.id) && !task.items.some(i=>i.startedBy===user.id||i.finishedBy===user.id);
   const waitingForParts=Boolean(task.partsRequirement&&task.partsRequirement.mode!=='none'&&!task.partsRequirement.issuedAt);
   const actions:DispatchActionName[]=[];
-  if(task.stage==='维修完成' && task.workHours===undefined && task.inspectorId===user.id && ['inspector','manager'].includes(user.role)) actions.push('record-hours');
   if(controller.manager&&!unsigned) {
     if(task.needsReview) {if(user.role==='manager') actions.push('reconcile');}
     else {
@@ -57,16 +62,18 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     catch(e){controller.setError(e instanceof Error?e.message:'附件加载失败');}
   }
   return <div className={`dispatch-detail task-detail-layout${actions.length?" has-task-actions":""}`}>
-    <TaskOverview task={task}><Space wrap><Tag>{executionLabels[task.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(task)}</Tag>{task.urgent?<Tag color="red">加急</Tag>:null}{task.overdue?<Tag color="red">超期</Tag>:null}{task.repairRound?<Tag color="orange">返工第 {task.repairRound} 轮</Tag>:null}{task.rework&&!task.repairRound?<Tag color="orange">返工第 {task.reworkCount} 次</Tag>:null}</Space></TaskOverview>
-    {task.stage==='维修完成'&&task.orderStatus!=='完成'&&task.workHours===undefined?<Alert type="warning" showIcon title="待调度人员录入工时" description="检验已通过，请由服务顾问／派单人员录入实际工时后再完结工单。"/>:null}
+    <TaskOverview task={task}><Space wrap><Tag>{executionLabels[task.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(task)}</Tag>{task.urgent?<Tag color="red">加急</Tag>:null}{task.overdue?<Tag color="red">超期</Tag>:null}{task.rework&&!task.repairRound?<Tag color="orange">返工第 {task.reworkCount} 次</Tag>:null}</Space></TaskOverview>
     {unsigned?<Alert type="info" showIcon title="客户签字后才能派工" description="请在委托开单中完成工单与客户签字，签字后即可从派工台安排维修。"/>:null}
     {task.needsReview?<Alert type="warning" title="历史任务待核对" description="历史记录未能完整确认人员或进度；管理员核对后才能继续，不补造历史时间。"/>:null}
-    {task.repairRound?<Alert type="warning" showIcon title={`返工第 ${task.repairRound} 轮 · ${task.stage==='维修完成'?'已结束':'处理中'}`} description={task.roundReason}/>:null}
     {task.feedback?<Alert type="warning" title="无法接单 · 待服务顾问处理" description={task.feedback}/>:null}
     {task.stage==='暂停'?<Alert type="warning" title={`暂停：${task.pauseReason}`} description={`${task.pauseNote||''} · 自 ${displayTime(task.pausedAt)}，已暂停 ${Math.max(0,Math.floor((Date.now()-Date.parse(task.pausedAt||''))/60000))} 分钟`}/>:null}
     {task.stage==='待检验'?<Alert type="info" title={task.inspectorName?`已由 ${task.inspectorName} 接手检验`:'等待检验员领取'}/>:null}
     {controller.error?<Alert type="error" showIcon title={controller.error}/>:null}
-    <section className="task-projects">
+    {task.stage==='待检验'?<section className="task-projects">
+      <h3>待检项目 · {inspectionDraft.pending.length} 项</h3>
+      <InspectionItems items={task.items} choices={inspectionDraft.choices} onChange={inspectionDraft.change} disabled={!inspect||!task.inspectorId||unsigned||task.needsReview||controller.busy}/>
+      <p className="inspection-progress">{inspect&&task.inspectorId?`已选择 ${inspectionDraft.pending.filter(item=>inspectionDraft.choices[item.id]).length} / ${inspectionDraft.pending.length} 项，请逐项确认通过或退回。`:'领取检验任务后，可逐项选择通过或退回。'}</p>
+    </section>:<section className="task-projects">
     <h3>维修项目 · {task.items.filter(i=>['待检验','已完工'].includes(i.status)).length}/{task.items.length} 已提报或通过</h3>
     {task.items.map(item=><Card key={item.id} size="small" title={item.name} extra={<Tag>{item.status}</Tag>}>
       <div className="dispatch-item-times"><span>开工：{displayTime(item.startAt)}</span><span>完工提报：{displayTime(item.finishAt)}</span><span>检验：{item.inspectorName||'未检验'} · {displayTime(item.inspectedAt)}</span><span>领料确认：{displayTime(item.pickedAt)}</span></div>
@@ -76,7 +83,9 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
       </Space>:null}
     </Card>)}
     <p className="dispatch-muted">需要配件的任务由仓管确认出库后自动开工；无需配件直接开工。</p>
-    </section>
+    </section>}
+    {task.stage==='待检验'?<PassedInspectionItems items={task.items}/>:null}
+    <RepairWritebackStatus controller={controller} admin={user.role==='manager'}/>
     <PartsRequirementSummary value={task.partsRequirement}/>
     {user.role==='manager'&&(task.partsRequirement||task.hasPartsHistory)?<WarehouseStockSearch key={`stock-${task.orderId}`} orderId={task.orderId} requirement={task.partsRequirement}/>:null}
     {owner?<RepairPhotoPanel controller={controller} editable={!unsigned&&!task.needsReview&&['待开工','维修中','暂停'].includes(task.stage)} onBlocked={setPhotoBlocked}/>:null}
@@ -93,7 +102,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
       ...(task.executionMode==='outsourced'?[{key:'outsourcingMode',label:'外包施工方式',children:task.outsourcingMode==='offsite'?'车辆外送整包维修':'承包方到店施工'},{key:'fee',label:'约定费用',children:task.agreedFee==null?'未填写':`¥${task.agreedFee.toFixed(2)}`}]:[]),
       {key:'technician',label:task.executionMode==='outsourced'?'承包方':'维修员工',children:task.technicianName||'未指派'},
       {key:'inspector',label:'检验人',children:task.inspectorName||'未指定'},
-      {key:'hours',label:'实际工时',children:task.workHours===undefined?'待检验员填写':`${task.workHours} 小时`},
+      {key:'hours',label:'实际工时',children:task.workHours===undefined?'未记录':`${task.workHours} 小时`},
       {key:'hoursActor',label:'工时记录',children:task.workHoursRecordedName?`${task.workHoursRecordedName} · ${displayTime(task.workHoursRecordedAt)}`:'未记录'},
       {key:'due',label:'预计完工',children:displayTime(task.dueAt)},
       {key:'assigned',label:'指派时间',children:displayTime(task.assignedAt)},
@@ -127,10 +136,11 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
       {event.detail.pauseReason?<p>{event.detail.pauseReason}</p>:null}
       {event.detail.reason?<p>{event.detail.reason}</p>:null}{event.detail.note?<p>{event.detail.note}</p>:null}</div>}))}/>
     </>}]} />
-    {actions.length?<div className="task-detail-actions"><Space wrap>{actions.map(action=><Button key={action} type={['reopen-repair','assign','accept','submit','inspect','claim-inspection'].includes(action)?'primary':'default'} loading={controller.busy} disabled={controller.busy||photoBlocked} onClick={()=>{
-      if(action==='accept')setPartsDialog(true);else if(['resume','reoffer','remind','claim-inspection','retry-inspection-notifications'].includes(action)) void controller.act({action});else setDialog(action);
-    }}>{actionLabels[action]}</Button>)}</Space></div>:null}
+    {actions.length?<div className="task-detail-actions"><Space wrap>{actions.map(action=><Button key={action} type={['reopen-repair','assign','accept','submit','inspect','claim-inspection'].includes(action)?'primary':'default'} loading={controller.busy} disabled={controller.busy||photoBlocked||action==='inspect'&&!inspectionDraft.complete} onClick={()=>{
+      if(action==='inspect'){if(!inspectionDraft.complete){controller.setError('请先为每个待检项目选择通过或退回');return;}setInspectionReview({version:task.version,choices:{...inspectionDraft.choices}});setDialog(action);}
+      else if(action==='accept')setPartsDialog(true);else if(['resume','reoffer','remind','claim-inspection','retry-inspection-notifications'].includes(action)) void controller.act({action});else setDialog(action);
+    }}>{action==='inspect'?(inspectionDraft.complete?`提交检验结果（通过 ${inspectionDraft.pending.length-inspectionDraft.rejectedItemIds.length} · 退回 ${inspectionDraft.rejectedItemIds.length}）`:`还剩 ${inspectionDraft.pending.filter(item=>!inspectionDraft.choices[item.id]).length} 项未确认`):actionLabels[action]}</Button>)}</Space></div>:null}
     {partsDialog?<PartsRequirementDialog controller={controller} accepting={task.stage==='待接单'} onClose={()=>setPartsDialog(false)}/>:null}
-    {dialog?<DispatchActionDialog key={`${task.orderId}-${dialog}`} action={dialog} task={task} controller={controller} onClose={()=>setDialog(undefined)}/>:null}
+    {dialog?<DispatchActionDialog key={`${task.orderId}-${dialog}`} action={dialog} task={task} controller={controller} inspectionReview={inspectionReview} onClose={()=>setDialog(undefined)}/>:null}
   </div>;
 }

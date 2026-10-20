@@ -1,3 +1,4 @@
+import {readRepairWriteback} from './repairWritebackRepository.mjs';
 import { readRepairRounds } from './repairRoundRepository.mjs';
 import { pool } from '../database/pool.mjs';
 import { HttpError } from '../http/HttpError.mjs';
@@ -16,6 +17,8 @@ export function mapTask(row) {
     stage:['草稿','待客户签字'].includes(row.order_status)?row.order_status:row.stage || (['待结算','完成'].includes(row.order_status)?'维修完成':row.order_status==='维修中'?'维修中':'待派工'),
     version:row.version || 0, plate:row.vehicle_plate, dispatchNo:row.dispatch_no || '', arrivalDate:row.arrival_date,
     orderStatus:row.order_status, faultDescription:row.fault_description };
+  const ids=task.technicianIds??(task.technicianId?[task.technicianId]:[]);
+  if(ids.length===1)task.items=task.items.map(item=>({...item,responsibleId:item.responsibleId||ids[0],responsibleName:item.responsibleName||(item.responsibleId&&item.responsibleId!==ids[0]?undefined:task.technicianName)}));
   task.overdue=dispatchMetric(task,'overdue');
   return task;
 }
@@ -70,16 +73,14 @@ export async function dispatchDetail(actor,id,client=pool) {
   for(const r of repairRounds) for(const i of r.task.items) catalog.set(i.id,{id:i.id,name:i.name});
   for(const i of task.items) catalog.set(i.id,{id:i.id,name:i.name});
   task.repairCatalog=[...catalog.values()];
-  return {task,repairRounds,schedulerNotifications,inspectionNotification:jobs[0],events:events.map(r=>({id:String(r.id),actorName:r.actor_name,action:r.action,detail:r.detail,at:r.at.toISOString()})),
+  return {task,repairWriteback:await readRepairWriteback(client,id),repairRounds,schedulerNotifications,inspectionNotification:jobs[0],events:events.map(r=>({id:String(r.id),actorName:r.actor_name,action:r.action,detail:r.detail,at:r.at.toISOString()})),
     notifications:notifications.map(r=>({id:r.id,kind:r.kind,status:r.status,error:r.error,createdAt:r.created_at.toISOString(),attempts:r.attempts,taskId:r.task_id,recipientName:r.name})),
     files:files.map(r=>({repairRound:r.repair_round,uploadedBy:r.uploaded_by,uploadedName:r.uploaded_name,id:r.id,orderId:id,kind:r.kind,originalName:r.original_name,mimeType:r.mime_type,sizeBytes:Number(r.size_bytes),createdAt:r.created_at.toISOString()}))};
 }
 
-export async function assertWorkHoursRecorded(client,orderId) {
-  const {rows}=await client.query(`select dt.stage,case when coalesce((dt.data->>'repairRound')::integer,0)>0 then coalesce(r.snapshot,dt.data) else dt.data end as data from dispatch_tasks dt left join dispatch_repair_rounds r on r.order_id=dt.order_id and r.round_no=0 where dt.order_id=$1`,[orderId]);
+export async function assertInspectionCompleted(client,orderId) {
+  const {rows}=await client.query('select stage from dispatch_tasks where order_id=$1',[orderId]);
   if(rows[0]?.stage!=='维修完成') throw new HttpError(409,'请先完成维修检验再完结工单');
-  const data=rows[0]?.data;
-  if(!Number.isFinite(data?.workHours) || data.workHours<=0 || !data.workHoursRecordedBy || !data.workHoursRecordedAt) throw new HttpError(409,'请先由本单检验人补录实际工时，再完结工单');
 }
 
 export async function assertRepairPhotoRecorded(client,task) {

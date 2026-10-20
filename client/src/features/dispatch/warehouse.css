@@ -58,3 +58,5 @@
 
 .warehouse-issued-batch + .warehouse-issued-batch{margin-top:20px;padding-top:16px;border-top:1px solid #e8ecf1}
 .warehouse-issued-batch h4{margin:0 0 12px;font-size:14px}
+
+.repair-context{display:inline-flex;flex-wrap:wrap;gap:4px;vertical-align:middle}.repair-context .ant-tag{margin:0}.warehouse-order-heading{flex-wrap:wrap;justify-content:flex-start}.warehouse-order-heading h2{flex:1 0 auto;white-space:nowrap}.warehouse-order-heading>.repair-context{flex-basis:100%}.warehouse-order>p{font-size:13px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}

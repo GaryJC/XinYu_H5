@@ -1,9 +1,10 @@
+import {DispatchFilterBar} from './DispatchFilterBar';
 import { WarehousePartsPage } from './WarehousePartsPage';
 import { TechnicianRepairPage } from './TechnicianRepairPage';
-import { useRef } from 'react';
+import { useEffect,useRef,useState } from 'react';
 import { DispatchWorkloadBoard } from './DispatchWorkloadBoard';
 import { executionLabels } from './DispatchExecutionFields';
-import { Alert,Button,Card,Checkbox,Drawer,Empty,Grid,Input,Segmented,Select,Space,Table,Tag } from 'antd';
+import { Alert,Button,Card,Drawer,Empty,Grid,Space,Table,Tag } from 'antd';
 import type { DispatchMetric,DispatchTask,UserProfile } from '../../../../shared/types';
 import { useDispatchController } from './useDispatchController';
 import { DispatchTaskDetail } from './DispatchTaskDetail';
@@ -14,7 +15,8 @@ export function DispatchPage({user,view}:{user:UserProfile;view:string}) {
   const update=(key:string,value:string|undefined)=>c.setFilters(f=>({...f,[key]:value}));
   const taskHeading=useRef<HTMLHeadingElement>(null);
   const inspection=view==='检验任务';
-  const inspectionStatuses=[{value:'',label:'全部未完结'},{value:'待检验',label:'待检验'},{value:'维修完成',label:'已检验'},{value:'完成',label:'已完结'}];
+  const [page,setPage]=useState(1);
+  useEffect(()=>{setPage(1);},[c.filters]);
   const chosen=c.summaries.find(s=>s.id===c.filters.technicianId);
   function badges(t:DispatchTask) {return <Space className="dispatch-badges" size={[8,8]} wrap><Tag>{executionLabels[t.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(t)}</Tag>{t.urgent?<Tag color="red">加急</Tag>:null}{t.overdue?<Tag color="red">超期</Tag>:null}{t.repairRound?<Tag color="orange">返工第 {t.repairRound} 轮</Tag>:t.rework?<Tag color="orange">返工</Tag>:null}{t.feedback?<Tag color="orange">无法接单</Tag>:null}{t.needsReview?<Tag>待核对</Tag>:null}</Space>;}
   if(user.role==='warehouse') return <WarehousePartsPage controller={c}/>;
@@ -22,24 +24,12 @@ export function DispatchPage({user,view}:{user:UserProfile;view:string}) {
   return <section className="dispatch-page" aria-label={view}>
     <div className="dispatch-heading"><div><h2>{view}</h2><p>{c.manager?'默认显示本店全部未完结工单，可按状态筛选并安排维修与检验。':'及时确认任务，记录项目进度。'}{c.updatedAt?` 更新于 ${c.updatedAt}`:''}</p></div><Button onClick={()=>{c.setError('');void c.refresh();}} loading={c.loading}>刷新</Button></div>
     {c.error?<Alert type="error" showIcon closable title={c.error} onClose={()=>c.setError('')}/>:null}
-    <Card size="small" className="dispatch-filter-card">
-      <div className="dispatch-filters">
-      <label>搜索<Input.Search aria-label="搜索派工任务" placeholder="车牌 / 委托单号 / 派工号" allowClear onSearch={value=>update('search',value)}/></label>
-      {inspection?<div className="dispatch-inspection-status"><Segmented block className="repair-task-tabs" aria-label="工单状态筛选" value={c.filters.stage||''} onChange={value=>c.setFilters(f=>({...f,stage:value||undefined,metric:undefined}))} options={inspectionStatuses.map(option=>({...option,className:(c.filters.stage||'')===option.value?'repair-tab-active':undefined}))}/></div>:<label>工单状态<Select aria-label="工单状态筛选" value={c.filters.stage||''} onChange={value=>c.setFilters(f=>({...f,stage:value||undefined,metric:undefined}))} options={statusFilters} popupMatchSelectWidth={220}/></label>}
-      <div className="dispatch-execution-filter"><span id="dispatch-execution-filter-label">执行方式</span><Checkbox.Group aria-labelledby="dispatch-execution-filter-label" value={c.filters.executionMode?.split(',')||[]} onChange={values=>update('executionMode',values.length?values.join(','):undefined)} options={Object.entries(executionLabels).map(([value,label])=>({value,label}))}/><span className="dispatch-muted">可多选，不选表示全部方式</span></div>
-
-      {c.manager?<label>维修工<Select aria-label="筛选维修工" allowClear placeholder="全部维修工" value={c.filters.technicianId} onChange={value=>{c.setFilters(f=>({...f,technicianId:value,metric:undefined}));}} options={c.summaries.map(p=>({value:p.id,label:`${personDisplayName(p,c.summaries)}${p.active?'':'（停用）'}`}))}/></label>:null}
-      </div><div className="dispatch-filter-actions"><div className="dispatch-filter-toggles"><Checkbox checked={c.filters.urgent==='true'} onChange={e=>update('urgent',e.target.checked?'true':undefined)}>仅加急</Checkbox>
-      <Checkbox checked={c.filters.overdue==='true'} onChange={e=>update('overdue',e.target.checked?'true':undefined)}>仅超期</Checkbox>
-      </div><Button onClick={()=>c.setFilters({})}>重置筛选</Button>
-    </div><details className="dispatch-date-filter"><summary>完成日期范围</summary><div className="dispatch-date-fields">      <label>完成记录起始日期<Input aria-label="完成记录起始日期" type="date" value={c.filters.from||''} onChange={e=>update('from',e.target.value)}/></label>
-      <label>完成记录结束日期<Input aria-label="完成记录结束日期" type="date" value={c.filters.to||''} onChange={e=>update('to',e.target.value)}/></label>
-</div><p className="dispatch-muted">仅筛选已完结记录和个人完成量，默认本月。</p></details><p className="dispatch-filter-hint">默认显示全部未完结工单，含待结算。</p></Card>
+    <DispatchFilterBar controller={c} inspection={inspection}/>
     {c.manager?<DispatchWorkloadBoard summaries={c.summaries} filters={c.filters} onSelect={(technicianId,metric)=>{
       c.setFilters(f=>({from:f.from,to:f.to,technicianId,metric}));
       if(mobile) taskHeading.current?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
     }}/>:null}
-    <div className="dispatch-heading"><h3 ref={taskHeading} className="dispatch-task-heading">{chosen?`${personDisplayName(chosen,c.summaries)} · `:''}{c.filters.metric?(c.filters.metric==='current'?'当前任务':metrics[c.filters.metric as DispatchMetric]):(statusFilters.find(option=>option.value===(c.filters.stage||''))?.label||'维修任务')}（{c.tasks.length}）</h3>{c.filters.metric?<Button onClick={()=>update('metric',undefined)}>清除数量筛选</Button>:null}</div>
+    <div className="dispatch-heading"><h3 ref={taskHeading} className="dispatch-task-heading">{chosen?`${personDisplayName(chosen,c.summaries)} · `:''}{c.filters.metric?(c.filters.metric==='current'?'当前任务':metrics[c.filters.metric as DispatchMetric]):(inspection&&c.filters.stage==='维修完成'?'已检验':statusFilters.find(option=>option.value===(c.filters.stage||''))?.label||'维修任务')}（{c.tasks.length}）</h3>{c.filters.metric?<Button onClick={()=>update('metric',undefined)}>清除数量筛选</Button>:null}</div>
     {!c.loading&&!c.tasks.length?<Empty description="没有符合条件的维修任务"/>:mobile?<div className="dispatch-task-cards">{c.tasks.map(t=><Card key={t.orderId} className="dispatch-task-card" size="small" title={t.plate||'未填写车牌'} extra={<Button type="link" onClick={()=>c.select(t.orderId)}>查看任务</Button>}>
       {badges(t)}
       <p className="dispatch-order-number">{t.dispatchNo||t.orderId}</p>
@@ -49,7 +39,7 @@ export function DispatchPage({user,view}:{user:UserProfile;view:string}) {
         <div><span>预计完工</span><span>{displayTime(t.dueAt)}</span></div>
       </div>
       <div className="dispatch-task-progress"><span>项目完成</span><strong>{t.items.filter(i=>['待检验','已完工'].includes(i.status)).length} / {t.items.length}</strong></div>
-    </Card>)}</div>:<Table loading={c.loading} rowKey="orderId" dataSource={c.tasks} pagination={{pageSize:20,showSizeChanger:false}} scroll={{x:1100}} columns={[
+    </Card>)}</div>:<Table loading={c.loading} rowKey="orderId" dataSource={c.tasks} pagination={{current:page,onChange:setPage,pageSize:20,showSizeChanger:false}} scroll={{x:1100}} columns={[
       {title:'车辆 / 单号',key:'order',render:(_,t)=><><Button type="link" onClick={()=>c.select(t.orderId)}>{t.plate}</Button><div className="dispatch-muted">{t.dispatchNo||t.orderId}</div></>},
       {title:'维修员工 / 承包方',dataIndex:'technicianName',render:value=>value||'待指派'},
       {title:'阶段',key:'stage',render:(_,t)=>badges(t)},

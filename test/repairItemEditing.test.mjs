@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {applyDispatchAction} from '../server/domain/dispatchPolicy.mjs';
 const tech={id:'t',name:'维修工',role:'technician',active:true,shopId:'s'};
-const task=()=>({orderId:'o',shopId:'s',orderStatus:'维修中',technicianIds:['t'],stage:'维修中',version:1,items:[{id:1,name:'原项目',status:'维修中',startAt:'old',startedBy:'t'},{id:2,name:'已检验项目',status:'已完工',inspectedBy:'i',finishAt:'old'}]});
+const task=()=>({orderId:'o',shopId:'s',orderStatus:'维修中',technicianIds:['t'],stage:'维修中',version:1,items:[{id:1,name:'原项目',status:'维修中',startAt:'old',startedBy:'t'},{id:2,name:'已检验项目',responsibleId:'t',responsibleName:'维修工',status:'已完工',inspectedBy:'i',finishAt:'old'}]});
 const act=(t,repairItems,action='edit-repair-items',actor=tech)=>applyDispatchAction(t,{action,repairItems,expectedVersion:t.version,requestId:'edit-test-request'},actor,[tech],'2026-10-18T05:00:00Z');
 const rows=()=>[{id:1,name:' 修正项目 '},{id:2,name:'已检验项目'},{name:'增修项目'}];
 test('technicians rename and add items while preserving progress and original input',()=>{

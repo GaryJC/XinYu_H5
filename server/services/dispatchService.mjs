@@ -1,3 +1,5 @@
+import {enqueueRepairWriteback} from '../repositories/repairWritebackRepository.mjs';
+import {wakeRepairWriteback} from '../workers/repairWritebackWorker.mjs';
 import { assertPartsPhotos } from '../repositories/partsRequirementRepository.mjs';
 import { repairCatalog,saveRepairRound } from '../repositories/repairRoundRepository.mjs';
 import { hasActiveRepairRound } from '../domain/repairRounds.mjs';
@@ -57,6 +59,7 @@ export async function technicianSummaries(actor,query={}) {
 export async function executeDispatchAction(actor,id,raw,runTransaction=transaction) {
   const input=validateDispatchRequest(raw);
   await runTransaction(client=>executeDispatchActionInTransaction(client,actor,id,input));
+  wakeRepairWriteback();
   return dispatchDetail(actor,id);
 }
 export async function executeDispatchActionInTransaction(client,actor,id,raw) {
@@ -88,6 +91,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
     const detail={previousItems:input.repairItems?task.items:undefined,partsRequirement:next.partsRequirement,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
       technicianName:next.technicianName,previousTechnicianName:task.technicianName,inspectorName:next.inspectorName,dueAt:next.dueAt,urgent:next.urgent,previousDueAt:task.dueAt};
     const {rows:[event]}=await client.query(`insert into dispatch_events(order_id,actor_id,actor_name,request_id,request_body,action,detail) values($1,$2,$3,$4,$5,$6,$7) returning id`,[id,actor.id,actor.name,input.requestId,JSON.stringify(input),input.action,JSON.stringify(detail)]);
+    if(input.action==='inspect'&&next.stage==='维修完成')await enqueueRepairWriteback(client,next,event.id);
     await client.query('insert into audit_logs(order_id,actor,action) values($1,$2,$3)',[id,actor.name,`派工：${input.action}${input.reason?` · ${input.reason}`:''}`]);
     if(input.action==='retry-scheduler-notifications') {
       if(!input.notificationJobId) throw new HttpError(400,'请选择派工通知任务');
@@ -117,8 +121,9 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
     if(['submit-order','retry-inspection-notifications'].includes(input.action)) {
       await client.query(`insert into dispatch_inspection_notifications(event_id,order_id) values($1,$2) on conflict do nothing`,[event.id,id]);
     }
-    if(['accept','record-parts'].includes(input.action) && next.partsRequirement.mode!=='none') people.filter(p=>p.active && p.role==='warehouse').forEach(p=>add(p.id,'配件申请'));
+    if(['accept','record-parts'].includes(input.action) && next.partsRequirement.mode!=='none'&&!next.partsRequirement.preparedAt&&!next.partsRequirement.issuedAt) people.filter(p=>p.active && p.role==='warehouse').forEach(p=>add(p.id,'配件申请'));
     if(input.action==='edit-parts') addHandlers(next,'配件需求已调整');
+    if(input.action==='accept'&&next.partsRequirement.preparedAt&&!next.partsRequirement.issuedAt) addHandlers(next,'配件可领取');
     if(input.action==='confirm-parts') addHandlers(next,'配件可领取');
     if(input.action==='issue-parts') addHandlers(next,'配件已出库');
     if(input.action==='submit' || input.action==='reassign-inspection') add(next.inspectorId,'待检验');

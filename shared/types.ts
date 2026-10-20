@@ -132,7 +132,22 @@ export type LegacyDepartment = {
   isDefault: boolean;
 };
 
+export type LegacyEmployeeCandidate = {
+  code: string;
+  name: string;
+  departmentCode: string;
+  departmentName: string;
+  status: string;
+};
+
+export type EmployeeBindingStatus = {
+  required: boolean;
+  employeeCode?: string;
+  candidates: LegacyEmployeeCandidate[];
+};
+
 export type UserProfile = {
+  legacyEmployeeCode?: string;
   inspectorRoleMember?: boolean | null;
   id: string;
   name: string;
@@ -378,8 +393,9 @@ export type DispatchExecution = {
 export type DispatchStage = "草稿" | "待客户签字" | "待派工" | "待接单" | "待开工" | "维修中" | "暂停" | "待检验" | "维修完成";
 export type DispatchItem = {
   id: number; name: string; status: RepairItemStatus;
+  responsibleId?: string; responsibleName?: string;
   startAt?: string; finishAt?: string; startedBy?: string; finishedBy?: string;
-  inspectorName?: string; inspectedBy?: string; inspectedAt?: string; pickedAt?: string;
+  inspectorName?: string; inspectedBy?: string; inspectedAt?: string; pickedAt?: string; rejectionReason?: string;
 };
 export type RepairPhotoUploadRequest = {requestId:string;fileName:string;mimeType:string;imageBase64:string;repairRound?:number;purpose?:"progress"|"parts"};
 export type PartsRequirement = { sourcePhotoIds?:string[]; revision?:number; batch?:number; preparedBy?:string; preparedName?:string; preparedAt?:string; issuedBy?:string; issuedName?:string; issuedAt?:string; recipientIds?:string[]; recipientName?:string; confirmedBy?:string; confirmedName?:string; confirmedAt?:string; mode:"none"|"list"|"photo"; items:Array<{name:string;quantity:number;unit:string}>; photoIds:string[]; recordedBy?:string; recordedName?:string; recordedAt?:string };
@@ -403,7 +419,7 @@ export type DispatchTask = DispatchExecution & {
   plate: string; dispatchNo: string; arrivalDate: string; orderStatus: WorkOrderStatus;
   faultDescription: string; overdue: boolean;
 };
-export type RepairItemEdit = {id?:number;name:string};
+export type RepairItemEdit = {id?:number;name:string;responsibleId?:string;responsibleName?:string};
 export type DispatchActionName = "edit-repair-items" | "edit-parts" | "issue-parts" | "confirm-parts" | "record-parts" | "reopen-repair" | "retry-scheduler-notifications" | "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
 export type DispatchActionRequest = DispatchExecution & {
   repairItems?:RepairItemEdit[];
@@ -430,7 +446,9 @@ export type DispatchEvent = {
   detail: { previousItems?:DispatchItem[]; partsRequirement?:PartsRequirement; repairRound?:number; items?:DispatchItem[]; reworkItemIds?:number[]; additionalItems?:string[]; workHours?: number; previousWorkHours?: number; note?: string; reason?: string; technicianName?: string; previousTechnicianName?: string; dueAt?: string; previousDueAt?: string; urgent?: boolean; stage: DispatchStage; itemId?: number; rejectedItemIds?: number[]; pauseReason?: string };
 };
 export type RepairRound = { round:number; task:DispatchTask; reason:string; openedBy?:string; openedName:string; openedAt?:string; completedAt?:string; closed:boolean };
+export type RepairWriteback = {id:string;repairRound?:number;status:"pending"|"synced"|"failed"|"manual";error:string;attempts:number;createdAt:string;syncedAt?:string;enabled:boolean};
 export type DispatchDetail = {
+  repairWriteback?: RepairWriteback;
   repairRounds?: RepairRound[];
   schedulerNotifications?: Array<{eventId:string;kind:string;status:string;error:string}>;
   inspectionNotification?: {status: string; error: string};
@@ -448,3 +466,5 @@ export type RunfengStockSearchResult = {items:RunfengPart[];hasMore:boolean;quer
 
 export type VehicleHistoricalPart = {code:string;name:string;specification:string;unit:string;manufacturer:string;quantity:number;lastUsedAt:string;dispatchNo:string;repairOrderId:string;vehicleModel:string};
 export type VehiclePartsHistory = {status:"found"|"no_history"|"no_parts";items:VehicleHistoricalPart[];hasMore:boolean;plate:string;source:"润丰";queriedAt:string};
+
+export type ResolveRepairWritebackRequest = {jobId:string;reason:string};

@@ -1,3 +1,4 @@
+import {resolveRepairWriteback,retryRepairWriteback} from '../services/repairWritebackService.mjs';
 import { warehouseVehiclePartsHistory,warehouseHistoricalPartStock,warehouseStockOptions,searchWarehouseStock } from '../services/warehouseStockService.mjs';
 import { uploadRepairPhoto } from '../services/repairPhotoService.mjs';
 import { readJson, sendJson } from '../http/response.mjs';
@@ -15,6 +16,10 @@ export async function handleDispatchRequest(req,res,url,actor) {
     const people=await dispatchPeople(actor);
     sendJson(res,200,{technicians:people.filter(p=>p.active && p.role==='technician'),inspectors:people.filter(p=>p.active && (p.role==='manager'||p.inspectorRoleMember!==false) && ['inspector','manager'].includes(p.role) && p.id!==actor.id)}); return true;
   }
+  const resolveWriteback=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)\/repair-writeback\/resolve$/);
+  if(resolveWriteback&&req.method==='POST'){sendJson(res,200,await resolveRepairWriteback(actor,decodeURIComponent(resolveWriteback[1]),await readJson(req)));return true;}
+  const retryWriteback=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)\/repair-writeback\/retry$/);
+  if(retryWriteback&&req.method==='POST'){sendJson(res,200,await retryRepairWriteback(actor,decodeURIComponent(retryWriteback[1])));return true;}
   const history=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)\/parts-history(\/stock)?$/);
   if(history&&req.method==='GET') {
     const id=decodeURIComponent(history[1]);

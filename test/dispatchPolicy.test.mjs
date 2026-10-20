@@ -123,6 +123,7 @@ test('equal collaborators share one progress and reassignment removes access',()
   assert.deepEqual(task.technicianIds,['t','t2']);
   assert.doesNotThrow(()=>assertDispatchAccess(task,second));
   task=act(task,'accept',second);
+  task=act(task,'edit-repair-items',second,{repairItems:task.items.map(i=>({id:i.id,name:i.name,responsibleId:'t2'}))});
   task=act(task,'finish',second,{itemId:1});
   assert.equal(task.items[0].startedBy,'t2');assert.equal(task.items[0].finishedBy,'t2');
   task=act(task,'reassign',advisor,{technicianIds:['t2'],dueAt:due,reason:'人员调整'});
@@ -172,9 +173,10 @@ test('execution validation rejects malformed costs, timestamps and silent mode c
   task=act(task,'update',advisor,{agreedFee:null});assert.equal(task.agreedFee,null);
 });
 
-test('inspection completion requires hours, records inspector, and blocks scheduler-only entry',()=>{
+test('inspection completes without hours and preserves optional historical recording',()=>{
   const pending=submitted();
-  assert.throws(()=>act(pending,'inspect',inspector,{workHours:undefined}),/请填写实际工时/);
+  const noHours=act(pending,'inspect',inspector,{workHours:undefined});
+  assert.equal(noHours.stage,'维修完成');assert.equal(noHours.workHours,undefined);assert.equal(noHours.workHoursRecordedBy,undefined);
   for(const workHours of [0,-1,1.001,'2',Infinity]) assert.throws(()=>act(pending,'inspect',inspector,{workHours}),e=>e.status===400);
   for(const actor of [advisor,technician]) assert.throws(()=>act(pending,'record-hours',actor,{workHours:2}),e=>e.status===403);
   const done=act(pending,'inspect',inspector,{workHours:3.25});
@@ -185,4 +187,20 @@ test('inspection completion requires hours, records inspector, and blocks schedu
   assert.throws(()=>act(pending,'inspect',inspector,{rejectedItemIds:[1],reason:'漏油',workHours:2}),/退回维修时无需/);
   const legacy={...done,workHours:undefined,workHoursRecordedBy:undefined};
   assert.equal(act(legacy,'record-hours',inspector,{workHours:2}).workHoursRecordedBy,inspector.id);
+});
+
+
+test('manager inspection takeover records the actual inspector identity for the order',()=>{
+ const done=act(submitted(),'inspect',manager);
+ assert.equal(done.inspectorId,manager.id);assert.equal(done.inspectorName,manager.name);
+ assert.ok(done.items.every(item=>item.inspectedBy===manager.id));
+});
+
+
+test('inspection return reasons stay with rejected items during repair and clear after passing',()=>{
+ let task=act(submitted(),'inspect',inspector,{rejectedItemIds:[1],reason:'制动仍有异响'});
+ assert.equal(task.items[0].rejectionReason,'制动仍有异响');assert.equal(task.items[1].rejectionReason,undefined);
+ task=act(task,'start',technician,{itemId:1});assert.equal(task.items[0].rejectionReason,'制动仍有异响');
+ task=act(task,'finish',technician,{itemId:1});task=act(task,'submit',technician,{inspectorId:'i'});task=act(task,'inspect',inspector);
+ assert.equal(task.items[0].rejectionReason,undefined);
 });

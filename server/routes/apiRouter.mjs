@@ -1,4 +1,6 @@
 import {reportVehicleLicenseException} from '../services/vehicleLicenseExceptionService.mjs';
+import { employeeBindingService } from "../services/employeeBindingService.mjs";
+import { assertEmployeeBound } from "../domain/employeeBinding.mjs";
 import { handleDispatchRequest } from "./dispatchRouter.mjs";
 import { executeDispatchAction } from "../services/dispatchService.mjs";
 import { authenticateRequest, loginForDevelopment, loginWithDingTalk } from "../auth.mjs";
@@ -60,12 +62,23 @@ export async function handleApiRequest(req, res, url) {
 
   if (!url.pathname.startsWith("/api/")) return false;
   const currentUser = requireAuthenticatedUser(await authenticateRequest(req));
-  if (await handleDispatchRequest(req, res, url, currentUser)) return true;
 
   if (req.method === "GET" && url.pathname === "/api/auth/me") {
     sendJson(res, 200, currentUser);
     return true;
   }
+
+  if (req.method === "GET" && url.pathname === "/api/auth/employee-binding") {
+    sendJson(res, 200, await employeeBindingService.status(currentUser));
+    return true;
+  }
+  if (req.method === "POST" && url.pathname === "/api/auth/employee-binding") {
+    const { employeeCode } = await readJson(req);
+    sendJson(res, 200, await employeeBindingService.confirm(currentUser, employeeCode));
+    return true;
+  }
+  assertEmployeeBound(currentUser);
+  if (await handleDispatchRequest(req, res, url, currentUser)) return true;
 
   if (req.method === "GET" && url.pathname === "/api/work-orders") {
     sendJson(res, 200, await listWorkOrders(currentUser.role, currentUser));
