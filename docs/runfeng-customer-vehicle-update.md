@@ -12,9 +12,9 @@
 
 | 含义 | 队列字段 / payload 路径 | 润丰处理 |
 | --- | --- | --- |
-| 派工号 | `legacy_dispatch_no` / `payload.order.dispatchNo` | 原单 `qxwxb.pgd`，示例 `A66329`，不是 H5 单号 |
-| 维修单标识 | `legacy_reid` | 原单 `qxwxb.reid` |
-| 内部单号 | `legacy_document_no` | 原单 `qxwxb.dh` |
+| 派工号 | `legacy_dispatch_no` / `payload.legacy_dispatch_no` / `payload.order.dispatchNo` | 原单 `qxwxb.pgd`，示例 `A66329`，不是 H5 单号 |
+| 维修单标识 | `legacy_reid` / `payload.legacy_reid` | 原单 `qxwxb.reid` |
+| 内部单号 | `legacy_document_no` / `payload.legacy_document_no` | 原单 `qxwxb.dh` |
 | 联系人 | `payload.order.customer.contact` | 当前维修单及车辆档案的联系人字段，实际列名由润丰确认 |
 | 联系方式 | `payload.order.customer.phone` | 当前维修单及车辆档案的电话字段，实际列名由润丰确认 |
 | 车型 | `payload.order.vehicle.model`、`modelLegacyCode` | 核验 `cxb`，更新当前单和 `qxclxxb.cx` 的车型关联 |
@@ -46,6 +46,9 @@ select * from claim_legacy_sync_events('runfeng-production', 20);
     "version": 1,
     "eventId": "新的UUID",
     "eventType": "updated",
+    "legacy_reid": 1028817,
+    "legacy_document_no": 85641,
+    "legacy_dispatch_no": "A66329",
     "revision": 2,
     "occurredAt": "2026-10-17T08:00:00.000Z",
     "order": {
@@ -60,7 +63,8 @@ select * from claim_legacy_sync_events('runfeng-production', 20);
 
 上例省略了不属于更新范围的 payload 字段，实际仍发送现有完整委托单结构。
 `event_id/order_id/revision/event_type` 必须与 JSON 中对应信息一致，领取后派工号也必须一致。
-首次尚未回填润丰编号时，更正事件可先以空关联排队；前一条事件 ACK 后，领取函数和触发器自动补齐原 `reid/dh/pgd` 及 `payload.order.dispatchNo`，润丰不得直接消费未领取的待处理记录。
+首次尚未回填润丰编号时，更正事件可先以空关联排队；前一条事件 ACK 后，领取函数和触发器自动补齐原 `reid/dh/pgd`、JSON 最外层的 `legacy_reid/legacy_document_no/legacy_dispatch_no` 及 `payload.order.dispatchNo`，润丰不得直接消费未领取的待处理记录。
+迁移 `202610190002_updated_payload_legacy_identity.sql` 将三个编号同步到 `updated` 的 JSON 最外层，便于使用 `token.SelectToken("legacy_reid")` 等读取。已有事件补齐前保存审计快照，领取状态和锁保持原值；已领取到客户端的旧 JSON 需在重领时获取新内容。
 
 在 SQL Server **提交成功之后**回填原来的三个编号：
 
