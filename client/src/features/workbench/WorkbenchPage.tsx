@@ -1,3 +1,4 @@
+import { EmployeeBindingGate } from "../employee-binding/EmployeeBindingGate";
 import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
 import { lazy, Suspense, useState } from "react";
 import { ClipboardCheck, LockKeyhole, Menu, RefreshCcw, UserRound } from "lucide-react";
@@ -9,6 +10,8 @@ import { OrdersArchive } from "./OrdersArchive";
 import { roleFocus } from "./workbenchConfig";
 import { dispatchEnabled, isDispatchNavigation } from "../dispatch/dispatchAvailability";
 import { useWorkbenchController } from "./useWorkbenchController";
+
+const ProcurementPage = lazy(() => import("../procurement/ProcurementPage").then(module => ({ default: module.ProcurementPage })));
 
 const DispatchPage = lazy(() => import("../dispatch/DispatchPage").then(module => ({ default: module.DispatchPage })));
 
@@ -31,6 +34,10 @@ export function WorkbenchPage() {
     currentUser, visibleNavItems, counters, apiError, dashboard, users,
     devLoginLoading, loginForDevelopment
   } = controller;
+
+  if (currentUser?.role === "technician" && !currentUser.legacyEmployeeCode) {
+    return <EmployeeBindingGate key={currentUser.id} user={currentUser} onBound={controller.setCurrentUser} />;
+  }
 
   const navigation = (
     <div className="navigation-shell">
@@ -73,7 +80,7 @@ export function WorkbenchPage() {
             {isMobile ? <Button aria-label="打开菜单" icon={<Menu size={19} />} onClick={() => setMenuOpen(true)} /> : null}
             <div>
               <h1>{isMobile ? "修理委托工作台" : "机动车修理委托书数字化工作台"}</h1>
-              <p>{orders.length} 张委托单 · 抚顺路店 · {selectedOrder ? workOrderDisplayStatus(selectedOrder) : "新建草稿"}</p>
+              <p>{isDispatchNavigation(activeNav)?`抚顺路店 · ${activeNav}`:<>{orders.length} 张委托单 · 抚顺路店 · {selectedOrder ? workOrderDisplayStatus(selectedOrder) : "新建草稿"}</>}</p>
             </div>
           </div>
           <div className="topbar-actions">
@@ -93,7 +100,8 @@ export function WorkbenchPage() {
                   { value: "advisor", label: "张三｜服务顾问" },
                   { value: "manager", label: "Gary｜门店管理员" },
                   ...(dispatchEnabled ? [
-                    { value: "technician", label: "维修工｜测试" },
+                    { value: "warehouse", label: "仓管｜测试" },
+                    { value: "technician", label: "李富强｜维修工（测试）" },
                     { value: "inspector", label: "检验员｜测试" }
                   ] : []),
                   { value: "unassigned", label: "未分配角色员工" },
@@ -110,9 +118,9 @@ export function WorkbenchPage() {
 
         {apiError ? <Alert className="error-box" type="warning" showIcon title="无法完成登录或加载数据" description={apiError} /> : null}
 
-        {!dispatchEnabled && ["technician", "inspector"].includes(role) ? <Alert type="info" showIcon title="维修与检验功能暂未开放" /> : null}
+        {!dispatchEnabled && ["technician", "inspector", "warehouse"].includes(role) ? <Alert type="info" showIcon title="维修与检验功能暂未开放" /> : null}
 
-        {activeNav === "工作台" && (dispatchEnabled || !["technician", "inspector"].includes(role)) ? (
+        {activeNav === "工作台" && (dispatchEnabled || !["technician", "inspector", "warehouse"].includes(role)) ? (
           <>
             <section className="metric-grid" aria-label="待办统计">
               {counters.map((counter) => <MetricCard key={counter.label} label={counter.label} value={counter.value} />)}
@@ -136,6 +144,10 @@ export function WorkbenchPage() {
           <Suspense fallback={<div role="status">正在加载派工模块…</div>}>
             <DispatchPage key={`${currentUser.id}-${activeNav}`} user={currentUser} view={activeNav}/>
           </Suspense>
+        ) : null}
+
+        {activeNav === "配件竞价" && currentUser && ["manager","warehouse"].includes(currentUser.role) ? (
+          <Suspense fallback={<div role="status">正在加载配件竞价…</div>}><ProcurementPage key={currentUser.id} user={currentUser}/></Suspense>
         ) : null}
 
         {activeNav === "数据看板" || activeNav === "权限设置" ? (

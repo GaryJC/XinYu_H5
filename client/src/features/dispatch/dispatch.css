@@ -54,3 +54,98 @@
  .dispatch-workload .ant-collapse-header{padding:14px 16px!important}
  .dispatch-task-card .ant-card-extra .ant-btn{padding-inline:0}
 }
+
+.workload-board{border:1px solid #e5e9ef;border-radius:12px;background:#fff;overflow:hidden}
+.workload-board>h3{margin:0;padding:16px;background:#f0f6ff;font-size:16px;color:#263247}
+.workload-board>h3>span{font-size:13px;font-weight:400;color:#657085}
+.workload-list{padding:0 16px}
+.workload-person{padding:16px 0;border-bottom:1px solid #edf0f4}
+.workload-person:last-child{border-bottom:0}
+.workload-person-name{display:flex;align-items:center;flex-wrap:wrap;gap:8px;overflow-wrap:anywhere;margin-bottom:10px}
+.workload-person-name>strong{font-size:15px;color:#263247}
+.workload-person-name>span{font-size:12px;color:#7b8493;background:#f3f4f6;border-radius:4px;padding:2px 6px}
+.workload-person-metrics{display:flex;flex-wrap:wrap;gap:8px}
+.workload-metric.ant-btn{height:auto;min-height:44px;padding:8px 12px;display:inline-flex;gap:10px;white-space:normal;text-align:left;border-radius:8px;font-size:13px}
+.workload-metric strong{font-size:20px;line-height:1.2;font-variant-numeric:tabular-nums}
+.workload-metric.workload-working{background:#edf5ff;color:#1668dc}
+.workload-metric.workload-pending{background:#f0f5ff;color:#425d99}
+.workload-metric.workload-paused{background:#f4f0fa;color:#72529b}
+.workload-metric.workload-inspection{background:#eaf8f8;color:#147d82}
+.workload-metric.workload-completed{background:#eff8ed;color:#438235}
+.workload-metric.workload-overdue{background:#fff1f0;color:#c53030}
+.workload-metric.workload-rework{background:#fff7e6;color:#ad6800}
+.workload-metric.is-zero{color:#7b8493}
+.workload-metric.is-selected{box-shadow:inset 0 0 0 2px #1677ff;color:#0958d9}
+.workload-completion-range{font-size:11px;line-height:1.5;color:#7b8493;margin-top:10px;overflow-wrap:anywhere}
+.dispatch-task-heading{scroll-margin-top:16px;overflow-wrap:anywhere}
+@media(max-width:767px){.workload-list{padding:0 12px}}
+
+.technician-task-list{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
+.technician-task-card .ant-card-body{padding:16px}
+.technician-page .ant-segmented{padding:6px}
+.technician-page .ant-segmented-item-label{min-height:44px;display:flex;align-items:center;justify-content:center;padding:0 8px}
+.technician-page .ant-btn,.technician-detail .ant-btn{min-height:44px}
+.technician-flags{margin-top:8px}
+.technician-detail{display:flex;flex-direction:column;gap:16px;padding-bottom:100px;overflow-wrap:anywhere}
+.technician-detail h3{font-size:16px;margin:0 0 12px}
+.technician-detail p{white-space:pre-wrap;margin:0;line-height:1.7}
+.technician-items{list-style:none;padding:0;margin:0}
+.technician-items li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #edf0f4}
+.technician-items .ant-tag{flex:none;margin:0}
+.repair-photos .image-source-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.repair-photos h3>span{font-weight:400;color:#657085;font-size:13px}
+.repair-photo-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+.repair-photo-grid .ant-image-img{object-fit:cover;border-radius:8px}
+.repair-photo-grid small{display:block;font-size:11px;color:#657085;line-height:1.5;margin-top:6px}
+.repair-photo-upload{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.repair-photo-upload .ant-alert{width:100%}
+.technician-action-bar{position:sticky;bottom:-24px;background:#fff;border-top:1px solid #edf0f4;padding:12px 0 calc(24px + env(safe-area-inset-bottom,0px));margin-bottom:-24px;z-index:2}
+.technician-action-bar>span{display:block;font-size:12px;color:#657085;margin-top:8px}
+@media(max-width:767px){.technician-detail{padding-bottom:24px}.repair-photo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.technician-page .ant-segmented-item-label{font-size:14px}}
+.technician-action-bar{position:fixed;bottom:0;right:24px;width:592px;padding:12px 0 calc(24px + env(safe-area-inset-bottom,0px));margin:0}
+@media(max-width:767px){.technician-action-bar{right:0;width:100%;padding:12px 24px calc(24px + env(safe-area-inset-bottom,0px))}.technician-detail{padding-bottom:110px}}
+.repair-photos .file-button,.repair-photos .file-button .ant-btn{width:100%;min-width:0}
+.repair-photos .file-button .ant-btn{height:44px;border-radius:8px;font-size:16px}
+.technician-detail>.ant-tag{align-self:flex-start}
+
+/* Quiet tabs: one shared surface, underline and weight indicate selection. */
+.dispatch-page .repair-task-tabs{background:#fff;padding:0;border-radius:10px;box-shadow:inset 0 -1px #e5e9ef}
+.dispatch-page .repair-task-tabs .ant-segmented-group{gap:0}
+.dispatch-page .repair-task-tabs .ant-segmented-thumb{opacity:0;box-shadow:none}
+.dispatch-page .repair-task-tabs .ant-segmented-item{position:relative;background:transparent;border-radius:0;color:#657085;box-shadow:none;min-width:0}
+.dispatch-page .repair-task-tabs .repair-tab-active{color:#263247;font-weight:600}
+.dispatch-page .repair-task-tabs .repair-tab-active .ant-segmented-item-label::before{opacity:1;top:auto;pointer-events:none;content:'';position:absolute;bottom:0;left:16%;right:16%;height:3px;background:#1677ff;border-radius:3px 3px 0 0}
+.dispatch-page .repair-task-tabs .ant-segmented-item-label{position:relative;display:flex;align-items:center;justify-content:center;text-align:center;min-height:48px;padding:4px 6px;white-space:normal;line-height:1.5;overflow-wrap:anywhere}
+@media(max-width:767px){.dispatch-page .repair-task-tabs .ant-segmented-group{gap:0}.dispatch-page .repair-task-tabs .ant-segmented-item-label{font-size:13px;padding:6px 2px}}
+.technician-flags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.technician-page .ant-tag,.technician-detail .ant-tag{padding:3px 10px;margin:0;border-radius:6px;line-height:20px}
+.technician-action-buttons{display:flex;gap:12px}
+.technician-action-buttons>.ant-btn-primary{flex:2;width:auto;min-width:0}
+.technician-action-buttons>.repair-pause-button,.technician-action-buttons>.repair-decline-button{flex:1;min-width:0;font-weight:600}
+.repair-decline-button:not(:disabled){background:#fff1f0}
+.repair-pause-button:not(:disabled){background:#fff7e6}
+@media(max-width:767px){.technician-page .ant-segmented-group{gap:6px}.technician-page .ant-segmented-item-label{padding:0 4px}.technician-action-buttons{gap:8px}}
+
+.reopen-project-options { display:flex; flex-direction:column; gap:12px; }
+.reopen-project-options .ant-checkbox-wrapper { min-height:44px; align-items:center; margin-inline-start:0; overflow-wrap:anywhere; }
+.reopen-extra-item { display:flex; gap:8px; margin-bottom:12px; }
+.reopen-extra-item .ant-input { min-width:0; }
+.repair-round-items { padding-left:0; list-style:none; }
+.repair-round-items li { padding:12px 0; border-bottom:1px solid #edf0f5; overflow-wrap:anywhere; }
+.repair-round-items small { color:#66758d; }
+.parts-mode-options { display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
+.parts-mode-options .ant-radio-wrapper { min-height:44px; align-items:center; margin-inline-end:0; }
+.parts-shortcuts { display:grid; gap:16px; margin-bottom:20px; }
+.parts-shortcuts h3 { margin:0 0 8px; font-size:14px; font-weight:600; color:#526079; }
+.parts-shortcuts .ant-btn { min-height:44px; }
+.parts-entry { padding:12px 0; border-bottom:1px solid #edf0f5; }
+.parts-entry .ant-form-item { margin-bottom:12px; }
+.parts-entry-quantity { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:8px; align-items:end; }
+.parts-entry-quantity .ant-input-number { width:100%; }
+.parts-entry-quantity > .ant-btn { margin-bottom:12px; }
+.dispatch-sheet-summary .ant-descriptions-item-content { overflow-wrap:anywhere; }
+
+.dispatch-filters>.dispatch-inspection-status,.dispatch-filters>.dispatch-execution-filter{grid-column:1/-1;width:100%;min-width:0}
+.dispatch-execution-filter{display:flex;flex-direction:column;gap:10px}
+.dispatch-execution-filter .ant-checkbox-group{display:flex;flex-wrap:wrap;gap:8px 16px}
+.dispatch-execution-filter .ant-checkbox-wrapper{min-height:36px;align-items:center;margin:0}

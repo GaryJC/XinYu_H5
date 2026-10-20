@@ -8,7 +8,8 @@ export async function getDingTalkUserProfile({ userId, accessToken }) {
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userid: userId })
+    body: JSON.stringify({ userid: userId }),
+    signal: AbortSignal.timeout(10000)
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.errcode) {

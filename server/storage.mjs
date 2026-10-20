@@ -9,7 +9,7 @@ import { measureStage } from "./http/requestTiming.mjs";
 let ossClient;
 const pendingThumbnails = new Map();
 
-const allowedFileKinds = new Set(["vehicle_license", "repair_order_photo", "damage_photo", "signature_image", "other"]);
+const allowedFileKinds = new Set(["repair_parts_photo", "repair_progress_photo", "vehicle_license", "repair_order_photo", "damage_photo", "signature_image", "other"]);
 const allowedImageMimeTypes = new Set([
   "image/jpeg",
   "image/png",
@@ -21,7 +21,7 @@ const allowedImageMimeTypes = new Set([
   "image/heif"
 ]);
 
-export async function saveUploadedFile({ orderId, kind, fileName, mimeType, imageBase64, uploadedBy }) {
+export async function saveUploadedFile({ orderId, kind, fileName, mimeType, imageBase64, uploadedBy, uploadRequestId, database }) {
   if (!imageBase64 || typeof imageBase64 !== "string") throw new HttpError(400, "缺少文件内容");
   validateUploadedImageMetadata(kind, mimeType);
 
@@ -41,7 +41,7 @@ export async function saveUploadedFile({ orderId, kind, fileName, mimeType, imag
     originalName: safeName,
     mimeType: mimeType || "application/octet-stream",
     sizeBytes: buffer.length,
-    uploadedBy: uploadedBy || null
+    uploadedBy: uploadedBy || null, uploadRequestId, database
   }));
 }
 

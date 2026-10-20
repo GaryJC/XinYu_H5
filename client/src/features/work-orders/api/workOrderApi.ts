@@ -19,6 +19,7 @@ import {
   VehicleReferenceCodeCheckResult,
   VehicleReferenceCreateResult,
   VehicleReferenceSearchResult,
+  VehicleLicenseException,
   WorkOrder,
   WorkOrderDraft,
   PaperOrderResolution,
@@ -42,6 +43,8 @@ export type WorkOrderApi = {
   loginForDevelopment(persona: DevelopmentPersonaKey): Promise<AuthResult>;
   me(): Promise<UserProfile>;
   list(role: RoleKey): Promise<WorkOrder[]>;
+  get(id:string):Promise<WorkOrder>;
+  reportLicenseException(id:string,input:{reason:string;requestId:string;vehiclePlate:string;vehicleVin:string}):Promise<VehicleLicenseException>;
   create(draft: WorkOrderDraft, actor: string): Promise<WorkOrder>;
   update(order: WorkOrder, actor: string, action: string): Promise<WorkOrder>;
   resolvePaperOrder(id: string, change: PaperOrderResolution): Promise<WorkOrder>;
@@ -113,6 +116,8 @@ export const workOrderApi: WorkOrderApi = {
   refreshFromRunfeng(id) {
     return request(`/api/work-orders/${encodeURIComponent(id)}/refresh-from-runfeng`, { method: "POST" });
   },
+  get(id) {return request(`/api/work-orders/${encodeURIComponent(id)}`);},
+  reportLicenseException(id,input) {return request(`/api/work-orders/${encodeURIComponent(id)}/license-exception`,{method:'POST',body:input});},
   create(draft, actor) {
     return request("/api/work-orders", { method: "POST", body: { draft, actor } });
   },

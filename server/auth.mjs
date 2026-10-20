@@ -14,6 +14,9 @@ import {
 import { getDingTalkUserProfile, resolveDingTalkOrganizationMapping } from "./integrations/dingtalk/organization.mjs";
 
 
+import { employeeBindingService } from "./services/employeeBindingService.mjs";
+import { requiresEmployeeBinding } from "./domain/employeeBinding.mjs";
+
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 
@@ -29,7 +32,7 @@ export async function loginWithDingTalk(authCode, context = {}) {
   const user = await upsertUserFromDingTalk({ profile, mapping, existingUser });
   if (!user) {
     console.warn(`[auth] Unmapped DingTalk user: ${dingUserId}`);
-    throw new HttpError(403, "当前钉钉账号未分配有效应用角色（服务顾问 / 派单员 / 调度员、维修工 / 维修技师、检验员、门店管理员），请联系钉钉管理员");
+    throw new HttpError(403, "当前钉钉账号未分配有效应用角色（服务顾问、维修工 / 维修技师、检验员、仓管、门店管理员），请联系钉钉管理员");
   }
   if (!user.active) throw new HttpError(403, "当前员工账号已停用");
 
@@ -56,9 +59,10 @@ function developmentPersona(persona) {
   const definitions = {
     advisor: { id: "u_dev_advisor", name: "张三（测试）", role: "advisor", active: true, shopId: "shop-hq", homeRoute: "order-create" },
     manager: { id: "u_dev_manager", name: "Gary（测试）", role: "manager", active: true, shopId: "shop-hq", homeRoute: "workbench" },
-    technician: { id: "u_dev_technician", name: "维修工（测试）", role: "technician", active: true, shopId: "shop-hq", homeRoute: "workbench" },
+    technician: { id: "u_dev_technician", name: "李富强", role: "technician", active: true, shopId: "shop-hq", homeRoute: "workbench" },
+    warehouse: { id: "u_dev_warehouse", name: "仓管（测试）", role: "warehouse", active: true, shopId: "shop-hq", homeRoute: "workbench" },
     inspector: { id: "u_dev_inspector", name: "检验员（测试）", role: "inspector", active: true, shopId: "shop-hq", homeRoute: "workbench" },
-    unassigned: { deniedReason: "当前钉钉账号未分配有效应用角色（服务顾问 / 派单员 / 调度员、维修工 / 维修技师、检验员、门店管理员），请联系钉钉管理员" },
+    unassigned: { deniedReason: "当前钉钉账号未分配有效应用角色（服务顾问、维修工 / 维修技师、检验员、仓管、门店管理员），请联系钉钉管理员" },
     disabled: { id: "u_dev_disabled", name: "停用员工（测试）", role: "advisor", active: false, shopId: "shop-hq", homeRoute: "order-create" }
   };
   const definition = definitions[persona];
@@ -67,6 +71,15 @@ function developmentPersona(persona) {
 }
 
 async function createSessionForUser(user, context, homeRoute) {
+  if (requiresEmployeeBinding(user)) {
+    try {
+      const binding = await employeeBindingService.status(user);
+      if (!binding.required) user = { ...user, legacyEmployeeCode: binding.employeeCode };
+    } catch (error) {
+      // Issue an authenticated session for the binding screen only; business APIs stay blocked.
+      if (!(error instanceof HttpError) || ![503, 409].includes(error.status)) throw error;
+    }
+  }
   const token = createTokenForUser(user.id);
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   await createAuthSession({

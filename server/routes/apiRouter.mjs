@@ -2,10 +2,15 @@ import { resolvePaperOrder, submitPaperDingTalkOrder } from "../services/paperOr
 import { saveWorkOrderPhoto } from "../services/workOrderPhotoService.mjs";
 import { updateCustomerVehicle } from "../services/customerVehicleUpdateService.mjs";
 import { refreshWorkOrderFromLegacy } from "../services/workOrderRefreshService.mjs";
+import { handleSupplierPortal,handleProcurement } from "./procurementRouter.mjs";
+import {reportVehicleLicenseException} from '../services/vehicleLicenseExceptionService.mjs';
+import { employeeBindingService } from "../services/employeeBindingService.mjs";
+import { assertEmployeeBound } from "../domain/employeeBinding.mjs";
 import { handleDispatchRequest } from "./dispatchRouter.mjs";
 import { executeDispatchAction } from "../services/dispatchService.mjs";
 import { authenticateRequest, loginForDevelopment, loginWithDingTalk } from "../auth.mjs";
 import {
+  getWorkOrderDetail,
   createSignatureTokenForOrder,
   createSettlementForOrder,
   createWorkOrder,
@@ -43,6 +48,7 @@ import { assertOcrRecordAccess, assertWorkOrderAccess } from "../repositories/ac
 import { confirmOcrRecord, createOcrRecord } from "../repositories/ocrRecordRepository.mjs";
 
 export async function handleApiRequest(req, res, url) {
+  if (await handleSupplierPortal(req,res,url)) return true;
   if (req.method === "GET" && url.pathname === "/api/health") {
     if (process.env.DEPLOYMENT_RELEASE) res.setHeader("X-Deployment-Release", process.env.DEPLOYMENT_RELEASE);
     sendJson(res, 200, await healthCheck());
@@ -63,12 +69,24 @@ export async function handleApiRequest(req, res, url) {
 
   if (!url.pathname.startsWith("/api/")) return false;
   const currentUser = requireAuthenticatedUser(await authenticateRequest(req));
-  if (await handleDispatchRequest(req, res, url, currentUser)) return true;
 
   if (req.method === "GET" && url.pathname === "/api/auth/me") {
     sendJson(res, 200, currentUser);
     return true;
   }
+
+  if (req.method === "GET" && url.pathname === "/api/auth/employee-binding") {
+    sendJson(res, 200, await employeeBindingService.status(currentUser));
+    return true;
+  }
+  if (req.method === "POST" && url.pathname === "/api/auth/employee-binding") {
+    const { employeeCode } = await readJson(req);
+    sendJson(res, 200, await employeeBindingService.confirm(currentUser, employeeCode));
+    return true;
+  }
+  if (await handleProcurement(req,res,url,currentUser)) return true;
+  assertEmployeeBound(currentUser);
+  if (await handleDispatchRequest(req, res, url, currentUser)) return true;
 
   if (req.method === "GET" && url.pathname === "/api/work-orders") {
     sendJson(res, 200, await listWorkOrders(currentUser.role, currentUser));
@@ -167,6 +185,7 @@ export async function handleApiRequest(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/files") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     const body = await readJson(req);
+    if (["repair_parts_photo","repair_progress_photo"].includes(body.kind)) throw new HttpError(400, "维修照片请通过维修任务上传");
     if (body.orderId) await assertWorkOrderAccess(body.orderId, currentUser);
     sendJson(res, 201, await saveUploadedFile({ ...body, uploadedBy: currentUser.id }));
     return true;
@@ -211,7 +230,16 @@ export async function handleApiRequest(req, res, url) {
     return true;
   }
 
+  const licenseExceptionMatch=url.pathname.match(/^\/api\/work-orders\/([^/]+)\/license-exception$/);
+  if(licenseExceptionMatch && req.method==='POST') {
+    requireAnyRole(currentUser,['advisor','manager']);
+    sendJson(res,200,await reportVehicleLicenseException(currentUser,decodeURIComponent(licenseExceptionMatch[1]),await readJson(req)));return true;
+  }
   const workOrderMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)$/);
+  if(workOrderMatch && req.method==='GET') {
+    requireAnyRole(currentUser,['advisor','manager']);
+    sendJson(res,200,await getWorkOrderDetail(decodeURIComponent(workOrderMatch[1]),currentUser));return true;
+  }
   if (workOrderMatch && req.method === "PUT") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     const { order, actor, action } = await readJson(req);

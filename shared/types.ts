@@ -1,4 +1,4 @@
-export type RoleKey = "advisor" | "technician" | "inspector" | "manager";
+export type RoleKey = "warehouse" | "advisor" | "technician" | "inspector" | "manager";
 export type DevelopmentPersonaKey = RoleKey | "unassigned" | "disabled";
 
 export type WorkOrderStatus =
@@ -133,7 +133,23 @@ export type LegacyDepartment = {
   isDefault: boolean;
 };
 
+export type LegacyEmployeeCandidate = {
+  code: string;
+  name: string;
+  departmentCode: string;
+  departmentName: string;
+  status: string;
+};
+
+export type EmployeeBindingStatus = {
+  required: boolean;
+  employeeCode?: string;
+  candidates: LegacyEmployeeCandidate[];
+};
+
 export type UserProfile = {
+  legacyEmployeeCode?: string;
+  inspectorRoleMember?: boolean | null;
   id: string;
   name: string;
   role: RoleKey;
@@ -204,9 +220,10 @@ export type PreRepairPhotos = {
 };
 
 export type StoredFile = {
+  repairRound?: number;
   id: string;
   orderId?: string;
-  kind: "vehicle_license" | "repair_order_photo" | "damage_photo" | "signature_image" | "other";
+  kind: "repair_parts_photo" | "repair_progress_photo" | "vehicle_license" | "repair_order_photo" | "damage_photo" | "signature_image" | "other";
   storageProvider: "oss" | "local";
   bucket: string;
   objectKey: string;
@@ -214,6 +231,7 @@ export type StoredFile = {
   mimeType: string;
   sizeBytes: number;
   uploadedBy?: string;
+  uploadedName?: string;
   createdAt: string;
 };
 
@@ -279,13 +297,18 @@ export type WorkOrderDispatchPlan = DispatchExecution & {
 
 export type PaperOrder = { mode: "pending" | "dingtalk" | "runfeng"; photoIds: string[] };
 export type PaperOrderResolution = { mode: "dingtalk" } | { mode: "runfeng"; dispatchNo: string };
-
+export type VehicleLicenseException = {
+  id:string; reason:string; vehiclePlate:string; vehicleVin:string;
+  reportedBy:string; reportedName:string; reportedAt:string;
+  notificationStatus:'pending'|'queued'|'failed'|'sent'|'unknown'; notificationError:string;
+};
 export type WorkOrder = {
   paperOrder?: PaperOrder;
   customerVehicleEditEnabled?: boolean;
   customerVehicleLinkComplete?: boolean;
   customerVehicleUpdatedAt?: string;
   customerVehicleUpdatedBy?: string;
+  vehicleLicenseException?: VehicleLicenseException;
   dispatchStage?: DispatchStage;
   dispatchPlan?: WorkOrderDispatchPlan | null;
   id: string;
@@ -381,10 +404,19 @@ export type DispatchExecution = {
 export type DispatchStage = "草稿" | "待客户签字" | "待派工" | "待接单" | "待开工" | "维修中" | "暂停" | "待检验" | "维修完成";
 export type DispatchItem = {
   id: number; name: string; status: RepairItemStatus;
+  responsibleId?: string; responsibleName?: string;
   startAt?: string; finishAt?: string; startedBy?: string; finishedBy?: string;
-  inspectorName?: string; inspectedBy?: string; inspectedAt?: string; pickedAt?: string;
+  inspectorName?: string; inspectedBy?: string; inspectedAt?: string; pickedAt?: string; rejectionReason?: string;
 };
+export type RepairPhotoUploadRequest = {requestId:string;fileName:string;mimeType:string;imageBase64:string;repairRound?:number;purpose?:"progress"|"parts"};
+export type PartsRequirement = { sourcePhotoIds?:string[]; revision?:number; batch?:number; preparedBy?:string; preparedName?:string; preparedAt?:string; issuedBy?:string; issuedName?:string; issuedAt?:string; recipientIds?:string[]; recipientName?:string; confirmedBy?:string; confirmedName?:string; confirmedAt?:string; mode:"none"|"list"|"photo"; items:Array<{name:string;quantity:number;unit:string}>; photoIds:string[]; recordedBy?:string; recordedName?:string; recordedAt?:string };
 export type DispatchTask = DispatchExecution & {
+  hasPartsHistory?:boolean;
+  partsRequirement?:PartsRequirement;
+  vehicleModel?:string; vehicleMileage?:string; customerName?:string; advisor?:string;
+  repairRound?: number; roundReason?: string; roundOpenedAt?: string; roundOpenedBy?: string; roundOpenedName?: string;
+  repairCatalog?: Array<{id:number;name:string}>;
+  reworkReason?: string; rejectedItemIds?: number[]; inspectionClaimedAt?: string;
   workHours?: number; workHoursRecordedBy?: string; workHoursRecordedName?: string; workHoursRecordedAt?: string;
   technicianIds?: string[]; participantIds?: string[];
   orderId: string; shopId: string; version: number; stage: DispatchStage;
@@ -398,14 +430,18 @@ export type DispatchTask = DispatchExecution & {
   plate: string; dispatchNo: string; arrivalDate: string; orderStatus: WorkOrderStatus;
   faultDescription: string; overdue: boolean;
 };
-export type DispatchActionName = "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
+export type RepairItemEdit = {id?:number;name:string;responsibleId?:string;responsibleName?:string};
+export type DispatchActionName = "edit-repair-items" | "edit-parts" | "issue-parts" | "confirm-parts" | "record-parts" | "reopen-repair" | "retry-scheduler-notifications" | "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
 export type DispatchActionRequest = DispatchExecution & {
+  repairItems?:RepairItemEdit[];
+  partsRequirement?:PartsRequirement;
+  reworkItemIds?: number[]; additionalItems?: string[];
   workHours?: number;
   technicianIds?: string[];
   action: DispatchActionName; expectedVersion: number; requestId: string;
   technicianId?: string; inspectorId?: string; itemId?: number; rejectedItemIds?: number[];
   dueAt?: string; urgent?: boolean; note?: string; reason?: string; pauseReason?: string;
-  notificationId?: string;
+  notificationId?: string; notificationJobId?: string;
 };
 export type DispatchMetric = "pendingAccept" | "unstarted" | "working" | "paused" | "inspection" | "completed" | "overdue" | "rework";
 export type TechnicianSummary = {
@@ -418,11 +454,17 @@ export type DispatchNotification = {
 };
 export type DispatchEvent = {
   id: string; actorName: string; action: string; at: string;
-  detail: { workHours?: number; previousWorkHours?: number; note?: string; reason?: string; technicianName?: string; previousTechnicianName?: string; dueAt?: string; previousDueAt?: string; urgent?: boolean; stage: DispatchStage; itemId?: number; rejectedItemIds?: number[]; pauseReason?: string };
+  detail: { previousItems?:DispatchItem[]; partsRequirement?:PartsRequirement; repairRound?:number; items?:DispatchItem[]; reworkItemIds?:number[]; additionalItems?:string[]; workHours?: number; previousWorkHours?: number; note?: string; reason?: string; technicianName?: string; previousTechnicianName?: string; dueAt?: string; previousDueAt?: string; urgent?: boolean; stage: DispatchStage; itemId?: number; rejectedItemIds?: number[]; pauseReason?: string };
 };
+export type RepairRound = { round:number; task:DispatchTask; reason:string; openedBy?:string; openedName:string; openedAt?:string; completedAt?:string; closed:boolean };
+export type RepairWriteback = {id:string;repairRound?:number;status:"pending"|"synced"|"failed"|"manual";error:string;attempts:number;createdAt:string;syncedAt?:string;enabled:boolean};
 export type DispatchDetail = {
+  repairWriteback?: RepairWriteback;
+  repairRounds?: RepairRound[];
+  schedulerNotifications?: Array<{eventId:string;kind:string;status:string;error:string}>;
+  inspectionNotification?: {status: string; error: string};
   task: DispatchTask; events: DispatchEvent[]; notifications: DispatchNotification[];
-  files: Array<Pick<StoredFile,"id"|"orderId"|"kind"|"originalName"|"mimeType"|"sizeBytes"|"createdAt">>;
+  files: Array<Pick<StoredFile,"id"|"orderId"|"kind"|"originalName"|"mimeType"|"sizeBytes"|"createdAt"|"uploadedBy"|"uploadedName"|"repairRound">>;
 };
 export type DispatchPeople = { technicians: UserProfile[]; inspectors: UserProfile[] };
 
@@ -442,3 +484,66 @@ export type WorkOrderCustomerVehicleUpdate = {
   organization: string;
   organizationLegacyCode: string;
 };
+export type RepairTaskCounts = { pendingAccept: number; inProgress: number; inspection: number; completed: number };
+
+export type RunfengWarehouse = {id:number;departmentCode:string;departmentName:string;name:string};
+export type RunfengStock = {departmentCode:string;departmentName:string;warehouse:string;location:string;quantity:number|null};
+export type RunfengPart = {code:string;name:string;specification:string;manufacturer:string;models:string;unit:string;referenceCode:string;stocks:RunfengStock[]};
+export type RunfengStockSearchResult = {items:RunfengPart[];hasMore:boolean;query:string;warehouseId?:number;inStockOnly:boolean;source:"润丰";queriedAt:string};
+
+export type VehicleHistoricalPart = {code:string;name:string;specification:string;unit:string;manufacturer:string;quantity:number;lastUsedAt:string;dispatchNo:string;repairOrderId:string;vehicleModel:string};
+export type VehiclePartsHistory = {status:"found"|"no_history"|"no_parts";items:VehicleHistoricalPart[];hasMore:boolean;plate:string;source:"润丰";queriedAt:string};
+
+export type ResolveRepairWritebackRequest = {jobId:string;reason:string};
+
+// Procurement: money is transported as integer fen; dates as ISO 8601 instants.
+export type ProcurementSupplier = {
+  id: string; name: string; contactName: string; phone: string; categories: string; note: string; active: boolean;
+};
+export type ProcurementSupplierInput = Omit<ProcurementSupplier, 'id'>;
+export type ProcurementTerms = {
+  partName: string; category: string; specification: string; brand: string; quantity: number; unit: string;
+  deliveryBy: string; paymentTerms: string; qualityRequirements: string; imageUrls: string[];
+};
+export type ProcurementCreateInput = ProcurementTerms & { supplierIds: string[]; deadline: string | null; requestId: string };
+export type ProcurementUpdateInput = ProcurementTerms & { deadline: string | null; expectedVersion: number; reopen?: boolean };
+export type ProcurementQuoteInput = {
+  termsVersion?: number;
+  requestId: string; unitPriceFen?: number; freightFen?: number; deliveryAt?: string; meetsRequirements?: boolean;
+  note: string; declined: boolean;
+};
+export type ProcurementQuote = ProcurementQuoteInput & { id: string; termsVersion: number; totalFen?: number; submittedAt: string };
+export type ProcurementStatus = 'open' | 'closed' | 'awarded' | 'failed' | 'cancelled';
+export type ProcurementInvitation = {
+  id: string; supplierId: string; supplierName: string; quotes: ProcurementQuote[]; invalidReason: string;
+};
+export type ProcurementTender = {
+  id: string; version: number; termsVersion: number; data: ProcurementTerms; status: ProcurementStatus; deadline: string | null;
+  closedAt: string | null; createdAt: string; winnerId: string | null; reason: string;
+  invitations: ProcurementInvitation[];
+};
+export type ProcurementLink = { supplierName: string; token: string; expiresAt: string };
+export type ProcurementAudit = { id: string; actor: string; action: string; detail: Record<string, unknown>; at: string };
+export type ProcurementDelivery = { id: string; status: string; error: string; recipientName: string };
+export type ProcurementDetail = { tender: ProcurementTender; audit: ProcurementAudit[]; notifications: ProcurementDelivery[] };
+export type ProcurementMetric = {
+  supplierId: string; supplierName: string; invited: number; quoted: number; valid: number; awarded: number;
+  lost: number; missed: number; declined: number; invalid: number; pending: number; participatedFailed: number;
+  awardAmountFen: number; responseRate: number | null; winRate: number | null;
+  priceIndex: number | null; priceSamples: number; priceLost: number; opportunityFen: number;
+};
+export type ProcurementAnalytics = {
+  from: string; to: string; total: number; awarded: number; failed: number; pending: number; awardAmountFen: number;
+  suppliers: ProcurementMetric[]; months: { month: string; total: number; awarded: number; failed: number }[];
+};
+export type ProcurementReport = {
+  id: string; supplierName: string; from: string; to: string; generatedAt: string; note: string;
+  metrics: Omit<ProcurementMetric, 'priceIndex' | 'priceSamples' | 'opportunityFen'>;
+  benchmark: { samples: number; competitorCount: number; gapBand: string | null; below: number; near: number; above: number };
+  categories: { category: string; samples: number; gapBand: string }[];
+  quarters: { quarter: string; quoted: number; awarded: number; samples: number; gapBand: string | null }[];
+};
+export type ProcurementReportRecord = { id: string; snapshot: ProcurementReport; publishedAt: string | null; notifications: ProcurementDelivery[] };
+export type ProcurementPortal = { kind: 'quote'; supplierName: string; tenderId: string; invitationId: string; termsVersion: number; terms: ProcurementTerms;
+  status: ProcurementStatus; deadline: string | null; quotes: ProcurementQuote[]; result: string;
+} | { kind: 'report'; report: ProcurementReport };

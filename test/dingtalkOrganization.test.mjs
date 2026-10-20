@@ -53,11 +53,17 @@ test("preserves existing store ownership regardless of department or role change
 });
 
 test("multiple roles resolve by explicit priority independent of response order", () => {
-  const names = ["维修技师", "检验员", "调度员", "门店管理员"];
+  const names = ["维修技师", "检验员", "服务顾问", "门店管理员"];
   const roles = ["technician", "inspector", "advisor", "manager"];
   for (let i = 1; i <= names.length; i++) {
     assert.equal(resolve(profile(names.slice(0, i))).role, roles[i - 1]);
     assert.equal(resolve(profile(names.slice(0, i).reverse())).role, roles[i - 1]);
   }
   assert.equal(resolve(profile([" 维修工 "])).role, "technician");
+});
+
+test("only service advisor and store manager names grant scheduling roles",()=>{
+  assert.equal(resolve(profile(["服务顾问"])).role,"advisor");
+  assert.equal(resolve(profile(["门店管理员"])).role,"manager");
+  for(const name of ["派单员","调度员"]) assert.equal(resolve(profile([name])),undefined);
 });

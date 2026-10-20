@@ -21,9 +21,9 @@ export function messageBody(notification, recipient, env=process.env) {
   const escape=value=>String(value||'').replace(/[\\`*_{}\[\]<>#|]/g,' ');
   return {agent_id:Number(env.DINGTALK_AGENT_ID),userid_list:recipient,to_all_user:false,
     msg:{msgtype:'markdown',markdown:{title:`${notification.kind} · ${data.plate || data.orderId}`,
-      text:`### ${escape(notification.kind)} · ${escape(data.plate || data.orderId)}\n\n${escape(data.dispatchNo || data.orderId)}\n\n${escape(data.summary)}\n\n${data.paperOrder ? '创建人已上传纸质委托书照片' : `预计完工：${due}`}${data.reason?`\n\n${escape(data.reason)}`:''}\n\n[${data.paperOrder ? "查看纸质委托书" : "查看维修任务"}](${url.toString()})`}}};
+      text:`### ${escape(notification.kind)} · ${escape(data.plate || data.orderId)}\n\n${escape(data.dispatchNo || data.orderId)}\n\n${escape(data.summary)}${data.actorName?`\n\n操作人：${escape(data.actorName)}`:''}${data.notice?`\n\n${escape(data.notice)}`:''}\n\n${data.paperOrder ? '创建人已上传纸质委托书照片' : `预计完工：${due}`}${data.reason?`\n\n${escape(data.reason)}`:''}\n\n[${data.paperOrder ? "查看纸质委托书" : "查看维修任务"}](${url.toString()})`}}};
 }
-export async function sendWorkNotification(notification, recipient, {env=process.env,fetcher=fetch,token=getDingTalkAccessToken}={}) {
+export async function sendWorkNotification(notification, recipient, {env=process.env,fetcher=fetch,token=getDingTalkAccessToken,buildMessage=messageBody}={}) {
   const mode=notificationConfiguration(env);
   if(mode==='mock') return {status:'accepted',taskId:`mock-${notification.id}`};
   if(mode!=='dingtalk') return {status:'failed',error:'通知发送尚未启用',retryable:false};
@@ -33,7 +33,7 @@ export async function sendWorkNotification(notification, recipient, {env=process
   try {
     const url=new URL('https://oapi.dingtalk.com/topapi/message/corpconversation/asyncsend_v2');
     url.searchParams.set('access_token',accessToken);
-    const response=await fetcher(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(messageBody(notification,recipient,env)),signal:AbortSignal.timeout(10000)});
+    const response=await fetcher(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(buildMessage(notification,recipient,env)),signal:AbortSignal.timeout(10000)});
     const payload=await response.json().catch(()=>null);
     if(response.status===429) return {status:'failed',error:'钉钉限流',retryable:true};
     if(!response.ok || !payload || payload.errcode===undefined) return {status:'unknown',error:'钉钉返回结果不确定，请核对平台记录'};

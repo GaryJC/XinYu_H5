@@ -61,3 +61,59 @@ test('inactive employee receives no new notification; malformed result remains u
   assert.equal(sends,0);assert.equal(finished.status,'failed');
   assert.equal((await queryWorkNotification({...notification,task_id:'99'},'worker',options(async()=>response({errcode:0})))).status,'unknown');
 });
+
+test('obsolete due reminders are never sent and pre-send validation failures can retry safely',async()=>{
+ const row={...notification,order_id:'WT-1',recipient_id:'t',kind:'即将到期',previous_status:'pending'};
+ let sends=0,finished;
+ const dependencies={claim:async()=>row,recipient:async()=>({active:true,role:'technician',id:'t'}),send:async()=>{sends++;return {status:'sent'};},finish:async(_,result)=>{finished=result;}};
+ await processNotification({...dependencies,validateDue:async()=>false});assert.equal(sends,0);assert.equal(finished.status,'failed');assert.equal(finished.retryable,false);
+ await processNotification({...dependencies,validateDue:async()=>{throw new Error('db unavailable');}});assert.equal(sends,0);assert.equal(finished.retryable,true);
+ await processNotification({...dependencies,validateDue:async()=>true});assert.equal(sends,1);
+});
+test('scheduler notices include operator, reason and due reminders include a clear instruction',()=>{
+ const text=messageBody({...notification,kind:'维修暂停',payload:{...notification.payload,actorName:'维修工甲',reason:'待配件：缺少滤芯'}},'scheduler',env).msg.markdown.text;
+ assert.match(text,/操作人：维修工甲/);assert.match(text,/待配件：缺少滤芯/);
+ assert.match(messageBody({...notification,kind:'即将到期',payload:{...notification.payload,notice:'工单将在1小时内到期，请尽快处理。'}},'t',env).msg.markdown.text,/请尽快处理/);
+});
+
+test('scheduler fanout checks role and store again before sending',async()=>{
+ const {validateSchedulerRecipient}=await import('../server/workers/schedulerNotifications.mjs');
+ const database={query:async()=>({rows:[{shop_id:'s'}]})};
+ assert.equal(await validateSchedulerRecipient({order_id:'o'},{active:true,role:'advisor',shopId:'s'},{database}),true);
+ assert.equal(await validateSchedulerRecipient({order_id:'o'},{active:true,role:'manager',shopId:'other'},{database}),false);
+ let sends=0,result;
+ await processNotification({claim:async()=>({...notification,kind:'维修暂停',previous_status:'pending'}),recipient:async()=>({active:true,role:'advisor',shopId:'other'}),validateScheduler:async()=>false,send:async()=>sends++,finish:async(_,r)=>{result=r;}});
+ assert.equal(sends,0);assert.equal(result.retryable,false);
+});
+
+test('parts notifications reject recipients who lost warehouse or shop membership',async()=>{
+ for(const user of [{active:true,role:'technician',shopId:'s'},{active:true,role:'warehouse',shopId:'other'},{active:false,role:'warehouse',shopId:'s'}]) {
+   let result,sent=false;
+   await processNotification({claim:async()=>({id:'parts',kind:'配件申请',previous_status:'pending',recipient_id:'w',payload:{shopId:'s'}}),recipient:async()=>user,send:async()=>{sent=true;},finish:async(_row,value)=>{result=value;}});
+   assert.equal(sent,false);assert.equal(result.status,'failed');
+ }
+});
+
+test('pickup and issue notices check the current request, round, handler and handover state',async()=>{
+ const {validatePartsPickupNotification:validate}=await import('../server/repositories/partsRequirementRepository.mjs');
+ const user={id:'t',active:true,role:'technician',shopId:'s'};
+ const row={order_id:'o',recipient_id:'t',kind:'配件可领取',payload:{shopId:'s',repairRound:1,partsRecordedAt:'at',partsRevision:3}};
+ const task={stage:'待开工',technician_id:'t',data:{repairRound:1,technicianIds:['t'],partsRequirement:{mode:'list',recordedAt:'at',revision:3,preparedAt:'ready'}}};
+ const database={query:async()=>({rows:[task]})};
+ assert.equal(await validate(row,user,database),true);
+ for(const patch of [{active:false},{role:'inspector'},{shopId:'other'}])assert.equal(await validate(row,{...user,...patch},database),false);
+ task.data.partsRequirement.revision=4;assert.equal(await validate(row,user,database),false);task.data.partsRequirement.revision=3;
+ task.data.repairRound=2;assert.equal(await validate(row,user,database),false);task.data.repairRound=1;
+ task.data.technicianIds=['other'];assert.equal(await validate(row,user,database),false);task.data.technicianIds=['t'];
+ task.data.partsRequirement.issuedAt='issued';assert.equal(await validate(row,user,database),false);
+ assert.equal(await validate({...row,kind:'配件已出库'},user,database),true);
+ task.stage='待派工';assert.equal(await validate({...row,kind:'配件已出库'},user,database),false);
+});
+test('obsolete pickup messages are canceled before sending; database failures remain retryable',async()=>{
+ const row={...notification,kind:'配件可领取',previous_status:'pending'};
+ let sent=0,finished;
+ const deps={claim:async()=>row,recipient:async()=>({active:true}),send:async()=>{sent++;return {status:'sent'};},finish:async(_,r)=>{finished=r;}};
+ await processNotification({...deps,validateParts:async()=>false});assert.equal(sent,0);assert.equal(finished.retryable,false);
+ await processNotification({...deps,validateParts:async()=>{throw new Error('db unavailable');}});assert.equal(sent,0);assert.equal(finished.retryable,true);
+ await processNotification({...deps,validateParts:async()=>true});assert.equal(sent,1);
+});

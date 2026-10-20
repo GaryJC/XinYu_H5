@@ -36,7 +36,7 @@ function setup(response) {
 }
 
 test("restoring an unsupported session rejects it before the role reaches the workbench", async () => {
-  for (const role of ["warehouse", "unknown", "constructor", "__proto__", undefined]) {
+  for (const role of ["unknown", "constructor", "__proto__", undefined]) {
     const { api } = setup({ id: "old-session", name: "测试用户", role });
     await assert.rejects(api.me(), /岗位尚未在此版本开放/);
   }
@@ -52,7 +52,7 @@ test("all configured workbench roles can restore their session", async () => {
 
 test("neither login flow persists a token for an unsupported role", async () => {
   for (const method of ["loginWithDingTalk", "loginForDevelopment"]) {
-    const { api, savedTokens } = setup({ token: "unsupported-token", user: { role: "warehouse" } });
+    const { api, savedTokens } = setup({ token: "unsupported-token", user: { role: "unknown" } });
     await assert.rejects(api[method]("test"), /岗位尚未在此版本开放/);
     assert.deepEqual(savedTokens, []);
   }
@@ -60,7 +60,7 @@ test("neither login flow persists a token for an unsupported role", async () => 
 
 test("supported logins still save their token and return the authenticated user", async () => {
   for (const method of ["loginWithDingTalk", "loginForDevelopment"]) {
-    const response = { token: "test-token", user: { id: "test-user", role: "advisor" } };
+    const response = { token: "test-token", user: { id: "test-user", role: "warehouse" } };
     const { api, savedTokens } = setup(response);
     assert.equal(await api[method]("test"), response);
     assert.deepEqual(savedTokens, ["test-token"]);

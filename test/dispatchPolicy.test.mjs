@@ -11,18 +11,18 @@ const people=[manager,advisor,technician,second,inspector];
 const now='2026-09-11T01:00:00.000Z';
 const due='2026-09-12T18:00:00+08:00';
 function initial(){return {orderId:'wo',shopId:'s',stage:'待派工',version:0,items:[{id:1,name:'制动',status:'待派工'},{id:2,name:'保养',status:'待派工'}]};}
-function act(task,action,actor=technician,fields={},at=now){return applyDispatchAction(task,{action,expectedVersion:task.version,requestId:randomUUID(),...fields},actor,people,at);}
+function act(task,action,actor=technician,fields={},at=now){return applyDispatchAction(task,{action,expectedVersion:task.version,requestId:randomUUID(),...(action==='inspect'&&!fields?.rejectedItemIds?.length?{workHours:2.5}:{}),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...fields},actor,people,at);}
 function assigned(){return act(initial(),'assign',advisor,{technicianId:'t',dueAt:due});}
-function submitted(){let t=act(assigned(),'accept');for(const id of [1,2]){t=act(t,'start',technician,{itemId:id});t=act(t,'finish',technician,{itemId:id});}return act(t,'submit',technician,{inspectorId:'i'});}
+function submitted(){let t=act(assigned(),'accept');for(const id of [1,2]){t=act(t,'finish',technician,{itemId:id});}return act(t,'submit',technician,{inspectorId:'i'});}
 
 test('complete lifecycle without parts waits for explicit acceptance and inspection',()=>{
   let task=assigned();assert.equal(task.stage,'待接单');assert.equal(task.dueAt,'2026-09-12T10:00:00.000Z');
   assert.throws(()=>act(task,'start',technician,{itemId:1}),e=>e.status===409);
-  task=act(task,'accept');assert.equal(task.stage,'待开工');assert.equal(task.firstStartedAt,undefined);
-  task=act(task,'start',technician,{itemId:1});assert.equal(task.stage,'维修中');
+  task=act(task,'accept');assert.equal(task.stage,'维修中');assert.equal(task.firstStartedAt,now);
+  assert.equal(task.items[0].startedBy,'t');assert.equal(task.items[1].status,'维修中');
   task=act(task,'finish',technician,{itemId:1});
   assert.throws(()=>act(task,'submit',technician,{inspectorId:'i'}),e=>e.status===409);
-  task=act(task,'start',technician,{itemId:2});task=act(task,'finish',technician,{itemId:2});
+task=act(task,'finish',technician,{itemId:2});
   task=act(task,'submit',technician,{inspectorId:'i'});assert.equal(task.stage,'待检验');assert.equal(task.completedAt,undefined);
   task=act(task,'inspect',inspector);assert.equal(task.stage,'维修完成');assert.equal(task.completedBy,'t');assert.equal(task.completedAt,now);
   assert.ok(task.items.every(i=>i.status==='已完工'));
@@ -32,17 +32,17 @@ test('declining retains assignment and blocks acceptance until advisor reoffers'
   let task=act(assigned(),'decline',technician,{reason:'工作量已满'});
   assert.equal(task.technicianId,'t');assert.equal(task.stage,'待接单');
   assert.throws(()=>act(task,'accept'),e=>e.status===409);
-  task=act(task,'reoffer',advisor);task=act(task,'accept');assert.equal(task.stage,'待开工');
+  task=act(task,'reoffer',advisor);task=act(task,'accept');assert.equal(task.stage,'维修中');
 });
 test('pause freezes actions without moving delivery deadline; resume restores phase',()=>{
   let task=act(assigned(),'accept');task=act(task,'pause',technician,{pauseReason:'待配件'});
-  assert.equal(task.stage,'暂停');assert.equal(task.resumeStage,'待开工');
+  assert.equal(task.stage,'暂停');assert.equal(task.resumeStage,'维修中');
   assert.throws(()=>act(task,'start',technician,{itemId:1}),e=>e.status===409);
-  task=act(task,'resume');assert.equal(task.stage,'待开工');assert.equal(task.dueAt,'2026-09-12T10:00:00.000Z');
+  task=act(task,'resume');assert.equal(task.stage,'维修中');assert.equal(task.dueAt,'2026-09-12T10:00:00.000Z');
   assert.throws(()=>act(task,'pause',technician,{pauseReason:'其他'}),e=>e.status===400);
 });
 test('in-progress reassignment preserves progress and historical actor, requires acceptance',()=>{
-  let task=act(assigned(),'accept');task=act(task,'start',technician,{itemId:1});
+  let task=act(assigned(),'accept');
   assert.throws(()=>act(task,'reassign',advisor,{technicianId:'t2',dueAt:due}),e=>e.status===400);
   task=act(task,'reassign',advisor,{technicianId:'t2',dueAt:due,reason:'交接制动检查'});
   assert.equal(task.items[0].status,'维修中');assert.equal(task.items[0].startedBy,'t');assert.equal(task.firstStartedAt,now);
@@ -123,13 +123,13 @@ test('equal collaborators share one progress and reassignment removes access',()
   assert.deepEqual(task.technicianIds,['t','t2']);
   assert.doesNotThrow(()=>assertDispatchAccess(task,second));
   task=act(task,'accept',second);
-  task=act(task,'start',technician,{itemId:1});
+  task=act(task,'edit-repair-items',second,{repairItems:task.items.map(i=>({id:i.id,name:i.name,responsibleId:'t2'}))});
   task=act(task,'finish',second,{itemId:1});
-  assert.equal(task.items[0].startedBy,'t');assert.equal(task.items[0].finishedBy,'t2');
+  assert.equal(task.items[0].startedBy,'t2');assert.equal(task.items[0].finishedBy,'t2');
   task=act(task,'reassign',advisor,{technicianIds:['t2'],dueAt:due,reason:'人员调整'});
   assert.throws(()=>assertDispatchAccess(task,technician),e=>e.status===403);
   assert.doesNotThrow(()=>assertDispatchAccess(task,second));
-  assert.deepEqual(task.participantIds,['t','t2']);
+  assert.deepEqual(task.participantIds,['t2']);
   assert.equal(act(task,'accept',second).stage,'维修中');
 });
 
@@ -142,7 +142,7 @@ test('field work means employees leave for a service unit and retains shared pro
   assert.throws(()=>act(initial(),'assign',advisor,{executionMode:'field',technicianIds:['t','t2'],dueAt:due}),e=>e.status===400);
   let task=act(initial(),'assign',advisor,{executionMode:'field',technicianIds:['t','t2'],serviceUnit:'客户车队',serviceAddress:'客户停车场',departureAt:now,expectedReturnAt:due,dueAt:due});
   assert.equal(task.serviceUnit,'客户车队');assert.equal(task.executionMode,'field');
-  task=act(task,'accept',second);task=act(task,'start',second,{itemId:1});
+  task=act(task,'accept',second);
   assert.equal(task.stage,'维修中');
   assert.throws(()=>act(task,'update',advisor,{returnedAt:'2026-09-10T01:00:00Z'}),e=>e.status===400);
   task=act(task,'update',advisor,{returnedAt:due});assert.equal(task.returnedAt,due);
@@ -153,7 +153,7 @@ for(const outsourcingMode of ['onsite','offsite']) test(`outsourced ${outsourcin
   assert.deepEqual(task.technicianIds,[]);assert.equal(task.technicianId,undefined);
   assert.throws(()=>assertDispatchAccess(task,technician),e=>e.status===403);
   task=act(task,'accept',advisor);
-  for(const itemId of [1,2]) {task=act(task,'start',manager,{itemId});task=act(task,'finish',advisor,{itemId});}
+  for(const itemId of [1,2]) {task=act(task,'finish',itemId===1?manager:advisor,{itemId});}
   assert.throws(()=>act(task,'submit',advisor,{inspectorId:'m'}),e=>e.status===403);
   task=act(task,'submit',advisor,{inspectorId:'i'});
   assert.throws(()=>act(task,'inspect',manager),e=>e.status===403);
@@ -173,15 +173,34 @@ test('execution validation rejects malformed costs, timestamps and silent mode c
   task=act(task,'update',advisor,{agreedFee:null});assert.equal(task.agreedFee,null);
 });
 
-test('only scheduling staff record positive work hours with amendment audit and closed-order lock',()=>{
-  let task=act(assigned(),'accept');task=act(task,'start',technician,{itemId:1});
-  assert.throws(()=>act(task,'record-hours',technician,{workHours:2}),e=>e.status===403);
-  for(const workHours of [0,-1,1.001,'2',Infinity]) assert.throws(()=>act(task,'record-hours',advisor,{workHours}),e=>e.status===400);
-  task=act(task,'record-hours',advisor,{workHours:2.5});
-  assert.equal(task.workHoursRecordedBy,advisor.id);assert.equal(task.workHours,2.5);
-  assert.throws(()=>act(task,'record-hours',advisor,{workHours:3}),e=>e.status===400);
-  task=act(task,'record-hours',manager,{workHours:3,reason:'核对后调整'});
-  assert.equal(task.workHours,3);assert.equal(task.workHoursRecordedBy,manager.id);
-  assert.throws(()=>act({...task,stage:'维修完成',orderStatus:'完成'},'record-hours',advisor,{workHours:4,reason:'调整'}),e=>e.status===409);
-  assert.throws(()=>act(task,'update',advisor,{workHours:5}),e=>e.status===400);
+test('inspection completes without hours and preserves optional historical recording',()=>{
+  const pending=submitted();
+  const noHours=act(pending,'inspect',inspector,{workHours:undefined});
+  assert.equal(noHours.stage,'维修完成');assert.equal(noHours.workHours,undefined);assert.equal(noHours.workHoursRecordedBy,undefined);
+  for(const workHours of [0,-1,1.001,'2',Infinity]) assert.throws(()=>act(pending,'inspect',inspector,{workHours}),e=>e.status===400);
+  for(const actor of [advisor,technician]) assert.throws(()=>act(pending,'record-hours',actor,{workHours:2}),e=>e.status===403);
+  const done=act(pending,'inspect',inspector,{workHours:3.25});
+  assert.equal(done.workHours,3.25);assert.equal(done.workHoursRecordedBy,inspector.id);assert.equal(done.workHoursRecordedAt,now);
+  assert.throws(()=>act(done,'record-hours',inspector,{workHours:4}),/已记录/);
+  const returned=act(pending,'inspect',inspector,{rejectedItemIds:[1],reason:'漏油'});
+  assert.equal(returned.workHours,undefined);
+  assert.throws(()=>act(pending,'inspect',inspector,{rejectedItemIds:[1],reason:'漏油',workHours:2}),/退回维修时无需/);
+  const legacy={...done,workHours:undefined,workHoursRecordedBy:undefined};
+  assert.equal(act(legacy,'record-hours',inspector,{workHours:2}).workHoursRecordedBy,inspector.id);
+});
+
+
+test('manager inspection takeover records the actual inspector identity for the order',()=>{
+ const done=act(submitted(),'inspect',manager);
+ assert.equal(done.inspectorId,manager.id);assert.equal(done.inspectorName,manager.name);
+ assert.ok(done.items.every(item=>item.inspectedBy===manager.id));
+});
+
+
+test('inspection return reasons stay with rejected items during repair and clear after passing',()=>{
+ let task=act(submitted(),'inspect',inspector,{rejectedItemIds:[1],reason:'制动仍有异响'});
+ assert.equal(task.items[0].rejectionReason,'制动仍有异响');assert.equal(task.items[1].rejectionReason,undefined);
+ task=act(task,'start',technician,{itemId:1});assert.equal(task.items[0].rejectionReason,'制动仍有异响');
+ task=act(task,'finish',technician,{itemId:1});task=act(task,'submit',technician,{inspectorId:'i'});task=act(task,'inspect',inspector);
+ assert.equal(task.items[0].rejectionReason,undefined);
 });

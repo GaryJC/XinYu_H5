@@ -1,8 +1,11 @@
 import { assertPaperPhotoIds, attachPaperPhotos, enqueuePaperNotifications } from "./repositories/paperOrderRepository.mjs";
 import { attachDraftVehicleLicense } from "./repositories/draftVehicleLicenseRepository.mjs";
+import { assertNoActiveRepair } from './repositories/repairRoundRepository.mjs';
+import {readLicenseExceptions} from './repositories/vehicleLicenseExceptionRepository.mjs';
+import {assertWorkOrderAccess} from './repositories/accessRepository.mjs';
 import { attachPreRepairPhotos } from "./repositories/preRepairPhotoRepository.mjs";
 import { assertPreRepairPhotosReady } from "./domain/preRepairPhotos.mjs";
-import { assertWorkHoursRecorded } from './repositories/dispatchRepository.mjs';
+import { assertInspectionCompleted } from './repositories/dispatchRepository.mjs';
 import { saveDispatchPlan, readDispatchPlans } from './repositories/dispatchPlanRepository.mjs';
 import { activateDispatchPlan } from './services/dispatchPlanService.mjs';
 import { pool, transaction } from "./database/pool.mjs";
@@ -143,7 +146,7 @@ export async function transitionWorkOrder(id, status, actor, action, patch = {})
     if (!order) throw new HttpError(404, "委托单不存在");
     if (["维修中", "待结算"].includes(status)) throw new HttpError(409, "请使用派工流程操作");
     assertStatusTransition(order.status, status);
-    if(status==="完成") await assertWorkHoursRecorded(client,id);
+    if(status==="完成") {await assertNoActiveRepair(client,id);await assertInspectionCompleted(client,id);}
     const safePatch = sanitizeTransitionPatch(status, patch);
     const repairItems = status === "维修中"
       ? order.repairItems.map((item) => ({
@@ -280,6 +283,7 @@ export async function createSettlementForOrder(orderId, actor) {
     const order = await findWorkOrderById(client, orderId, true);
     if (!order) throw new HttpError(404, "委托单不存在");
     assertSettlementAllowed(order.status);
+    await assertNoActiveRepair(client,orderId);
     if (order.settlementStatements.length) return order;
     const amount = Number(order.settlementAmount || order.estimatedFee || order.repairItems.reduce((sum, item) => sum + Number(item.laborFee || 0), 0));
     const id = createId("settle");
@@ -425,6 +429,7 @@ async function hydrateOrders(rows, client = pool) {
     [ids]
   );
 
+  const licenseExceptions = await readLicenseExceptions(client,ids);
   const dispatchPlans = await readDispatchPlans(client, ids);
   const itemsByOrder = groupBy(repairItems.rows, "order_id");
   const signaturesByOrder = groupBy(signatures.rows, "order_id");
@@ -447,6 +452,7 @@ async function hydrateOrders(rows, client = pool) {
       settlementByOrder.get(row.id) || [],
       filesByOrder.get(row.id) || []
     ),
+    vehicleLicenseException: licenseExceptions.get(row.id),
     dispatchPlan: dispatchPlans.get(row.id)
   }));
 }
@@ -637,4 +643,11 @@ async function refreshOutboundPickedState(client, orderId, repairItems) {
   const stats = rows[0] || { total: 0, picked: 0 };
   const status = stats.picked === 0 ? "待领料" : stats.picked === stats.total ? "已领料" : "部分领料";
   await client.query("update outbound_orders set status = $2 where id = $1", [outboundId, status]);
+}
+
+export async function getWorkOrderDetail(id,user) {
+  await assertWorkOrderAccess(id,user);
+  const order=await findWorkOrderById(pool,id);
+  if(!order)throw new HttpError(404,'委托单不存在');
+  return sanitizeVisibleOrders([order],user.role,user)[0];
 }

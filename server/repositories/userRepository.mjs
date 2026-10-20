@@ -15,7 +15,7 @@ export async function listAccessUsers(shopId, database=pool) {
 
 export async function findUserById(id) {
   const { rows } = await pool.query(
-    "select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at from users where id = $1",
+    "select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, inspector_role_member, legacy_employee_code from users where id = $1",
     [id]
   );
   return rows[0] ? rowToUser(rows[0]) : undefined;
@@ -23,7 +23,7 @@ export async function findUserById(id) {
 
 export async function findUserByDingTalkUserId(dingTalkUserId) {
   const { rows } = await pool.query(
-    "select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at from users where dingtalk_user_id = $1",
+    "select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, inspector_role_member, legacy_employee_code from users where dingtalk_user_id = $1",
     [dingTalkUserId]
   );
   return rows[0] ? rowToUser(rows[0]) : undefined;
@@ -43,7 +43,7 @@ export async function upsertDevelopmentUser({ id, name, role, active, shopId }) 
         role = excluded.role,
         active = excluded.active,
         shop_id = excluded.shop_id
-      returning id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at
+      returning id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, legacy_employee_code
     `,
     [id, name, role, active, shopId]
   );
@@ -66,7 +66,7 @@ export async function upsertUserFromDingTalk({ profile, mapping, existingUser })
         active = excluded.active,
         shop_id = excluded.shop_id,
         phone = excluded.phone
-      returning id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at
+      returning id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, legacy_employee_code
     `,
     [
       id,
@@ -234,6 +234,8 @@ export async function isAuthSessionActive(token) {
 
 function rowToUser(row) {
   return {
+    legacyEmployeeCode: row.legacy_employee_code || undefined,
+    inspectorRoleMember: row.inspector_role_member,
     id: row.id,
     name: row.name,
     role: row.role,

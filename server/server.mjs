@@ -1,3 +1,6 @@
+import { startProcurementWorker } from "./workers/procurementWorker.mjs";
+import {startRepairWritebacks} from './workers/repairWritebackWorker.mjs';
+import {startVehicleLicenseExceptionNotifications} from './workers/vehicleLicenseExceptionNotifications.mjs';
 import { startDispatchNotifications } from "./workers/dispatchNotifications.mjs";
 import { startLegacySyncRecovery } from "./workers/legacySyncRecovery.mjs";
 import path from "node:path";
@@ -12,8 +15,11 @@ import { handleApiRequest } from "./routes/apiRouter.mjs";
 import { withRequestTiming } from "./http/requestTiming.mjs";
 
 const config = serverConfig();
+const stopRepairWritebacks = startRepairWritebacks();
 const stopNotifications = startDispatchNotifications();
 const stopLegacySyncRecovery = startLegacySyncRecovery();
+const stopProcurement = startProcurementWorker();
+const stopLicenseNotifications = startVehicleLicenseExceptionNotifications();
 const distDir = path.resolve(config.distDir);
 
 const server = createServer(async (req, res) => {
@@ -48,7 +54,7 @@ server.listen(config.port, "0.0.0.0", () => {
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {
     server.close(async () => {
-      await Promise.all([stopNotifications(), stopLegacySyncRecovery()]);
+      await Promise.all([stopRepairWritebacks(), stopNotifications(), stopProcurement(), stopLicenseNotifications(), stopLegacySyncRecovery()]);
       await Promise.all([closePool(), closeSqlServerPool()]);
       process.exit(0);
     });

@@ -6,6 +6,9 @@ import { useArchiveSignature } from "../signature/useArchiveSignature";
 import { SubmittedOrderPhotos } from "../work-order-photos/SubmittedOrderPhotos";
 import { useArchiveLegacyRefresh } from "./useArchiveLegacyRefresh";
 import { WorkOrderPrintButton } from "../work-order-print/WorkOrderPrintButton";
+import {VehicleLicenseExceptionNotice} from '../work-orders/components/VehicleLicenseException';
+import {isCurrentVehicleLicenseException} from '../work-orders/domain/vehicleLicenseException';
+import { PreRepairPhotos } from "../pre-repair-photos/PreRepairPhotos";
 import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
 import { QuickDispatchDialog } from "../dispatch/QuickDispatchDialog";
 import { dispatchEnabled } from "../dispatch/dispatchAvailability";
@@ -23,8 +26,9 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
     role, currentUser, deleteDraft, actionLoading
   } = controller;
   const signature = useArchiveSignature(currentUser, controller.acceptRefreshedOrder, controller.refreshArchiveSummary);
-  const [detailOrderId, setDetailOrderId] = useState<string | undefined>(()=>new URLSearchParams(location.search).get("paperOrder") || undefined);
-  const detailOrder = controller.orders.find(order => order.id === detailOrderId);
+  const [detailOrderId, setLocalDetailOrderId] = useState<string | undefined>(()=>new URLSearchParams(location.search).get("paperOrder") || undefined);
+  const setDetailOrderId=(id?:string)=>{setLocalDetailOrderId(id);if(!id)controller.clearLinkedOrder();};
+  const detailOrder = controller.orders.find(order => order.id === detailOrderId) || (!detailOrderId ? controller.linkedOrderDetail : undefined);
   const legacyRefresh = useArchiveLegacyRefresh(currentUser, controller.acceptRefreshedOrder, controller.refreshArchiveSummary);
   // The archive API returns the full authorized list; search and table pagination
   // must not narrow the all-orders refresh operation.
@@ -179,6 +183,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
         {refreshReport}
         {signature.error && <Alert type="error" showIcon title="发起签字失败" description={signature.error} style={{ marginBottom: 12 }} />}
         {deleteError ? <Alert type="error" showIcon title="删除草稿失败" description={deleteError} style={{ marginBottom: 12 }} /> : null}
+        {detailOrder?.vehicleLicenseException?<div style={{marginBottom:16}}><VehicleLicenseExceptionNotice exception={detailOrder.vehicleLicenseException} current={isCurrentVehicleLicenseException(detailOrder.vehicleLicenseException,detailOrder.vehicle)}/></div>:null}
         {detailOrder ? <OrderDetail key={detailOrder.id} order={detailOrder} isMobile={isMobile} user={currentUser} onUpdated={controller.acceptRefreshedOrder}/> : null}
       </Modal>
       {signature.session && <WorkOrderSignatureDialog key={signature.session.token} session={signature.session}

@@ -1,19 +1,24 @@
+import {readRepairWriteback} from './repairWritebackRepository.mjs';
+import { readRepairRounds } from './repairRoundRepository.mjs';
 import { pool } from '../database/pool.mjs';
 import { HttpError } from '../http/HttpError.mjs';
-import { assertDispatchAccess, dispatchMetric } from '../domain/dispatchPolicy.mjs';
+import { assertDispatchAccess, canInspect, dispatchMetric } from '../domain/dispatchPolicy.mjs';
 const projection = `select wo.id as order_id, wo.shop_id, wo.vehicle_plate, wo.dispatch_no, wo.arrival_date,
-  wo.status as order_status, wo.fault_description, wo.technician as legacy_technician,
+  wo.vehicle_model,wo.vehicle_mileage,wo.customer_name,wo.advisor,wo.status as order_status, wo.fault_description, wo.technician as legacy_technician,
+  exists(select 1 from dispatch_events e where e.order_id=wo.id and e.action in ('accept','record-parts','edit-parts') and e.detail->'partsRequirement' is not null) as has_parts_history,
   dt.technician_id, dt.inspector_id, dt.stage, dt.version, dt.data,
   coalesce((select jsonb_agg(jsonb_build_object('id',ri.client_item_id,'name',ri.name,
     'status',ri.status,'startAt',nullif(ri.start_at,''),'finishAt',nullif(ri.finish_at,'')) order by ri.item_no)
     from repair_items ri where ri.order_id=wo.id),'[]'::jsonb) as repair_items
   from work_orders wo left join dispatch_tasks dt on dt.order_id=wo.id`;
 export function mapTask(row) {
-  const task = { items:row.repair_items, ...row.data, orderId:row.order_id, shopId:row.shop_id,
+  const task = { hasPartsHistory:Boolean(row.has_parts_history), items:row.repair_items, ...row.data, vehicleModel:row.vehicle_model||'',vehicleMileage:row.vehicle_mileage||'',customerName:row.customer_name||'',advisor:row.advisor||'', orderId:row.order_id, shopId:row.shop_id,
     technicianId:row.technician_id || undefined, inspectorId:row.inspector_id || undefined,
     stage:['草稿','待客户签字'].includes(row.order_status)?row.order_status:row.stage || (['待结算','完成'].includes(row.order_status)?'维修完成':row.order_status==='维修中'?'维修中':'待派工'),
     version:row.version || 0, plate:row.vehicle_plate, dispatchNo:row.dispatch_no || '', arrivalDate:row.arrival_date,
     orderStatus:row.order_status, faultDescription:row.fault_description };
+  const ids=task.technicianIds??(task.technicianId?[task.technicianId]:[]);
+  if(ids.length===1)task.items=task.items.map(item=>({...item,responsibleId:item.responsibleId||ids[0],responsibleName:item.responsibleName||(item.responsibleId&&item.responsibleId!==ids[0]?undefined:task.technicianName)}));
   task.overdue=dispatchMetric(task,'overdue');
   return task;
 }
@@ -25,27 +30,33 @@ export async function getDispatchTask(client, id, actor, lock=false) {
   const task=mapTask(rows[0]); assertDispatchAccess(task,actor); return task;
 }
 export async function listDispatchTasks(actor, client=pool) {
-  if(!actor?.active || !['manager','advisor','technician','inspector'].includes(actor.role)) throw new HttpError(403,'无权访问派工模块');
-  const restriction=actor.role==='technician'?"and (dt.technician_id=$2 or dt.data->'technicianIds' ? $2)":actor.role==='inspector'?'and dt.inspector_id=$2':'';
+  if(!actor?.active || !['manager','advisor','technician','inspector','warehouse'].includes(actor.role)) throw new HttpError(403,'无权访问派工模块');
+  const restriction=actor.role==='technician'?"and (dt.technician_id=$2 or dt.data->'technicianIds' ? $2)":actor.role==='inspector'?"and (dt.inspector_id=$2 or dt.stage='待检验')":'';
   const {rows}=await client.query(`${projection} where wo.shop_id=$1 and wo.status <> '待处理纸质委托书' ${restriction}
     order by coalesce((dt.data->>'urgent')::boolean,false) desc,
       nullif(dt.data->>'dueAt','')::timestamptz asc nulls last, wo.arrival_date asc, wo.id asc`,
     restriction?[actor.shopId,actor.id]:[actor.shopId]);
-  return rows.map(mapTask);
+  return rows.map(mapTask).filter(t=>actor.role!=='warehouse' || (t.partsRequirement || t.hasPartsHistory) && !['草稿','待客户签字'].includes(t.orderStatus)).filter(t=>actor.role!=='inspector' || t.inspectorId===actor.id || canInspect(t,actor));
 }
 export async function dispatchPeople(actor, client=pool) {
-  const {rows}=await client.query('select id,name,role,active,shop_id from users where shop_id=$1 order by name,id',[actor.shopId]);
-  return rows.map(r=>({id:r.id,name:r.name,role:r.role,active:r.active,shopId:r.shop_id}));
+  const {rows}=await client.query('select id,name,role,active,shop_id,inspector_role_member from users where shop_id=$1 order by name,id',[actor.shopId]);
+  return rows.map(r=>({id:r.id,name:r.name,role:r.role,active:r.active,shopId:r.shop_id,inspectorRoleMember:r.inspector_role_member}));
 }
 export async function saveDispatchTask(client, task) {
-  const {orderId,shopId,technicianId,inspectorId,stage,version,plate,dispatchNo,arrivalDate,orderStatus,faultDescription,overdue,...data}=task;
+  const {hasPartsHistory,orderId,shopId,technicianId,inspectorId,stage,version,plate,dispatchNo,arrivalDate,orderStatus,faultDescription,overdue,repairCatalog,vehicleModel,vehicleMileage,customerName,advisor,...data}=task;
   await client.query(`insert into dispatch_tasks(order_id,shop_id,technician_id,inspector_id,stage,version,data)
     values($1,$2,$3,$4,$5,$6,$7) on conflict(order_id) do update set technician_id=excluded.technician_id,
     inspector_id=excluded.inspector_id,stage=excluded.stage,version=excluded.version,data=excluded.data,updated_at=now()`,
     [orderId,shopId,technicianId||null,inspectorId||null,stage,version,JSON.stringify(data)]);
+  if(task.repairRound) {
+    await client.query('update work_orders set updated_at=now() where id=$1',[orderId]);
+    return; // Commercial fields and original repair_items are immutable during subsequent rounds.
+  }
   const started=task.firstStartedAt || task.startHistoryUnknown || task.items.some(i=>i.startAt || ['维修中','待检验','已完工'].includes(i.status));
   const status=stage==='维修完成'?(orderStatus==='完成'?'完成':'待结算'):started?'维修中':'待派工';
   await client.query(`update work_orders set status=$2,technician=$3,inspector=$4,updated_at=now() where id=$1`,[orderId,status,task.technicianName||'待派工',task.inspectorName||'待检验']);
+  for(const [index,item] of task.items.entries()) await client.query(`insert into repair_items(order_id,client_item_id,item_no,name) values($1,$2,$3,$4)
+    on conflict(order_id,client_item_id) do update set name=excluded.name`,[orderId,item.id,index+1,item.name]);
   for(const item of task.items) await client.query(`update repair_items set owner=$3,status=$4,start_at=$5,finish_at=$6,inspector=$7 where order_id=$1 and client_item_id=$2`,[orderId,item.id,task.technicianName||'待派工',item.status,item.startAt||'',item.finishAt||'',item.inspectorName||'待检验']);
 }
 export async function dispatchDetail(actor,id,client=pool) {
@@ -54,14 +65,25 @@ export async function dispatchDetail(actor,id,client=pool) {
   const {rows:notifications}=await client.query(`select n.id,n.kind,n.status,n.error,n.created_at,n.attempts,n.task_id,u.name
     from dispatch_notifications n join users u on u.id=n.recipient_id where n.order_id=$1
     ${['manager','advisor'].includes(actor.role)?'':'and n.recipient_id=$2'} order by n.created_at desc`,['manager','advisor'].includes(actor.role)?[id]:[id,actor.id]);
-  const {rows:files}=await client.query("select id,kind,original_name,mime_type,size_bytes,created_at from files where order_id=$1 and kind in ('repair_order_photo','damage_photo','other') order by created_at",[id]);
-  return {task,events:events.map(r=>({id:String(r.id),actorName:r.actor_name,action:r.action,detail:r.detail,at:r.at.toISOString()})),
+  const {rows:files}=await client.query("select repair_round,id,kind,original_name,mime_type,size_bytes,created_at,uploaded_by,(select name from users where users.id=files.uploaded_by) as uploaded_name from files where order_id=$1 and kind in ('repair_parts_photo','repair_progress_photo','repair_order_photo','damage_photo','other') order by created_at",[id]);
+  const {rows:jobs}=await client.query('select status,error from dispatch_inspection_notifications where order_id=$1 order by event_id desc limit 1',[id]);
+  const schedulerNotifications=['manager','advisor'].includes(actor.role)?(await client.query('select event_id::text as "eventId",kind,status,error from dispatch_scheduler_notifications where order_id=$1 order by event_id desc limit 20',[id])).rows:undefined;
+  const repairRounds=await readRepairRounds(client,id);
+  const catalog=new Map();
+  for(const r of repairRounds) for(const i of r.task.items) catalog.set(i.id,{id:i.id,name:i.name});
+  for(const i of task.items) catalog.set(i.id,{id:i.id,name:i.name});
+  task.repairCatalog=[...catalog.values()];
+  return {task,repairWriteback:await readRepairWriteback(client,id),repairRounds,schedulerNotifications,inspectionNotification:jobs[0],events:events.map(r=>({id:String(r.id),actorName:r.actor_name,action:r.action,detail:r.detail,at:r.at.toISOString()})),
     notifications:notifications.map(r=>({id:r.id,kind:r.kind,status:r.status,error:r.error,createdAt:r.created_at.toISOString(),attempts:r.attempts,taskId:r.task_id,recipientName:r.name})),
-    files:files.map(r=>({id:r.id,orderId:id,kind:r.kind,originalName:r.original_name,mimeType:r.mime_type,sizeBytes:Number(r.size_bytes),createdAt:r.created_at.toISOString()}))};
+    files:files.map(r=>({repairRound:r.repair_round,uploadedBy:r.uploaded_by,uploadedName:r.uploaded_name,id:r.id,orderId:id,kind:r.kind,originalName:r.original_name,mimeType:r.mime_type,sizeBytes:Number(r.size_bytes),createdAt:r.created_at.toISOString()}))};
 }
 
-export async function assertWorkHoursRecorded(client,orderId) {
-  const {rows}=await client.query('select data from dispatch_tasks where order_id=$1',[orderId]);
-  const data=rows[0]?.data;
-  if(!Number.isFinite(data?.workHours) || data.workHours<=0 || !data.workHoursRecordedBy || !data.workHoursRecordedAt) throw new HttpError(409,'请先由服务顾问／派单人员在派工台录入实际工时，再完结工单');
+export async function assertInspectionCompleted(client,orderId) {
+  const {rows}=await client.query('select stage from dispatch_tasks where order_id=$1',[orderId]);
+  if(rows[0]?.stage!=='维修完成') throw new HttpError(409,'请先完成维修检验再完结工单');
+}
+
+export async function assertRepairPhotoRecorded(client,task) {
+  const {rows}=await client.query("select 1 from files where order_id=$1 and kind='repair_progress_photo' and coalesce(repair_round,0)=$2 limit 1",[task.orderId,task.repairRound||0]);
+  if(!rows.length) throw new HttpError(409,'请先上传至少一张本轮维修照片，再提交完工');
 }

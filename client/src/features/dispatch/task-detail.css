@@ -1,0 +1,44 @@
+.repair-task-drawer .ant-drawer-body{background:#f5f7fa;padding:20px}
+.repair-task-drawer .ant-drawer-header{padding:18px 20px}
+.task-overview,.technician-detail>section,.task-detail-layout>section{background:#fff;border:1px solid #e8ecf1;border-radius:12px;padding:18px}
+.task-overview-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.task-overview-status .ant-tag{margin:0}
+.task-overview-ref{margin:10px 0 16px;font-size:12px;color:#788497;overflow-wrap:anywhere}
+.task-overview dl{margin:0;display:grid;gap:10px;font-size:13px;line-height:1.6}
+.task-overview dl>div{display:grid;grid-template-columns:84px minmax(0,1fr);gap:8px}
+.task-overview dt{color:#788497}
+.task-overview dd{margin:0;overflow-wrap:anywhere}
+.repair-task-drawer h3{font-size:15px;margin:0 0 14px}
+.technician-detail>section>p{font-size:13px;color:#526079}
+.repair-task-drawer .ant-collapse{background:#fff;border-color:#e8ecf1}
+.repair-task-drawer .ant-collapse-header{font-size:13px;padding:16px!important;align-items:center!important}
+.repair-task-drawer .ant-alert{font-size:13px;border-radius:10px}
+.repair-task-drawer .ant-alert-description{font-size:12px}
+.repair-task-drawer .ant-descriptions-item-label,.repair-task-drawer .ant-descriptions-item-content{font-size:12px!important;padding:10px!important;overflow-wrap:anywhere}
+.repair-task-drawer .technician-items{margin:0;padding:0}
+.repair-task-drawer .technician-items li{gap:12px;font-size:14px;padding:12px 0}
+.repair-task-drawer .technician-items li:first-child{padding-top:0}
+.repair-task-drawer .technician-items li:last-child{border-bottom:0;padding-bottom:0}
+.task-projects{display:flex;flex-direction:column;gap:12px}
+.task-projects>h3{margin:0}
+.task-projects>.ant-card>.ant-card-head{padding:0 14px;min-height:44px;font-size:14px}
+.task-projects>.ant-card>.ant-card-head .ant-card-head-title{white-space:normal}
+.task-projects>.ant-card>.ant-card-body{padding:14px!important}
+.task-projects>.dispatch-muted{margin:0;font-size:12px}
+.task-detail-layout>section[aria-label="所需配件"]>p{font-size:12px;margin:10px 0 0}
+.task-detail-layout.has-task-actions{padding-bottom:90px}
+.task-detail-actions{position:fixed;bottom:0;right:0;width:700px;max-width:100vw;padding:14px 20px max(16px,env(safe-area-inset-bottom));background:#fff;border-top:1px solid #e8ecf1;z-index:3}
+.task-detail-actions>.ant-space{display:flex;justify-content:flex-end}
+.task-detail-actions .ant-btn{height:44px;min-width:110px}
+.technician-action-bar{right:0;width:640px;max-width:100vw;padding:14px 20px max(16px,env(safe-area-inset-bottom));border-top:1px solid #e8ecf1}
+@media(max-width:767px){
+ .repair-task-drawer .ant-drawer-body{padding:16px}
+ .repair-task-drawer .ant-drawer-header{padding:16px}
+ .task-overview,.technician-detail>section,.task-detail-layout>section{padding:16px}
+ .technician-detail{gap:16px;padding-bottom:90px}
+ .task-detail-actions,.technician-action-bar{width:100%;padding-inline:16px}
+ .task-detail-actions>.ant-space>.ant-space-item{flex:1}
+ .task-detail-actions .ant-btn{width:100%}
+}
+
+.technician-detail{padding-bottom:132px}.repair-item-return-reason{color:#a83b29;font-size:13px;white-space:pre-wrap}.repair-round-reason{white-space:pre-wrap;overflow-wrap:anywhere}

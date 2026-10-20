@@ -3,6 +3,8 @@ import { CustomerVehicleUpdateTag } from "../../customer-vehicle-update/Customer
 import { PaperOrderResolution } from "./PaperOrderResolution";
 import { SubmittedOrderPhotos } from "../../work-order-photos/SubmittedOrderPhotos";
 import { VehicleScanIllustration } from "../../vehicle-identity/VehicleScanIllustration";
+import {VehicleLicenseExceptionNotice,VehicleLicenseExceptionButton} from './VehicleLicenseException';
+import {isCurrentVehicleLicenseException} from '../domain/vehicleLicenseException';
 import "../work-order-form.css";
 import { PreRepairPhotos } from "../../pre-repair-photos/PreRepairPhotos";
 import { DraftDispatchFields } from "../../dispatch/DraftDispatchFields";
@@ -36,7 +38,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     selectedOrder, startNewOrder, canEditForm, saveDraft, role, sendSignature,
     formErrors, vehicleLicenseOcr, ocrState, scanVehicleLicense,
     confirmVehicleLicenseOcr, draft, updateDraft, updateVehicle, updateCustomer,
-    toggleArrayField, setDraft, totalLabor, updateRepairItem,
+    toggleArrayField, setDraft, updateRepairItem,
     actionLoading, completeSignature, identifierRecognition,
     vehicleHistory, vehicleHistoryLoading, vehicleHistoryError, scanVehicleIdentifier,
     lookupVehicleLicenseForDevelopment, selectVehicleReference, departments, departmentError
@@ -57,6 +59,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
       : selectedOrder?.legacySyncStatus === "processing"
         ? "签字和委托单已上传，润丰正在处理。"
         : "签字和委托单已上传，正在等待润丰系统拉取。";
+  const licenseExceptionCurrent=isCurrentVehicleLicenseException(draft.vehicleLicenseException,draft.vehicle);
+  const hasVehicleLicense=Boolean(controller.vehicleLicenseFileId || selectedOrder?.files?.some(file=>file.kind==='vehicle_license'));
 
   async function handleSendSignature() {
     if (canResumeSignature && selectedOrder?.signatureToken) {
@@ -174,6 +178,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   onConfirm={confirmVehicleLicenseOcr}
                 />
               </div>}
+              {draft.vehicleLicenseException?<div style={{marginTop:12}}><VehicleLicenseExceptionNotice exception={draft.vehicleLicenseException} current={licenseExceptionCurrent}/></div>:null}
+              {vehicleHistory?.status==='new'&&!hasVehicleLicense&&!licenseExceptionCurrent?<VehicleLicenseExceptionButton disabled={!canEditForm||Boolean(actionLoading)} onConfirm={controller.reportMissingVehicleLicense}/>:null}
             </Form.Item>
             </>}
 
@@ -333,10 +339,10 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             </div>
 
             </FormSection>
-            <FormSection title="维修项目与费用">
+            <FormSection title="维修项目">
             <div className="section-title-row">
               <Form.Item className="section-title-form-item" label="维修项目明细" required validateStatus={fieldError("维修项目") ? "error" : undefined} help={fieldError("维修项目")}>
-                <span>工时预估合计：¥{totalLabor}</span>
+                <span>填写本次需要维修的项目</span>
               </Form.Item>
               <Button
                 type="link"
@@ -380,11 +386,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             </div>
 
             <div className="field-grid settlement-grid">
-              <Field disabled={!canEditForm} label="预计修理费" value={String(draft.estimatedFee)} suffix="元" onChange={(value) => updateDraft({ estimatedFee: Number(value) })} />
               <Form.Item className="field" label="旧件处置方式"><Select aria-label="旧件处置方式" disabled={!canEditForm} value={draft.oldPartsHandling} onChange={(value) => updateDraft({ oldPartsHandling: value as WorkOrderDraft["oldPartsHandling"] })} options={["客户带走", "门店回收", "环保处理"].map((value) => ({ value }))} /></Form.Item>
-              <Field disabled={!(role === "advisor" || role === "manager")} label="结算金额占位" value={String(draft.settlementAmount || draft.estimatedFee || totalLabor)} suffix="元" onChange={(value) => updateDraft({ settlementAmount: Number(value) })} />
             </div>
-            <TextArea disabled={!(role === "advisor" || role === "manager")} label="费用备注" value={draft.feeNote} onChange={(value) => updateDraft({ feeNote: value })} />
 
             </FormSection>
             {dispatchEnabled && <DraftDispatchFields plan={draft.dispatchPlan} users={controller.users} shopId={controller.currentUser?.shopId}
