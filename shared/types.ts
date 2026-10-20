@@ -468,3 +468,55 @@ export type VehicleHistoricalPart = {code:string;name:string;specification:strin
 export type VehiclePartsHistory = {status:"found"|"no_history"|"no_parts";items:VehicleHistoricalPart[];hasMore:boolean;plate:string;source:"润丰";queriedAt:string};
 
 export type ResolveRepairWritebackRequest = {jobId:string;reason:string};
+
+// Procurement: money is transported as integer fen; dates as ISO 8601 instants.
+export type ProcurementSupplier = {
+  id: string; name: string; contactName: string; phone: string; categories: string; note: string; active: boolean;
+};
+export type ProcurementSupplierInput = Omit<ProcurementSupplier, 'id'>;
+export type ProcurementTerms = {
+  partName: string; category: string; specification: string; brand: string; quantity: number; unit: string;
+  deliveryBy: string; paymentTerms: string; qualityRequirements: string; imageUrls: string[];
+};
+export type ProcurementCreateInput = ProcurementTerms & { supplierIds: string[]; deadline: string | null; requestId: string };
+export type ProcurementUpdateInput = ProcurementTerms & { deadline: string | null; expectedVersion: number; reopen?: boolean };
+export type ProcurementQuoteInput = {
+  termsVersion?: number;
+  requestId: string; unitPriceFen?: number; freightFen?: number; deliveryAt?: string; meetsRequirements?: boolean;
+  note: string; declined: boolean;
+};
+export type ProcurementQuote = ProcurementQuoteInput & { id: string; termsVersion: number; totalFen?: number; submittedAt: string };
+export type ProcurementStatus = 'open' | 'closed' | 'awarded' | 'failed' | 'cancelled';
+export type ProcurementInvitation = {
+  id: string; supplierId: string; supplierName: string; quotes: ProcurementQuote[]; invalidReason: string;
+};
+export type ProcurementTender = {
+  id: string; version: number; termsVersion: number; data: ProcurementTerms; status: ProcurementStatus; deadline: string | null;
+  closedAt: string | null; createdAt: string; winnerId: string | null; reason: string;
+  invitations: ProcurementInvitation[];
+};
+export type ProcurementLink = { supplierName: string; token: string; expiresAt: string };
+export type ProcurementAudit = { id: string; actor: string; action: string; detail: Record<string, unknown>; at: string };
+export type ProcurementDelivery = { id: string; status: string; error: string; recipientName: string };
+export type ProcurementDetail = { tender: ProcurementTender; audit: ProcurementAudit[]; notifications: ProcurementDelivery[] };
+export type ProcurementMetric = {
+  supplierId: string; supplierName: string; invited: number; quoted: number; valid: number; awarded: number;
+  lost: number; missed: number; declined: number; invalid: number; pending: number; participatedFailed: number;
+  awardAmountFen: number; responseRate: number | null; winRate: number | null;
+  priceIndex: number | null; priceSamples: number; priceLost: number; opportunityFen: number;
+};
+export type ProcurementAnalytics = {
+  from: string; to: string; total: number; awarded: number; failed: number; pending: number; awardAmountFen: number;
+  suppliers: ProcurementMetric[]; months: { month: string; total: number; awarded: number; failed: number }[];
+};
+export type ProcurementReport = {
+  id: string; supplierName: string; from: string; to: string; generatedAt: string; note: string;
+  metrics: Omit<ProcurementMetric, 'priceIndex' | 'priceSamples' | 'opportunityFen'>;
+  benchmark: { samples: number; competitorCount: number; gapBand: string | null; below: number; near: number; above: number };
+  categories: { category: string; samples: number; gapBand: string }[];
+  quarters: { quarter: string; quoted: number; awarded: number; samples: number; gapBand: string | null }[];
+};
+export type ProcurementReportRecord = { id: string; snapshot: ProcurementReport; publishedAt: string | null; notifications: ProcurementDelivery[] };
+export type ProcurementPortal = { kind: 'quote'; supplierName: string; tenderId: string; invitationId: string; termsVersion: number; terms: ProcurementTerms;
+  status: ProcurementStatus; deadline: string | null; quotes: ProcurementQuote[]; result: string;
+} | { kind: 'report'; report: ProcurementReport };

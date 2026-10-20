@@ -1,3 +1,4 @@
+import { startProcurementWorker } from "./workers/procurementWorker.mjs";
 import {startRepairWritebacks} from './workers/repairWritebackWorker.mjs';
 import {startVehicleLicenseExceptionNotifications} from './workers/vehicleLicenseExceptionNotifications.mjs';
 import { startDispatchNotifications } from "./workers/dispatchNotifications.mjs";
@@ -15,6 +16,7 @@ import { withRequestTiming } from "./http/requestTiming.mjs";
 const config = serverConfig();
 const stopRepairWritebacks = startRepairWritebacks();
 const stopNotifications = startDispatchNotifications();
+const stopProcurement = startProcurementWorker();
 const stopLicenseNotifications = startVehicleLicenseExceptionNotifications();
 const distDir = path.resolve(config.distDir);
 
@@ -52,6 +54,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
     server.close(async () => {
       await stopRepairWritebacks();
       await stopNotifications();
+      await stopProcurement();
       await stopLicenseNotifications();
       await Promise.all([closePool(), closeSqlServerPool()]);
       process.exit(0);

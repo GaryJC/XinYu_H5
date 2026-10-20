@@ -11,6 +11,8 @@ import { roleFocus } from "./workbenchConfig";
 import { dispatchEnabled, isDispatchNavigation } from "../dispatch/dispatchAvailability";
 import { useWorkbenchController } from "./useWorkbenchController";
 
+const ProcurementPage = lazy(() => import("../procurement/ProcurementPage").then(module => ({ default: module.ProcurementPage })));
+
 const DispatchPage = lazy(() => import("../dispatch/DispatchPage").then(module => ({ default: module.DispatchPage })));
 
 const WorkOrderEditor = lazy(() =>
@@ -142,6 +144,10 @@ export function WorkbenchPage() {
           <Suspense fallback={<div role="status">正在加载派工模块…</div>}>
             <DispatchPage key={`${currentUser.id}-${activeNav}`} user={currentUser} view={activeNav}/>
           </Suspense>
+        ) : null}
+
+        {activeNav === "配件竞价" && currentUser && ["manager","warehouse"].includes(currentUser.role) ? (
+          <Suspense fallback={<div role="status">正在加载配件竞价…</div>}><ProcurementPage key={currentUser.id} user={currentUser}/></Suspense>
         ) : null}
 
         {activeNav === "数据看板" || activeNav === "权限设置" ? (

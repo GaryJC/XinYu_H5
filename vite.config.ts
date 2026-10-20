@@ -23,6 +23,7 @@ export default defineConfig({
     host: "0.0.0.0",
     port: devPort,
     proxy: {
+      "/api/supplier-portal": { target: apiProxyTarget, changeOrigin: false },
       "/api": {
         target: apiProxyTarget,
         changeOrigin: true

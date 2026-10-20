@@ -1,3 +1,4 @@
+import { handleSupplierPortal,handleProcurement } from "./procurementRouter.mjs";
 import {reportVehicleLicenseException} from '../services/vehicleLicenseExceptionService.mjs';
 import { employeeBindingService } from "../services/employeeBindingService.mjs";
 import { assertEmployeeBound } from "../domain/employeeBinding.mjs";
@@ -43,6 +44,7 @@ import { assertOcrRecordAccess, assertWorkOrderAccess } from "../repositories/ac
 import { confirmOcrRecord, createOcrRecord } from "../repositories/ocrRecordRepository.mjs";
 
 export async function handleApiRequest(req, res, url) {
+  if (await handleSupplierPortal(req,res,url)) return true;
   if (req.method === "GET" && url.pathname === "/api/health") {
     sendJson(res, 200, await healthCheck());
     return true;
@@ -77,6 +79,7 @@ export async function handleApiRequest(req, res, url) {
     sendJson(res, 200, await employeeBindingService.confirm(currentUser, employeeCode));
     return true;
   }
+  if (await handleProcurement(req,res,url,currentUser)) return true;
   assertEmployeeBound(currentUser);
   if (await handleDispatchRequest(req, res, url, currentUser)) return true;
 

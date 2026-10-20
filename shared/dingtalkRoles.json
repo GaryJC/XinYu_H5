@@ -5,7 +5,7 @@
       "门店管理员"
     ],
     "homeRoute": "workbench",
-    "page": "工作台",
+    "page": "工作台、配件竞价",
     "priority": 100
   },
   {
@@ -42,7 +42,7 @@
       "仓管"
     ],
     "homeRoute": "workbench",
-    "page": "配件申请",
+    "page": "配件申请、配件竞价",
     "priority": 30
   }
 ]

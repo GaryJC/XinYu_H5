@@ -2,7 +2,7 @@ import {getDingTalkAccessToken} from './accessToken.mjs';
 import {getDingTalkUserProfile,resolveDingTalkOrganizationMapping} from './organization.mjs';
 import {findUserByDingTalkUserId,upsertUserFromDingTalk,saveDingTalkUserSnapshot} from '../../repositories/userRepository.mjs';
 import definitions from '../../../shared/dingtalkRoles.json' with {type:'json'};
-export async function syncManagerRoster(shopId,{fetcher=fetch,token=getDingTalkAccessToken,profile=getDingTalkUserProfile,find=findUserByDingTalkUserId,upsert=upsertUserFromDingTalk,snapshot=saveDingTalkUserSnapshot}={}) {
+export async function syncManagerRoster(shopId,{fetcher=fetch,token=getDingTalkAccessToken,profile=getDingTalkUserProfile,find=findUserByDingTalkUserId,upsert=upsertUserFromDingTalk,snapshot=saveDingTalkUserSnapshot,roleKeys=['manager']}={}) {
   const accessToken=await token();
   async function call(method,body) {
     const url=new URL(`https://oapi.dingtalk.com/topapi/role/${method}`);url.searchParams.set('access_token',accessToken);
@@ -11,7 +11,7 @@ export async function syncManagerRoster(shopId,{fetcher=fetch,token=getDingTalkA
     if(!response.ok || payload?.errcode!==0 || !Array.isArray(payload.result?.list))throw new Error('读取钉钉门店管理员角色失败，请检查通讯录授权');
     return payload.result;
   }
-  const names=definitions.find(r=>r.role==='manager').names;
+  const names=definitions.filter(r=>roleKeys.includes(r.role)).flatMap(r=>r.names);
   const roles=new Set(),ids=new Set();
   async function pages(method,body,accept) {
     for(let offset=0,page=0;page<1000;page++) {
@@ -29,7 +29,7 @@ export async function syncManagerRoster(shopId,{fetcher=fetch,token=getDingTalkA
   for(const p of profiles) {
     const existing=await find(p.userId),mapping=resolveDingTalkOrganizationMapping(p,{shopId:existing?.shopId||shopId});
     await snapshot(p);const user=await upsert({profile:p,mapping,existingUser:existing});
-    if(user?.active&&user.shopId===shopId&&user.role==='manager'&&p.roles.some(r=>names.includes(r.name)))eligible.push(user.id);
+    if(user?.active&&user.shopId===shopId&&roleKeys.includes(user.role)&&p.roles.some(r=>names.includes(r.name)))eligible.push(user.id);
   }
   return eligible;
 }
