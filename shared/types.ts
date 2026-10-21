@@ -569,6 +569,6 @@ export type CustomerSignatureOrder = {
   estimatedDeliveryAt: string;
 };
 export type CustomerSignatureSession =
-  | { state: "pending"; expiresAt: string; order: CustomerSignatureOrder }
+  | { state: "pending"; expiresAt: string | null; order: CustomerSignatureOrder }
   | { state: "signed" };
 export type CustomerSignatureInput = { token: string; imageBase64: string; confirmed: boolean };

@@ -10,6 +10,7 @@ export const dispatchApi={
   stockWarehouses:(id:string)=>request<{warehouses:RunfengWarehouse[]}>(`/api/dispatch/tasks/${encodeURIComponent(id)}/parts-stock/warehouses`),
   searchStock:(id:string,filters:{query:string;warehouseId?:number;inStockOnly:boolean})=>request<RunfengStockSearchResult>(`/api/dispatch/tasks/${encodeURIComponent(id)}/parts-stock?${new URLSearchParams({query:filters.query,inStockOnly:String(filters.inStockOnly),...(filters.warehouseId?{warehouseId:String(filters.warehouseId)}:{})})}`),
   myCounts:()=>request<RepairTaskCounts>('/api/dispatch/my-counts'),
+  deletePhoto:(id:string,fileId:string)=>request<{id:string}>(`/api/dispatch/tasks/${encodeURIComponent(id)}/photos/${encodeURIComponent(fileId)}`,{method:'DELETE'}),
   uploadPhoto:(id:string,body:RepairPhotoUploadRequest)=>request<{id:string}>(`/api/dispatch/tasks/${encodeURIComponent(id)}/photos`,{method:'POST',body}),
   tasks:(filters:DispatchFilters)=>request<DispatchTask[]>(`/api/dispatch/tasks?${query(filters)}`),
   people:()=>request<DispatchPeople>('/api/dispatch/people'),

@@ -1,3 +1,4 @@
+import { removeRepairPhoto } from '../repositories/repairPhotoRepository.mjs';
 import { transaction } from '../database/pool.mjs';
 import { getDispatchTask } from '../repositories/dispatchRepository.mjs';
 import { technicianIds } from '../domain/dispatchPolicy.mjs';
@@ -32,4 +33,8 @@ export async function uploadRepairPhoto(actor,id,body,{runTransaction=transactio
     await client.query('update files set repair_round=$2 where id=$1',[file.id,task.repairRound||0]);
     return {...file,repairRound:task.repairRound||0};
   });
+}
+
+export async function deleteRepairPhoto(actor, orderId, fileId) {
+  return transaction(client => removeRepairPhoto(client, actor, orderId, fileId));
 }

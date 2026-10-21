@@ -59,16 +59,16 @@ VITE_DINGTALK_CLIENT_ID=
 
 ## 客户签字、远程链接与人工确认
 
-开单页和归档补签均通过 `POST /api/work-orders/:id/signature-token` 获取可用会话。有效会话直接复用；未签字的“待客户签字”工单缺少会话或会话过期时，自动重新签发 7 天有效的会话并使旧会话失效，记录操作人及时间。已签字或纸质委托单不允许重新签发。创建会话与提交签名均先锁定父工单，再处理令牌，防止并发重复签发或重复提交。
+开单页和归档补签均通过 `POST /api/work-orders/:id/signature-token` 获取可用会话。有效会话直接复用；未签字的“待客户签字”工单缺少会话或会话过期时，自动重新签发无时间限制的会话并使旧会话失效，记录操作人及时间。已确认签字或纸质委托单不允许重新签发；待确认的签字可以因不合格要求重签。创建会话与提交签名均先锁定父工单，再处理令牌，防止并发重复签发或重复提交。
 
 服务顾问／管理员登录后，在签字弹窗复制客户签字链接，通过微信或短信手动转发。客户在 `/customer-signature#令牌` 打开手机页面，无需登录或加入钉钉企业。令牌使用 32 字节安全随机数；放在 URL fragment，客户接口通过 POST 请求体接收令牌，避免进入地址查询参数和访问路径日志。页面仅展示签字所需的委托信息，不开放员工工单或文件接口。
 
-“重新发送链接”调用原签发接口并传入 `renew: true`，立即使旧会话失效，生成新的 7 天链接；新链接仍需员工手动复制发送。已签字的委托单不允许再次签发。旧版本的短随机会话在发起签字时自动替换，不允许用于免登录接口。
+“重新发送链接”调用原签发接口并传入 `renew: true`，立即使旧会话失效，生成不设时间限制的新链接；新链接仍需员工手动复制发送。待确认签字可通过“签名不合格，重新发送链接”撤回并重签；旧签名文件保留，新签名须重新审核。提交签字后链接不可再次提交。旧版本的短随机会话在发起签字时自动替换，不允许用于免登录接口。
 
 免登录接口：`POST /api/public/customer-signature/session` 查询状态；`POST /api/public/customer-signature/sign` 接收令牌、PNG 签名和 `confirmed: true`。签名限制为 2 MB、400 万像素以内，经解码和重新编码后保存；服务端从会话确定工单与客户，不接受客户指定文件或工单。令牌校验、文件元数据、签名、通知入队在同一工单锁事务中提交。
 
-现场和远程签字均先标记 `customerSignatureReview.state=pending`，界面显示“需确认用户签字”，底层状态保持“待客户签字”以阻止同步和派工。使用现有钉钉工作通知队列，通知本店负责顾问及本店管理员。推送沿用 `DISPATCH_NOTIFICATION_MODE=dingtalk`、`DINGTALK_AGENT_ID`、`DISPATCH_APP_URL` 和钉钉凭据配置；关闭通知时保留队列记录。通知直达 `?workOrder=单号`；发送前重新检查收件人权限及待确认状态。
+现场和远程签字均先标记 `customerSignatureReview.state=pending`，界面显示“需确认用户签字”，底层状态保持“待客户签字”以阻止同步和派工。使用现有钉钉工作通知队列，通知本店负责顾问及本店管理员。推送沿用 `DISPATCH_NOTIFICATION_MODE=dingtalk`、`DINGTALK_AGENT_ID`、`DISPATCH_APP_URL` 和钉钉凭据配置；关闭通知时保留队列记录。通知直达 `?workOrder=单号`；每次提交签字单独入队，发送前重新检查收件人权限、待确认状态及签字批次，过时通知不再发送。
 
-仅负责该单的服务顾问或本店管理员可以通过 `POST /api/work-orders/:id/confirm-customer-signature` 确认。确认事务记录操作人与时间，将状态改为“已委托”，激活预设派工并写入润丰初次同步队列；并发或重复确认不会重复入队。旧版本已签字工单不补加确认关卡。部署前执行新迁移 `202610210001_customer_signature_review.sql`。
+仅负责该单的服务顾问或本店管理员可以通过 `POST /api/work-orders/:id/confirm-customer-signature` 确认。确认事务记录操作人与时间，将状态改为“已委托”，激活预设派工并写入润丰初次同步队列；并发或重复确认不会重复入队。旧版本已签字工单不补加确认关卡。部署前依次执行新迁移 `202610210001_customer_signature_review.sql` 和 `202610210002_signature_resubmission.sql`。
 
 独立临时 PostgreSQL 回归：显式设置本机 `WORKFLOW_TEST_ADMIN_URL` 后运行 `node --test test/workflowRecovery.integration.test.mjs`。测试创建并删除自己的数据库，覆盖过期／缺失会话、并发签发与签署、旧会话拒绝、改派责任留痕和检验写回快照，不读取应用 `.env`。

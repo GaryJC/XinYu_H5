@@ -1,3 +1,4 @@
+import { Modal } from "antd";
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 import { OcrFieldKey, OcrFieldState, OcrRecord, VehicleLicenseOcrResult, WorkOrderDraft } from "../../../../shared/types";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
@@ -10,11 +11,14 @@ const initialOcrState: Record<OcrFieldKey, OcrFieldState> = {
 
 type Options = {
   actor: string;
+  draft: WorkOrderDraft;
   setDraft: Dispatch<SetStateAction<WorkOrderDraft>>;
   onRecognized?: (result: VehicleLicenseOcrResult) => Promise<void>;
 };
 
-export function useVehicleLicenseOcr({ actor, setDraft, onRecognized }: Options) {
+export function useVehicleLicenseOcr({ actor, draft, setDraft, onRecognized }: Options) {
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const generation = useRef(0);
   const scanning = useRef(false);
   useEffect(() => () => { generation.current++; }, []);
@@ -68,7 +72,23 @@ export function useVehicleLicenseOcr({ actor, setDraft, onRecognized }: Options)
       if (session !== generation.current) return;
       setVehicleLicenseFileId(uploadedFile.id);
       setDraft(current => ({...current, inspection:{...current.inspection,vehicleLicenseFileId:uploadedFile.id}}));
-      const result = await workOrderApi.recognizeVehicleLicense({ fileId: uploadedFile.id });
+      const recognized = await workOrderApi.recognizeVehicleLicense({ fileId: uploadedFile.id });
+      if (session !== generation.current) return;
+      const result = { ...recognized };
+      const normalize = (value:string) => value.replace(/\s/g, '').toUpperCase();
+      for (const key of ['plate','vin'] as const) {
+        const existing = draftRef.current.vehicle[key];
+        if (existing && result[key] && normalize(existing) !== normalize(result[key])) {
+          const useRecognized = await new Promise<boolean>(resolve => Modal.confirm({
+            title: `${key === 'plate' ? '车牌号码' : '车架号'}识别结果不一致，请核对`,
+            content: `当前已录入：${existing}；行驶证识别：${result[key]}。照片模糊可能识别错误，请核对原件后选择。`,
+            okText: '使用行驶证结果', cancelText: '保留已录入值', closable: false, mask: { closable: false },
+            onOk: () => { resolve(true); }, onCancel: () => { resolve(false); }
+          }));
+          if (session !== generation.current) return;
+          if (!useRecognized || draftRef.current.vehicle[key] !== existing) result[key] = draftRef.current.vehicle[key];
+        }
+      }
       if (session !== generation.current) return;
       const record = await workOrderApi.createOcrRecord(
         undefined,

@@ -31,7 +31,7 @@ export function CustomerSignaturePage() {
           <SignaturePad value={c.image} onChange={c.setImage} disabled={c.busy}/>
           <Checkbox checked={c.confirmed} disabled={c.busy} onChange={event => c.setConfirmed(event.target.checked)}>我已核对以上委托信息，并确认提交本人签名。</Checkbox>
           <Button block size="large" type="primary" loading={c.busy} disabled={!c.image || !c.confirmed} onClick={() => void c.submit()}>确认签字并提交</Button>
-          <p className="customer-signature-help">链接有效期至 {new Date(c.session?.state === 'pending' ? c.session.expiresAt : '').toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}（北京时间），请勿转发。信息有误请联系服务顾问。</p>
+          <p className="customer-signature-help">链接不设时间限制，提交签字或服务顾问生成新链接后失效。请勿转发；信息有误请联系服务顾问。</p>
         </>}
       </>}
   </Card>

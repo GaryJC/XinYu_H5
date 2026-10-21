@@ -1,6 +1,6 @@
 import {resolveRepairWriteback,retryRepairWriteback} from '../services/repairWritebackService.mjs';
 import { warehouseVehiclePartsHistory,warehouseHistoricalPartStock,warehouseStockOptions,searchWarehouseStock } from '../services/warehouseStockService.mjs';
-import { uploadRepairPhoto } from '../services/repairPhotoService.mjs';
+import { uploadRepairPhoto, deleteRepairPhoto } from '../services/repairPhotoService.mjs';
 import { readJson, sendJson } from '../http/response.mjs';
 import { requireAnyRole } from '../domain/accessPolicy.mjs';
 import { DISPATCH_ROLES } from '../domain/dispatchPolicy.mjs';
@@ -30,6 +30,8 @@ export async function handleDispatchRequest(req,res,url,actor) {
     const id=decodeURIComponent(stock[1]);
     sendJson(res,200,stock[2]?await warehouseStockOptions(actor,id):await searchWarehouseStock(actor,id,query));return true;
   }
+  const deletePhoto=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)\/photos\/([^/]+)$/);
+  if(deletePhoto && req.method==='DELETE') {sendJson(res,200,await deleteRepairPhoto(actor,decodeURIComponent(deletePhoto[1]),decodeURIComponent(deletePhoto[2])));return true;}
   const photo=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)\/photos$/);
   if(photo && req.method==='POST') {sendJson(res,201,await uploadRepairPhoto(actor,decodeURIComponent(photo[1]),await readJson(req)));return true;}
   const personal=url.pathname.match(/^\/api\/dispatch\/technicians\/([^/]+)\/tasks$/);

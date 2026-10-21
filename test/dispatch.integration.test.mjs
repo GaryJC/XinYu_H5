@@ -67,14 +67,14 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal(legacy.technicianId,'unique');assert.equal(legacy.completedAt,undefined);
       assert.equal((await service.technicianSummaries(manager)).find(p=>p.id==='unique').completed,0);
     });
-    await t.test('draft preselection activates only at signature, retains actor and is atomic with Runfeng submission',async()=>{
-      const db=await import('../server/db.mjs');
+    const db=await import('../server/db.mjs');
+    await t.test('draft preselection activates only after signature approval, retains actor and is atomic with Runfeng submission',async()=>{
       const plan={technicianId:tech.id,dueAt,urgent:true,note:'开单预选'};
       const draft={shop:{id:'shop-hq'},advisor:advisor.name,dispatchPlan:plan,repairItems:[{id:1,name:'保养',status:'待派工'}]};
       let order=await db.createWorkOrder(draft,advisor.name,advisor);
       assert.equal(order.dispatchPlan.technicianId,tech.id);
       assert.equal((await pool.query('select 1 from dispatch_tasks where order_id=$1',[order.id])).rowCount,0);
-      assert.equal((await pool.query('select 1 from dispatch_notifications where order_id=$1',[order.id])).rowCount,0);
+      assert.equal((await pool.query("select 1 from dispatch_notifications where order_id=$1 and kind<>'需确认用户签字'",[order.id])).rowCount,0);
       order=await db.updateWorkOrder({...order,dispatchPlan:null},advisor.name,'清除预选',advisor);
       assert.equal(order.dispatchPlan,undefined);
       await assert.rejects(()=>db.updateWorkOrder({...order,dispatchPlan:{...plan,technicianId:outside.id}},advisor.name,'跨店',advisor),e=>e.status===400);
@@ -87,21 +87,24 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         return {token,file};
       }
       const signature=await prepareSignature(order);
-      const signed=await db.signWorkOrderByToken(signature.token,{name:'车主',signedAt:new Date().toISOString()},signature.file);
+      const pending=await db.signWorkOrderByToken(signature.token,{name:'车主',signedAt:new Date().toISOString()},signature.file);
+      assert.equal(pending.status,'待客户签字');
+      const signed=await db.confirmCustomerSignature(order.id,advisor);
       assert.equal(signed.status,'待派工');
       assert.equal(signed.technician,tech.name);
       const assigned=(await service.dispatchDetail(advisor,order.id)).task;
       assert.equal(assigned.stage,'待接单');assert.equal(assigned.assignedBy,advisor.id);assert.equal(assigned.urgent,true);
-      assert.equal((await pool.query('select 1 from dispatch_notifications where order_id=$1',[order.id])).rowCount,1);
+      assert.equal((await pool.query("select 1 from dispatch_notifications where order_id=$1 and kind<>'需确认用户签字'",[order.id])).rowCount,1);
       assert.equal((await pool.query('select 1 from legacy_sync_outbox where order_id=$1',[order.id])).rowCount,1);
       await assert.rejects(()=>db.signWorkOrderByToken(signature.token,{},signature.file),e=>e.status===409);
-      assert.equal((await pool.query('select 1 from dispatch_notifications where order_id=$1',[order.id])).rowCount,1);
+      assert.equal((await pool.query("select 1 from dispatch_notifications where order_id=$1 and kind<>'需确认用户签字'",[order.id])).rowCount,1);
       const fallback=await db.createWorkOrder(draft,advisor.name,advisor);
       const secondSignature=await prepareSignature(fallback);
       await pool.query("update users set active=false where id=$1",[tech.id]);
-      const saved=await db.signWorkOrderByToken(secondSignature.token,{name:'车主'},secondSignature.file);
+      await db.signWorkOrderByToken(secondSignature.token,{name:'车主'},secondSignature.file);
+      const saved=await db.confirmCustomerSignature(fallback.id,advisor);
       assert.equal(saved.status,'已委托');assert.ok(saved.dispatchPlan.activationError);
-      assert.equal((await pool.query('select 1 from dispatch_notifications where order_id=$1',[fallback.id])).rowCount,0);
+      assert.equal((await pool.query("select 1 from dispatch_notifications where order_id=$1 and kind<>'需确认用户签字'",[fallback.id])).rowCount,0);
       await pool.query("update users set active=true where id=$1",[tech.id]);
       await service.executeDispatchAction(advisor,fallback.id,{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianId:tech.id,dueAt});
       assert.equal((await service.dispatchDetail(advisor,fallback.id)).task.stage,'待接单');
@@ -464,7 +467,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       let whole=(await service.executeDispatchAction(advisor,'whole',{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianId:tech.id,dueAt})).task;
       const execute=async(actor,action,extra={})=>{whole=(await service.executeDispatchAction(actor,'whole',{action,expectedVersion:whole.version,requestId:randomUUID(),...(action==='inspect'&&!extra.rejectedItemIds?.length?{workHours:2.5}:{}),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra})).task;};
       await execute(tech,'accept');
-      const {uploadRepairPhoto}=await import('../server/services/repairPhotoService.mjs');
+      const {uploadRepairPhoto,deleteRepairPhoto}=await import('../server/services/repairPhotoService.mjs');
       const {createFileRecord}=await import('../server/repositories/fileRepository.mjs');
       const save=async input=>createFileRecord({...input,storageProvider:'local',bucket:'local',objectKey:'test-photo',originalName:'photo.png',sizeBytes:8});
       const photoBody={requestId:randomUUID(),mimeType:'image/png',imageBase64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aY9sAAAAASUVORK5CYII='};
@@ -479,7 +482,14 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       const photo=await uploadRepairPhoto(tech,'whole',photoBody,{save});
       assert.equal((await uploadRepairPhoto(tech,'whole',photoBody,{save})).id,photo.id);
       assert.equal((await pool.query("select count(*) from files where order_id='whole' and kind='repair_progress_photo' and repair_round=0")).rows[0].count,'1');
+      await assert.rejects(()=>deleteRepairPhoto(advisor,'whole',photo.id),e=>e.status===403);
+      const extra=await uploadRepairPhoto(tech,'whole',{...photoBody,requestId:randomUUID()},{save});
+      await deleteRepairPhoto(tech,'whole',extra.id);
+      assert.equal((await pool.query('select id from files where id=$1',[extra.id])).rows.length,0);
+      const historic=(await pool.query("select id from files where order_id='whole' and kind='repair_progress_photo' and repair_round=1")).rows[0];
+      await assert.rejects(()=>deleteRepairPhoto(tech,'whole',historic.id),e=>e.status===409);
       await execute(tech,'submit-order');assert.equal(whole.inspectorId,undefined);
+      await assert.rejects(()=>deleteRepairPhoto(tech,'whole',photo.id),e=>e.status===409);
       await assertFileReadAccess(photo.id,inspector);
       await assert.rejects(()=>uploadRepairPhoto(tech,'whole',{...photoBody,requestId:randomUUID()},{save}),e=>e.status===409);
       const {processInspectionNotifications}=await import('../server/workers/inspectionNotifications.mjs');
@@ -943,7 +953,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
           const assigned=(await service.dispatchDetail(manager,id)).task;
           assert.equal(assigned.stage,'待接单');assert.equal(assigned.items[0].name,'批量派工项目1');
           assert.equal(assigned.items[0].responsibleId,tech.id);assert.equal(assigned.items[1].responsibleId,tech2.id);
-          assert.equal((await pool.query('select 1 from dispatch_notifications where order_id=$1',[id])).rowCount,2);
+          assert.equal((await pool.query("select 1 from dispatch_notifications where order_id=$1 and kind<>'需确认用户签字'",[id])).rowCount,2);
         }
         for(const mobile of [false,true]) {
           const id=`ui-projects-${mobile?'mobile':'desktop'}`;await seed(id);

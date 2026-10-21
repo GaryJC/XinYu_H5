@@ -167,7 +167,8 @@ export async function createSignatureTokenForOrder(id, actor, { renew = false } 
   return transaction(async (client) => {
     const order = await findWorkOrderById(client, id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
-    if (!["草稿", "待客户签字"].includes(order.status) || order.signatures.customer) throw new HttpError(409, `当前状态“${order.status}”不能发起签字`);
+    const resign = renew && order.status === "待客户签字" && order.customerSignatureReview?.state === "pending";
+    if (!["草稿", "待客户签字"].includes(order.status) || order.signatures.customer && !resign) throw new HttpError(409, `当前状态“${order.status}”不能发起签字`);
     if (order.paperOrder) throw new HttpError(409, "纸质委托书无需电子签字，请提交纸质委托单");
     const { rows: sessions } = await client.query(
       "select token from signature_tokens where order_id=$1 and not used and (expires_at is null or expires_at>clock_timestamp()) order by created_at desc,token desc limit 1 for update", [id]
@@ -177,11 +178,15 @@ export async function createSignatureTokenForOrder(id, actor, { renew = false } 
     assertPreRepairPhotosReady(order);
     await client.query("update signature_tokens set expires_at=clock_timestamp() where order_id=$1", [id]);
     const token = createSignatureToken();
-    await upsertWorkOrder(client, { ...order, status: "待客户签字", updatedAt: nowString() });
+    if (resign) {
+      await client.query("update work_orders set customer_signature_review=null where id=$1", [id]);
+      await client.query("update dispatch_notifications set status='failed',retryable=false,error='已要求客户重签',next_attempt_at=null where order_id=$1 and kind='需确认用户签字' and status='pending'", [id]);
+    }
+    await upsertWorkOrder(client, { ...order, signatures: resign ? { ...order.signatures, customer: undefined } : order.signatures, status: "待客户签字", updatedAt: nowString() });
     await client.query(
       `
         insert into signature_tokens (token, order_id, used, expires_at)
-        values ($1, $2, false, now() + interval '7 days')
+        values ($1, $2, false, null)
       `,
       [token, id]
     );

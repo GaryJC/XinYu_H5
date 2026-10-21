@@ -9,12 +9,11 @@ export function assertRemoteSignatureToken(token) {
 }
 
 export function customerSignatureSession(order) {
-  if (!order) throw new HttpError(404, '签字链接不存在或已过期，请联系服务顾问重新发送');
+  if (!order) throw new HttpError(404, '签字链接不存在或已失效，请联系服务顾问重新发送');
   if (order.signatureTokenUsed || order.signatures.customer) return { state: 'signed' };
   if (order.paperOrder || order.status !== '待客户签字') throw new HttpError(409, '当前委托单不能签字，请联系服务顾问');
-  if (!order.signatureExpiresAt) throw new HttpError(404, '签字链接已失效，请联系服务顾问重新发送');
   return {
-    state: 'pending', expiresAt: order.signatureExpiresAt,
+    state: 'pending', expiresAt: order.signatureExpiresAt || null,
     order: {
       id: order.id,
       shop: { name: order.shop.name, address: order.shop.address, phone: order.shop.phone },
