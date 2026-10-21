@@ -1,3 +1,4 @@
+import { outsourcingMembership } from './outsourcingMembership.mjs';
 import { randomUUID } from 'node:crypto';
 import { pool } from '../database/pool.mjs';
 // Claim and mark unknown BEFORE sending. A crashed send must never be blindly replayed.
@@ -34,5 +35,5 @@ export async function finishNotification(row,result,database=pool) {
     [row.id,row.lease_id,status,result.taskId||null,result.error||'',Boolean(result.retryable),delay]);
 }
 export async function notificationRecipient(id,database=pool) {
-  const {rows}=await database.query('select id,shop_id as "shopId",dingtalk_user_id,active,role,inspector_role_member from users where id=$1',[id]); return rows[0];
+  const {rows}=await database.query(`select id,shop_id as "shopId",dingtalk_user_id,active,role,inspector_role_member, ${outsourcingMembership} from users where id=$1`,[id]); return rows[0]?{...rows[0],outsourcingRoleMember:rows[0].outsourcing_role_member}:undefined;
 }

@@ -21,7 +21,7 @@ export async function uploadRepairPhoto(actor,id,body,{runTransaction=transactio
   return runTransaction(async client=> {
     const task=await getDispatchTask(client,id,actor,true);
     const {rows:users}=await client.query('select role,active,shop_id from users where id=$1',[actor.id]);
-    const owner=actor.role==='technician'&&technicianIds(task).includes(actor.id)||task.executionMode==='outsourced'&&['manager','advisor'].includes(actor.role);
+    const owner=(['technician','outsourcing'].includes(actor.role)||actor.outsourcingRoleMember)&&technicianIds(task).includes(actor.id)||task.executionMode==='outsourced'&&['manager','advisor'].includes(actor.role);
     if(!users[0]?.active || users[0].role!==actor.role || users[0].shop_id!==task.shopId || !owner || task.needsReview) throw new HttpError(403,'仅当前维修工可上传维修照片');
     const kind=body.purpose==='parts'?'repair_parts_photo':'repair_progress_photo';
     const {rows}=await client.query('select id,kind,repair_round from files where order_id=$1 and uploaded_by=$2 and upload_request_id=$3',[id,actor.id,body.requestId]);

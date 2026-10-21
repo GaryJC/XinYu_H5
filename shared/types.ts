@@ -1,4 +1,4 @@
-export type RoleKey = "warehouse" | "advisor" | "technician" | "inspector" | "manager";
+export type RoleKey = "outsourcing" | "warehouse" | "advisor" | "technician" | "inspector" | "manager";
 export type DevelopmentPersonaKey = RoleKey | "unassigned" | "disabled";
 
 export type WorkOrderStatus =
@@ -150,6 +150,7 @@ export type EmployeeBindingStatus = {
 export type UserProfile = {
   legacyEmployeeCode?: string;
   inspectorRoleMember?: boolean | null;
+  outsourcingRoleMember?: boolean;
   id: string;
   name: string;
   role: RoleKey;
@@ -397,6 +398,7 @@ export type DispatchExecution = {
   expectedReturnAt?: string;
   returnedAt?: string;
   contractor?: string;
+  contractorId?: string;
   outsourcingMode?: "onsite" | "offsite";
   agreedFee?: number | null;
   handedOverAt?: string;
@@ -469,7 +471,7 @@ export type DispatchDetail = {
   task: DispatchTask; events: DispatchEvent[]; notifications: DispatchNotification[];
   files: Array<Pick<StoredFile,"id"|"orderId"|"kind"|"originalName"|"mimeType"|"sizeBytes"|"createdAt"|"uploadedBy"|"uploadedName"|"repairRound">>;
 };
-export type DispatchPeople = { technicians: UserProfile[]; inspectors: UserProfile[] };
+export type DispatchPeople = { technicians: UserProfile[]; inspectors: UserProfile[]; contractors: UserProfile[] };
 
 
 export type WorkOrderPhotoDelete = { fileIds: string[] };

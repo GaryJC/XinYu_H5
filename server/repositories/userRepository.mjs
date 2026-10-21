@@ -1,21 +1,22 @@
+import { outsourcingMembership } from './outsourcingMembership.mjs';
 import crypto from "node:crypto";
 import { pool } from "../database/pool.mjs";
 
 export async function listUsers(shopId) {
   const { rows } = await pool.query(
-    "select id, name, role, active, shop_id from users where shop_id = $1 order by role, name", [shopId]
+    `select id, name, role, active, shop_id, ${outsourcingMembership} from users where shop_id = $1 order by role, name`, [shopId]
   );
   return rows.map(rowToUser);
 }
 
 export async function listAccessUsers(shopId, database=pool) {
-  const {rows}=await database.query('select id,name,role,active,shop_id,dingtalk_user_id,last_login_at from users where shop_id=$1 order by role,name',[shopId]);
+  const {rows}=await database.query(`select id,name,role,active,shop_id,dingtalk_user_id,last_login_at, ${outsourcingMembership} from users where shop_id=$1 order by role,name`,[shopId]);
   return rows.map(row=>({...rowToUser(row),lastLoginAt:row.last_login_at?new Date(row.last_login_at).toISOString():undefined}));
 }
 
 export async function findUserById(id) {
   const { rows } = await pool.query(
-    "select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, inspector_role_member, legacy_employee_code from users where id = $1",
+    `select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, inspector_role_member, legacy_employee_code, ${outsourcingMembership} from users where id = $1`,
     [id]
   );
   return rows[0] ? rowToUser(rows[0]) : undefined;
@@ -23,7 +24,7 @@ export async function findUserById(id) {
 
 export async function findUserByDingTalkUserId(dingTalkUserId) {
   const { rows } = await pool.query(
-    "select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, inspector_role_member, legacy_employee_code from users where dingtalk_user_id = $1",
+    `select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, inspector_role_member, legacy_employee_code, ${outsourcingMembership} from users where dingtalk_user_id = $1`,
     [dingTalkUserId]
   );
   return rows[0] ? rowToUser(rows[0]) : undefined;
@@ -78,7 +79,7 @@ export async function upsertUserFromDingTalk({ profile, mapping, existingUser })
       profile.phone || existingUser?.phone || null
     ]
   );
-  return rowToUser(rows[0]);
+  return {...rowToUser(rows[0]),outsourcingRoleMember:profile.roles.some(role=>role.name.trim()==='外包')};
 }
 
 export async function saveDingTalkUserSnapshot(profile) {
@@ -236,6 +237,7 @@ function rowToUser(row) {
   return {
     legacyEmployeeCode: row.legacy_employee_code || undefined,
     inspectorRoleMember: row.inspector_role_member,
+    outsourcingRoleMember: row.outsourcing_role_member,
     id: row.id,
     name: row.name,
     role: row.role,

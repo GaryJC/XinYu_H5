@@ -7,7 +7,7 @@ export function validateProjectReassignment(input) {
     throw new HttpError(400,'请选择需要改派的维修项目');
   if(!Array.isArray(input.repairItems)||input.repairItems.length!==ids.length||input.repairItems.some(row=>!ids.includes(row?.id)))
     throw new HttpError(400,'改派项目与负责人名单不一致');
-  if(['technicianId','technicianIds','executionMode','contractor','outsourcingMode','dueAt','urgent'].some(key=>input[key]!==undefined))
+  if(['technicianId','technicianIds','executionMode','contractorId','contractor','outsourcingMode','dueAt','urgent'].some(key=>input[key]!==undefined))
     throw new HttpError(400,'项目改派不调整整单人员、执行方式或时间');
 }
 

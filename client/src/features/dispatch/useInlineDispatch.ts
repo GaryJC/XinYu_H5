@@ -4,7 +4,7 @@ import {localDateTime} from './dispatchLabels';
 import type {ActionInput} from './useDispatchController';
 
 function executionFor(task:DispatchTask):DispatchExecution {
-  return Object.fromEntries(['executionMode','serviceUnit','serviceAddress','serviceContact','departureAt','expectedReturnAt','returnedAt','contractor','outsourcingMode','agreedFee','handedOverAt','receivedAt'].map(key=>[key,task[key as keyof DispatchExecution]]));
+  return Object.fromEntries(['executionMode','serviceUnit','serviceAddress','serviceContact','departureAt','expectedReturnAt','returnedAt','contractor','contractorId','outsourcingMode','agreedFee','handedOverAt','receivedAt'].map(key=>[key,task[key as keyof DispatchExecution]]));
 }
 
 export function useInlineDispatch(task:DispatchTask,onEdit:()=>void) {
@@ -18,7 +18,7 @@ export function useInlineDispatch(task:DispatchTask,onEdit:()=>void) {
   const changeNote=(note:string)=>change({note});
   const validTime=Boolean(dueAt)&&Number.isFinite(Date.parse(`${dueAt}:00+08:00`));
   const mode=execution.executionMode||'internal';
-  const validExecution=mode==='field'?Boolean(execution.serviceUnit?.trim()&&execution.serviceAddress?.trim()):mode==='outsourced'?Boolean(execution.contractor?.trim()):true;
+  const validExecution=mode==='field'?Boolean(execution.serviceUnit?.trim()&&execution.serviceAddress?.trim()):mode==='outsourced'?Boolean(execution.contractorId):true;
   function request(rows:RepairItemEdit[]):ActionInput {
     const input:ActionInput={...execution,action:'assign',technicianIds:mode==='outsourced'?[]:[...new Set(rows.map(row=>row.responsibleId).filter((id):id is string=>Boolean(id)))],repairItems:rows.map(row=>({id:row.id,name:row.name,...(mode!=='outsourced'?{responsibleId:row.responsibleId}:{})})),dueAt:new Date(`${dueAt}:00+08:00`).toISOString(),urgent,note};
     if(task.repairRound)delete input.agreedFee;

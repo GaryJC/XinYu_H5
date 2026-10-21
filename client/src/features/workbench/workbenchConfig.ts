@@ -8,7 +8,7 @@ export const navItems: Array<{ label: string; icon: typeof LayoutDashboard; role
   { label: "派工台", icon: ClipboardList, roles: ["advisor", "manager"] },
   { label: "配件竞价", icon: ClipboardList, roles: ["warehouse", "manager"] },
   { label: "配件申请", icon: ClipboardList, roles: ["warehouse"] },
-  { label: "我的维修", icon: ClipboardList, roles: ["technician"] },
+  { label: "我的维修", icon: ClipboardList, roles: ["technician", "outsourcing"] },
   { label: "检验任务", icon: ClipboardList, roles: ["inspector", "manager"] },
   { label: "数据看板", icon: BarChart3, roles: ["manager"] },
   { label: "权限设置", icon: ShieldCheck, roles: ["manager"] }
@@ -18,6 +18,7 @@ export const belongings = ["音响系统", "点烟器", "天窗", "四门玻璃�
 export const exteriorIssues = ["石击", "凹凸", "划伤", "损坏"];
 
 export const roleFocus: Record<RoleKey, { title: string; dataScope: string; primary: string; blocked: string[] }> = {
+  outsourcing: {title:"外包维修工作区",dataScope:"分配给本人的维修任务",primary:"接单、领料、开工和提报完工",blocked:["不能派工","不能检验或结算"]},
   warehouse: {title:"仓管工作区",dataScope:"本店配件申请与配件竞价",primary:"处理配件申请、管理询价竞标、查看供应商分析，全程留痕",blocked:["暂不处理出入库"]},
   advisor: {
     title: "服务顾问工作区",

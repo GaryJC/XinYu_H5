@@ -44,5 +44,14 @@
     "homeRoute": "workbench",
     "page": "配件申请、配件竞价",
     "priority": 30
+  },
+  {
+    "role": "outsourcing",
+    "names": [
+      "外包"
+    ],
+    "homeRoute": "workbench",
+    "page": "我的维修",
+    "priority": 10
   }
 ]

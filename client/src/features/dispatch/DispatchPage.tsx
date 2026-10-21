@@ -20,7 +20,7 @@ export function DispatchPage({user,view}:{user:UserProfile;view:string}) {
   const chosen=c.summaries.find(s=>s.id===c.filters.technicianId);
   function badges(t:DispatchTask) {return <Space className="dispatch-badges" size={[8,8]} wrap><Tag>{executionLabels[t.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(t)}</Tag>{t.urgent?<Tag color="red">加急</Tag>:null}{t.overdue?<Tag color="red">超期</Tag>:null}{t.repairRound?<Tag color="orange">返工第 {t.repairRound} 轮</Tag>:t.rework?<Tag color="orange">返工</Tag>:null}{t.feedback?<Tag color="orange">无法接单</Tag>:null}{t.needsReview?<Tag>待核对</Tag>:null}</Space>;}
   if(user.role==='warehouse') return <WarehousePartsPage controller={c}/>;
-  if(view==='我的维修' && user.role==='technician') return <TechnicianRepairPage controller={c} user={user}/>;
+  if(view==='我的维修' && (['technician','outsourcing'].includes(user.role)||user.outsourcingRoleMember)) return <TechnicianRepairPage controller={c} user={user}/>;
   return <section className="dispatch-page" aria-label={view}>
     <div className="dispatch-heading"><div><h2>{view}</h2><p>{c.manager?'默认显示本店全部未完结工单，可按状态筛选并安排维修与检验。':'及时确认任务，记录项目进度。'}{c.updatedAt?` 更新于 ${c.updatedAt}`:''}</p></div><Button onClick={()=>{c.setError('');void c.refresh();}} loading={c.loading}>刷新</Button></div>
     {c.error?<Alert type="error" showIcon closable title={c.error} onClose={()=>c.setError('')}/>:null}

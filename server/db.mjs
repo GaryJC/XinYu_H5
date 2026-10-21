@@ -635,7 +635,7 @@ async function addAudit(client, orderId, actor, action) {
 export function roleFilter(role, user) {
   if (!validRoles.has(role) || !user?.shopId) return { where: "where false", params: [] };
   const base = "where wo.shop_id = $1";
-  if (role === "technician") return { where: `${base} and exists (select 1 from dispatch_tasks dt where dt.order_id=wo.id and (dt.technician_id=$2 or dt.data->'technicianIds' ? $2))`, params: [user.shopId,user.id] };
+  if (["technician","outsourcing"].includes(role)) return { where: `${base} and exists (select 1 from dispatch_tasks dt where dt.order_id=wo.id and (dt.technician_id=$2 or dt.data->'technicianIds' ? $2))`, params: [user.shopId,user.id] };
   if (role === "inspector") return { where: `${base} and exists (select 1 from dispatch_tasks dt where dt.order_id=wo.id and dt.inspector_id=$2)`, params: [user.shopId,user.id] };
   if (user.id && ["advisor", "manager"].includes(role)) return {
     where: `where (wo.shop_id = $1 or (wo.paper_order is not null and exists (

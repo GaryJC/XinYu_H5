@@ -8,7 +8,7 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
   const [filters,setFilters]=useState<DispatchFilters>({stage:view==='检验任务'?'待检验':view==='我的维修'?'进行中':undefined});
   const [taskCounts,setTaskCounts]=useState<RepairTaskCounts>();
   const [tasks,setTasks]=useState<DispatchTask[]>([]);
-  const [people,setPeople]=useState<DispatchPeople>({technicians:[],inspectors:[]});
+  const [people,setPeople]=useState<DispatchPeople>({technicians:[],inspectors:[],contractors:[]});
   const [summaries,setSummaries]=useState<TechnicianSummary[]>([]);
   const [selectedId,setSelectedId]=useState<string|undefined>(()=>initialOrderId || new URLSearchParams(location.search).get('dispatchOrder') || undefined);
   const [detail,setDetail]=useState<DispatchDetail>();
@@ -20,10 +20,10 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
   const pending=useRef<{key:string;body:DispatchActionRequest} | undefined>(undefined);
   const refresh=useCallback(async()=> {
     const current=++generation.current; setLoading(true);
-    const results=await Promise.allSettled([dispatchApi.tasks(filters),dispatchApi.people(),manager?dispatchApi.summaries(filters):Promise.resolve([]),view==='我的维修'&&user.role==='technician'?dispatchApi.myCounts():Promise.resolve(undefined)]);
+    const results=await Promise.allSettled([dispatchApi.tasks(filters),dispatchApi.people(),manager?dispatchApi.summaries(filters):Promise.resolve([]),view==='我的维修'&&(['technician','outsourcing'].includes(user.role)||user.outsourcingRoleMember)?dispatchApi.myCounts():Promise.resolve(undefined)]);
     if(current!==generation.current) return;
     if(results[0].status==='fulfilled') setTasks(results[0].value); else setTasks([]);
-    if(results[1].status==='fulfilled') setPeople(results[1].value); else setPeople({technicians:[],inspectors:[]});
+    if(results[1].status==='fulfilled') setPeople(results[1].value); else setPeople({technicians:[],inspectors:[],contractors:[]});
     if(results[2].status==='fulfilled') setSummaries(results[2].value); else setSummaries([]);
     setTaskCounts(results[3].status==='fulfilled'?results[3].value:undefined);
     const failed=results.find(r=>r.status==='rejected');

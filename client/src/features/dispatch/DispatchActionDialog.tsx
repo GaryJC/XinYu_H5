@@ -21,7 +21,7 @@ export function DispatchActionDialog({action,task,controller,onClose,inspectionR
   const [reworkItemIds,setReworkItemIds]=useState<number[]>([]);
   const [additionalItems,setAdditionalItems]=useState<string[]>([]);
   const [technicianIds,setTechnicianIds]=useState<string[]>(task.technicianIds??(task.technicianId?[task.technicianId]:[]));
-  const [execution,setExecution]=useState<DispatchExecution>({executionMode:task.executionMode||'internal',serviceUnit:task.serviceUnit,serviceAddress:task.serviceAddress,serviceContact:task.serviceContact,departureAt:reopening?undefined:task.departureAt,expectedReturnAt:reopening?undefined:task.expectedReturnAt,returnedAt:reopening?undefined:task.returnedAt,contractor:task.contractor,outsourcingMode:task.outsourcingMode,agreedFee:reopening?undefined:task.agreedFee,handedOverAt:reopening?undefined:task.handedOverAt,receivedAt:reopening?undefined:task.receivedAt});
+  const [execution,setExecution]=useState<DispatchExecution>({executionMode:task.executionMode||'internal',serviceUnit:task.serviceUnit,serviceAddress:task.serviceAddress,serviceContact:task.serviceContact,departureAt:reopening?undefined:task.departureAt,expectedReturnAt:reopening?undefined:task.expectedReturnAt,returnedAt:reopening?undefined:task.returnedAt,contractor:task.contractor,contractorId:task.contractorId,outsourcingMode:task.outsourcingMode,agreedFee:reopening?undefined:task.agreedFee,handedOverAt:reopening?undefined:task.handedOverAt,receivedAt:reopening?undefined:task.receivedAt});
   const [workHours,setWorkHours]=useState<number|null>(action==='inspect'?null:task.workHours??null);
   const [inspectorId,setInspectorId]=useState<string>();
   const [dueAt,setDueAt]=useState(reopening?'':localDateTime(task.dueAt));
@@ -76,7 +76,7 @@ export function DispatchActionDialog({action,task,controller,onClose,inspectionR
       </FormSection>:null}
       {action==='record-hours'?<><Alert type="info" title="检验通过时填写本轮维修的实际工时，并一并保存。"/><Form.Item label="实际工时（小时）" required><InputNumber aria-label="实际工时" min={0.01} max={10000} precision={2} value={workHours} onChange={value=>{setWorkHours(value);setError('');}}/></Form.Item></>:null}
       {error||controller.error?<Alert type="error" showIcon title={error||controller.error}/>:null}
-      {(assign&&!historical)||action==='update'?<FormSection title="执行方式"><DispatchExecutionFields value={execution} onChange={setExecution} allowModeChange={assign} hideFee={reopening||Boolean(task.repairRound)}/></FormSection>:null}
+      {(assign&&!historical)||action==='update'?<FormSection title="执行方式"><DispatchExecutionFields contractors={controller.people.contractors} value={execution} onChange={setExecution} allowModeChange={assign} hideFee={reopening||Boolean(task.repairRound)}/></FormSection>:null}
       {assign && <FormSection title="人员安排与说明">
       {assign&&execution.executionMode!=='outsourced'?<Form.Item label="维修员工（可多选，平级协作）" required><Select mode="multiple" aria-label="维修工" value={technicianIds} onChange={ids=>{setTechnicianIds(ids);projectDraft.changeTeam(ids);}} placeholder="选择同店维修员工" options={controller.people.technicians.map(p=>({value:p.id,label:`${personDisplayName(p,controller.people.technicians)} · 当前 ${controller.summaries.find(s=>s.id===p.id)?.current||0} 单`}))}/></Form.Item>:null}
       {assign&&execution.executionMode!=='outsourced'&&!controller.people.technicians.length?<Alert type="info" title="暂无可派维修工，请配置钉钉角色并让员工登录一次。"/>:null}
@@ -85,7 +85,7 @@ export function DispatchActionDialog({action,task,controller,onClose,inspectionR
         <p>待检验项目保留原维修责任：{task.items.filter(i=>i.status==='待检验').map(i=>`${i.name}（${i.responsibleName||'原负责人'}）`).join('、')||'无'}。</p>
         <p>已通过项目保留负责人和检验结果，原维修参与人员不能自检。</p>
       </>}/>:null}
-      {assign?<Alert type="info" title={execution.executionMode==='outsourced'?'外包进度由服务顾问或管理员录入，完工后需独立检验。':'所选员工共同维护工单进度，任一人确认即代表工单接单；每次操作均记录实际操作人。'}/>:null}
+      {assign?<Alert type="info" title={execution.executionMode==='outsourced'?'外包人员可接单并维护维修进度，完工后需独立检验。':'所选员工共同维护工单进度，任一人确认即代表工单接单；每次操作均记录实际操作人。'}/>:null}
       </FormSection>}
       {action==='assign'?<FormSection title="维修项目与负责人"><RepairItemsEditor items={task.items} rows={assignmentRows} onChange={projectDraft.change} editing disabled={controller.busy} showResponsibilities={execution.executionMode!=='outsourced'} technicians={controller.people.technicians.filter(p=>technicianIds.includes(p.id))}/>{projectDraft.stale?<Alert type="warning" title="工单已更新，请关闭窗口重新派工"/>:null}</FormSection>:null}
       <FormSection className={action==='inspect'?'inspection-notes':undefined} title={scheduling ? "时间与备注" : action==='inspect'?'备注':"操作说明"}>

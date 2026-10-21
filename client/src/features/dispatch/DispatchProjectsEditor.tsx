@@ -34,7 +34,7 @@ export function DispatchProjectsEditor({task,controller:c,actionsTarget}:{task:D
     {!pending&&task.executionMode==='outsourced'&&draft.dirty?<p role="status">请先保存或取消项目修改，再更新外包进度。</p>:null}
     {pending?<Form layout="vertical" className="inline-dispatch-form">
       <h4>派工安排</h4>
-      <DispatchExecutionFields value={assignment.execution} onChange={assignment.changeExecution} disabled={c.busy} hideFee={Boolean(task.repairRound)}/>
+      <DispatchExecutionFields contractors={c.people.contractors} value={assignment.execution} onChange={assignment.changeExecution} disabled={c.busy} hideFee={Boolean(task.repairRound)}/>
       <Form.Item label="预计完工时间" required><Input aria-label="预计完工时间" type="datetime-local" disabled={c.busy} value={assignment.dueAt} onChange={e=>assignment.changeDueAt(e.target.value)}/></Form.Item>
       <Checkbox disabled={c.busy} checked={assignment.urgent} onChange={e=>assignment.changeUrgent(e.target.checked)}>加急任务</Checkbox>
       <Form.Item label="派工备注"><Input.TextArea aria-label="派工备注" disabled={c.busy} value={assignment.note} maxLength={2000} rows={2} onChange={e=>assignment.changeNote(e.target.value)}/></Form.Item>

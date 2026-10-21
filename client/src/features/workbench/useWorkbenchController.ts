@@ -65,7 +65,7 @@ export function useWorkbenchController() {
   } = useVehicleIdentityRecognition({ setDraft });
   const { ocrState, vehicleLicenseOcr, vehicleLicenseFileId, isUploading: isVehicleLicenseUploading, resetOcr, scanVehicleLicense, confirmVehicleLicenseOcr } =
     useVehicleLicenseOcr({ actor, setDraft, onRecognized: lookupVehicleLicense });
-  const visibleNavItems = useMemo(() => navItems.filter((item) => item.roles.includes(role) && (dispatchEnabled || !isDispatchNavigation(item.label))), [role]);
+  const visibleNavItems = useMemo(() => navItems.filter((item) => (item.roles.includes(role)||item.label==='我的维修'&&currentUser?.outsourcingRoleMember) && (dispatchEnabled || !isDispatchNavigation(item.label))), [role,currentUser?.outsourcingRoleMember]);
   const canEditForm = canCreateOrder(role) && (
     !selectedOrder || (
       selectedOrder.status === "草稿" && selectedOrder.shop.id === currentUser?.shopId

@@ -1,5 +1,5 @@
 import { Form, Input, InputNumber, Select } from 'antd';
-import type { DispatchExecution } from '../../../../shared/types';
+import type { DispatchExecution, UserProfile } from '../../../../shared/types';
 import { localDateTime } from './dispatchLabels';
 export const executionLabels = { internal: '店内维修', field: '外修（员工外派）', outsourced: '外包' };
 export const executionTextFields = {
@@ -8,15 +8,16 @@ export const executionTextFields = {
 export const executionTimeFields = {
   departureAt: '出发时间', expectedReturnAt: '预计返回时间', returnedAt: '实际返回时间', handedOverAt: '交车时间', receivedAt: '收车时间'
 } as const;
-export function DispatchExecutionFields({value,onChange,allowModeChange=true,disabled=false,hideFee=false}:{value:DispatchExecution;onChange:(value:DispatchExecution)=>void;allowModeChange?:boolean;disabled?:boolean;hideFee?:boolean}) {
+export function DispatchExecutionFields({value,onChange,allowModeChange=true,disabled=false,hideFee=false,contractors=[]}:{value:DispatchExecution;onChange:(value:DispatchExecution)=>void;allowModeChange?:boolean;disabled?:boolean;hideFee?:boolean;contractors?:UserProfile[]}) {
   const mode=value.executionMode||'internal';
   const patch=(change:Partial<DispatchExecution>)=>onChange({...value,...change});
-  const textKeys: Array<keyof typeof executionTextFields> = mode==='field'?['serviceUnit','serviceAddress','serviceContact']:mode==='outsourced'?['contractor','serviceAddress','serviceContact']:[];
+  const textKeys: Array<keyof typeof executionTextFields> = mode==='field'?['serviceUnit','serviceAddress','serviceContact']:mode==='outsourced'?['serviceAddress','serviceContact']:[];
   const timeKeys: Array<keyof typeof executionTimeFields> = mode==='field'?['departureAt','expectedReturnAt','returnedAt']:mode==='outsourced'&&value.outsourcingMode==='offsite'?['handedOverAt','receivedAt']:[];
   return <>
     <Form.Item label="执行方式"><Select aria-label="执行方式" disabled={disabled||!allowModeChange} value={mode} onChange={executionMode=>onChange({executionMode,...(executionMode==='outsourced'?{outsourcingMode:'onsite' as const}:{})})} options={Object.entries(executionLabels).map(([value,label])=>({value,label}))}/></Form.Item>
     {mode==='outsourced'?<Form.Item label="外包施工方式"><Select aria-label="外包施工方式" disabled={disabled||!allowModeChange} value={value.outsourcingMode||'onsite'} onChange={outsourcingMode=>patch({outsourcingMode,handedOverAt:undefined,receivedAt:undefined})} options={[{value:'onsite',label:'承包方到店施工'},{value:'offsite',label:'车辆外送整包维修'}]}/></Form.Item>:null}
-    {textKeys.map(key=><Form.Item key={key} label={executionTextFields[key]} required={(['serviceUnit','serviceAddress'].includes(key)&&mode==='field')||key==='contractor'}><Input aria-label={executionTextFields[key]} disabled={disabled||key==='contractor'&&!allowModeChange} value={value[key]||''} maxLength={2000} onChange={e=>patch({[key]:e.target.value})}/></Form.Item>)}
+    {mode==='outsourced'?<Form.Item label="承包方" required><Select aria-label="承包方" showSearch optionFilterProp="label" disabled={disabled||!allowModeChange} value={value.contractorId||value.contractor||undefined} placeholder="请选择本店外包人员" notFoundContent="暂无外包人员，请在钉钉分配外包角色并登录应用" options={contractors.map(p=>({value:p.id,label:contractors.filter(other=>other.name===p.name).length>1?`${p.name}（员工编号 ${p.id}）`:p.name}))} onChange={contractorId=>patch({contractorId,contractor:contractors.find(p=>p.id===contractorId)?.name})}/></Form.Item>:null}
+    {textKeys.map(key=><Form.Item key={key} label={executionTextFields[key]} required={(['serviceUnit','serviceAddress'].includes(key)&&mode==='field')}><Input aria-label={executionTextFields[key]} disabled={disabled} value={value[key]||''} maxLength={2000} onChange={e=>patch({[key]:e.target.value})}/></Form.Item>)}
     {mode==='outsourced'&&!hideFee?<Form.Item label="约定费用（元）"><InputNumber disabled={disabled} aria-label="约定费用" min={0} max={999999999} precision={2} value={value.agreedFee} onChange={fee=>patch({agreedFee:fee})}/></Form.Item>:null}
     {timeKeys.map(key=><Form.Item key={key} label={executionTimeFields[key]}><Input disabled={disabled} aria-label={executionTimeFields[key]} type="datetime-local" value={localDateTime(value[key])} onChange={e=>patch({[key]:e.target.value?new Date(`${e.target.value}:00+08:00`).toISOString():''})}/></Form.Item>)}
   </>;

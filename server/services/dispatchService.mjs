@@ -36,7 +36,7 @@ export async function queryDispatchTasks(actor, query={}) {
   });
 }
 export async function myRepairCounts(actor) {
-  if(actor.role!=='technician') throw new HttpError(403,'仅维修工可查看本人任务数量');
+  if(!['technician','outsourcing'].includes(actor.role)&&!actor.outsourcingRoleMember) throw new HttpError(403,'仅维修工可查看本人任务数量');
   const tasks=await listDispatchTasks(actor);
   const range=completionRange();
   return {
@@ -109,7 +109,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
     }
     const recipients=[];
     const add=(recipient,kind)=>{ if(recipient) recipients.push({recipient,kind}); };
-    const handlers=t=>t.executionMode==='outsourced' ? people.filter(p=>p.active && ['manager','advisor'].includes(p.role)).map(p=>p.id) : technicianIds(t);
+    const handlers=t=>t.executionMode==='outsourced' && !technicianIds(t).length ? people.filter(p=>p.active && ['manager','advisor'].includes(p.role)).map(p=>p.id) : technicianIds(t);
     const addHandlers=(t,kind)=>handlers(t).forEach(id=>add(id,kind));
     const removedProjects=input.repairItems?task.items.filter(item=>!next.items.some(current=>current.id===item.id)):[];
     const removedFor=recipient=>removedProjects.filter(item=>item.responsibleId?item.responsibleId===recipient:technicianIds(task).includes(recipient));

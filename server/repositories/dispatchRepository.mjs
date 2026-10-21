@@ -1,8 +1,9 @@
+import { outsourcingMembership } from './outsourcingMembership.mjs';
 import {readRepairWriteback} from './repairWritebackRepository.mjs';
 import { readRepairRounds } from './repairRoundRepository.mjs';
 import { pool } from '../database/pool.mjs';
 import { HttpError } from '../http/HttpError.mjs';
-import { assertDispatchAccess, canInspect, dispatchMetric } from '../domain/dispatchPolicy.mjs';
+import { assertDispatchAccess, canInspect, dispatchMetric, technicianIds } from '../domain/dispatchPolicy.mjs';
 const projection = `select wo.id as order_id, wo.shop_id, wo.vehicle_plate, wo.dispatch_no, wo.arrival_date,
   wo.vehicle_vin,wo.vehicle_model,wo.vehicle_mileage,wo.customer_name,wo.advisor,wo.status as order_status, wo.fault_description, wo.technician as legacy_technician,
   exists(select 1 from dispatch_events e where e.order_id=wo.id and e.action in ('accept','record-parts','edit-parts') and e.detail->'partsRequirement' is not null) as has_parts_history,
@@ -30,17 +31,17 @@ export async function getDispatchTask(client, id, actor, lock=false) {
   const task=mapTask(rows[0]); assertDispatchAccess(task,actor); return task;
 }
 export async function listDispatchTasks(actor, client=pool) {
-  if(!actor?.active || !['manager','advisor','technician','inspector','warehouse'].includes(actor.role)) throw new HttpError(403,'无权访问派工模块');
-  const restriction=actor.role==='technician'?"and (dt.technician_id=$2 or dt.data->'technicianIds' ? $2)":actor.role==='inspector'?"and (dt.inspector_id=$2 or dt.stage='待检验')":'';
+  if(!actor?.active || !['manager','advisor','technician','inspector','warehouse','outsourcing'].includes(actor.role)) throw new HttpError(403,'无权访问派工模块');
+  const restriction=['technician','outsourcing'].includes(actor.role)?"and (dt.technician_id=$2 or dt.data->'technicianIds' ? $2)":actor.role==='inspector'?"and (dt.inspector_id=$2 or dt.stage='待检验' or dt.technician_id=$2 or dt.data->'technicianIds' ? $2)":'';
   const {rows}=await client.query(`${projection} where wo.shop_id=$1 and wo.status <> '待处理纸质委托书' ${restriction}
     order by coalesce((dt.data->>'urgent')::boolean,false) desc,
       nullif(dt.data->>'dueAt','')::timestamptz asc nulls last, wo.arrival_date asc, wo.id asc`,
     restriction?[actor.shopId,actor.id]:[actor.shopId]);
-  return rows.map(mapTask).filter(t=>actor.role!=='warehouse' || (t.partsRequirement || t.hasPartsHistory) && !['草稿','待客户签字'].includes(t.orderStatus)).filter(t=>actor.role!=='inspector' || t.inspectorId===actor.id || canInspect(t,actor));
+  return rows.map(mapTask).filter(t=>actor.role!=='warehouse' || actor.outsourcingRoleMember&&technicianIds(t).includes(actor.id) || (t.partsRequirement || t.hasPartsHistory) && !['草稿','待客户签字'].includes(t.orderStatus)).filter(t=>actor.role!=='inspector' || actor.outsourcingRoleMember&&technicianIds(t).includes(actor.id) || t.inspectorId===actor.id || canInspect(t,actor));
 }
 export async function dispatchPeople(actor, client=pool) {
-  const {rows}=await client.query('select id,name,role,active,shop_id,inspector_role_member from users where shop_id=$1 order by name,id',[actor.shopId]);
-  return rows.map(r=>({id:r.id,name:r.name,role:r.role,active:r.active,shopId:r.shop_id,inspectorRoleMember:r.inspector_role_member}));
+  const {rows}=await client.query(`select id,name,role,active,shop_id,inspector_role_member, ${outsourcingMembership} from users where shop_id=$1 order by name,id`,[actor.shopId]);
+  return rows.map(r=>({id:r.id,name:r.name,role:r.role,active:r.active,shopId:r.shop_id,inspectorRoleMember:r.inspector_role_member,outsourcingRoleMember:r.outsourcing_role_member}));
 }
 export async function saveDispatchTask(client, task) {
   const {hasPartsHistory,orderId,shopId,technicianId,inspectorId,stage,version,plate,dispatchNo,arrivalDate,orderStatus,faultDescription,overdue,repairCatalog,vehicleVin,vehicleModel,vehicleMileage,customerName,advisor,...data}=task;

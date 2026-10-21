@@ -7,7 +7,8 @@ const advisor={id:'d',name:'服务顾问',role:'advisor',active:true,shopId:'s'}
 const technician={id:'t',name:'同名维修工',role:'technician',active:true,shopId:'s'};
 const second={...technician,id:'t2'};
 const inspector={id:'i',name:'检验员',role:'inspector',active:true,shopId:'s'};
-const people=[manager,advisor,technician,second,inspector];
+const contractor={id:'external',name:'外包维修厂',role:'outsourcing',active:true,shopId:'s'};
+const people=[manager,advisor,technician,second,inspector,contractor];
 const now='2026-09-11T01:00:00.000Z';
 const due='2026-09-12T18:00:00+08:00';
 function initial(){return {orderId:'wo',shopId:'s',stage:'待派工',version:0,items:[{id:1,name:'制动',status:'待派工'},{id:2,name:'保养',status:'待派工'}]};}
@@ -149,14 +150,14 @@ test('field work means employees leave for a service unit and retains shared pro
 });
 
 for(const outsourcingMode of ['onsite','offsite']) test(`outsourced ${outsourcingMode} lifecycle is tracked internally and independently inspected`,()=>{
-  let task=act(initial(),'assign',advisor,{executionMode:'outsourced',contractor:'承包单位',outsourcingMode,agreedFee:123.45,dueAt:due});
-  assert.deepEqual(task.technicianIds,[]);assert.equal(task.technicianId,undefined);
+  let task=act(initial(),'assign',advisor,{executionMode:'outsourced',contractorId:'external',contractor:'伪造名称',outsourcingMode,agreedFee:123.45,dueAt:due});
+  assert.deepEqual(task.technicianIds,['external']);assert.equal(task.technicianId,'external');assert.equal(task.contractor,'外包维修厂');
   assert.throws(()=>assertDispatchAccess(task,technician),e=>e.status===403);
-  task=act(task,'accept',advisor);
-  for(const itemId of [1,2]) {task=act(task,'finish',itemId===1?manager:advisor,{itemId});}
-  assert.throws(()=>act(task,'submit',advisor,{inspectorId:'m'}),e=>e.status===403);
+  task=act(task,'accept',contractor);
+  for(const itemId of [1,2]) {task=act(task,'finish',contractor,{itemId});}
+  assert.throws(()=>act(task,'submit',contractor,{inspectorId:'external'}),e=>e.status===400);
   task=act(task,'submit',advisor,{inspectorId:'i'});
-  assert.throws(()=>act(task,'inspect',manager),e=>e.status===403);
+  assert.throws(()=>act(task,'inspect',contractor),e=>e.status===403);
   task=act(task,'inspect',inspector,{rejectedItemIds:[1],reason:'返工'});
   task=act(task,'start',advisor,{itemId:1});task=act(task,'finish',advisor,{itemId:1});
   task=act(task,'submit',advisor,{inspectorId:'i'});task=act(task,'inspect',inspector);
@@ -167,8 +168,8 @@ test('execution validation rejects malformed costs, timestamps and silent mode c
   for(const fields of [{executionMode:'unknown'},{agreedFee:-1},{agreedFee:'100'},{agreedFee:1.001},{departureAt:'2026-09-11T01:00:00'},{outsourcingMode:'unknown'}]) assert.throws(()=>act(initial(),'assign',advisor,{technicianIds:['t'],dueAt:due,...fields}),e=>e.status===400);
   assert.throws(()=>act(assigned(),'update',advisor,{executionMode:'outsourced',contractor:'单位',outsourcingMode:'onsite'}),e=>e.status===400);
   let task=act(initial(),'assign',advisor,{executionMode:'field',technicianIds:['t'],serviceUnit:'客户车队',serviceAddress:'停车场',dueAt:due});
-  task=act(task,'reassign',advisor,{executionMode:'outsourced',outsourcingMode:'onsite',contractor:'承包方',dueAt:due,reason:'转外包'});
-  assert.equal(task.serviceUnit,undefined);assert.deepEqual(task.technicianIds,[]);
+  task=act(task,'reassign',advisor,{executionMode:'outsourced',outsourcingMode:'onsite',contractorId:'external',dueAt:due,reason:'转外包'});
+  assert.equal(task.serviceUnit,undefined);assert.deepEqual(task.technicianIds,['external']);
   task=act(task,'update',advisor,{agreedFee:100});
   task=act(task,'update',advisor,{agreedFee:null});assert.equal(task.agreedFee,null);
 });

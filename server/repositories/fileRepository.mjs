@@ -82,7 +82,7 @@ export async function assertFileReadAccess(fileId, user, database = pool) {
   if (user.role === "advisor" && (file.uploaded_by === user.id || file.advisor)) return;
   if (user.active && user.role === "warehouse" && file.kind === "repair_parts_photo" && !["草稿","待客户签字"].includes(file.status)) return;
   if (["repair_parts_photo", "repair_progress_photo", "repair_order_photo", "damage_photo", "other"].includes(file.kind)) {
-    if (user.role === "technician" && (file.technician_id === user.id || file.technician_ids?.includes(user.id))) return;
+    if ((["technician","outsourcing"].includes(user.role)||user.outsourcingRoleMember) && (file.technician_id === user.id || file.technician_ids?.includes(user.id))) return;
     if (user.role === "inspector" && user.inspectorRoleMember!==false && (file.inspector_id === user.id || file.stage==='待检验' && ![file.technician_id,...(file.technician_ids||[]),...(file.participant_ids||[])].includes(user.id) && !(file.items||[]).some(i=>i.startedBy===user.id || i.finishedBy===user.id))) return;
   }
   throw new HttpError(403, "无权查看该文件");

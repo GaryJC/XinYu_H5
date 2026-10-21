@@ -12,8 +12,8 @@ export async function saveDispatchPlan(client, order, actor, plan) {
   await client.query('select id from users where shop_id=$1 order by id for share',[actor.shopId]);
   const people=await dispatchPeople(actor,client);
   const task=applyDispatchAction({orderId:order.id,shopId:order.shop.id,stage:'待派工',version:0,items:[]}, {...plan,action:'assign',expectedVersion:0,requestId:'validate-draft',technicianIds:ids},actor,people);
-  const {technicianId,technicianIds,executionMode,serviceUnit,serviceAddress,serviceContact,departureAt,expectedReturnAt,returnedAt,contractor,outsourcingMode,agreedFee,handedOverAt,receivedAt}=task;
-  const data={technicianIds,executionMode,serviceUnit,serviceAddress,serviceContact,departureAt,expectedReturnAt,returnedAt,contractor,outsourcingMode,agreedFee,handedOverAt,receivedAt};
+  const {technicianId,technicianIds,executionMode,serviceUnit,serviceAddress,serviceContact,departureAt,expectedReturnAt,returnedAt,contractor,contractorId,outsourcingMode,agreedFee,handedOverAt,receivedAt}=task;
+  const data={technicianIds,executionMode,serviceUnit,serviceAddress,serviceContact,departureAt,expectedReturnAt,returnedAt,contractor,contractorId,outsourcingMode,agreedFee,handedOverAt,receivedAt};
   await client.query(`insert into work_order_dispatch_plans(order_id,technician_id,assigned_by,due_at,urgent,note,execution_data)
     values($1,$2,$3,$4,$5,$6,$7) on conflict(order_id) do update set technician_id=excluded.technician_id,
     assigned_by=excluded.assigned_by,due_at=excluded.due_at,urgent=excluded.urgent,note=excluded.note,execution_data=excluded.execution_data,activation_error='',activated_at=null`,

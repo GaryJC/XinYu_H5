@@ -37,7 +37,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
   const {task,events,notifications,files}=detail;
   const unsigned=['草稿','待客户签字'].includes(task.orderStatus);
   const workers=task.technicianIds??(task.technicianId?[task.technicianId]:[]);
-  const owner=task.executionMode==='outsourced'?controller.manager:workers.includes(user.id) && user.role==='technician';
+  const owner=workers.includes(user.id) && (['technician','outsourcing'].includes(user.role)||user.outsourcingRoleMember) || task.executionMode==='outsourced'&&controller.manager;
   const inspect=task.stage==='待检验' && (user.role==='manager'||(user.role==='inspector'&&task.inspectorId===user.id)) && !workers.includes(user.id) && !task.participantIds?.includes(user.id) && !task.items.some(i=>i.startedBy===user.id||i.finishedBy===user.id);
   const waitingForParts=Boolean(task.partsRequirement&&task.partsRequirement.mode!=='none'&&!task.partsRequirement.issuedAt);
   const actions:DispatchActionName[]=[];

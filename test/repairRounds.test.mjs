@@ -5,7 +5,7 @@ import {applyDispatchAction,canInspect} from '../server/domain/dispatchPolicy.mj
 const manager={id:'m',name:'管理员',role:'manager',active:true,shopId:'s'};
 const tech={id:'t',name:'技师',role:'technician',active:true,shopId:'s'};
 const advisor={...manager,id:'a',role:'advisor'},inspector={...manager,id:'i',role:'inspector'};
-const people=[manager,advisor,tech,inspector],now='2026-10-15T10:00:00Z';
+const people=[manager,advisor,tech,inspector,{id:'external',name:'外包维修厂',role:'outsourcing',active:true,shopId:'s'}],now='2026-10-15T10:00:00Z';
 const completed=()=>({orderId:'wo',shopId:'s',orderStatus:'完成',stage:'维修完成',version:4,technicianId:'t',technicianIds:['t'],firstStartedAt:'2026-10-01T10:00:00Z',completedAt:'2026-10-02T10:00:00Z',workHours:3,participantIds:['t'],items:[{id:1,name:'原项目一',status:'已完工',startedBy:'t',inspectedBy:'i',inspectedAt:'2026-10-02T10:00:00Z'},{id:2,name:'原项目二',status:'已完工'}]});
 const input=()=>({action:'reopen-repair',expectedVersion:4,requestId:randomUUID(),reworkItemIds:[1],additionalItems:['补充项目'],reason:'客户反馈仍有异响',technicianIds:['t'],dueAt:'2026-10-17T10:00:00Z'});
 const act=(t,action,user=tech,extra={})=>applyDispatchAction(t,{action,expectedVersion:t.version,requestId:randomUUID(),...(action==='inspect'&&!extra.rejectedItemIds?.length?{workHours:2.5}:{}),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra},user,people,now);
@@ -25,5 +25,5 @@ test('reopening enforces permissions, version, mandatory reason, projects and fu
  for(const fields of [{reason:' '},{reworkItemIds:[],additionalItems:[]},{reworkItemIds:[999]},{reworkItemIds:[1,1]},{additionalItems:[' ']},{dueAt:now},{expectedVersion:0}]) assert.throws(()=>applyDispatchAction(completed(),{...input(),...fields},manager,people,now));
  for(const actor of [tech,inspector,{...manager,active:false},{...manager,shopId:'other'}]) assert.throws(()=>applyDispatchAction(completed(),input(),actor,people,now));
  for(const execution of [{executionMode:'field'},{executionMode:'outsourced'}]) assert.throws(()=>applyDispatchAction(completed(),{...input(),...execution},manager,people,now));
- const task=applyDispatchAction(completed(),{...input(),executionMode:'outsourced',contractor:'承包方',outsourcingMode:'onsite',technicianIds:[]},manager,people,now);assert.equal(task.executionMode,'outsourced');assert.equal(task.stage,'待接单');
+ const task=applyDispatchAction(completed(),{...input(),executionMode:'outsourced',contractorId:'external',outsourcingMode:'onsite',technicianIds:[]},manager,people,now);assert.equal(task.executionMode,'outsourced');assert.equal(task.stage,'待接单');
 });

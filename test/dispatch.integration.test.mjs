@@ -47,6 +47,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
     await pool.query(await fs.readFile('supabase/migrations/202609110002_advisor_dispatch_plans.sql','utf8'));
     for(const file of files.filter(f=>f>'202609110002_advisor_dispatch_plans.sql')) await pool.query(await fs.readFile(`supabase/migrations/${file}`,'utf8'));
     await pool.query("update users set legacy_employee_code='027',legacy_employee_name=name,legacy_employee_department='test',legacy_employee_bound_at=now() where role='technician'");
+    await pool.query("insert into users(id,name,role,shop_id,active) values('external','测试外包单位','outsourcing','shop-hq',true)");
     dispatcher.role='advisor';
     const service=await import('../server/services/dispatchService.mjs');
     async function progressPhoto(id,round=0,kind='repair_progress_photo'){const file=randomUUID();await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by,repair_round) values($1,$2,$3,'local','','fixture','image/png',8,$4,$5)",[file,id,kind,tech.id,round]);return file;}
@@ -330,7 +331,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
     await t.test('draft team and outsourced plans round-trip and activate without a fictional technician',async()=>{
       const {saveDispatchPlan,readDispatchPlans}=await import('../server/repositories/dispatchPlanRepository.mjs');
       const {activateDispatchPlan}=await import('../server/services/dispatchPlanService.mjs');
-      for(const [id,fields] of [['draft-team',{executionMode:'field',technicianIds:[tech.id,tech2.id],serviceUnit:'客户车队',serviceAddress:'客户停车场'}],['draft-outsourced',{executionMode:'outsourced',contractor:'外包维修厂',outsourcingMode:'offsite',agreedFee:500,handedOverAt:new Date().toISOString()}]]) {
+      for(const [id,fields] of [['draft-team',{executionMode:'field',technicianIds:[tech.id,tech2.id],serviceUnit:'客户车队',serviceAddress:'客户停车场'}],['draft-outsourced',{executionMode:'outsourced',contractorId:'external',contractor:'测试外包单位',outsourcingMode:'offsite',agreedFee:500,handedOverAt:new Date().toISOString()}]]) {
         await seed(id);
         await database.transaction(async client=>{
           await saveDispatchPlan(client,{id,shop:{id:'shop-hq'}},advisor,{...fields,dueAt});
@@ -341,8 +342,8 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         const task=(await service.dispatchDetail(advisor,id)).task;
         assert.equal(task.executionMode,fields.executionMode);assert.equal(task.stage,'待接单');
         if(fields.executionMode==='outsourced') {
-          assert.equal(task.technicianId,undefined);assert.equal(task.agreedFee,500);
-          assert.equal((await pool.query('select technician_id from work_order_dispatch_plans where order_id=$1',[id])).rows[0].technician_id,null);
+          assert.equal(task.technicianId,'external');assert.equal(task.agreedFee,500);
+          assert.equal((await pool.query('select technician_id from work_order_dispatch_plans where order_id=$1',[id])).rows[0].technician_id,'external');
           assert.ok((await pool.query('select recipient_id from dispatch_notifications where order_id=$1',[id])).rows.every(r=>![tech.id,tech2.id].includes(r.recipient_id)));
         } else assert.deepEqual(task.technicianIds,[tech.id,tech2.id]);
       }
@@ -823,7 +824,8 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
             await form.getByLabel('交车时间',{exact:true}).fill('2026-09-14T10:00');
             await form.getByLabel('收车时间',{exact:true}).fill('2026-09-15T10:00');
           }
-          await form.getByLabel('承包方',{exact:true}).fill('测试外包单位');
+          await form.getByRole('combobox',{name:'承包方',exact:true}).click();
+          await page.getByText('测试外包单位',{exact:true}).last().click();
           await form.getByLabel('约定费用',{exact:true}).fill('500');
           await form.getByLabel('预计完工时间',{exact:true}).fill('2026-12-31T18:00');
           await page.screenshot({path:`output/playwright/dispatch-qa/${outsourcingMode}-form-mobile.png`});

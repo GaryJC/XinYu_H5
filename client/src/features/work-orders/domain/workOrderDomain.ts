@@ -12,6 +12,7 @@ const shopProfile = {
 export const workflow: WorkOrderStatus[] = ["草稿", "待客户签字", "已委托", "待派工", "维修中", "待结算", "完成"];
 
 export const roles: Record<RoleKey, { name: string; scope: string; permissions: string[] }> = {
+  outsourcing: {name:"外包",scope:"分配给本人的外包维修任务",permissions:["接单","领料确认","开工","完工提报"]},
   warehouse: {name:"仓管",scope:"本店配件申请",permissions:["查看申请","确认留痕"]},
   advisor: {
     name: "服务顾问",

@@ -11,7 +11,7 @@ export async function validatePartsPickupNotification(row,user,database) {
   const {rows}=await database.query('select stage,data,technician_id from dispatch_tasks where order_id=$1',[row.order_id]);
   const task=rows[0],data=task?.data,parts=data?.partsRequirement;
   if(!task || !['待开工','维修中','暂停'].includes(task.stage) || (data.repairRound||0)!==(row.payload.repairRound||0) || !parts || parts.recordedAt!==row.payload.partsRecordedAt || parts.revision!==row.payload.partsRevision) return false;
-  const handler=data.executionMode==='outsourced'?['manager','advisor'].includes(user.role):user.role==='technician'&&(data.technicianIds??[task.technician_id]).includes(row.recipient_id);
+  const handler=(['technician','outsourcing'].includes(user.role)||user.outsourcingRoleMember)&&(data.technicianIds??[task.technician_id]).includes(row.recipient_id)||data.executionMode==='outsourced'&&['manager','advisor'].includes(user.role);
   if(!handler) return false;
   if(row.kind==='配件需求已调整')return true;
   return row.kind==='配件可领取'?Boolean(parts.preparedAt&&!parts.issuedAt):Boolean(parts.issuedAt);

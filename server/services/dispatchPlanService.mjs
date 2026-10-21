@@ -10,7 +10,7 @@ export async function activateDispatchPlan(client,order) {
   await client.query('select id from users where id=any($1::text[]) order by id for share',[[plan.assigned_by,...ids]]);
   const people=await dispatchPeople({shopId:order.shop.id},client);
   const actor=people.find(p=>p.id===plan.assigned_by && p.active && ['advisor','manager'].includes(p.role));
-  const validWorkers=ids.every(id=>people.some(p=>p.id===id && p.active && p.role==='technician'));
+  const validWorkers=data.executionMode==='outsourced'?people.some(p=>p.id===data.contractorId&&p.active&&(p.role==='outsourcing'||p.outsourcingRoleMember)):ids.every(id=>people.some(p=>p.id===id && p.active && p.role==='technician'));
   if (!actor || !validWorkers || (data.executionMode!=='outsourced' && !ids.length)) {
     await markDispatchPlan(client,order.id,'预选维修工或指派人已停用、转店或权限变更，请服务顾问在派工台重新指派');
     return;
