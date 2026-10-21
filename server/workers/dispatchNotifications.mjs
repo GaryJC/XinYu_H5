@@ -1,3 +1,4 @@
+import { validateSignatureReviewRecipient } from '../repositories/customerSignatureReviewRepository.mjs';
 import { pool } from '../database/pool.mjs';
 import { validatePartsPickupNotification } from '../repositories/partsRequirementRepository.mjs';
 import { processSchedulerNotifications, validateSchedulerRecipient } from './schedulerNotifications.mjs';
@@ -11,6 +12,7 @@ export async function processNotification({claim=claimNotification,finish=finish
   try {
     const user=await recipient(row.recipient_id);
     if(row.previous_status!=='pending') result=await query(row,user?.dingtalk_user_id);
+    else if(row.kind==='需确认用户签字' && !await validateSignatureReviewRecipient(row,user)) result={status:'failed',error:'签字已确认或收件人已无权限',retryable:false};
     else if(row.kind==='待检验' && user?.role==='inspector' && user.inspector_role_member===false) result={status:'failed',error:'收件人已不属于钉钉检验员角色',retryable:false};
     else if(row.kind==='即将到期' && !await validateDue(row,user)) result={status:'failed',error:'工单状态、截止时间或责任人已变化，旧临期提醒已取消',retryable:false};
     else if(['无法接单','维修暂停','维修已提检'].includes(row.kind) && !await validateScheduler(row,user)) result={status:'failed',error:'收件人已无本店调度权限',retryable:false};

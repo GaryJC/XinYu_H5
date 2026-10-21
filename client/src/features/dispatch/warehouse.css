@@ -60,3 +60,19 @@
 .warehouse-issued-batch h4{margin:0 0 12px;font-size:14px}
 
 .repair-context{display:inline-flex;flex-wrap:wrap;gap:4px;vertical-align:middle}.repair-context .ant-tag{margin:0}.warehouse-order-heading{flex-wrap:wrap;justify-content:flex-start}.warehouse-order-heading h2{flex:1 0 auto;white-space:nowrap}.warehouse-order-heading>.repair-context{flex-basis:100%}.warehouse-order>p{font-size:13px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+
+.warehouse-vehicle-info .ant-descriptions-item-content{min-width:0;overflow-wrap:anywhere;white-space:pre-wrap}
+.warehouse-vehicle-info .ant-descriptions-item-label{white-space:nowrap}
+
+.warehouse-identifiers{display:flex;flex-direction:column;gap:8px;margin:14px 0 18px}
+.warehouse-identifier{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:#eff6ff;border:1px solid #c7ddfc;border-radius:10px}
+.warehouse-identifier>div{display:flex;flex-direction:column;gap:6px;min-width:0}
+.warehouse-identifier span{font-size:12px;color:#53729a}
+.warehouse-identifier strong{font-size:20px;line-height:1.4;font-weight:700;color:#164c8b;overflow-wrap:anywhere;user-select:text}
+.warehouse-identifiers .warehouse-dispatch-number{margin:0}
+.warehouse-order-more{margin-bottom:16px}
+.warehouse-repair-items{margin:16px 0}
+.warehouse-detail>.warehouse-repair-items{margin:0}
+.warehouse-repair-items ol{margin:0;padding-left:24px}
+.warehouse-repair-items li{padding:8px 0 8px 4px;line-height:1.6;overflow-wrap:anywhere}
+.warehouse-repair-items li+li{border-top:1px solid #edf0f4}

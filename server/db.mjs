@@ -1,3 +1,5 @@
+import { queueCustomerSignatureReview } from "./repositories/customerSignatureReviewRepository.mjs";
+import { isRemoteSignatureToken } from "./domain/customerSignaturePolicy.mjs";
 import { assertPaperPhotoIds, attachPaperPhotos, enqueuePaperNotifications } from "./repositories/paperOrderRepository.mjs";
 import { attachDraftVehicleLicense } from "./repositories/draftVehicleLicenseRepository.mjs";
 import { assertNoActiveRepair } from './repositories/repairRoundRepository.mjs';
@@ -5,7 +7,7 @@ import {readLicenseExceptions} from './repositories/vehicleLicenseExceptionRepos
 import {assertWorkOrderAccess} from './repositories/accessRepository.mjs';
 import { attachPreRepairPhotos } from "./repositories/preRepairPhotoRepository.mjs";
 import { assertPreRepairPhotosReady } from "./domain/preRepairPhotos.mjs";
-import { assertInspectionCompleted } from './repositories/dispatchRepository.mjs';
+import { getDispatchTask, assertInspectionCompleted } from './repositories/dispatchRepository.mjs';
 import { saveDispatchPlan, readDispatchPlans } from './repositories/dispatchPlanRepository.mjs';
 import { activateDispatchPlan } from './services/dispatchPlanService.mjs';
 import { pool, transaction } from "./database/pool.mjs";
@@ -161,7 +163,7 @@ export async function transitionWorkOrder(id, status, actor, action, patch = {})
   });
 }
 
-export async function createSignatureTokenForOrder(id, actor) {
+export async function createSignatureTokenForOrder(id, actor, { renew = false } = {}) {
   return transaction(async (client) => {
     const order = await findWorkOrderById(client, id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
@@ -170,11 +172,11 @@ export async function createSignatureTokenForOrder(id, actor) {
     const { rows: sessions } = await client.query(
       "select token from signature_tokens where order_id=$1 and not used and (expires_at is null or expires_at>clock_timestamp()) order by created_at desc,token desc limit 1 for update", [id]
     );
-    if (order.status === "待客户签字" && sessions[0]) return { ...order, signatureToken: sessions[0].token, signatureTokenUsed: false };
+    if (!renew && order.status === "待客户签字" && sessions[0] && isRemoteSignatureToken(sessions[0].token)) return { ...order, signatureToken: sessions[0].token, signatureTokenUsed: false };
     assertOrderReadyForSignature(order);
     assertPreRepairPhotosReady(order);
     await client.query("update signature_tokens set expires_at=clock_timestamp() where order_id=$1", [id]);
-    const token = createSignatureToken(id);
+    const token = createSignatureToken();
     await upsertWorkOrder(client, { ...order, status: "待客户签字", updatedAt: nowString() });
     await client.query(
       `
@@ -183,7 +185,7 @@ export async function createSignatureTokenForOrder(id, actor) {
       `,
       [token, id]
     );
-    await addAudit(client, id, actor, order.status === "草稿" ? "发起客户签字" : "恢复客户签字会话");
+    await addAudit(client, id, actor, renew ? "重新发送客户签字链接，旧链接失效" : order.status === "草稿" ? "发起客户签字" : "恢复客户签字会话");
     return { ...await findWorkOrderById(client, id), signatureToken: token, signatureTokenUsed: false };
   });
 }
@@ -191,7 +193,7 @@ export async function createSignatureTokenForOrder(id, actor) {
 export async function findWorkOrderByToken(token) {
   const { rows } = await pool.query(
     `
-      select wo.*, st.token as signature_token, st.used as signature_token_used
+      select wo.*, st.token as signature_token, st.used as signature_token_used, st.expires_at as signature_expires_at
       from signature_tokens st
       join work_orders wo on wo.id = st.order_id
       where st.token = $1
@@ -199,10 +201,11 @@ export async function findWorkOrderByToken(token) {
     `,
     [token]
   );
-  return (await hydrateOrders(rows))[0];
+  const order = (await hydrateOrders(rows))[0];
+  return order ? { ...order, signatureExpiresAt: rows[0].signature_expires_at?.toISOString() } : undefined;
 }
 
-export async function signWorkOrderByToken(token, signature, signatureFileId) {
+export async function signWorkOrderByToken(token, signature, signatureFileId, createSignatureFile) {
   return transaction(async (client) => {
     // Resolve the parent without a token lock, then use the same parent -> token
     // lock order as session creation. Recheck validity after acquiring the parent.
@@ -224,7 +227,15 @@ export async function signWorkOrderByToken(token, signature, signatureFileId) {
     if (!tokenRow) throw new HttpError(404, "签字链接不存在或已失效");
     if (tokenRow.used) throw new HttpError(409, "签字链接已使用");
 
-    if (order.status !== "待客户签字") throw new HttpError(409, "当前委托单已签字或不能签字");
+    if (order.status !== "待客户签字" || order.signatures.customer) throw new HttpError(409, "当前委托单已签字或不能签字");
+    if (order.paperOrder) throw new HttpError(409, "纸质委托书无需电子签字");
+    // A remote signature is stored only after locking and validating the session.
+    // Its file metadata participates in the same transaction as the signature.
+    if (createSignatureFile) {
+      const file = await createSignatureFile(client, order);
+      signatureFileId = file.id;
+      signature = order.customer.name || "客户签名";
+    }
     if (!signatureFileId) throw new HttpError(400, "请完成手写签名");
     const signatureFile = await client.query(
       "select id from files where id = $1 and order_id = $2 and kind = 'signature_image'",
@@ -234,7 +245,7 @@ export async function signWorkOrderByToken(token, signature, signatureFileId) {
 
     const next = {
       ...order,
-      status: "已委托",
+      status: "待客户签字",
       updatedAt: nowString(),
       signatures: {
         ...order.signatures,
@@ -248,9 +259,28 @@ export async function signWorkOrderByToken(token, signature, signatureFileId) {
     );
     await client.query("update signature_tokens set used = true, used_at = now() where token = $1", [token]);
     await addAudit(client, order.id, order.customer.name || "车主", "客户完成电子签名");
-    await activateDispatchPlan(client, next);
-    await enqueueLegacySyncEvent(client, await findWorkOrderById(client, order.id), "created");
+    await queueCustomerSignatureReview(client, next);
     return findWorkOrderById(client, order.id);
+  });
+}
+
+
+export async function confirmCustomerSignature(id, actor) {
+  return transaction(async client => {
+    const order = await findWorkOrderById(client, id, true);
+    if (!order) throw new HttpError(404, "委托单不存在");
+    if (!actor?.active || actor.shopId !== order.shop.id || !["advisor", "manager"].includes(actor.role)
+      || actor.role === "advisor" && actor.name !== order.advisor) throw new HttpError(403, "仅负责此单的服务顾问或本店管理员可以确认签字");
+    if (order.customerSignatureReview?.state === "confirmed") return order;
+    if (order.status !== "待客户签字" || order.customerSignatureReview?.state !== "pending"
+      || !order.signatures.customer || !order.customerSignatureFileId) throw new HttpError(409, "当前委托单没有待确认的客户签字");
+    const review = { ...order.customerSignatureReview, state: "confirmed", confirmedAt: new Date().toISOString(), confirmedBy: actor.name };
+    await client.query("update work_orders set status='已委托', customer_signature_review=$2::jsonb, updated_at=now() where id=$1", [id, JSON.stringify(review)]);
+    await addAudit(client, id, actor.name, "确认用户签字，提交后续流程");
+    const next = await findWorkOrderById(client, id);
+    await activateDispatchPlan(client, next);
+    await enqueueLegacySyncEvent(client, await findWorkOrderById(client, id), "created");
+    return findWorkOrderById(client, id);
   });
 }
 
@@ -655,7 +685,8 @@ async function refreshOutboundPickedState(client, orderId, repairItems) {
 }
 
 export async function getWorkOrderDetail(id,user) {
-  await assertWorkOrderAccess(id,user);
+  if(user.role==='warehouse') await getDispatchTask(pool,id,user);
+  else await assertWorkOrderAccess(id,user);
   const order=await findWorkOrderById(pool,id);
   if(!order)throw new HttpError(404,'委托单不存在');
   return sanitizeVisibleOrders([order],user.role,user)[0];

@@ -12,7 +12,6 @@ export function assertLegacyRepairHeaders(rows,snapshot,{checkMutable=true}={}) 
  if(!snapshot.departmentCode?.trim())throw new Error('缺少润丰部门编码，请管理员核对');
  if(rows.length<1||rows.length>2||rows.filter(r=>r.wd==='').length!==1||rows.filter(r=>r.wd==='1').length>1||rows.some(r=>!['','1'].includes(r.wd)))throw new Error('派工号内单缺失或内外单重复，禁止替换维修项目');
  if(rows.some(r=>r.plate!==snapshot.plate||r.department!==snapshot.departmentCode||Number(r.dh)!==snapshot.documentNo))throw new Error('润丰派工号对应的车辆、部门或内部单号不一致');
- if(!rows.some(r=>Number(r.reid)===snapshot.legacyReid))throw new Error('润丰主记录编号不一致');
  if(checkMutable&&rows.some(r=>r.deleted==='1'||r.settled||r.approved==='1'))throw new Error('润丰单据已删除、结算或审核，禁止替换项目');
 }
 export async function replaceLegacyRepairItems(snapshot,{executeTransaction=executeSqlServerTransaction,source=process.env.RUNFENG_REPAIR_WRITEBACK_SOURCE,allowedDispatchNos=writebackDispatchAllowlist()}={}) {
@@ -20,7 +19,7 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
  if(allowedDispatchNos&&!allowedDispatchNos.includes(snapshot.dispatchNo))throw new Error('当前派工号未在润丰直写测试白名单中');
  if(!source||!/^[a-zA-Z0-9_-]{1,60}$/.test(source))throw new Error('请配置唯一 RUNFENG_REPAIR_WRITEBACK_SOURCE');
  if(!/^[A-Za-z][0-9]+$/.test(snapshot.dispatchNo)||snapshot.dispatchNo.length>20)throw new Error('润丰派工号无效');
- const key=`${source}:${snapshot.eventId}`,hash=writebackHash(snapshot);
+ const key=`${source}:${snapshot.eventId}`;
  return executeTransaction(async execute=>{
   const dispatch=(req,sql)=>req.input('dispatch_no',sql.VarChar(20),snapshot.dispatchNo);
   const receipt=(req,sql)=>req.input('event_key',sql.VarChar(150),key);
@@ -28,9 +27,15 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
   const {recordset:headers}=await execute(LEGACY_REPAIR_HEADERS,dispatch);
   // Keep compatibility with receipts created when both documents were mandatory.
   assertLegacyRepairHeaders(headers||[],snapshot,{checkMutable:false});
+  // pgd is the lookup key; the uniquely validated internal header owns the identity.
+  // ACKs from older consumers may contain a detail-row reid. Never use it to target writes.
+  const canonicalSnapshot={...snapshot,legacyReid:Number(headers.find(row=>row.wd==='').reid)};
+  const hash=writebackHash(canonicalSnapshot);
+  // Old releases hashed the supplied reid (which could also be the external header).
+  const compatibleHashes=new Set([hash,writebackHash(snapshot),...headers.map(row=>writebackHash({...snapshot,legacyReid:Number(row.reid)}))]);
   const previous=await execute('select payload_hash from dbo.h5_repair_writeback_receipts with (updlock,holdlock) where event_key=@event_key',receipt);
   if(previous.recordset?.[0]) {
-   if(previous.recordset[0].payload_hash.trim()!==hash)throw new Error('润丰写回幂等键对应内容不一致');
+   if(!compatibleHashes.has(previous.recordset[0].payload_hash.trim()))throw new Error('润丰写回幂等键对应内容不一致');
    return {duplicate:true};
   }
   const pending=[];
@@ -38,7 +43,7 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
    const documentKey=`${key}:${header.wd===''?'internal':'external'}`;
    const existing=await execute('select payload_hash from dbo.h5_repair_writeback_receipts with (updlock,holdlock) where event_key=@event_key',(req,sql)=>req.input('event_key',sql.VarChar(150),documentKey));
    if(existing.recordset?.[0]) {
-    if(existing.recordset[0].payload_hash.trim()!==hash)throw new Error('润丰写回幂等键对应内容不一致');
+    if(!compatibleHashes.has(existing.recordset[0].payload_hash.trim()))throw new Error('润丰写回幂等键对应内容不一致');
    } else pending.push({...header,documentKey});
   }
   if(headers?.length&&!pending.length)return {duplicate:true};

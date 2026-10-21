@@ -284,7 +284,7 @@ export function useWorkbenchController() {
     setFormErrors([]);
     preRepairPhotos.reset();
     paperPhotos.reset();
-    resetOcr(order.ocrRecords, order.inspection.vehicleLicenseFileId || order.files?.find(file => file.kind === "vehicle_license")?.id);
+    resetOcr(order.ocrRecords.filter(record => !order.inspection.replacedPhotoIds?.includes(record.fileId)), order.inspection.vehicleLicenseFileId || order.files?.find(file => file.kind === "vehicle_license" && !order.inspection.replacedPhotoIds?.includes(file.id))?.id);
     resetVehicleIdentityRecognition();
   }
 

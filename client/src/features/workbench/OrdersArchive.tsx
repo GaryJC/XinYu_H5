@@ -1,3 +1,4 @@
+import { SignatureReview } from "../signature/SignatureReview";
 import { PaperOrderResolution } from "../work-orders/components/PaperOrderResolution";
 import { WorkOrderSignatureDialog } from "../signature/WorkOrderSignatureDialog";
 import { CustomerVehicleEditor, CustomerVehicleUpdateNotice } from "../customer-vehicle-update/CustomerVehicleEditor";
@@ -191,10 +192,11 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
         {signature.error && <Alert type="error" showIcon title="发起签字失败" description={signature.error} style={{ marginBottom: 12 }} />}
         {deleteError ? <Alert type="error" showIcon title="删除草稿失败" description={deleteError} style={{ marginBottom: 12 }} /> : null}
         {detailOrder?.vehicleLicenseException?<div style={{marginBottom:16}}><VehicleLicenseExceptionNotice exception={detailOrder.vehicleLicenseException} current={isCurrentVehicleLicenseException(detailOrder.vehicleLicenseException,detailOrder.vehicle)}/></div>:null}
+        {detailOrder && <SignatureReview order={detailOrder} user={currentUser} onUpdated={controller.acceptRefreshedOrder} />}
         {detailOrder ? <OrderDetail key={detailOrder.id} order={detailOrder} isMobile={isMobile} user={currentUser} onUpdated={controller.acceptRefreshedOrder}/> : null}
       </Modal>
       {signature.session && <WorkOrderSignatureDialog key={signature.session.token} session={signature.session}
-        completeSignature={signature.completeSignature} onClose={signature.close} />}
+        completeSignature={signature.completeSignature} onOrderUpdated={controller.acceptRefreshedOrder} onClose={signature.close} />}
       {dispatchEnabled && dispatchOrder && currentUser && <QuickDispatchDialog key={dispatchOrder.id} orderId={dispatchOrder.id} user={currentUser} onClose={() => { setDispatchOrder(undefined); void controller.refreshWorkbench(); }} />}
     </Card>
   );

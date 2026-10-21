@@ -33,7 +33,7 @@ export async function processRepairWritebacks(runTransaction,write,shouldContinu
    const {rows:orders}=await client.query('select dispatch_no,department_code,legacy_reid,legacy_document_no,vehicle_plate from work_orders where id=$1',[job.order_id]);
    try {
     const order=orders[0];
-    if(!order?.dispatch_no||!order.legacy_document_no||!order.legacy_reid){await client.query("update repair_writebacks set error='等待润丰开单回填派工号及内部编号',next_attempt_at=now()+interval '1 minute' where id=$1",[job.id]);return true;}
+    if(!order?.dispatch_no||!order.legacy_document_no){await client.query("update repair_writebacks set error='等待润丰开单回填派工号及内部编号',next_attempt_at=now()+interval '1 minute' where id=$1",[job.id]);return true;}
     if(order.vehicle_plate!==job.snapshot.plate)throw new Error('工单车牌已变化，请管理员核对');
     await write({...job.snapshot,eventId:String(job.event_id),dispatchNo:order.dispatch_no,departmentCode:order.department_code,legacyReid:Number(order.legacy_reid),documentNo:Number(order.legacy_document_no)});
     await client.query("update repair_writebacks set status='synced',error='',synced_at=now(),attempts=attempts+1 where id=$1",[job.id]);

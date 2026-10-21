@@ -1,9 +1,10 @@
 import { DispatchStage, LegacySyncStatus, WorkOrderStatus } from "../../../../shared/types";
 import { Card, Statistic, Tag } from "antd";
 
-const statusColor: Record<WorkOrderStatus | DispatchStage, string> = {
+const statusColor: Record<WorkOrderStatus | DispatchStage | "需确认用户签字", string> = {
   待处理纸质委托书: "orange",
   草稿: "default",
+  需确认用户签字: "orange",
   待客户签字: "gold",
   已委托: "cyan",
   待派工: "blue",
@@ -33,7 +34,7 @@ export function MetricCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-export function StatusChip({ status }: { status: WorkOrderStatus | DispatchStage }) {
+export function StatusChip({ status }: { status: WorkOrderStatus | DispatchStage | "需确认用户签字" }) {
   return <Tag color={statusColor[status]}>{status}</Tag>;
 }
 

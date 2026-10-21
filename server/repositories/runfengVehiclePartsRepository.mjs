@@ -20,10 +20,14 @@ export async function findVehiclePartsHistory({plate,excludeDispatch},execute=ex
       recent.forEach((r,i)=>request.input(`order${i}`,sql.Int,r.order_no));
     });
   const raw=details.recordset||[],rows=raw.slice(0,500);
-  const variants=new Map();
+  const variants=new Map(),latestByName=new Map();
   for(const order of recent) {
     for(const row of rows.filter(r=>r.order_no===order.order_no)) {
       const code=text(row.code),name=text(row.name),specification=text(row.specification),unit=text(row.unit),manufacturer=text(row.manufacturer);
+      // Keep every variant from the latest repair for this material name only.
+      const material=name.toUpperCase().replace(/\s+/g,'')||code.toUpperCase();
+      if(latestByName.has(material)&&latestByName.get(material)!==String(order.id))continue;
+      latestByName.set(material,String(order.id));
       const key=JSON.stringify([code.toUpperCase()||name,specification,unit,manufacturer]);
       const found=variants.get(key);
       if(found){if(found.repairOrderId===String(order.id))found.quantity+=Number(row.quantity);continue;}

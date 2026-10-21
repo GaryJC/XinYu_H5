@@ -1,10 +1,11 @@
+import {WarehouseVehicleInfo} from './WarehouseVehicleInfo';
 import {RepairContext} from './RepairContext';
-import { WarehouseDispatchNumber } from './WarehouseDispatchNumber';
+import {WarehouseRepairItems} from './WarehouseRepairItems';
 import { WarehousePartsEditor } from './WarehousePartsEditor';
 import { useState } from 'react';
 import type { DispatchController } from './useDispatchController';
 import { WarehouseStockSearch } from './WarehouseStockSearch';
-import { Button, Card, Collapse, Descriptions, Empty, Table, Tag } from 'antd';
+import { Button, Card, Collapse, Empty, Table, Tag } from 'antd';
 import type { DispatchDetail, PartsRequirement } from '../../../../shared/types';
 import { AuthenticatedImage } from '../../shared/ui/AuthenticatedImage';
 import { canProcessParts, isSupplementalParts, partsStatus } from './partsProgress';
@@ -21,7 +22,7 @@ function PartsTable({value}:{value?:PartsRequirement}) {
   ]}/>{value.sourcePhotoIds?.length?<Collapse items={[{key:'source',label:'原手写清单照片',children:<div className="repair-photo-grid">{value.sourcePhotoIds.map(id=><AuthenticatedImage key={id} fileId={id} alt="原手写配件清单" width="100%" height={160}/>)}</div>}]}/>:null}</>;
 }
 
-export function WarehousePartsDetail({detail,controller}:{detail:DispatchDetail;controller?:DispatchController}) {
+export function WarehousePartsDetail({detail,controller,onOpenOrder}:{detail:DispatchDetail;controller?:DispatchController;onOpenOrder?:()=>void}) {
   const [editing,setEditing]=useState(false);
   const {task}=detail, parts=task.partsRequirement;
   const events=detail.events.filter(e=>['accept','record-parts','edit-parts','confirm-parts','issue-parts'].includes(e.action));
@@ -29,17 +30,11 @@ export function WarehousePartsDetail({detail,controller}:{detail:DispatchDetail;
   const canEdit=Boolean(controller&&!controller.busy&&!task.needsReview&&task.acceptedAt&&['待开工','维修中','暂停'].includes(task.stage)&&!parts?.issuedAt);
   return <div className="warehouse-detail">
     <section className="warehouse-order" aria-label="申请工单信息">
-      <div className="warehouse-order-heading"><h2>{task.plate}</h2><Tag color={parts?.issuedAt?'green':parts && parts.mode!=='none'?'gold':'default'}>{partsStatus(parts)}</Tag><RepairContext task={task}/></div>
-      {task.repairRound&&task.roundReason?<p>返工原因：{task.roundReason}</p>:null}
-      <WarehouseDispatchNumber value={task.dispatchNo}/>
-      <Collapse className="warehouse-order-more" items={[{key:'details',label:'查看委托单其他详情',children:<Descriptions size="small" column={1} colon={false} items={[
-        {key:'order',label:'委托单号',children:task.orderId},
-        {key:'round',label:'维修轮次',children:task.repairRound?`返工第 ${task.repairRound} 轮`:'首次维修'},
-        {key:'customer',label:'托修单位',children:task.customerName || '未填写'},
-        {key:'model',label:'车型',children:task.vehicleModel || '未填写'},
-        {key:'technician',label:'主修人',children:task.technicianName || '未记录'}
-      ]}/>}]} />
+      <div className="warehouse-order-heading"><h2>车辆信息</h2><Tag color={parts?.issuedAt?'green':parts && parts.mode!=='none'?'gold':'default'}>{partsStatus(parts)}</Tag><RepairContext task={task}/></div>
+      <WarehouseVehicleInfo task={task}/>
+      {onOpenOrder?<Button block onClick={onOpenOrder}>查看委托单</Button>:null}
     </section>
+    <WarehouseRepairItems task={task} disabled={controller?.busy} onRefresh={controller?()=>Promise.all([controller.refresh(),controller.refreshDetail()]):undefined}/>
     <Card className="warehouse-parts-card" size="small" title={isSupplementalParts(parts)?'补料所需配件':'所需配件'} extra={canEdit?<Button size="small" onClick={()=>setEditing(true)}>新增／编辑配件</Button>:null}>
       <PartsTable value={parts}/>
       {parts?<div className="warehouse-audit-meta"><span>登记人：{parts.recordedName || '未记录'}</span><time>{displayTime(parts.recordedAt)}</time></div>:null}

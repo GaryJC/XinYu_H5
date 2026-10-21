@@ -115,6 +115,13 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       const requirement={mode:'list',items:[{name:'机油',quantity:4,unit:'升'}]};
       const accepted=await run(tech,'accept',1,{partsRequirement:requirement});
       assert.ok((await service.queryDispatchTasks(warehouse)).some(t=>t.orderId==='warehouse-order'));
+      await pool.query("update work_orders set vehicle_vin='VIN-WAREHOUSE',vehicle_model='仓管车型' where id='warehouse-order'");
+      const task=(await service.dispatchDetail(warehouse,'warehouse-order')).task;
+      assert.equal(task.vehicleVin,'VIN-WAREHOUSE');assert.equal(task.vehicleModel,'仓管车型');
+      const warehouseOrder=await db.getWorkOrderDetail('warehouse-order',warehouse);
+      assert.equal(warehouseOrder.vehicle.vin,'VIN-WAREHOUSE');assert.equal(warehouseOrder.signatureToken,undefined);
+      await assert.rejects(()=>db.getWorkOrderDetail('warehouse-order',{...warehouse,shopId:'other'}),e=>e.status===403);
+
       assert.equal((await pool.query("select 1 from dispatch_notifications where order_id='warehouse-order' and kind='配件申请' and recipient_id='warehouse'")).rowCount,1);
       const command={action:'confirm-parts',expectedVersion:accepted.task.version,requestId:randomUUID()};
       const results=await Promise.allSettled([service.executeDispatchAction(warehouse,'warehouse-order',command),service.executeDispatchAction(warehouse,'warehouse-order',command)]);

@@ -1,3 +1,4 @@
+import { SignatureShare } from "./SignatureShare";
 import { useEffect, useState } from "react";
 import { Alert, Button, Form, Grid } from "antd";
 import { FileSignature, Maximize2, Minimize2 } from "lucide-react";
@@ -13,9 +14,11 @@ type Props = {
   session: SignatureSession;
   completeSignature: (order: WorkOrder, token: string, image: string) => Promise<WorkOrder>;
   onClose: () => void;
+  onOrderUpdated: (order: WorkOrder) => void;
 };
 
-export function WorkOrderSignatureDialog({ session: signatureSession, completeSignature, onClose }: Props) {
+export function WorkOrderSignatureDialog({ session, completeSignature, onClose, onOrderUpdated }: Props) {
+  const [signatureSession, setSignatureSession] = useState(session);
   const [signatureImage, setSignatureImage] = useState("");
   const [signatureSubmitting, setSignatureSubmitting] = useState(false);
   const [signatureResult, setSignatureResult] = useState("");
@@ -39,7 +42,7 @@ export function WorkOrderSignatureDialog({ session: signatureSession, completeSi
     try {
       await completeSignature(signatureSession.order, signatureSession.token, signatureImage);
       setSignatureCompleted(true);
-      setSignatureResult("客户签字已保存，委托单已进入润丰待拉取队列。");
+      setSignatureResult("客户签字已保存，需确认用户签字。请关闭此弹窗，在委托单上核对并确认后进入后续流程。");
     } catch (error) {
       setSignatureResult(error instanceof Error ? error.message : "签字保存失败");
     } finally {
@@ -74,6 +77,13 @@ export function WorkOrderSignatureDialog({ session: signatureSession, completeSi
             {signatureSession ? (
               <Form layout="vertical" requiredMark>
                 {signatureResult ? <Alert className="signature-message" type={signatureCompleted ? "success" : "error"} showIcon title={signatureResult} /> : <Alert className="signature-message" type="info" showIcon title="请客户核对委托信息并在下方手写签名。" />}
+                {!signatureCompleted && <SignatureShare session={signatureSession} onRenew={setSignatureSession} onUpdated={order => {
+                  onOrderUpdated(order);
+                  if (order.signatures.customer) {
+                    setSignatureCompleted(true);
+                    setSignatureResult("客户已完成签字，需确认用户签字。请关闭弹窗后核对并确认。");
+                  }
+                }} />}
                 <div className="summary-grid">
                   <Summary label="委托单号" value={signatureSession.order.id} />
                   <Summary label="车牌号码" value={signatureSession.order.vehicle.plate} />

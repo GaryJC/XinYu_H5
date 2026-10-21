@@ -1,0 +1,11 @@
+.customer-signature-page { max-width: 780px; margin: 0 auto; padding: 16px; }
+.customer-signature-page h2 { font-size: 16px; margin-top: 20px; }
+.customer-signature-details { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr); gap: 10px; }
+.customer-signature-details dt { color: #657085; }
+.customer-signature-details dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.customer-signature-page .ant-checkbox-wrapper { margin: 20px 0; }
+.customer-signature-help { font-size: 12px; color: #657085; margin-top: 16px; }
+.customer-signature-share { padding: 12px; margin-bottom: 16px; border-radius: 8px; background: #f0f7ff; }
+.customer-signature-share p { margin: 8px 0; }
+.customer-signature-share .ant-space { margin-top: 8px; }
+@media (max-width: 480px) { .customer-signature-page { padding: 8px; } .customer-signature-page .ant-card-body { padding: 16px; } }

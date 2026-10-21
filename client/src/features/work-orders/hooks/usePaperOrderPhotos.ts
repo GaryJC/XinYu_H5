@@ -25,5 +25,11 @@ export function usePaperOrderPhotos(setDraft: Dispatch<SetStateAction<WorkOrderD
     finally { if(session===generation.current) {running.current=false;setUploading(false);} }
   }
   function remove(id:string) { setDraft(current=>({...current,paperOrder:current.paperOrder ? {...current.paperOrder,photoIds:current.paperOrder.photoIds.filter(value=>value!==id)} : undefined})); }
-  return {uploading,error,reset,upload,remove,isUploading:()=>running.current};
+  function removeMany(ids: string[]) {
+    if (running.current) return;
+    setDraft(current => ({ ...current, paperOrder: current.paperOrder ? {
+      ...current.paperOrder, photoIds: current.paperOrder.photoIds.filter(id => !ids.includes(id))
+    } : undefined }));
+  }
+  return {uploading,error,reset,upload,remove,removeMany,isUploading:()=>running.current};
 }

@@ -51,7 +51,7 @@ export function ActionPanel({
       </div>
       {!order ? <p>请先保存或选择一张委托单。</p> : null}
       {dispatchEnabled && canSubmitDispatch(role, order) ? <Button type="primary" block onClick={onSubmitDispatch}>提交派工池</Button> : null}
-      {dispatchEnabled && order && ["已委托","待派工","维修中"].includes(order.status) ? <p>客户签字后自动进入派工列表。请从左侧“派工台”“我的维修”或“检验任务”完成后续操作。</p> : null}
+      {dispatchEnabled && order && ["已委托","待派工","维修中"].includes(order.status) ? <p>确认客户签字后自动进入派工列表。请从左侧“派工台”“我的维修”或“检验任务”完成后续操作。</p> : null}
       {canSettle(role, order) ? <Button type="primary" block onClick={onSettle}>确认结算归档</Button> : null}
       {order ? (
         <div className="locked-actions">

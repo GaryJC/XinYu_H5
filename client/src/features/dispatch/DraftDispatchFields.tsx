@@ -16,8 +16,8 @@ export function DraftDispatchFields({plan,users,shopId,disabled,signed,technicia
       {plan?.activationError && <Alert type="warning" title={plan.activationError}/>}
       <Button onClick={onOpen}>前往派工</Button>
     </> : <>
-      <p className="dispatch-muted">可预选维修工，签字后自动派工；也可签字提交润丰后再派工。</p>
-      <Checkbox disabled={disabled} checked={Boolean(plan)} onChange={e=>onChange(e.target.checked?{technicianIds:[],executionMode:'internal',dueAt:'',urgent:false,note:''}:null)}>签字后自动派工</Checkbox>
+      <p className="dispatch-muted">可预选维修工，确认客户签字后自动派工；也可确认后提交润丰，再安排派工。</p>
+      <Checkbox disabled={disabled} checked={Boolean(plan)} onChange={e=>onChange(e.target.checked?{technicianIds:[],executionMode:'internal',dueAt:'',urgent:false,note:''}:null)}>确认客户签字后自动派工</Checkbox>
       {plan && <>
         <FormSection title="执行方式"><fieldset disabled={disabled} style={{border:0,padding:0,margin:0}}><div className="dispatch-execution-fields"><DispatchExecutionFields disabled={disabled} value={plan} onChange={value=>onChange({...value,technicianIds:plan.technicianIds??(plan.technicianId?[plan.technicianId]:[]),dueAt:plan.dueAt,urgent:plan.urgent,note:plan.note})}/></div></fieldset></FormSection>
         {plan.executionMode!=='outsourced'?<FormSection title="人员安排"><Form.Item label="预选维修工（可多选）"><Select mode="multiple" aria-label="预选维修工" allowClear showSearch optionFilterProp="label" disabled={disabled} value={plan.technicianIds??(plan.technicianId?[plan.technicianId]:[])} options={options} placeholder="选择共同维修的员工" onChange={technicianIds=>patch({technicianIds,technicianId:undefined})}/></Form.Item></FormSection>:null}

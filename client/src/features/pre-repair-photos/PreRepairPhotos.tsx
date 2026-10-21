@@ -1,7 +1,8 @@
-import { Alert, Button } from "antd";
+import { Alert, Button, Checkbox, Popconfirm } from "antd";
 import type { PreRepairPhotos as Photos } from "../../../../shared/types";
 import { AuthenticatedImage, AuthenticatedImagePreviewGroup } from "../../shared/ui/AuthenticatedImage";
 import { ImageSourcePicker } from "../../shared/ui/ImageSourcePicker";
+import { PhotoBatchActions, usePhotoSelection } from "../../shared/ui/PhotoBatchActions";
 import { PhotoGuide } from "./PhotoGuide";
 import { photoSlots } from "./photoSlots";
 import type { PhotoSlot } from "./photoSlots";
@@ -15,6 +16,8 @@ type Props = {
     uploading: string; error: string;
     upload:(slot:PhotoSlot|"extra",file:File)=>Promise<void>;
     uploadExtras:(files:File[])=>Promise<void>;
+    removeExtras?:(ids:string[])=>void | Promise<unknown>;
+    removePhoto?:(id:string)=>void;
     removeExtra?:(id:string)=>void; removeMileage?:()=>void;
     replaceExtra?:(id:string,file:File)=>Promise<void>;
   };
@@ -22,11 +25,13 @@ type Props = {
 };
 
 export function PreRepairPhotos({ photos = {}, disabled, controls, errors = [], required = true }: Props) {
+  const selection = usePhotoSelection(photos.extra || []);
   const busy = Boolean(controls?.uploading);
   return <section className="pre-repair-photos" aria-label="车辆维修前照片">
     <div className="pre-repair-photos-heading"><h3>车辆维修前照片</h3><span>{required ? `${photoSlots.filter((slot) => slot.required && photos[slot.key]).length}/2 必传` : "选填"}</span></div>
     <p>{required ? "请拍摄车辆左前方与右后方，覆盖车头、车尾和两侧全貌；公里数照片可选上传。" : "已提供纸质委托书，维修前照片可按需补充，无需重复上传。"}</p>
     {controls?.error && <Alert type="error" showIcon message={controls.error} />}
+    {!disabled && controls?.removeExtras && <PhotoBatchActions ids={photos.extra || []} selection={selection} disabled={busy} onRemove={controls.removeExtras}/>}
     <AuthenticatedImagePreviewGroup fileIds={[...photoSlots.map((slot) => photos[slot.key]).filter((id): id is string => Boolean(id)), ...(photos.extra || [])]}><div className="pre-repair-photo-grid">
       {photoSlots.map((slot) => {
         const id = photos[slot.key];
@@ -39,10 +44,14 @@ export function PreRepairPhotos({ photos = {}, disabled, controls, errors = [], 
           <p>{slot.hint}</p>
           {!disabled && controls && <ImageSourcePicker disabled={busy} loading={controls.uploading === slot.key} label={`${slot.label}照片`} primaryActionLabel={id ? "重新拍摄" : "拍照上传"} onSelect={(file) => controls.upload(slot.key, file)} />}
           {!disabled && controls?.removeMileage && slot.key === "mileage" && id && <Button type="link" danger disabled={busy} onClick={controls.removeMileage} aria-label="移除公里数照片">移除</Button>}
+          {!disabled && controls?.removePhoto && id && <Popconfirm title="确认删除这张照片？" okText="删除" cancelText="取消" onConfirm={()=>controls.removePhoto?.(id)}>
+            <Button danger disabled={busy} aria-label={`删除${slot.label}照片`}>删除照片</Button>
+          </Popconfirm>}
           {error && <div className="pre-repair-photo-error" role="alert">{error}</div>}
         </div>;
       })}
       {(photos.extra || []).map((id, index) => <div className="pre-repair-photo-card" key={id}>
+        {!disabled && controls?.removeExtras && <Checkbox aria-label={`选择额外照片 ${index + 1}`} disabled={busy} checked={selection.selectedIds.includes(id)} onChange={event => selection.toggle(id, event.target.checked)}>选择</Checkbox>}
         <div className="pre-repair-photo-label">额外照片 {index + 1}</div>
         <div className="pre-repair-photo-cover"><AuthenticatedImage fileId={id} alt={`维修前额外照片 ${index + 1}`} width="100%" height={160} /></div>
         {!disabled && controls?.replaceExtra && <ImageSourcePicker label={`额外照片 ${index + 1}重新上传`} primaryActionLabel="重新上传"

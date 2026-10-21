@@ -34,7 +34,7 @@ test('SQL Server 2000 temporary fixtures replace atomically and recover idempote
   }))}),/second document failure/);
   assert.deepEqual(await state(),before,'Both documents and fee totals must roll back');
   assert.equal((await query(`select count(*) as n from ${tables.h5_repair_writeback_receipts}`)).recordset[0].n,0);
-  await replaceLegacyRepairItems(snapshot,{source:'temporary-fixture',allowedDispatchNos:null,executeTransaction});
+  await replaceLegacyRepairItems({...snapshot,legacyReid:7808964},{source:'temporary-fixture',allowedDispatchNos:null,executeTransaction});
   const after=await state(),projects=after.items.filter(i=>i.lb.trim()==='项目');
   assert.equal(projects.length,2);assert.deepEqual(projects.map(i=>i.wxr.trim()),['027 李富强','']);assert.ok(projects.every(i=>['sl','dj','je','cb','gs','ywyje','uddec1','uddec2'].every(key=>Number(i[key])===0&&i[key]!==null)),'Omitted numeric columns must retain the database defaults');
   assert.deepEqual(after.items.filter(i=>i.lb.trim()!=='项目'),before.items.filter(i=>i.lb.trim()!=='项目'));

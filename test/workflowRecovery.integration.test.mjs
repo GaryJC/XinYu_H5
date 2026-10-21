@@ -49,6 +49,9 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       assert.equal(results[1].status,'fulfilled');
       if(results[0].status==='fulfilled')assert.equal(results[0].value.signatureToken,session.signatureToken);
       else assert.equal(results[0].reason.status,409);
+      assert.equal((await pool.query("select count(*) from legacy_sync_outbox where order_id='race'")).rows[0].count,'0');
+      const pending=await db.findWorkOrderById(pool,'race');assert.equal(pending.customerSignatureReview.state,'pending');assert.equal(pending.status,'待客户签字');
+      await Promise.all([db.confirmCustomerSignature('race',manager),db.confirmCustomerSignature('race',manager)]);
       assert.equal((await pool.query("select count(*) from legacy_sync_outbox where order_id='race'")).rows[0].count,'1');
       await assert.rejects(()=>db.createSignatureTokenForOrder('race',manager.name),e=>e.status===409);
       await assert.rejects(()=>db.signWorkOrderByToken(session.signatureToken,'测试客户',file),e=>e.status===409);
@@ -59,6 +62,73 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       const [sign,recover]=await Promise.allSettled([db.signWorkOrderByToken(old,'客户',file),db.createSignatureTokenForOrder('expired',manager.name)]);
       assert.equal(sign.status,'rejected');assert.equal(sign.reason.status,404);assert.equal(recover.status,'fulfilled');
       assert.equal((await db.findWorkOrderByToken(recover.value.signatureToken)).status,'待客户签字');
+    });
+    await t.test('public mobile signature, resend, notification audience and staff approval gate',async()=>{
+      const {createServer}=await import('node:http');
+      const path=await import('node:path');const os=await import('node:os');
+      const uploads=await fs.mkdtemp(path.join(os.tmpdir(),'customer-signature-'));
+      process.env.LOCAL_UPLOAD_ROOT=uploads;process.env.FILE_STORAGE_PROVIDER='local';
+      const {default:sharp}=await import('sharp');
+      const png=`data:image/png;base64,${(await sharp({create:{width:200,height:80,channels:3,background:'#222'}}).png().toBuffer()).toString('base64')}`;
+      const {handleApiRequest}=await import('../server/routes/apiRouter.mjs');
+      const server=createServer(async(req,res)=>{try{await handleApiRequest(req,res,new URL(req.url,'http://localhost'));}catch(e){res.statusCode=e.status||500;res.setHeader('Content-Type','application/json');res.end(JSON.stringify({error:e.message}));}});
+      await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+      async function post(route,body) {
+        const response=await fetch(`http://127.0.0.1:${server.address().port}${route}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        return {status:response.status,body:await response.json(),cache:response.headers.get('cache-control')};
+      }
+      try {
+        for(const [id,name,shop] of [['a','负责顾问','shop-hq'],['b','其他顾问','shop-hq'],['c','外店管理员','other']]) {
+          await pool.query("insert into users(id,name,role,shop_id,active) values($1,$2,$3,$4,true)",[id,name,id==='c'?'manager':'advisor',shop]);
+        }
+        await seed('remote');await pool.query("update work_orders set advisor='负责顾问' where id='remote'");
+        await pool.query("insert into work_order_dispatch_plans(order_id,technician_id,assigned_by,due_at) values('remote','t','m',now()+interval '1 day')");
+        const first=await db.createSignatureTokenForOrder('remote',manager.name);
+        assert.match(first.signatureToken,/^sig_[a-f0-9]{64}$/);
+        const renewed=await db.createSignatureTokenForOrder('remote',manager.name,{renew:true});
+        assert.notEqual(first.signatureToken,renewed.signatureToken);
+        const root='/api/public/customer-signature',token=renewed.signatureToken;
+        assert.equal((await post(`${root}/session`,{token:first.signatureToken})).status,404);
+        assert.equal((await post(`${root}/session`,{token:'sig_legacy_weak'})).status,404);
+        const session=await post(`${root}/session`,{token});
+        assert.equal(session.status,200);assert.equal(session.cache,'no-store');
+        assert.equal(session.body.order.vehicle.plate,'沪ATEST');
+        assert.equal(session.body.order.customer,undefined);assert.equal(session.body.order.files,undefined);assert.equal(session.body.order.advisor,undefined);
+        assert.equal((await post(`${root}/sign`,null)).status,404);
+        assert.equal((await post(`${root}/sign`,{token,imageBase64:png,confirmed:false})).status,400);
+        assert.equal((await post(`${root}/sign`,{token,imageBase64:'data:image/png;base64,PHN2Zz4=',confirmed:true})).status,400);
+        const signed=await Promise.all([post(`${root}/sign`,{token,imageBase64:png,confirmed:true,orderId:'wrong'}),post(`${root}/sign`,{token,imageBase64:png,confirmed:true})]);
+        assert.deepEqual(signed.map(r=>r.status).sort(),[200,409]);
+        assert.deepEqual((await post(`${root}/session`,{token})).body,{state:'signed'});
+        const order=await db.findWorkOrderById(pool,'remote');
+        assert.equal(order.status,'待客户签字');assert.equal(order.customerSignatureReview.state,'pending');assert.ok(order.customerSignatureFileId);
+        assert.equal((await pool.query("select count(*) from legacy_sync_outbox where order_id='remote'")).rows[0].count,'0');
+        assert.equal((await pool.query("select count(*) from dispatch_tasks where order_id='remote'")).rows[0].count,'0');
+        const notices=(await pool.query("select * from dispatch_notifications where order_id='remote' and kind='需确认用户签字' order by recipient_id")).rows;
+        assert.deepEqual(notices.map(r=>r.recipient_id),['a','m']);
+        const {messageBody}=await import('../server/integrations/dingtalk/notifications.mjs');
+        const message=messageBody(notices[0],'customer-advisor',{DISPATCH_APP_URL:'https://example.com/',DINGTALK_AGENT_ID:'1'});
+        assert.match(message.msg.markdown.text,/workOrder=remote/);assert.match(message.msg.markdown.text,/确认/);
+        assert.equal((await post('/api/work-orders/remote/confirm-customer-signature',{})).status,401);
+        await assert.rejects(()=>db.confirmCustomerSignature('remote',{...manager,id:'b',role:'advisor',name:'其他顾问'}),e=>e.status===403);
+        await assert.rejects(()=>db.confirmCustomerSignature('remote',{...manager,shopId:'other'}),e=>e.status===403);
+        await assert.rejects(()=>db.createSignatureTokenForOrder('remote',manager.name,{renew:true}),e=>e.status===409);
+        await assert.rejects(()=>db.transitionWorkOrder('remote','待派工',manager.name,'绕过确认'),e=>e.status===409);
+        const extraToken='sig_'+'e'.repeat(64);
+        await pool.query("insert into signature_tokens(token,order_id,expires_at) values($1,'remote',now()+interval '1 day')",[extraToken]);
+        await assert.rejects(()=>db.signWorkOrderByToken(extraToken,'覆盖签名',order.customerSignatureFileId),e=>e.status===409);
+        const {validateSignatureReviewRecipient}=await import('../server/repositories/customerSignatureReviewRepository.mjs');
+        assert.equal(await validateSignatureReviewRecipient(notices[1],manager,pool),true);
+        const approved=await Promise.all([db.confirmCustomerSignature('remote',{...manager,id:'a',role:'advisor',name:'负责顾问'}),db.confirmCustomerSignature('remote',manager)]);
+        assert.equal(approved[0].customerSignatureReview.state,'confirmed');
+        assert.equal(approved[0].customerSignatureFileId,order.customerSignatureFileId);
+        assert.equal((await pool.query("select count(*) from legacy_sync_outbox where order_id='remote'")).rows[0].count,'1');
+        assert.equal((await pool.query("select count(*) from dispatch_tasks where order_id='remote'")).rows[0].count,'1');
+        assert.equal(await validateSignatureReviewRecipient(notices[1],manager,pool),false);
+        await assert.rejects(()=>db.confirmCustomerSignature('renew',manager),e=>e.status===409);
+      } finally {
+        await new Promise(resolve=>server.close(resolve));await fs.rm(uploads,{recursive:true,force:true});
+      }
     });
     await t.test('handover persists historical owners and writes the final mixed-team snapshot',async()=>{
       await seed('handover','已委托');
@@ -99,7 +169,7 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       const base=`http://127.0.0.1:${server.address().port}`;
       const {chromium}=await import(process.env.DISPATCH_PLAYWRIGHT_MODULE||'playwright');
       const browser=await chromium.launch({headless:true,executablePath:process.env.DISPATCH_CHROME_PATH});
-      const pages=[],errors=[];const artifacts='output/playwright/workflow-qa';await fs.mkdir(artifacts,{recursive:true});
+      const pages=[],errors=[];const artifacts='output/playwright/remote-signature-qa';await fs.mkdir(artifacts,{recursive:true});
       async function pageFor(route,authenticated=true,mobile=true) {
         const context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:1000},isMobile:mobile,hasTouch:mobile});
         const page=await context.newPage();pages.push(page);page.setDefaultTimeout(12000);page.on('pageerror',e=>errors.push(e.message));
@@ -122,11 +192,57 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
         await signing.mouse.move(box.x+box.width*.65,box.y+box.height*.55,{steps:12});await signing.mouse.up();
         await landscape.getByRole('button',{name:'完成横屏签字',exact:true}).click();
         await form.getByRole('button',{name:'确认签字',exact:true}).click();
-        await form.getByText('客户签字已保存，委托单已进入润丰待拉取队列。',{exact:true}).waitFor();
+        await form.getByText('客户签字已保存，需确认用户签字。请关闭此弹窗，在委托单上核对并确认后进入后续流程。',{exact:true}).waitFor();
         assert.equal((await pool.query("select count(*) from signatures where order_id='ui-signature' and signer_type='customer'")).rows[0].count,'1');
         await signing.screenshot({path:`${artifacts}/mobile-signature.png`,fullPage:true});
         await form.getByRole('button',{name:/^完\s*成$/}).click();
         assert.equal(await signing.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+
+        await seed('ui-remote','待客户签字');
+        await signing.reload();
+        await signing.locator('.archive-order-card').filter({hasText:'ui-remote'}).click();
+        await signing.getByRole('button',{name:'继续签字',exact:true}).click();
+        const remoteForm=signing.getByRole('dialog',{name:'机动车维修委托确认',exact:true});
+        const oldLink=await remoteForm.getByLabel('客户签字链接',{exact:true}).inputValue();
+        await remoteForm.getByRole('button',{name:'重新发送链接',exact:true}).click();
+        await signing.getByRole('button',{name:'生成新链接',exact:true}).click();
+        await remoteForm.getByText('新链接已生成，旧链接已失效。请复制新链接并重新发送给客户。',{exact:true}).waitFor();
+        const newLink=await remoteForm.getByLabel('客户签字链接',{exact:true}).inputValue();
+        assert.notEqual(newLink,oldLink);
+        const invalid=await pageFor(new URL(oldLink).pathname+new URL(oldLink).hash,false);
+        await invalid.getByRole('alert').getByText(/签字链接不存在或已过期/).waitFor();
+        const customer=await pageFor(new URL(newLink).pathname+new URL(newLink).hash,false);
+        await customer.getByRole('heading',{name:'维修项目',exact:true}).waitFor();
+        assert.equal(await customer.getByRole('button',{name:'确认签字并提交',exact:true}).isDisabled(),true);
+        await customer.getByRole('button',{name:'横屏签字',exact:true}).click();
+        const remoteLandscape=customer.getByRole('dialog',{name:'横屏签字',exact:true});
+        const remoteCanvas=remoteLandscape.getByLabel('手写签名区域');const rect=await remoteCanvas.boundingBox();assert.ok(rect);
+        await customer.mouse.move(rect.x+rect.width*.25,rect.y+rect.height*.3);await customer.mouse.down();
+        await customer.mouse.move(rect.x+rect.width*.7,rect.y+rect.height*.7,{steps:16});await customer.mouse.up();
+        await remoteLandscape.getByRole('button',{name:'完成横屏签字',exact:true}).click();
+        await customer.screenshot({path:`${artifacts}/customer-signature-form.png`,fullPage:true});
+        await customer.getByRole('checkbox').check();
+        await customer.getByRole('button',{name:'确认签字并提交',exact:true}).click();
+        await customer.getByText('签字已提交',{exact:true}).waitFor();
+        assert.equal((await db.findWorkOrderById(pool,'ui-remote')).customerSignatureReview.state,'pending');
+        assert.equal((await pool.query("select count(*) from legacy_sync_outbox where order_id='ui-remote'")).rows[0].count,'0');
+        assert.equal(await customer.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+        await customer.screenshot({path:`${artifacts}/customer-remote-signed.png`,fullPage:true});
+        await customer.reload();await customer.getByText('签字已提交',{exact:true}).waitFor();
+        await remoteForm.getByRole('button',{name:'刷新签字状态',exact:true}).click();
+        await remoteForm.getByText('客户已完成签字，需确认用户签字。请关闭弹窗后核对并确认。',{exact:true}).waitFor();
+        await remoteForm.getByRole('button',{name:/^完\s*成$/}).click();
+        await signing.screenshot({path:`${artifacts}/staff-signature-pending.png`,fullPage:true});
+        await signing.getByRole('button',{name:'确认用户签字',exact:true}).click();
+        const [approvalResponse] = await Promise.all([
+          signing.waitForResponse(response => response.url().endsWith('/confirm-customer-signature')),
+          signing.getByRole('dialog',{name:'确认客户签名并继续流程？',exact:true}).getByRole('button',{name:'确认用户签字',exact:true}).click()
+        ]);
+        assert.equal(approvalResponse.status(),200,await approvalResponse.text());
+        await signing.getByRole('button',{name:'确认用户签字',exact:true}).waitFor({state:'hidden'});
+        assert.equal((await db.findWorkOrderById(pool,'ui-remote')).customerSignatureReview.state,'confirmed');
+        assert.equal((await pool.query("select count(*) from legacy_sync_outbox where order_id='ui-remote'")).rows[0].count,'1');
+        await signing.screenshot({path:`${artifacts}/staff-signature-approved.png`,fullPage:true});
 
         const procurement=await import('../server/services/procurementService.mjs');
         const supplier=await procurement.updateSupplier(manager,null,{name:'浏览器测试供应商',contactName:'测试联系人',phone:'13800000000',active:true});

@@ -363,6 +363,7 @@ export type WorkOrder = {
     reception?: string;
     technician?: string;
   };
+  customerSignatureReview?: { state: "pending" | "confirmed"; signedAt: string; confirmedAt?: string; confirmedBy?: string };
   customerSignatureFileId?: string;
   signatureToken?: string;
   signatureTokenUsed?: boolean;
@@ -413,7 +414,7 @@ export type PartsRequirement = { sourcePhotoIds?:string[]; revision?:number; bat
 export type DispatchTask = DispatchExecution & {
   hasPartsHistory?:boolean;
   partsRequirement?:PartsRequirement;
-  vehicleModel?:string; vehicleMileage?:string; customerName?:string; advisor?:string;
+  vehicleVin?:string; vehicleModel?:string; vehicleMileage?:string; customerName?:string; advisor?:string;
   repairRound?: number; roundReason?: string; roundOpenedAt?: string; roundOpenedBy?: string; roundOpenedName?: string;
   repairCatalog?: Array<{id:number;name:string}>;
   repairItemIdFloor?: number;
@@ -470,6 +471,8 @@ export type DispatchDetail = {
 };
 export type DispatchPeople = { technicians: UserProfile[]; inspectors: UserProfile[] };
 
+
+export type WorkOrderPhotoDelete = { fileIds: string[] };
 
 export type WorkOrderPhotoUpdate = {
   fileId: string;
@@ -549,3 +552,21 @@ export type ProcurementReportRecord = { id: string; snapshot: ProcurementReport;
 export type ProcurementPortal = { kind: 'quote'; supplierName: string; tenderId: string; invitationId: string; termsVersion: number; terms: ProcurementTerms;
   status: ProcurementStatus; deadline: string | null; quotes: ProcurementQuote[]; result: string;
 } | { kind: 'report'; report: ProcurementReport };
+
+
+export type CustomerSignatureOrder = {
+  id: string;
+  shop: Pick<ShopProfile, "name" | "address" | "phone">;
+  vehicle: Pick<WorkOrder["vehicle"], "plate" | "model" | "mileage">;
+  customerName: string;
+  faultDescription: string;
+  repairItems: { name: string; laborFee: number }[];
+  estimatedFee: number;
+  feeNote: string;
+  oldPartsHandling: WorkOrder["oldPartsHandling"];
+  estimatedDeliveryAt: string;
+};
+export type CustomerSignatureSession =
+  | { state: "pending"; expiresAt: string; order: CustomerSignatureOrder }
+  | { state: "signed" };
+export type CustomerSignatureInput = { token: string; imageBase64: string; confirmed: boolean };

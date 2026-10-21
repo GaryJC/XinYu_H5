@@ -17,13 +17,7 @@ export async function updateWorkOrderPhoto(client, id, input, actor) {
       || input.fileId === input.replaceFileId
       || (input.replaceFileId !== undefined && (typeof input.replaceFileId !== "string" || !input.replaceFileId.trim()))) throw new HttpError(400, "照片参数不正确");
   const slot = slots[input.slot];
-  const { rows: orders } = await client.query("select * from work_orders where id=$1 for update", [id]);
-  const order = orders[0];
-  if (!order) throw new HttpError(404, "委托单不存在");
-  if (!actor?.active || !actor.shopId || actor.shopId !== order.shop_id
-      || !["manager", "advisor"].includes(actor.role)
-      || (actor.role === "advisor" && actor.name !== order.advisor)) throw new HttpError(403, "无权更新该委托单照片");
-  if (order.status === "草稿") throw new HttpError(409, "草稿请在开单页面上传照片并保存");
+  const order = await lockPhotoOrder(client, id, actor);
   const { rows: files } = await client.query("select * from files where id=$1 for update", [input.fileId]);
   const file = files[0];
   if (!file || file.kind !== slot.kind || !/^image\/(jpeg|png|webp)$/.test(file.mime_type || "")
@@ -68,4 +62,47 @@ export async function updateWorkOrderPhoto(client, id, input, actor) {
   await client.query("update work_orders set inspection=$2::jsonb,updated_at=now() where id=$1", [id, JSON.stringify(inspection)]);
   await client.query("insert into audit_logs(order_id,actor,action) values($1,$2,$3)",
     [id, actor.name, `补传/更新${slot.label}（文件 ${file.id}），保留原照片`]);
+}
+
+async function lockPhotoOrder(client, id, actor) {
+  const { rows: orders } = await client.query("select * from work_orders where id=$1 for update", [id]);
+  const order = orders[0];
+  if (!order) throw new HttpError(404, "委托单不存在");
+  if (!actor?.active || !actor.shopId || actor.shopId !== order.shop_id
+      || !["manager", "advisor"].includes(actor.role)
+      || (actor.role === "advisor" && actor.name !== order.advisor)) throw new HttpError(403, "无权更新该委托单照片");
+  if (order.status === "草稿") throw new HttpError(409, "草稿请在开单页面上传照片并保存");
+  return order;
+}
+
+export async function removeWorkOrderPhotos(client, id, input, actor) {
+  const ids = input?.fileIds;
+  if (!Array.isArray(ids) || !ids.length || ids.length > 100
+      || ids.some(value => typeof value !== "string" || !value.trim()) || new Set(ids).size !== ids.length) {
+    throw new HttpError(400, "请选择要删除的照片（每次最多 100 张）");
+  }
+  const order = await lockPhotoOrder(client, id, actor);
+  const inspection = { ...(order.inspection || {}) };
+  const { rows: files } = await client.query("select * from files where id=any($1::text[]) and order_id=$2 for update", [ids, id]);
+  const allowedKinds = new Set(Object.values(slots).map(slot => slot.kind).concat("damage_photo"));
+  if (files.length !== ids.length || files.some(file => !allowedKinds.has(file.kind)
+      || !/^image\/(jpeg|png|webp)$/.test(file.mime_type || "") || (inspection.replacedPhotoIds || []).includes(file.id))) {
+    throw new HttpError(409, "照片不存在、已变更或不允许删除，请刷新后重试");
+  }
+  const removed = new Set(ids);
+  const photos = { ...(inspection.preRepairPhotos || {}) };
+  for (const key of ["front45", "rear45", "mileage"]) if (removed.has(photos[key])) delete photos[key];
+  photos.extra = (photos.extra || []).filter(fileId => !removed.has(fileId));
+  inspection.preRepairPhotos = photos;
+  if (removed.has(inspection.vehicleLicenseFileId)) delete inspection.vehicleLicenseFileId;
+  inspection.replacedPhotoIds = [...new Set([...(inspection.replacedPhotoIds || []), ...ids])];
+  if (order.paper_order?.photoIds?.some(fileId => removed.has(fileId))) {
+    const paper = { ...order.paper_order, photoIds: order.paper_order.photoIds.filter(fileId => !removed.has(fileId)) };
+    if (!paper.photoIds.length) throw new HttpError(409, "纸质委托书至少保留一张照片，请先上传新照片再删除");
+    assertPaperPhotoIds(paper);
+    await client.query("update work_orders set paper_order=$2::jsonb where id=$1", [id, JSON.stringify(paper)]);
+  }
+  await client.query("update work_orders set inspection=$2::jsonb,updated_at=now() where id=$1", [id, JSON.stringify(inspection)]);
+  await client.query("insert into audit_logs(order_id,actor,action) values($1,$2,$3)",
+    [id, actor.name, `删除委托单照片 ${ids.length} 张（文件 ${ids.join("、")}），保留原文件`]);
 }

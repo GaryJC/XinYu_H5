@@ -63,11 +63,18 @@ export function usePreRepairPhotos(setDraft: Dispatch<SetStateAction<WorkOrderDr
     } } }));
   }
 
+  function removeExtras(ids: string[]) {
+    if (inFlight.current) return;
+    setDraft(current => ({ ...current, inspection: { ...current.inspection, preRepairPhotos: {
+      ...current.inspection.preRepairPhotos, extra: (current.inspection.preRepairPhotos?.extra || []).filter(id => !ids.includes(id))
+    } } }));
+  }
+
   function removeMileage() {
     setDraft((current) => ({ ...current, inspection: { ...current.inspection, preRepairPhotos: {
       ...current.inspection.preRepairPhotos, mileage: undefined
     } } }));
   }
 
-  return { uploading, error, upload, uploadExtras, reset, removeExtra, removeMileage, isUploading: () => inFlight.current };
+  return { uploading, error, upload, uploadExtras, reset, removeExtras, removeExtra, removeMileage, isUploading: () => inFlight.current };
 }

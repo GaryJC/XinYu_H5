@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { StoredFile, WorkOrder, WorkOrderPhotoUpdate } from "../../../../shared/types";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
-import { prepareOcrImage } from "../../shared/images/prepareOcrImage";
+import { prepareOcrImage, prepareUploadPhoto } from "../../shared/images/prepareOcrImage";
 
 export function useOrderPhotoUpload(orderId: string, userId: string | undefined, onUpdated: (order: WorkOrder) => void) {
-  const [uploading, setUploading] = useState<WorkOrderPhotoUpdate["slot"] | "">("");
+  const [uploading, setUploading] = useState<WorkOrderPhotoUpdate["slot"] | "delete" | "">("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const running = useRef(false);
@@ -15,26 +15,49 @@ export function useOrderPhotoUpload(orderId: string, userId: string | undefined,
     setUploading(""); setError(""); setSuccess(false);
     return () => { generation.current++; };
   }, [orderId, userId]);
-  async function upload(slot: WorkOrderPhotoUpdate["slot"], file: File, replaceFileId?: string) {
-    if (running.current) return false;
+
+  async function uploadMany(slot: WorkOrderPhotoUpdate["slot"], files: File[], replaceFileId?: string) {
+    if (running.current || !files.length) return false;
     const session = generation.current;
     running.current = true; setUploading(slot); setError(""); setSuccess(false);
+    let completed = 0;
     try {
-      const image = await prepareOcrImage(file);
-      if (session !== generation.current) return false;
-      const kind: StoredFile["kind"] = slot === "vehicleLicense" ? "vehicle_license" : slot === "other" ? "other" : "repair_order_photo";
-      const stored = await workOrderApi.uploadFile({kind, ...image});
-      if (session !== generation.current) return false;
-      const updated = await workOrderApi.updatePhoto(orderId, {slot, fileId:stored.id, replaceFileId});
-      if (session !== generation.current) return false;
-      onUpdated(updated); setSuccess(true);
+      // Keep the whole batch locked and process images sequentially for mobile WebViews.
+      for (const file of files) {
+        const image = await (slot === "vehicleLicense" ? prepareOcrImage(file) : prepareUploadPhoto(file));
+        if (session !== generation.current) return false;
+        const kind: StoredFile["kind"] = slot === "vehicleLicense" ? "vehicle_license" : slot === "other" ? "other" : "repair_order_photo";
+        const stored = await workOrderApi.uploadFile({kind, ...image});
+        if (session !== generation.current) return false;
+        const updated = await workOrderApi.updatePhoto(orderId, {slot, fileId:stored.id, replaceFileId});
+        if (session !== generation.current) return false;
+        onUpdated(updated);
+        completed++;
+      }
+      setSuccess(true);
       return true;
     } catch (cause) {
-      if (session === generation.current) setError(cause instanceof Error ? cause.message : "照片更新失败，请重试");
+      if (session === generation.current) setError(`${completed ? `已上传 ${completed} 张，剩余照片请重新选择。` : ""}${cause instanceof Error ? cause.message : "照片更新失败，请重试"}`);
       return false;
     } finally {
       if (session === generation.current) { running.current=false; setUploading(""); }
     }
   }
-  return {uploading, error, success, upload};
+  async function remove(fileIds: string[]) {
+    if (running.current || !fileIds.length) return false;
+    const session = generation.current;
+    running.current = true; setUploading("delete"); setError(""); setSuccess(false);
+    try {
+      const updated = await workOrderApi.deletePhotos(orderId, { fileIds });
+      if (session !== generation.current) return false;
+      onUpdated(updated); setSuccess(true);
+      return true;
+    } catch (cause) {
+      if (session === generation.current) setError(cause instanceof Error ? cause.message : "照片删除失败，请重试");
+      return false;
+    } finally {
+      if (session === generation.current) { running.current=false; setUploading(""); }
+    }
+  }
+  return {uploading, error, success, upload: (slot: WorkOrderPhotoUpdate["slot"], file: File, replaceFileId?: string) => uploadMany(slot, [file], replaceFileId), uploadMany, remove};
 }

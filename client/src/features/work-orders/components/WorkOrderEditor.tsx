@@ -1,3 +1,4 @@
+import { SignatureReview } from "../../signature/SignatureReview";
 import { PaperOrderPhotos } from "./PaperOrderPhotos";
 import { CustomerVehicleUpdateTag } from "../../customer-vehicle-update/CustomerVehicleUpdateTag";
 import { PaperOrderResolution } from "./PaperOrderResolution";
@@ -60,7 +61,9 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
         ? "签字和委托单已上传，润丰正在处理。"
         : "签字和委托单已上传，正在等待润丰系统拉取。";
   const licenseExceptionCurrent=isCurrentVehicleLicenseException(draft.vehicleLicenseException,draft.vehicle);
-  const hasVehicleLicense=Boolean(controller.vehicleLicenseFileId || selectedOrder?.files?.some(file=>file.kind==='vehicle_license'));
+  const hasVehicleLicense = selectedOrder && selectedOrder.status !== "草稿"
+    ? Boolean(selectedOrder.files?.some(file => file.kind === "vehicle_license" && !selectedOrder.inspection.replacedPhotoIds?.includes(file.id)))
+    : Boolean(controller.vehicleLicenseFileId || selectedOrder?.files?.some(file => file.kind === "vehicle_license" && !selectedOrder.inspection.replacedPhotoIds?.includes(file.id)));
 
   async function handleSendSignature() {
     const session = await sendSignature();
@@ -392,6 +395,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               onOpen={()=>controller.openDispatch(selectedOrder!.id)}/>}
 
             </>}
+            {selectedOrder && <SignatureReview order={selectedOrder} user={controller.currentUser} onUpdated={controller.acceptRefreshedOrder} />}
             {!draft.paperOrder && <div className="workflow-actions">
               <div>
                 <strong>完成开单流程</strong>
@@ -401,9 +405,9 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                     type={selectedOrder?.legacySyncStatus === "failed" ? "warning" : "success"}
                     showIcon
                     title="签字已上传成功"
-                    description={signatureUploadDescription}
+                    description={selectedOrder?.customerSignatureReview?.state === "pending" ? "需确认用户签字，确认前不会同步润丰或派工。" : signatureUploadDescription}
                   />
-                ) : <span>客户签字完成后，委托单会自动进入润丰待拉取队列。</span>}
+                ) : <span>客户签字并经服务顾问或管理员确认后，委托单会进入润丰待拉取队列。</span>}
                 {showSignatureValidation && formErrors.length ? (
                   <Alert
                     className="signature-validation-summary"
@@ -426,7 +430,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
 
           </Form>
           {signatureSession && <WorkOrderSignatureDialog key={signatureSession.token} session={signatureSession}
-            completeSignature={completeSignature} onClose={() => setSignatureSession(undefined)} />}
+            completeSignature={completeSignature} onOrderUpdated={controller.acceptRefreshedOrder} onClose={() => setSignatureSession(undefined)} />}
           </FormSurface>
   );
 }

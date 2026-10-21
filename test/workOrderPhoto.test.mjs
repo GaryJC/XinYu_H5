@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { updateWorkOrderPhoto } from "../server/repositories/workOrderPhotoRepository.mjs";
+import { updateWorkOrderPhoto, removeWorkOrderPhotos } from "../server/repositories/workOrderPhotoRepository.mjs";
 import { rowToWorkOrder } from "../server/domain/workOrderModel.mjs";
 
 const actor = {id:"u1", name:"顾问", role:"advisor", active:true, shopId:"shop1"};
@@ -88,4 +88,76 @@ test("invalid photo slot and missing IDs are rejected before accessing the datab
     await assert.rejects(()=>updateWorkOrderPhoto(client,"order1",input,actor),e=>e.status===400);
     assert.equal(calls.length,0);
   }
+});
+
+function deletionFixture(options = {}) {
+  const base = fixture(options);
+  const query = base.client.query;
+  base.client.query = async (sql, params) => {
+    if (sql.startsWith("select * from files where id=any")) {
+      base.calls.push({query:sql,params});
+      return { rows: options.files || params[0].map(id => ({id,order_id:"order1",kind:"repair_order_photo",mime_type:"image/jpeg"})) };
+    }
+    return query(sql, params);
+  };
+  return base;
+}
+
+test("batch deletion clears only selected photo slots and retains files with audit history", async () => {
+  const {client,calls,order} = deletionFixture();
+  await removeWorkOrderPhotos(client,"order1",{fileIds:["old-front","old-extra"]},actor);
+  const inspection = changedInspection(calls);
+  assert.equal(inspection.preRepairPhotos.front45,undefined);
+  assert.equal(inspection.preRepairPhotos.rear45,"rear");
+  assert.deepEqual(inspection.preRepairPhotos.extra,[]);
+  assert.deepEqual(inspection.replacedPhotoIds,["old-front","old-extra"]);
+  assert.deepEqual(inspection.belongings,order.inspection.belongings);
+  assert.ok(calls.some(c => c.query.startsWith("insert into audit_logs")));
+  assert.ok(!calls.some(c => /delete |legacy_sync|update signatures|status\s*=/.test(c.query)));
+});
+
+test("deletion clears current license ID and hides historical license attachments", async () => {
+  const {client,calls} = deletionFixture({order:{inspection:{vehicleLicenseFileId:"license"}},
+    files:[{id:"license",kind:"vehicle_license",mime_type:"image/jpeg"}]});
+  await removeWorkOrderPhotos(client,"order1",{fileIds:["license"]},actor);
+  assert.equal(changedInspection(calls).vehicleLicenseFileId,undefined);
+  assert.deepEqual(changedInspection(calls).replacedPhotoIds,["license"]);
+});
+
+test("paper deletion updates references but refuses deleting the last paper image before writes", async () => {
+  const {client,calls} = deletionFixture({order:{paper_order:{mode:"pending",photoIds:["paper1","paper2"]}}});
+  await removeWorkOrderPhotos(client,"order1",{fileIds:["paper1"]},actor);
+  const paper = JSON.parse(calls.find(c => c.query.includes("set paper_order=")).params[1]);
+  assert.deepEqual(paper.photoIds,["paper2"]);
+  const last = deletionFixture({order:{paper_order:{mode:"pending",photoIds:["paper1"]}}});
+  await assert.rejects(()=>removeWorkOrderPhotos(last.client,"order1",{fileIds:["paper1"]},actor), e=>e.status===409);
+  assert.ok(!last.calls.some(c=>/^(update|insert|delete)/.test(c.query)));
+});
+
+test("invalid, missing, hidden and non-photo files reject the entire batch before writes", async () => {
+  for (const options of [
+    {files:[]},
+    {files:[{id:"signature",kind:"signature_image",mime_type:"image/png"}]},
+    {files:[{id:"new",kind:"other",mime_type:"text/html"}]},
+    {order:{inspection:{replacedPhotoIds:["new"]}}}
+  ]) {
+    const {client,calls} = deletionFixture(options);
+    await assert.rejects(()=>removeWorkOrderPhotos(client,"order1",{fileIds:["new"]},actor),e=>e.status===409);
+    assert.ok(!calls.some(c=>/^(update|insert|delete)/.test(c.query)));
+  }
+  for (const input of [null,{}, {fileIds:[]},{fileIds:[""]},{fileIds:[1]},{fileIds:["a","a"]},{fileIds:Array.from({length:101},(_,i)=>String(i))}]) {
+    const {client,calls} = deletionFixture();
+    await assert.rejects(()=>removeWorkOrderPhotos(client,"order1",input,actor),e=>e.status===400);
+    assert.equal(calls.length,0);
+  }
+});
+
+test("photo deletion enforces advisor ownership, shop, role, activity and draft workflow", async () => {
+  for (const patch of [{shopId:"other"},{name:"其他顾问"},{active:false},{role:"technician"}]) {
+    const {client,calls} = deletionFixture();
+    await assert.rejects(()=>removeWorkOrderPhotos(client,"order1",{fileIds:["new"]},{...actor,...patch}),e=>e.status===403);
+    assert.equal(calls.length,1);
+  }
+  const {client} = deletionFixture({order:{status:"草稿"}});
+  await assert.rejects(()=>removeWorkOrderPhotos(client,"order1",{fileIds:["new"]},actor),e=>e.status===409);
 });

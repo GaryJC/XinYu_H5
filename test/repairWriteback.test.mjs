@@ -64,7 +64,8 @@ test('wrong vehicle, department, identifiers, missing document or settled header
  for(const change of [{plate:'其他车'},{department:'02'},{dh:999},{settled:'2026.10.18'},{deleted:'1'},{approved:'1'}])assert.throws(()=>assertLegacyRepairHeaders([{...headers()[0],...change},headers()[1]],snapshot));
  assert.doesNotThrow(()=>assertLegacyRepairHeaders(headers().slice(0,1),snapshot));
  assert.throws(()=>assertLegacyRepairHeaders(headers().slice(1),snapshot),/内单缺失/);
- assert.throws(()=>assertLegacyRepairHeaders(headers(),{...snapshot,legacyReid:999}),/主记录/);
+ assert.doesNotThrow(()=>assertLegacyRepairHeaders(headers(),{...snapshot,legacyReid:999}));
+ assert.throws(()=>assertLegacyRepairHeaders([headers()[0],headers()[0]],snapshot),/内单缺失|重复/);
 });
 test('downstream business records prevent any delete',async()=>{
  const mock=sqlHarness({downstream:1});await assert.rejects(()=>replaceLegacyRepairItems(snapshot,{executeTransaction:mock.executeTransaction,source:'test'}),/已有派工明细/);assert.ok(!mock.state().statements.some(s=>s.query.startsWith('delete')));
@@ -97,4 +98,24 @@ test('code page preflight only issues parameterized validation SQL and propagate
  await validateLegacyRepairStrings(snapshot,{execute:async(text,configure)=>{query=text;configure({input:(key,type,value)=>{params[key]=value;}},{NVarChar:()=>null});}});
  assert.ok(query.includes('DATALENGTH'));assert.ok(!/insert|delete|update/i.test(query));assert.equal(params.v0,'更换机油');assert.equal(params.v1,'027 李富强');
  await assert.rejects(()=>validateLegacyRepairStrings(snapshot,{execute:async()=>{throw new Error('不支持字符');}}),/不支持字符/);
+});
+
+test('dispatch identity ignores misfilled or missing ACK reid and writes canonical receipt hashes',async()=>{
+ for(const legacyReid of [7808964,0,null,undefined]) {
+  const mock=sqlHarness();
+  await replaceLegacyRepairItems({...snapshot,legacyReid},{executeTransaction:mock.executeTransaction,source:'test'});
+  const statements=mock.state().statements;
+  assert.deepEqual(statements.filter(s=>s.query.startsWith('update dbo.qxwxb')).map(s=>s.params.reid),[10,11]);
+  assert.ok(statements.filter(s=>s.query.startsWith('insert into dbo.h5_repair_writeback_receipts')).every(s=>s.params.hash===writebackHash(snapshot)));
+ }
+});
+test('canonical and legacy external receipts survive ACK correction but reject changed content',async()=>{
+ for(const legacyReid of [10,11]) {
+  const hash=writebackHash({...snapshot,legacyReid});
+  const mock=sqlHarness({existingHash:hash});
+  assert.deepEqual(await replaceLegacyRepairItems({...snapshot,legacyReid:7808964},{executeTransaction:mock.executeTransaction,source:'test'}),{duplicate:true});
+  assert.ok(!mock.state().statements.some(s=>/^(delete|insert|update)/.test(s.query)));
+  const changed=sqlHarness({existingHash:hash});
+  await assert.rejects(()=>replaceLegacyRepairItems({...snapshot,items:[{...snapshot.items[0],name:'不同项目'}]},{executeTransaction:changed.executeTransaction,source:'test'}),/幂等键/);
+ }
 });

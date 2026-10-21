@@ -24,6 +24,7 @@ import {
   WorkOrderDraft,
   PaperOrderResolution,
   WorkOrderPhotoUpdate,
+  WorkOrderPhotoDelete,
   WorkOrderCustomerVehicleUpdate,
   WorkOrderStatus
 } from "../../../../../shared/types";
@@ -50,11 +51,13 @@ export type WorkOrderApi = {
   resolvePaperOrder(id: string, change: PaperOrderResolution): Promise<WorkOrder>;
   submitPaperOrder(id: string): Promise<WorkOrder>;
   refreshFromRunfeng(id: string): Promise<WorkOrder>;
+  deletePhotos(id: string, input: WorkOrderPhotoDelete): Promise<WorkOrder>;
   updatePhoto(id: string, photo: WorkOrderPhotoUpdate): Promise<WorkOrder>;
   updateCustomerVehicle(id: string, change: WorkOrderCustomerVehicleUpdate): Promise<WorkOrder>;
   deleteDraft(id: string): Promise<{ id: string }>;
   transition(id: string, status: WorkOrderStatus, actor: string, action: string, patch?: Partial<WorkOrder>): Promise<WorkOrder>;
-  createSignatureToken(id: string, actor: string): Promise<WorkOrder>;
+  createSignatureToken(id: string, actor: string, renew?: boolean): Promise<WorkOrder>;
+  confirmCustomerSignature(id: string): Promise<WorkOrder>;
   signByToken(token: string, signature: string, signatureFileId: string): Promise<WorkOrder>;
   findByToken(token: string): Promise<WorkOrder | undefined>;
   recognizeVehicleLicense(input: VehicleLicenseOcrInput | string): Promise<VehicleLicenseOcrResult>;
@@ -101,6 +104,9 @@ export const workOrderApi: WorkOrderApi = {
     const stages = new Map(tasks.map(task => [task.orderId, task.stage]));
     return orders.map(order => ({ ...order, dispatchStage: stages.get(order.id) }));
   },
+  deletePhotos(id, input) {
+    return request(`/api/work-orders/${encodeURIComponent(id)}/photos`, {method:"DELETE", body:input});
+  },
   updatePhoto(id, photo) {
     return request(`/api/work-orders/${encodeURIComponent(id)}/photos`, {method:"POST", body:photo});
   },
@@ -130,8 +136,9 @@ export const workOrderApi: WorkOrderApi = {
   transition(id, status, actor, action, patch = {}) {
     return request(`/api/work-orders/${id}/transition`, { method: "POST", body: { status, actor, action, patch } });
   },
-  createSignatureToken(id, actor) {
-    return request(`/api/work-orders/${id}/signature-token`, { method: "POST", body: { actor } });
+  confirmCustomerSignature(id) { return request(`/api/work-orders/${encodeURIComponent(id)}/confirm-customer-signature`, { method: "POST" }); },
+  createSignatureToken(id, actor, renew = false) {
+    return request(`/api/work-orders/${id}/signature-token`, { method: "POST", body: { actor, renew } });
   },
   signByToken(token, signature, signatureFileId) {
     return request(`/api/signatures/${token}/sign`, { method: "POST", body: { signature, signatureFileId } });

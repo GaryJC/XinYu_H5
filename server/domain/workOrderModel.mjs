@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { customerVehicleEditEnabled } from "../config/customerVehicleEdit.mjs";
 
 export function workOrderValues(order) {
@@ -45,6 +45,7 @@ export function workOrderValues(order) {
 
 export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecords, syncRecords, outboundOrders, settlements, files = []) {
   return {
+    customerSignatureReview: row.customer_signature_review || undefined,
     paperOrder: row.paper_order || undefined,
     id: row.id,
     dispatchNo: row.dispatch_no || "",
@@ -220,8 +221,8 @@ export function createOrderId() {
   return `WT-${stamp}-${randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
 }
 
-export function createSignatureToken(orderId) {
-  return `sig_${orderId}_${Math.random().toString(36).slice(2, 9)}`;
+export function createSignatureToken() {
+  return `sig_${randomBytes(32).toString("hex")}`;
 }
 
 export function createId(prefix) {
@@ -232,6 +233,7 @@ export function createId(prefix) {
 
 export function rowToOcrRecord(row) {
   return {
+    customerSignatureReview: row.customer_signature_review || undefined,
     paperOrder: row.paper_order || undefined,
     id: row.id,
     orderId: row.order_id || undefined,

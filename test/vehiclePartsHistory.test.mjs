@@ -40,3 +40,18 @@ test('only a selected historical code can query exact inventory; errors never ma
  await assert.rejects(()=>warehouseVehiclePartsHistory(actor,'o',{...d,getTask:async()=>({orderStatus:'待派工',partsRequirement:{},plate:''})}),e=>e.status===409);
  await assert.rejects(()=>warehouseVehiclePartsHistory(actor,'o',{...d,findHistory:async()=>{throw Error('private connection details');}}),e=>e.status===502&&!e.message.includes('details'));
 });
+test('same material only shows models from its latest repair and retains other materials latest usage',async()=>{
+ let calls=0;
+ const result=await findVehiclePartsHistory({plate:'P'},async()=>({recordset:++calls===1?[
+  {id:3,order_no:3,repaired_at:'2026.10.20'}, {id:2,order_no:2,repaired_at:'2026.09.20'}, {id:1,order_no:1,repaired_at:'2026.08.20'}
+ ]:[
+  {order_no:3,code:'NEW',name:'机油',specification:'5W30',unit:'升',quantity:3},
+  {order_no:3,code:'NEW',name:'机油',specification:'5W30',unit:'升',quantity:1},
+  {order_no:3,code:'NEW-B',name:'机油',specification:'5W30',unit:'桶',quantity:1},
+  {order_no:2,code:'OLD',name:' 机 油 ',specification:'5W40',unit:'升',quantity:5},
+  {order_no:2,code:'FILTER',name:'滤芯',specification:'F2',unit:'个',quantity:1},
+  {order_no:1,code:'FILTER-OLD',name:'滤芯',specification:'F1',unit:'个',quantity:2}
+ ]}));
+ assert.deepEqual(result.items.map(item=>item.code),['NEW','NEW-B','FILTER']);
+ assert.equal(result.items[0].quantity,4);assert.equal(result.items[2].repairOrderId,'2');
+});

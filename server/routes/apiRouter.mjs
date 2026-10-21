@@ -1,5 +1,6 @@
+import { handleCustomerSignature } from "./customerSignatureRouter.mjs";
 import { resolvePaperOrder, submitPaperDingTalkOrder } from "../services/paperOrderService.mjs";
-import { saveWorkOrderPhoto } from "../services/workOrderPhotoService.mjs";
+import { saveWorkOrderPhoto, deleteWorkOrderPhotos } from "../services/workOrderPhotoService.mjs";
 import { updateCustomerVehicle } from "../services/customerVehicleUpdateService.mjs";
 import { refreshWorkOrderFromLegacy } from "../services/workOrderRefreshService.mjs";
 import { handleSupplierPortal,handleProcurement } from "./procurementRouter.mjs";
@@ -12,6 +13,7 @@ import { authenticateRequest, loginForDevelopment, loginWithDingTalk } from "../
 import {
   getWorkOrderDetail,
   createSignatureTokenForOrder,
+  confirmCustomerSignature,
   createSettlementForOrder,
   createWorkOrder,
   dashboardSummary,
@@ -48,6 +50,7 @@ import { assertOcrRecordAccess, assertWorkOrderAccess } from "../repositories/ac
 import { confirmOcrRecord, createOcrRecord } from "../repositories/ocrRecordRepository.mjs";
 
 export async function handleApiRequest(req, res, url) {
+  if (await handleCustomerSignature(req, res, url)) return true;
   if (await handleSupplierPortal(req,res,url)) return true;
   if (req.method === "GET" && url.pathname === "/api/health") {
     if (process.env.DEPLOYMENT_RELEASE) res.setHeader("X-Deployment-Release", process.env.DEPLOYMENT_RELEASE);
@@ -237,7 +240,7 @@ export async function handleApiRequest(req, res, url) {
   }
   const workOrderMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)$/);
   if(workOrderMatch && req.method==='GET') {
-    requireAnyRole(currentUser,['advisor','manager']);
+    requireAnyRole(currentUser,['advisor','manager','warehouse']);
     sendJson(res,200,await getWorkOrderDetail(decodeURIComponent(workOrderMatch[1]),currentUser));return true;
   }
   if (workOrderMatch && req.method === "PUT") {
@@ -283,6 +286,12 @@ export async function handleApiRequest(req, res, url) {
     return true;
   }
 
+  if (photoMatch && req.method === "DELETE") {
+    requireAnyRole(currentUser, ["advisor", "manager"]);
+    sendJson(res, 200, await deleteWorkOrderPhotos(decodeURIComponent(photoMatch[1]), await readJson(req), currentUser));
+    return true;
+  }
+
   const refreshMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/refresh-from-runfeng$/);
   if (refreshMatch && req.method === "POST") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
@@ -302,12 +311,19 @@ export async function handleApiRequest(req, res, url) {
     return true;
   }
 
+  const confirmSignatureMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/confirm-customer-signature$/);
+  if (confirmSignatureMatch && req.method === "POST") {
+    requireAnyRole(currentUser, ["advisor", "manager"]);
+    sendJson(res, 200, await confirmCustomerSignature(confirmSignatureMatch[1], currentUser));
+    return true;
+  }
+
   const tokenMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/signature-token$/);
   if (tokenMatch && req.method === "POST") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     await assertWorkOrderAccess(tokenMatch[1], currentUser);
-    const { actor } = await readJson(req);
-    sendJson(res, 200, await createSignatureTokenForOrder(tokenMatch[1], currentUser.name || actor));
+    const { actor, renew } = await readJson(req);
+    sendJson(res, 200, await createSignatureTokenForOrder(tokenMatch[1], currentUser.name || actor, { renew: renew === true }));
     return true;
   }
 

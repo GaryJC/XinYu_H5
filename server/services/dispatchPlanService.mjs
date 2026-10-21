@@ -1,7 +1,7 @@
 import { pendingDispatchPlan, markDispatchPlan } from '../repositories/dispatchPlanRepository.mjs';
 import { dispatchPeople, executeDispatchActionInTransaction } from './dispatchService.mjs';
 
-// Called inside the signature transaction: signature, repair task and outboxes commit together.
+// Called inside staff signature approval: review, repair task and outboxes commit together.
 export async function activateDispatchPlan(client,order) {
   const plan=await pendingDispatchPlan(client,order.id);
   if (!plan) return;
