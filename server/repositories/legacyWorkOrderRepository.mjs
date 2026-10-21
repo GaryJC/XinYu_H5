@@ -1,11 +1,16 @@
 import { executeSqlServerTransaction } from "../database/sqlServerPool.mjs";
 import { HttpError } from "../http/HttpError.mjs";
 
-export const LEGACY_ORDER_QUERY = `select top 2 reid, dh, wd, pgd, bzxx, ch, cx, lc, jcrq, jhrq,
+const LEGACY_ORDER_HEADER = `select top 2 reid, dh, wd, pgd, bzxx, ch, cx, lc, jcrq, jhrq,
   sxr, lxr, lxdh, ssdw, wxnr, fyhj, bm,
-  (select top 1 RTRIM(d.mc) from dbo.bmxxb d where RTRIM(d.bm)=RTRIM(qxwxb.bm)) as department_name from dbo.qxwxb
+  (select top 1 RTRIM(d.mc) from dbo.bmxxb d where RTRIM(d.bm)=RTRIM(qxwxb.bm)) as department_name from dbo.qxwxb`;
+export const LEGACY_ORDER_QUERY = `${LEGACY_ORDER_HEADER}
   where (@reid is not null and reid=@reid and dh=@dh)
      or (@reid is null and RTRIM(bzxx)=@marker)`;
+// Runfeng can keep an internal and external header under the same dispatch number.
+// Initial paper imports use the formal internal account, as vehicle history does.
+export const LEGACY_DISPATCH_ORDER_QUERY = `${LEGACY_ORDER_HEADER}
+  where wd='' and RTRIM(pgd)=@dispatchNo`;
 export const LEGACY_ITEMS_QUERY = `select reid, Xh, hh, je from dbo.qxwxmxb
   where dh=@dh and wd=@wd and RTRIM(lb)='项目' order by Xh, reid`;
 
@@ -15,7 +20,7 @@ export async function readLegacyWorkOrder(order, runTransaction = executeSqlServ
   return runTransaction(async execute => {
     const linked = order.legacy_reid != null && order.legacy_document_no != null;
     const byDispatch = order.paperDispatchNo;
-    const result = await execute(byDispatch ? LEGACY_ORDER_QUERY.slice(0, LEGACY_ORDER_QUERY.indexOf("  where")) + " where RTRIM(pgd)=@dispatchNo" : LEGACY_ORDER_QUERY, (request, sql) => {
+    const result = await execute(byDispatch ? LEGACY_DISPATCH_ORDER_QUERY : LEGACY_ORDER_QUERY, (request, sql) => {
       if (byDispatch) request.input("dispatchNo", sql.VarChar(50), byDispatch);
       request.input("reid", sql.Int, linked ? Number(order.legacy_reid) : null);
       request.input("dh", sql.Int, linked ? Number(order.legacy_document_no) : null);

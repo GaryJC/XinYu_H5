@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildLegacyRefresh, legacyDate } from "../server/domain/legacyRefresh.mjs";
-import { readLegacyWorkOrder, LEGACY_ITEMS_QUERY, LEGACY_ORDER_QUERY } from "../server/repositories/legacyWorkOrderRepository.mjs";
+import { readLegacyWorkOrder, LEGACY_ITEMS_QUERY, LEGACY_ORDER_QUERY, LEGACY_DISPATCH_ORDER_QUERY } from "../server/repositories/legacyWorkOrderRepository.mjs";
 
 function snapshot() {
   return { header: { reid: 101, dh: 201, wd: "", pgd: "A123", ch: "鲁B12345", jcrq: "20261015", jhrq: "2026/10/16", fyhj: 120, wxnr: "制动异响" },
@@ -80,4 +80,27 @@ test("missing, duplicate or mismatched source records never fall back to a diffe
       async run => run(async () => { reads++; return { recordset: rows }; })), /润丰/);
     assert.equal(reads, 1);
   }
+});
+
+test("paper dispatch lookup selects the internal account and reads its matching details", async () => {
+  const source = snapshot();
+  const queries = [];
+  const result = await readLegacyWorkOrder({ id: "paper", paperDispatchNo: "A67561" }, async run => run(async (query, configure) => {
+    const inputs = {};
+    configure?.({ input: (key, _type, value) => { inputs[key] = value; } }, new Proxy({}, { get: () => () => "type" }));
+    queries.push({ query, inputs });
+    if (query === LEGACY_DISPATCH_ORDER_QUERY) {
+      assert.match(query, /where wd='' and RTRIM\(pgd\)=@dispatchNo/);
+      assert.match(query, /select top 2/);
+      assert.equal(inputs.dispatchNo, "A67561");
+      return { recordset: [{ ...source.header, pgd: "A67561", wd: "" }] };
+    }
+    if (query === LEGACY_ITEMS_QUERY) return { recordset: source.items };
+    return { recordset: [] };
+  }));
+  assert.equal(result.header.pgd, "A67561");
+  assert.equal(result.header.wd, "");
+  assert.deepEqual(result.items, source.items);
+  assert.equal(queries[1].inputs.dh, source.header.dh);
+  assert.equal(queries[1].inputs.wd, "");
 });

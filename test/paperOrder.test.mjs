@@ -49,7 +49,7 @@ test('Runfeng paper import queries the exact dispatch number and rejects ambiguo
   for (const headers of [[],[{pgd:'A123'},{pgd:'A123'}],[{pgd:'A123',bzxx:'H5:other'}]]) {
     await assert.rejects(()=>readLegacyWorkOrder({id:'paper',paperDispatchNo:'A123'},async run=>run(async(sql,configure)=>{
       const inputs={};configure({input:(key,type,value)=>inputs[key]=value},new Proxy({},{get:()=>()=>''}));
-      assert.match(sql,/where RTRIM\(pgd\)=@dispatchNo/);assert.equal(inputs.dispatchNo,'A123');
+      assert.match(sql,/where wd='' and RTRIM\(pgd\)=@dispatchNo/);assert.equal(inputs.dispatchNo,'A123');
       return {recordset:headers};
     })),/未找到|多个|不一致/);
   }
