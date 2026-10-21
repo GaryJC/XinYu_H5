@@ -1,0 +1,465 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e6]:
+        - generic [ref=e13]:
+          - strong [ref=e14]: 修理委托
+          - generic [ref=e15]: 钉钉自建 H5
+        - navigation "主导航" [ref=e16]:
+          - button "工作台" [ref=e17] [cursor=pointer]
+          - button "委托开单" [ref=e24] [cursor=pointer]
+          - button "派工台" [ref=e29] [cursor=pointer]
+          - button "配件竞价" [ref=e192] [cursor=pointer]
+          - button "检验任务" [ref=e197] [cursor=pointer]
+          - button "数据看板" [ref=e202] [cursor=pointer]
+          - button "权限设置" [ref=e206] [cursor=pointer]
+        - paragraph [ref=e39]: 按门店与岗位权限使用委托开单、签字与归档功能。
+    - main [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e43]:
+          - heading "机动车修理委托书数字化工作台" [level=1] [ref=e44]
+          - paragraph [ref=e45]: 32 张委托单 · 抚顺路店 · 维修中
+        - generic [ref=e46]:
+          - generic [ref=e47]: 测试身份：Gary（测试）
+          - generic [ref=e54] [cursor=pointer]:
+            - generic [ref=e55]:
+              - generic: 选择测试身份
+              - combobox "切换本地测试身份" [ref=e56]
+            - img "down" [ref=e211]
+          - generic [ref=e61]: 门店管理员
+      - region "待办统计" [ref=e67]:
+        - generic [ref=e70]:
+          - generic [ref=e71]: 待客户签字
+          - generic [ref=e73]:
+            - generic [ref=e74]: "1"
+            - generic [ref=e75]: 较昨日 +1
+        - generic [ref=e79]:
+          - generic [ref=e80]: 待派工
+          - generic [ref=e82]:
+            - generic [ref=e83]: "7"
+            - generic [ref=e84]: 较昨日 +7
+        - generic [ref=e88]:
+          - generic [ref=e89]: 维修中
+          - generic [ref=e91]:
+            - generic [ref=e92]: "7"
+            - generic [ref=e93]: 较昨日 +7
+        - generic [ref=e97]:
+          - generic [ref=e98]: 待结算
+          - generic [ref=e100]:
+            - generic [ref=e101]: "3"
+            - generic [ref=e102]: 较昨日 +3
+      - generic [ref=e104]:
+        - generic [ref=e105]:
+          - strong [ref=e106]: 管理员工作区
+          - generic [ref=e107]: 显示全量门店数据
+        - paragraph [ref=e108]: 查看全量数据、处理异常、协助签字与平台同步、查看员工权限
+        - generic [ref=e109]: 调度与检验操作全程留痕
+      - generic [ref=e113]:
+        - generic [ref=e114]:
+          - generic [ref=e115]:
+            - heading "归档查询" [level=2] [ref=e116]
+            - paragraph [ref=e117]: 点击任一委托单可查看完整归档内容。
+          - generic [ref=e118]:
+            - button "刷新列表" [ref=e119] [cursor=pointer]
+            - button "全部从润丰更新（4）" [ref=e215] [cursor=pointer]
+            - generic [ref=e122]:
+              - searchbox "搜索车牌 / VIN / 工单号 / 派工号" [ref=e124]
+              - button [ref=e126] [cursor=pointer]:
+                - img "search" [ref=e128]
+        - paragraph [ref=e131]: 更新全部已同步且有权限的委托单，不受搜索和分页影响；保留签名、照片和维修进度。更新期间请保持页面打开。
+        - generic [ref=e134]:
+          - table [ref=e138]:
+            - rowgroup [ref=e149]:
+              - row [ref=e150]:
+                - columnheader "委托单号" [ref=e151]
+                - columnheader "车牌" [ref=e152]
+                - columnheader "车主" [ref=e153]
+                - columnheader "服务顾问" [ref=e154]
+                - columnheader "维修技师" [ref=e155]
+                - columnheader "业务状态" [ref=e156]
+                - columnheader "润丰同步" [ref=e157]
+                - columnheader "金额" [ref=e158]
+                - columnheader "更新时间" [ref=e159]
+            - rowgroup [ref=e160]:
+              - row [ref=e223] [cursor=pointer]:
+                - cell "WT-TEST-RUNFENG-A67527" [ref=e224]
+                - cell "鲁BB75252" [ref=e225]
+                - cell "【测试】润丰项目写回联调" [ref=e226]
+                - cell "张三（测试）" [ref=e227]
+                - cell "李富强、曲怀复" [ref=e228]
+                - cell "待结算" [ref=e229]
+                - cell "润丰：已同步" [ref=e231]
+                - cell "-" [ref=e233]
+                - cell "2026/10/18 20:21:36" [ref=e234]
+              - row [ref=e235] [cursor=pointer]:
+                - cell "WT-MOCK-TECH-01" [ref=e236]
+                - cell "鲁B90001" [ref=e237]
+                - cell "-" [ref=e238]
+                - cell "张三（测试）" [ref=e239]
+                - cell "李富强" [ref=e240]
+                - cell "待检验" [ref=e241]
+                - cell [ref=e243]
+                - cell "-" [ref=e244]
+                - cell "2026/10/18 14:24:15" [ref=e245]
+              - row [ref=e246] [cursor=pointer]:
+                - cell "WT-MOCK-TECH-03" [ref=e247]
+                - cell "鲁B90003" [ref=e248]
+                - cell "-" [ref=e249]
+                - cell "张三（测试）" [ref=e250]
+                - cell "李富强" [ref=e251]
+                - cell "维修中" [ref=e252]
+                - cell [ref=e254]
+                - cell "-" [ref=e255]
+                - cell "2026/10/17 22:50:11" [ref=e256]
+              - row [ref=e257] [cursor=pointer]:
+                - cell "WT-20261017-9A3E8C7CDAB1" [ref=e258]
+                - cell "鲁B8KR85" [ref=e259]
+                - cell "个人(92805部队)" [ref=e260]
+                - cell "Gary（测试）" [ref=e261]
+                - cell "待派工" [ref=e262]
+                - cell "待派工 纸质委托书" [ref=e263]:
+                  - generic [ref=e264]: 待派工
+                  - generic [ref=e265]: 纸质委托书
+                - cell "润丰：已同步" [ref=e266]
+                - cell "-" [ref=e268]
+                - cell "2026/10/17 22:34:35" [ref=e269]
+              - row [ref=e270] [cursor=pointer]:
+                - cell "WT-20261017-9031DB21E30D" [ref=e271]
+                - cell "鲁B498Z3" [ref=e272]
+                - cell "青岛高速集团有限公司" [ref=e273]
+                - cell "Gary（测试）" [ref=e274]
+                - cell "待派工" [ref=e275]
+                - cell "待派工 纸质委托书" [ref=e276]:
+                  - generic [ref=e277]: 待派工
+                  - generic [ref=e278]: 纸质委托书
+                - cell "润丰：已同步" [ref=e279]
+                - cell "¥300" [ref=e281]
+                - cell "2026/10/17 22:33:53" [ref=e282]
+              - row [ref=e283] [cursor=pointer]:
+                - cell "WT-20261017-EFC77AE2479A" [ref=e284]
+                - cell "鲁B7TT83" [ref=e285]
+                - cell "个人（保险）" [ref=e286]
+                - cell "Gary（测试）" [ref=e287]
+                - cell "待派工" [ref=e288]
+                - cell "待派工 纸质委托书" [ref=e289]:
+                  - generic [ref=e290]: 待派工
+                  - generic [ref=e291]: 纸质委托书
+                - cell "润丰：已同步" [ref=e292]
+                - cell "-" [ref=e294]
+                - cell "2026/10/17 22:09:03" [ref=e295]
+              - row [ref=e296] [cursor=pointer]:
+                - cell "WT-20260817-9704F0693A25" [ref=e297]
+                - cell "鲁BTEST03" [ref=e298]
+                - cell "青岛水务集团有限公司" [ref=e299]
+                - cell "联调测试顾问-王五" [ref=e300]
+                - cell "待派工" [ref=e301]
+                - cell "待派工" [ref=e302]
+                - cell "润丰：待拉取 待更新" [ref=e304]:
+                  - generic [ref=e305]: 润丰：待拉取
+                  - generic [ref=e306]: 待更新
+                - cell "¥380" [ref=e307]
+                - cell "2026/10/17 16:49:49" [ref=e308]
+              - row [ref=e309] [cursor=pointer]:
+                - cell "WT-DEMO-HISTORY-20261017-01" [ref=e310]
+                - cell "鲁B279X6" [ref=e311]
+                - cell "【测试】历史用料验证车队" [ref=e312]
+                - cell "张三（测试）" [ref=e313]
+                - cell "李富强" [ref=e314]
+                - cell "待开工" [ref=e315]
+                - cell [ref=e317]
+                - cell "-" [ref=e318]
+                - cell "2026/10/17 16:36:45" [ref=e319]
+          - list [ref=e320]:
+            - listitem "上一页" [ref=e321]:
+              - button [disabled] [ref=e322]:
+                - img "left" [ref=e323]
+            - listitem "1" [ref=e326] [cursor=pointer]
+            - listitem "2" [ref=e328] [cursor=pointer]
+            - listitem "3" [ref=e330] [cursor=pointer]
+            - listitem "4" [ref=e332] [cursor=pointer]
+            - listitem "下一页" [ref=e334] [cursor=pointer]:
+              - button [ref=e335]:
+                - img "right" [ref=e336]
+  - generic [ref=e339]:
+    - dialog "委托单详情 · WT-MOCK-TECH-03":
+      - generic [ref=e340]:
+        - button "Close" [active] [ref=e341] [cursor=pointer]:
+          - generic "关闭" [ref=e342]:
+            - img "close" [ref=e343]
+        - generic [ref=e346]: 委托单详情 · WT-MOCK-TECH-03
+        - generic [ref=e348]:
+          - button "修改联系及车辆信息" [disabled] [ref=e351]
+          - table [ref=e354]:
+            - rowgroup [ref=e355]:
+              - row [ref=e356]:
+                - rowheader "委托单号" [ref=e357]
+                - cell "WT-MOCK-TECH-03" [ref=e358]
+                - rowheader "状态" [ref=e359]
+                - cell "维修中" [ref=e360]
+                - rowheader "润丰同步" [ref=e363]
+                - cell [ref=e364]
+              - row [ref=e365]:
+                - rowheader "服务顾问" [ref=e366]
+                - cell "张三（测试）" [ref=e367]
+                - rowheader "派工号" [ref=e368]
+                - cell "-" [ref=e369]
+                - rowheader "进厂日期" [ref=e370]
+                - cell "2026-09-14" [ref=e371]
+              - row [ref=e372]:
+                - rowheader "预计交车" [ref=e373]
+                - cell "-" [ref=e374]
+                - rowheader "更新时间" [ref=e375]
+                - cell "2026/10/17 22:50:11" [ref=e376]
+                - rowheader "门店地址" [ref=e377]
+                - cell "抚顺路店" [ref=e378]
+              - row [ref=e379]:
+                - rowheader "门店电话" [ref=e380]
+                - cell "021-6000-8618" [ref=e381]
+                - rowheader "平台工单号" [ref=e382]
+                - cell "-" [ref=e383]
+                - rowheader "车牌号码" [ref=e384]
+                - cell "鲁B90003" [ref=e385]
+              - row [ref=e386]:
+                - rowheader "VIN/底盘号" [ref=e387]
+                - cell "-" [ref=e388]
+                - rowheader "进厂里程" [ref=e389]
+                - cell "-" [ref=e390]
+                - rowheader "车型" [ref=e391]
+                - cell "-" [ref=e392]
+              - row [ref=e393]:
+                - rowheader "购车日期" [ref=e394]
+                - cell "-" [ref=e395]
+                - rowheader "车主名称/所属单位" [ref=e396]
+                - cell "-" [ref=e397]
+                - rowheader "联系人" [ref=e398]
+                - cell "-" [ref=e399]
+              - row [ref=e400]:
+                - rowheader "联系电话" [ref=e401]
+                - cell "-" [ref=e402]
+                - rowheader "车辆地址" [ref=e403]
+                - cell "-" [ref=e404]
+              - row [ref=e405]:
+                - rowheader "故障描述" [ref=e406]
+                - cell "【本地模拟】维修中 · 制动系统检修" [ref=e407]
+              - row [ref=e408]:
+                - rowheader "随车物品" [ref=e409]
+                - cell "-" [ref=e410]
+                - rowheader "外观状况" [ref=e411]
+                - cell "-" [ref=e412]
+                - rowheader "燃油存量" [ref=e413]
+                - cell "1/2" [ref=e414]
+              - row [ref=e415]:
+                - rowheader "预计修理费" [ref=e416]
+                - cell "¥0" [ref=e417]
+                - rowheader "结算金额" [ref=e418]
+                - cell "¥0" [ref=e419]
+                - rowheader "旧件处置" [ref=e420]
+                - cell "客户带走" [ref=e421]
+              - row [ref=e422]:
+                - rowheader "费用备注" [ref=e423]
+                - cell "LOCAL-TECHNICIAN-MOCK" [ref=e424]
+              - row [ref=e425]:
+                - rowheader "签字记录" [ref=e426]
+                - cell "-" [ref=e427]
+          - region "车辆维修前照片" [ref=e428]:
+            - generic [ref=e429]:
+              - heading "车辆维修前照片" [level=3] [ref=e430]
+              - generic [ref=e431]: 0/2 必传
+            - paragraph [ref=e432]: 请拍摄车辆左前方与右后方，覆盖车头、车尾和两侧全貌；公里数照片可选上传。
+            - generic [ref=e433]:
+              - generic [ref=e434]:
+                - generic [ref=e435]:
+                  - generic [ref=e436]: "* 斜前方 45°"
+                  - generic [ref=e437]: 必传
+                - generic [ref=e439]:
+                  - img "左前方45度整车拍摄示例，完整展示车头和左侧车身" [ref=e440]
+                  - generic [ref=e441]: 拍摄示例
+                - paragraph [ref=e442]: 站在左前角，拍到完整车头和左侧车身
+                - generic [ref=e443]:
+                  - generic [ref=e444]:
+                    - button "拍照上传" [ref=e445] [cursor=pointer]
+                    - button "斜前方 45°照片拍照" [ref=e451] [cursor=pointer]
+                  - generic [ref=e452]:
+                    - button "相册" [ref=e453] [cursor=pointer]
+                    - button "斜前方 45°照片从相册选择" [ref=e461] [cursor=pointer]
+              - generic [ref=e462]:
+                - generic [ref=e463]:
+                  - generic [ref=e464]: "* 斜后方 45°"
+                  - generic [ref=e465]: 必传
+                - generic [ref=e467]:
+                  - img "右后方45度整车拍摄示例，完整展示车尾和右侧车身" [ref=e468]
+                  - generic [ref=e469]: 拍摄示例
+                - paragraph [ref=e470]: 站在右后角，拍到完整车尾和右侧车身
+                - generic [ref=e471]:
+                  - generic [ref=e472]:
+                    - button "拍照上传" [ref=e473] [cursor=pointer]
+                    - button "斜后方 45°照片拍照" [ref=e479] [cursor=pointer]
+                  - generic [ref=e480]:
+                    - button "相册" [ref=e481] [cursor=pointer]
+                    - button "斜后方 45°照片从相册选择" [ref=e489] [cursor=pointer]
+              - generic [ref=e490]:
+                - generic [ref=e491]:
+                  - generic [ref=e492]: 公里数 / 仪表盘
+                  - generic [ref=e493]: 选填
+                - generic [ref=e495]:
+                  - img "仪表盘总公里数拍摄示例" [ref=e496]
+                  - generic [ref=e497]: 拍摄示例
+                - paragraph [ref=e498]: 点亮仪表盘，清晰拍出总公里数和单位
+                - generic [ref=e499]:
+                  - generic [ref=e500]:
+                    - button "拍照上传" [ref=e501] [cursor=pointer]
+                    - button "公里数 / 仪表盘照片拍照" [ref=e507] [cursor=pointer]
+                  - generic [ref=e508]:
+                    - button "相册" [ref=e509] [cursor=pointer]
+                    - button "公里数 / 仪表盘照片从相册选择" [ref=e517] [cursor=pointer]
+              - generic [ref=e518]:
+                - generic [ref=e519]:
+                  - text: 额外照片
+                  - generic [ref=e520]: 选填
+                - generic [aria-hidden] [ref=e521]: ＋
+                - paragraph [ref=e522]: 可补充划痕、凹陷、内饰或其他细节照片
+                - generic [ref=e523]:
+                  - generic [ref=e524]:
+                    - button "添加照片" [ref=e525] [cursor=pointer]
+                    - button "维修前额外照片拍照" [ref=e531] [cursor=pointer]
+                  - generic [ref=e532]:
+                    - button "相册多选" [ref=e533] [cursor=pointer]
+                    - button "维修前额外照片从相册选择" [ref=e541] [cursor=pointer]
+          - generic [ref=e542]:
+            - heading "行驶证照片" [level=3] [ref=e543]
+            - generic [ref=e544]:
+              - img "暂无数据" [ref=e546]
+              - generic [ref=e552]: 暂无图片
+            - generic [ref=e553]:
+              - generic [ref=e554]:
+                - button "上传照片" [ref=e555] [cursor=pointer]
+                - button "行驶证照片上传拍照" [ref=e561] [cursor=pointer]
+              - generic [ref=e562]:
+                - button "相册" [ref=e563] [cursor=pointer]
+                - button "行驶证照片上传从相册选择" [ref=e571] [cursor=pointer]
+          - generic [ref=e572]:
+            - heading "其他照片" [level=3] [ref=e573]
+            - generic [ref=e574]:
+              - img "暂无数据" [ref=e576]
+              - generic [ref=e582]: 暂无图片
+            - generic [ref=e583]:
+              - generic [ref=e584]:
+                - button "上传照片" [ref=e585] [cursor=pointer]
+                - button "其他照片上传拍照" [ref=e591] [cursor=pointer]
+              - generic [ref=e592]:
+                - button "相册" [ref=e593] [cursor=pointer]
+                - button "其他照片上传从相册选择" [ref=e601] [cursor=pointer]
+          - generic [ref=e602]:
+            - heading "客户签名" [level=3] [ref=e603]
+            - generic [ref=e604]:
+              - img "暂无数据" [ref=e606]
+              - generic [ref=e612]: 暂无图片
+          - generic [ref=e613]:
+            - heading "维修项目" [level=3] [ref=e614]
+            - table [ref=e621]:
+              - rowgroup [ref=e622]:
+                - row [ref=e623]:
+                  - columnheader "项目" [ref=e624]
+                  - columnheader "工费" [ref=e625]
+                  - columnheader "主修人" [ref=e626]
+                  - columnheader "状态" [ref=e627]
+                  - columnheader "开工" [ref=e628]
+                  - columnheader "完工" [ref=e629]
+                  - columnheader "检查人" [ref=e630]
+              - rowgroup [ref=e631]:
+                - row [ref=e632]:
+                  - cell "【模拟】制动系统检修" [ref=e633]
+                  - cell "¥0" [ref=e634]
+                  - cell "李富强" [ref=e635]
+                  - cell "维修中" [ref=e636]
+                  - cell "2026-09-14T08:14:28.025Z" [ref=e637]
+                  - cell [ref=e638]
+                  - cell "待检验" [ref=e639]
+          - generic [ref=e640]:
+            - heading "OCR 记录" [level=3] [ref=e641]
+            - table [ref=e648]:
+              - rowgroup [ref=e649]:
+                - row [ref=e650]:
+                  - columnheader "来源" [ref=e651]
+                  - columnheader "状态" [ref=e652]
+                  - columnheader "置信度" [ref=e653]
+                  - columnheader "创建时间" [ref=e654]
+                  - columnheader "确认时间" [ref=e655]
+              - rowgroup [ref=e656]:
+                - row [ref=e657]:
+                  - cell "暂无记录" [ref=e658]
+          - generic [ref=e660]:
+            - heading "平台同步记录" [level=3] [ref=e661]
+            - table [ref=e668]:
+              - rowgroup [ref=e669]:
+                - row [ref=e670]:
+                  - columnheader "平台工单号" [ref=e671]
+                  - columnheader "状态" [ref=e672]
+                  - columnheader "说明" [ref=e673]
+                  - columnheader "同步时间" [ref=e674]
+              - rowgroup [ref=e675]:
+                - row [ref=e676]:
+                  - cell "暂无记录" [ref=e677]
+          - generic [ref=e679]:
+            - heading "出库单" [level=3] [ref=e680]
+            - table [ref=e687]:
+              - rowgroup [ref=e688]:
+                - row [ref=e689]:
+                  - columnheader "出库单号" [ref=e690]
+                  - columnheader "派工号" [ref=e691]
+                  - columnheader "技师" [ref=e692]
+                  - columnheader "状态" [ref=e693]
+                  - columnheader "物料项目数" [ref=e694]
+              - rowgroup [ref=e695]:
+                - row [ref=e696]:
+                  - cell "暂无记录" [ref=e697]
+          - generic [ref=e699]:
+            - heading "结算记录" [level=3] [ref=e700]
+            - table [ref=e707]:
+              - rowgroup [ref=e708]:
+                - row [ref=e709]:
+                  - columnheader "派工号" [ref=e710]
+                  - columnheader "金额" [ref=e711]
+                  - columnheader "来源" [ref=e712]
+                  - columnheader "匹配状态" [ref=e713]
+                  - columnheader "同步时间" [ref=e714]
+              - rowgroup [ref=e715]:
+                - row [ref=e716]:
+                  - cell "暂无记录" [ref=e717]
+          - generic [ref=e719]:
+            - heading "操作留痕" [level=3] [ref=e720]
+            - table [ref=e727]:
+              - rowgroup [ref=e728]:
+                - row [ref=e729]:
+                  - columnheader "时间" [ref=e730]
+                  - columnheader "操作人" [ref=e731]
+                  - columnheader "操作" [ref=e732]
+              - rowgroup [ref=e733]:
+                - row [ref=e734]:
+                  - cell "2026/10/17 22:50:11" [ref=e735]
+                  - cell "维修工（测试）" [ref=e736]
+                  - cell "派工：record-parts" [ref=e737]
+                - row [ref=e738]:
+                  - cell "2026/10/17 22:49:54" [ref=e739]
+                  - cell "仓管（测试）" [ref=e740]
+                  - cell "派工：issue-parts" [ref=e741]
+                - row [ref=e742]:
+                  - cell "2026/10/17 22:49:49" [ref=e743]
+                  - cell "仓管（测试）" [ref=e744]
+                  - cell "派工：confirm-parts" [ref=e745]
+                - row [ref=e746]:
+                  - cell "2026/10/17 22:49:21" [ref=e747]
+                  - cell "维修工（测试）" [ref=e748]
+                  - cell "派工：record-parts" [ref=e749]
+                - row [ref=e750]:
+                  - cell "2026/10/17 22:39:43" [ref=e751]
+                  - cell "维修工（测试）" [ref=e752]
+                  - cell "派工：record-parts" [ref=e753]
+                - row [ref=e754]:
+                  - cell "2026/9/14 16:14:28" [ref=e755]
+                  - cell "张三（测试）" [ref=e756]
+                  - cell "创建本地维修技师模拟工单：维修中" [ref=e757]
+        - generic [ref=e759]:
+          - button "打印委托单" [ref=e760] [cursor=pointer]
+          - button "查看派工单" [ref=e767] [cursor=pointer]
+          - button "关 闭" [ref=e769] [cursor=pointer]

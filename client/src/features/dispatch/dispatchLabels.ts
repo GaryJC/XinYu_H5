@@ -26,6 +26,7 @@ export function taskStatusLabel(task:DispatchTask) {
 }
 
 export function dispatchEventLabel(event:Pick<DispatchEvent,'action'|'detail'>) {
+  if(event.action==='reassign'&&event.detail.reassignItemIds)return '项目改派';
   if((event.detail.partsRequirement?.batch??1)>1) {
     const labels:Record<string,string>={'record-parts':'登记补料','edit-parts':'仓管整理补料需求','confirm-parts':'补料完成','issue-parts':'补料出库'};
     if(labels[event.action]) return labels[event.action];

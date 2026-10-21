@@ -88,7 +88,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
     await saveRepairRound(client,task,next,currentActor,input.action);
     await saveDispatchTask(client,next);
     if(input.action==='assign') await markDispatchPlan(client,id);
-    const detail={previousItems:input.repairItems?task.items:undefined,partsRequirement:next.partsRequirement,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
+    const detail={reassignItemIds:input.reassignItemIds,previousItems:input.repairItems||['reassign','inspect'].includes(input.action)?task.items:undefined,partsRequirement:next.partsRequirement,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
       technicianName:next.technicianName,previousTechnicianName:task.technicianName,inspectorName:next.inspectorName,dueAt:next.dueAt,urgent:next.urgent,previousDueAt:task.dueAt};
     const {rows:[event]}=await client.query(`insert into dispatch_events(order_id,actor_id,actor_name,request_id,request_body,action,detail) values($1,$2,$3,$4,$5,$6,$7) returning id`,[id,actor.id,actor.name,input.requestId,JSON.stringify(input),input.action,JSON.stringify(detail)]);
     if(input.action==='inspect'&&next.stage==='维修完成')await enqueueRepairWriteback(client,next,event.id);
@@ -111,8 +111,19 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
     const add=(recipient,kind)=>{ if(recipient) recipients.push({recipient,kind}); };
     const handlers=t=>t.executionMode==='outsourced' ? people.filter(p=>p.active && ['manager','advisor'].includes(p.role)).map(p=>p.id) : technicianIds(t);
     const addHandlers=(t,kind)=>handlers(t).forEach(id=>add(id,kind));
-    if(['assign','reassign','reoffer','reconcile','reopen-repair'].includes(input.action) && next.stage!=='维修完成') addHandlers(next,input.action==='reopen-repair'?'返工派工':'新派工');
-    if(['reassign','cancel'].includes(input.action)) addHandlers(task,input.action==='cancel'?'派工已撤销':'任务已改派');
+    const removedProjects=input.repairItems?task.items.filter(item=>!next.items.some(current=>current.id===item.id)):[];
+    const removedFor=recipient=>removedProjects.filter(item=>item.responsibleId?item.responsibleId===recipient:technicianIds(task).includes(recipient));
+    const removedRecipients=new Set(removedProjects.flatMap(item=>item.responsibleId?[item.responsibleId]:technicianIds(task)));
+    removedRecipients.forEach(recipient=>add(recipient,'维修项目已删除'));
+    const changedProjectIds=input.reassignItemIds??(input.action==='edit-repair-items'?next.items.filter(item=>item.responsibleId&&item.responsibleId!==task.items.find(previous=>previous.id===item.id)?.responsibleId).map(item=>item.id):[]);
+    const projectReassignment=changedProjectIds.length>0;
+    if(projectReassignment) {
+      const affected=new Set([...task.items,...next.items].filter(i=>changedProjectIds.includes(i.id)).map(i=>i.responsibleId).filter(Boolean));
+      affected.forEach(id=>add(id,'项目改派'));
+    } else {
+      if(['assign','reassign','reoffer','reconcile','reopen-repair'].includes(input.action) && next.stage!=='维修完成') addHandlers(next,input.action==='reopen-repair'?'返工派工':'新派工');
+      if(['reassign','cancel'].includes(input.action)) addHandlers(task,input.action==='cancel'?'派工已撤销':'任务已改派');
+    }
     const schedulerKind={decline:'无法接单',pause:'维修暂停','submit-order':'维修已提检',submit:'维修已提检'}[input.action];
     if(schedulerKind) {
       const payload={orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,actorName:actor.name,reason:input.action==='pause'?[input.pauseReason,input.note].filter(Boolean).join('：'):input.reason||input.note||''};
@@ -138,5 +149,5 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
       add(recipient,'人工催办');
       }
     }
-    for(const {recipient,kind} of recipients) await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),id,event.id,recipient,kind,JSON.stringify({shopId:next.shopId,repairRound:next.repairRound||0,orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,partsRecordedAt:next.partsRequirement?.recordedAt,partsRevision:next.partsRequirement?.revision,notice:input.action==='edit-parts'?'仓管已整理配件需求，请查看最新清单。':input.action==='confirm-parts'?'配件已备齐，请到仓库领取。':input.action==='issue-parts'?'仓管已确认配件交接出库，待开工任务已自动开工。':'',reason:input.reason||''})]);
+    for(const {recipient,kind} of recipients) await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),id,event.id,recipient,kind,JSON.stringify({shopId:next.shopId,repairRound:next.repairRound||0,orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,actorName:actor.name,summary:(kind==='维修项目已删除'?removedFor(recipient).map(i=>i.name):projectReassignment?next.items.filter(i=>changedProjectIds.includes(i.id)).map(i=>`${i.name} → ${i.responsibleName}`):next.items.map(i=>i.name)).join('、').slice(0,200),dueAt:next.dueAt,partsRecordedAt:next.partsRequirement?.recordedAt,partsRevision:next.partsRequirement?.revision,notice:kind==='维修项目已删除'?'所列维修项目已删除，无需继续施工；其他项目按原安排执行。':projectReassignment?'仅所列项目变更负责人，其他项目及工单进度保持不变。':input.action==='edit-parts'?'仓管已整理配件需求，请查看最新清单。':input.action==='confirm-parts'?'配件已备齐，请到仓库领取。':input.action==='issue-parts'?'仓管已确认配件交接出库，待开工任务已自动开工。':'',reason:input.reason||''})]);
 }

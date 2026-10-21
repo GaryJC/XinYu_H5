@@ -48,7 +48,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const showLegacySyncStatus = Boolean(selectedOrder && selectedOrder.status !== "草稿");
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
   const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "编码", "选择已有"].some((phrase) => error.includes(phrase)));
-  const canResumeSignature = Boolean(selectedOrder?.status === "待客户签字" && selectedOrder.signatureToken && !selectedOrder.signatureTokenUsed);
+  const canResumeSignature = Boolean(selectedOrder?.status === "待客户签字" && !selectedOrder.signatures.customer);
   const signatureDisabled = Boolean(controller.preRepairPhotos.uploading) || !canResumeSignature && (!canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder)));
   const signatureDisabledReason = selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) ? `当前状态“${selectedOrder.status}”不能再次发起签字` : "";
   const signatureUploaded = Boolean(selectedOrder?.signatures.customer);
@@ -63,10 +63,6 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const hasVehicleLicense=Boolean(controller.vehicleLicenseFileId || selectedOrder?.files?.some(file=>file.kind==='vehicle_license'));
 
   async function handleSendSignature() {
-    if (canResumeSignature && selectedOrder?.signatureToken) {
-      setSignatureSession({ token: selectedOrder.signatureToken, order: selectedOrder });
-      return;
-    }
     const session = await sendSignature();
     if (session) {
       setShowSignatureValidation(false);

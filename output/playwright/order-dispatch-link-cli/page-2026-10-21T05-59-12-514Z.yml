@@ -1,0 +1,181 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e6]:
+      - generic [ref=e13]:
+        - strong [ref=e14]: 修理委托
+        - generic [ref=e15]: 钉钉自建 H5
+      - navigation "主导航" [ref=e16]:
+        - button "工作台" [ref=e17] [cursor=pointer]
+        - button "委托开单" [ref=e24] [cursor=pointer]
+        - button "派工台" [ref=e29] [cursor=pointer]
+        - button "配件竞价" [ref=e192] [cursor=pointer]
+        - button "检验任务" [ref=e197] [cursor=pointer]
+        - button "数据看板" [ref=e202] [cursor=pointer]
+        - button "权限设置" [ref=e206] [cursor=pointer]
+      - paragraph [ref=e39]: 按门店与岗位权限使用委托开单、签字与归档功能。
+  - main [ref=e40]:
+    - generic [ref=e41]:
+      - generic [ref=e43]:
+        - heading "机动车修理委托书数字化工作台" [level=1] [ref=e44]
+        - paragraph [ref=e45]: 32 张委托单 · 抚顺路店 · 待结算
+      - generic [ref=e46]:
+        - generic [ref=e47]: 测试身份：Gary（测试）
+        - generic [ref=e54] [cursor=pointer]:
+          - generic [ref=e55]:
+            - generic: 选择测试身份
+            - combobox "切换本地测试身份" [active] [ref=e56]
+          - img "down" [ref=e211]
+        - generic [ref=e61]: 门店管理员
+    - region "待办统计" [ref=e67]:
+      - generic [ref=e70]:
+        - generic [ref=e71]: 待客户签字
+        - generic [ref=e73]:
+          - generic [ref=e74]: "1"
+          - generic [ref=e75]: 较昨日 +1
+      - generic [ref=e79]:
+        - generic [ref=e80]: 待派工
+        - generic [ref=e82]:
+          - generic [ref=e83]: "7"
+          - generic [ref=e84]: 较昨日 +7
+      - generic [ref=e88]:
+        - generic [ref=e89]: 维修中
+        - generic [ref=e91]:
+          - generic [ref=e92]: "7"
+          - generic [ref=e93]: 较昨日 +7
+      - generic [ref=e97]:
+        - generic [ref=e98]: 待结算
+        - generic [ref=e100]:
+          - generic [ref=e101]: "3"
+          - generic [ref=e102]: 较昨日 +3
+    - generic [ref=e104]:
+      - generic [ref=e105]:
+        - strong [ref=e106]: 管理员工作区
+        - generic [ref=e107]: 显示全量门店数据
+      - paragraph [ref=e108]: 查看全量数据、处理异常、协助签字与平台同步、查看员工权限
+      - generic [ref=e109]: 调度与检验操作全程留痕
+    - generic [ref=e113]:
+      - generic [ref=e114]:
+        - generic [ref=e115]:
+          - heading "归档查询" [level=2] [ref=e116]
+          - paragraph [ref=e117]: 点击任一委托单可查看完整归档内容。
+        - generic [ref=e118]:
+          - button "刷新列表" [ref=e119] [cursor=pointer]
+          - button "全部从润丰更新（4）" [ref=e215] [cursor=pointer]
+          - generic [ref=e122]:
+            - searchbox "搜索车牌 / VIN / 工单号 / 派工号" [ref=e124]
+            - button [ref=e126] [cursor=pointer]:
+              - img "search" [ref=e128]
+      - paragraph [ref=e131]: 更新全部已同步且有权限的委托单，不受搜索和分页影响；保留签名、照片和维修进度。更新期间请保持页面打开。
+      - generic [ref=e134]:
+        - table [ref=e138]:
+          - rowgroup [ref=e149]:
+            - row [ref=e150]:
+              - columnheader "委托单号" [ref=e151]
+              - columnheader "车牌" [ref=e152]
+              - columnheader "车主" [ref=e153]
+              - columnheader "服务顾问" [ref=e154]
+              - columnheader "维修技师" [ref=e155]
+              - columnheader "业务状态" [ref=e156]
+              - columnheader "润丰同步" [ref=e157]
+              - columnheader "金额" [ref=e158]
+              - columnheader "更新时间" [ref=e159]
+          - rowgroup [ref=e160]:
+            - row [ref=e223] [cursor=pointer]:
+              - cell "WT-TEST-RUNFENG-A67527" [ref=e224]
+              - cell "鲁BB75252" [ref=e225]
+              - cell "【测试】润丰项目写回联调" [ref=e226]
+              - cell "张三（测试）" [ref=e227]
+              - cell "李富强、曲怀复" [ref=e228]
+              - cell "待结算" [ref=e229]
+              - cell "润丰：已同步" [ref=e231]
+              - cell "-" [ref=e233]
+              - cell "2026/10/18 20:21:36" [ref=e234]
+            - row [ref=e235] [cursor=pointer]:
+              - cell "WT-MOCK-TECH-01" [ref=e236]
+              - cell "鲁B90001" [ref=e237]
+              - cell "-" [ref=e238]
+              - cell "张三（测试）" [ref=e239]
+              - cell "李富强" [ref=e240]
+              - cell "待检验" [ref=e241]
+              - cell [ref=e243]
+              - cell "-" [ref=e244]
+              - cell "2026/10/18 14:24:15" [ref=e245]
+            - row [ref=e246] [cursor=pointer]:
+              - cell "WT-MOCK-TECH-03" [ref=e247]
+              - cell "鲁B90003" [ref=e248]
+              - cell "-" [ref=e249]
+              - cell "张三（测试）" [ref=e250]
+              - cell "李富强" [ref=e251]
+              - cell "维修中" [ref=e252]
+              - cell [ref=e254]
+              - cell "-" [ref=e255]
+              - cell "2026/10/17 22:50:11" [ref=e256]
+            - row [ref=e257] [cursor=pointer]:
+              - cell "WT-20261017-9A3E8C7CDAB1" [ref=e258]
+              - cell "鲁B8KR85" [ref=e259]
+              - cell "个人(92805部队)" [ref=e260]
+              - cell "Gary（测试）" [ref=e261]
+              - cell "待派工" [ref=e262]
+              - cell "待派工 纸质委托书" [ref=e263]:
+                - generic [ref=e264]: 待派工
+                - generic [ref=e265]: 纸质委托书
+              - cell "润丰：已同步" [ref=e266]
+              - cell "-" [ref=e268]
+              - cell "2026/10/17 22:34:35" [ref=e269]
+            - row [ref=e270] [cursor=pointer]:
+              - cell "WT-20261017-9031DB21E30D" [ref=e271]
+              - cell "鲁B498Z3" [ref=e272]
+              - cell "青岛高速集团有限公司" [ref=e273]
+              - cell "Gary（测试）" [ref=e274]
+              - cell "待派工" [ref=e275]
+              - cell "待派工 纸质委托书" [ref=e276]:
+                - generic [ref=e277]: 待派工
+                - generic [ref=e278]: 纸质委托书
+              - cell "润丰：已同步" [ref=e279]
+              - cell "¥300" [ref=e281]
+              - cell "2026/10/17 22:33:53" [ref=e282]
+            - row [ref=e283] [cursor=pointer]:
+              - cell "WT-20261017-EFC77AE2479A" [ref=e284]
+              - cell "鲁B7TT83" [ref=e285]
+              - cell "个人（保险）" [ref=e286]
+              - cell "Gary（测试）" [ref=e287]
+              - cell "待派工" [ref=e288]
+              - cell "待派工 纸质委托书" [ref=e289]:
+                - generic [ref=e290]: 待派工
+                - generic [ref=e291]: 纸质委托书
+              - cell "润丰：已同步" [ref=e292]
+              - cell "-" [ref=e294]
+              - cell "2026/10/17 22:09:03" [ref=e295]
+            - row [ref=e296] [cursor=pointer]:
+              - cell "WT-20260817-9704F0693A25" [ref=e297]
+              - cell "鲁BTEST03" [ref=e298]
+              - cell "青岛水务集团有限公司" [ref=e299]
+              - cell "联调测试顾问-王五" [ref=e300]
+              - cell "待派工" [ref=e301]
+              - cell "待派工" [ref=e302]
+              - cell "润丰：待拉取 待更新" [ref=e304]:
+                - generic [ref=e305]: 润丰：待拉取
+                - generic [ref=e306]: 待更新
+              - cell "¥380" [ref=e307]
+              - cell "2026/10/17 16:49:49" [ref=e308]
+            - row [ref=e309] [cursor=pointer]:
+              - cell "WT-DEMO-HISTORY-20261017-01" [ref=e310]
+              - cell "鲁B279X6" [ref=e311]
+              - cell "【测试】历史用料验证车队" [ref=e312]
+              - cell "张三（测试）" [ref=e313]
+              - cell "李富强" [ref=e314]
+              - cell "待开工" [ref=e315]
+              - cell [ref=e317]
+              - cell "-" [ref=e318]
+              - cell "2026/10/17 16:36:45" [ref=e319]
+        - list [ref=e320]:
+          - listitem "上一页" [ref=e321]:
+            - button [disabled] [ref=e322]:
+              - img "left" [ref=e323]
+          - listitem "1" [ref=e326] [cursor=pointer]
+          - listitem "2" [ref=e328] [cursor=pointer]
+          - listitem "3" [ref=e330] [cursor=pointer]
+          - listitem "4" [ref=e332] [cursor=pointer]
+          - listitem "下一页" [ref=e334] [cursor=pointer]:
+            - button [ref=e335]:
+              - img "right" [ref=e336]

@@ -365,6 +365,15 @@ export function useWorkbenchController() {
   }
 
   async function sendSignature() {
+    if (selectedOrder?.status === "待客户签字") {
+      setActionLoading("signature");setFormErrors([]);
+      try {
+        const order = await workOrderApi.createSignatureToken(selectedOrder.id, actor);
+        await loadOrders(role, order.id);
+        return { token: order.signatureToken!, order };
+      } catch (error) { setFormErrors([actionError(error, "恢复客户签字失败")]);return undefined; }
+      finally { setActionLoading(""); }
+    }
     if (preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
     const errors = validateBeforeSignature();
     if (errors.length) {
@@ -434,7 +443,7 @@ export function useWorkbenchController() {
 
   function openDispatch(orderId: string) {
     if (!dispatchEnabled) return;
-    const url=new URL(location.href);url.searchParams.set('dispatchOrder',orderId);
+    const url=new URL(location.href);url.searchParams.delete('workOrder');url.searchParams.delete('paperOrder');url.searchParams.set('dispatchOrder',orderId);
     history.replaceState(null,'',url);setActiveNav('派工台');
   }
 

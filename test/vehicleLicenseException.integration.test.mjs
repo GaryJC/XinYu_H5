@@ -8,10 +8,12 @@ test('vehicle license exception persistence, signature rules, administrator fano
  const url=new URL(adminUrl);assert.ok(['127.0.0.1','localhost','[::1]'].includes(url.hostname));
  const admin=new pg.Client({connectionString:adminUrl});await admin.connect();
  const name=`codex_license_test_${Date.now()}_${process.pid}`;let pool;
+ const connectionsClosed=[];
  try {
   await admin.query(`create database "${name}"`);url.pathname=`/${name}`;
   process.env.DATABASE_URL=url.toString();process.env.APP_ENV='test';process.env.DISPATCH_NOTIFICATION_MODE='mock';
   pool=(await import('../server/database/pool.mjs')).pool;
+  pool.on('connect',client=>connectionsClosed.push(new Promise(resolve=>client.once('end',resolve))));
   for(const file of (await fs.readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')&&f!=='202608070005_remove_obsolete_runfeng_sync_role.sql').sort())await pool.query(await fs.readFile(`supabase/migrations/${file}`,'utf8'));
   const advisor={id:'a',name:'顾问甲',role:'advisor',shopId:'shop-hq',active:true};
   const manager={id:'m1',name:'管理员甲',role:'manager',shopId:'shop-hq',active:true};
@@ -62,6 +64,7 @@ test('vehicle license exception persistence, signature rules, administrator fano
   assert.equal((await pool.query("select count(*) from vehicle_license_exception_notifications where status='sent'")).rows[0].count,'2');
  } finally {
   if(pool)await pool.end();
+  await Promise.all(connectionsClosed);
   await admin.query(`drop database if exists "${name}" with (force)`);await admin.end();
  }
 });

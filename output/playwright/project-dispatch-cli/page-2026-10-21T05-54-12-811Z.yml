@@ -1,0 +1,608 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e6]:
+        - generic [ref=e13]:
+          - strong [ref=e14]: 修理委托
+          - generic [ref=e15]: 钉钉自建 H5
+        - navigation "主导航" [ref=e16]:
+          - button "工作台" [ref=e192] [cursor=pointer]
+          - button "委托开单" [ref=e24] [cursor=pointer]
+          - button "派工台" [ref=e199] [cursor=pointer]
+          - button "配件竞价" [ref=e204] [cursor=pointer]
+          - button "检验任务" [ref=e209] [cursor=pointer]
+          - button "数据看板" [ref=e214] [cursor=pointer]
+          - button "权限设置" [ref=e218] [cursor=pointer]
+        - paragraph [ref=e39]: 按门店与岗位权限使用委托开单、签字与归档功能。
+    - main [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e43]:
+          - heading "机动车修理委托书数字化工作台" [level=1] [ref=e44]
+          - paragraph [ref=e45]: 抚顺路店 · 派工台
+        - generic [ref=e46]:
+          - generic [ref=e47]: 测试身份：Gary（测试）
+          - generic [ref=e54] [cursor=pointer]:
+            - generic [ref=e55]:
+              - generic: 选择测试身份
+              - combobox "切换本地测试身份" [ref=e56]
+            - img "down" [ref=e223]
+          - generic [ref=e61]: 门店管理员
+      - region "派工台" [ref=e226]:
+        - generic [ref=e227]:
+          - generic [ref=e228]:
+            - heading "派工台" [level=2] [ref=e229]
+            - paragraph [ref=e230]: 默认显示本店全部未完结工单，可按状态筛选并安排维修与检验。 更新于 13:54:06
+          - button "刷 新" [ref=e231] [cursor=pointer]
+        - search "工单搜索筛选" [ref=e233]:
+          - generic [ref=e234]:
+            - searchbox "搜索派工任务" [ref=e236]
+            - button [ref=e238] [cursor=pointer]:
+              - img "search" [ref=e240]
+          - generic "工单状态筛选" [ref=e243]:
+            - tablist [ref=e244]:
+              - generic [ref=e246]:
+                - tab "全部未完结" [selected] [ref=e248] [cursor=pointer]
+                - tab "未派工" [ref=e250] [cursor=pointer]
+                - tab "未接单" [ref=e252] [cursor=pointer]
+                - tab "待开工" [ref=e254] [cursor=pointer]
+                - tab "正在维修" [ref=e256] [cursor=pointer]
+                - tab "暂停" [ref=e258] [cursor=pointer]
+                - tab "待检验" [ref=e260] [cursor=pointer]
+                - tab "待结算" [ref=e262] [cursor=pointer]
+                - tab "草稿" [ref=e264] [cursor=pointer]
+                - tab "待客户签字" [ref=e266] [cursor=pointer]
+                - tab "已完结" [ref=e268] [cursor=pointer]
+            - generic:
+              - generic:
+                - tabpanel "全部未完结"
+          - generic [ref=e269]:
+            - button "筛选" [ref=e270] [cursor=pointer]:
+              - img "filter" [ref=e272]
+            - button "加急" [ref=e276] [cursor=pointer]:
+              - img "thunderbolt" [ref=e278]
+            - button "超期" [ref=e282] [cursor=pointer]:
+              - img "clock-circle" [ref=e284]
+        - region "工作负荷看板" [ref=e289]:
+          - heading "工作负荷看板 · 5 人" [level=3] [ref=e290]:
+            - text: 工作负荷看板
+            - generic [ref=e291]: · 5 人
+          - generic [ref=e292]:
+            - generic [ref=e293]:
+              - strong [ref=e295]: 刘峰
+              - generic [ref=e296]:
+                - button "刘峰，维修中 0 单" [ref=e298] [cursor=pointer]:
+                  - generic [ref=e299]: 维修中
+                  - strong [ref=e300]: "0"
+                - button "刘峰，待接单 1 单" [ref=e302] [cursor=pointer]:
+                  - generic [ref=e303]: 待接单
+                  - strong [ref=e304]: "1"
+                - button "刘峰，暂停 0 单" [ref=e306] [cursor=pointer]:
+                  - generic [ref=e307]: 暂停
+                  - strong [ref=e308]: "0"
+                - button "刘峰，待检验 0 单" [ref=e310] [cursor=pointer]:
+                  - generic [ref=e311]: 待检验
+                  - strong [ref=e312]: "0"
+                - button "刘峰，已完成 0 单" [ref=e314] [cursor=pointer]:
+                  - generic [ref=e315]: 已完成
+                  - strong [ref=e316]: "0"
+                - button "刘峰，超期 1 单" [ref=e318] [cursor=pointer]:
+                  - generic [ref=e319]: 超期
+                  - strong [ref=e320]: "1"
+              - generic [ref=e321]: 完成量统计：2026-10-01 至 2026-10-31
+            - generic [ref=e322]:
+              - strong [ref=e324]: 张明
+              - generic [ref=e325]:
+                - button "张明，维修中 0 单" [ref=e327] [cursor=pointer]:
+                  - generic [ref=e328]: 维修中
+                  - strong [ref=e329]: "0"
+                - button "张明，待接单 1 单" [ref=e331] [cursor=pointer]:
+                  - generic [ref=e332]: 待接单
+                  - strong [ref=e333]: "1"
+                - button "张明，暂停 0 单" [ref=e335] [cursor=pointer]:
+                  - generic [ref=e336]: 暂停
+                  - strong [ref=e337]: "0"
+                - button "张明，待检验 0 单" [ref=e339] [cursor=pointer]:
+                  - generic [ref=e340]: 待检验
+                  - strong [ref=e341]: "0"
+                - button "张明，已完成 0 单" [ref=e343] [cursor=pointer]:
+                  - generic [ref=e344]: 已完成
+                  - strong [ref=e345]: "0"
+                - button "张明，超期 1 单" [ref=e347] [cursor=pointer]:
+                  - generic [ref=e348]: 超期
+                  - strong [ref=e349]: "1"
+              - generic [ref=e350]: 完成量统计：2026-10-01 至 2026-10-31
+            - generic [ref=e351]:
+              - strong [ref=e353]: 曲怀复
+              - generic [ref=e354]:
+                - button "曲怀复，维修中 0 单" [ref=e356] [cursor=pointer]:
+                  - generic [ref=e357]: 维修中
+                  - strong [ref=e358]: "0"
+                - button "曲怀复，待接单 0 单" [ref=e360] [cursor=pointer]:
+                  - generic [ref=e361]: 待接单
+                  - strong [ref=e362]: "0"
+                - button "曲怀复，暂停 0 单" [ref=e364] [cursor=pointer]:
+                  - generic [ref=e365]: 暂停
+                  - strong [ref=e366]: "0"
+                - button "曲怀复，待检验 0 单" [ref=e368] [cursor=pointer]:
+                  - generic [ref=e369]: 待检验
+                  - strong [ref=e370]: "0"
+                - button "曲怀复，已完成 1 单" [ref=e372] [cursor=pointer]:
+                  - generic [ref=e373]: 已完成
+                  - strong [ref=e374]: "1"
+              - generic [ref=e375]: 完成量统计：2026-10-01 至 2026-10-31
+            - generic [ref=e376]:
+              - strong [ref=e378]: 李富强
+              - generic [ref=e379]:
+                - button "李富强，维修中 8 单" [ref=e381] [cursor=pointer]:
+                  - generic [ref=e382]: 维修中
+                  - strong [ref=e383]: "8"
+                - button "李富强，待接单 1 单" [ref=e385] [cursor=pointer]:
+                  - generic [ref=e386]: 待接单
+                  - strong [ref=e387]: "1"
+                - button "李富强，暂停 1 单" [ref=e389] [cursor=pointer]:
+                  - generic [ref=e390]: 暂停
+                  - strong [ref=e391]: "1"
+                - button "李富强，待检验 2 单" [ref=e393] [cursor=pointer]:
+                  - generic [ref=e394]: 待检验
+                  - strong [ref=e395]: "2"
+                - button "李富强，已完成 3 单" [ref=e397] [cursor=pointer]:
+                  - generic [ref=e398]: 已完成
+                  - strong [ref=e399]: "3"
+                - button "李富强，超期 17 单" [ref=e401] [cursor=pointer]:
+                  - generic [ref=e402]: 超期
+                  - strong [ref=e403]: "17"
+                - button "李富强，返工 3 单" [ref=e405] [cursor=pointer]:
+                  - generic [ref=e406]: 返工
+                  - strong [ref=e407]: "3"
+              - generic [ref=e408]: 完成量统计：2026-10-01 至 2026-10-31
+            - generic [ref=e409]:
+              - strong [ref=e411]: 陈立
+              - generic [ref=e412]:
+                - button "陈立，维修中 0 单" [ref=e414] [cursor=pointer]:
+                  - generic [ref=e415]: 维修中
+                  - strong [ref=e416]: "0"
+                - button "陈立，待接单 0 单" [ref=e418] [cursor=pointer]:
+                  - generic [ref=e419]: 待接单
+                  - strong [ref=e420]: "0"
+                - button "陈立，暂停 0 单" [ref=e422] [cursor=pointer]:
+                  - generic [ref=e423]: 暂停
+                  - strong [ref=e424]: "0"
+                - button "陈立，待检验 0 单" [ref=e426] [cursor=pointer]:
+                  - generic [ref=e427]: 待检验
+                  - strong [ref=e428]: "0"
+                - button "陈立，已完成 0 单" [ref=e430] [cursor=pointer]:
+                  - generic [ref=e431]: 已完成
+                  - strong [ref=e432]: "0"
+              - generic [ref=e433]: 完成量统计：2026-10-01 至 2026-10-31
+        - heading "全部未完结（30）" [level=3] [ref=e435]
+        - generic [ref=e438]:
+          - table [ref=e442]:
+            - rowgroup [ref=e443]:
+              - row [ref=e444]:
+                - columnheader "车辆 / 单号" [ref=e445]
+                - columnheader "维修员工 / 承包方" [ref=e446]
+                - columnheader "阶段" [ref=e447]
+                - columnheader "维修内容" [ref=e448]
+                - columnheader "项目进度" [ref=e449]
+                - columnheader "预计完工" [ref=e450]
+                - columnheader "操作" [ref=e451]
+            - rowgroup [ref=e452]:
+              - row [ref=e453]:
+                - cell "鲁B90001 WT-MOCK-TECH-01" [ref=e454]:
+                  - button "鲁B90001" [ref=e455] [cursor=pointer]
+                  - generic [ref=e457]: WT-MOCK-TECH-01
+                - cell "李富强" [ref=e458]
+                - cell "店内维修 待检验 加急 超期" [ref=e459]:
+                  - generic [ref=e460]:
+                    - generic [ref=e461]: 店内维修
+                    - generic [ref=e463]: 待检验
+                    - generic [ref=e465]: 加急
+                    - generic [ref=e467]: 超期
+                - cell "【模拟】更换机油机滤" [ref=e469]
+                - cell "1/1" [ref=e471]
+                - cell "2026/9/15 16:14:28" [ref=e472]
+                - cell [ref=e473]:
+                  - button "详 情" [ref=e474] [cursor=pointer]
+              - row [ref=e476]:
+                - cell "鲁B96001 A996001" [ref=e477]:
+                  - button "鲁B96001" [ref=e478] [cursor=pointer]
+                  - generic [ref=e480]: A996001
+                - cell "李富强" [ref=e481]
+                - cell "店内维修 待开工 加急 超期" [ref=e482]:
+                  - generic [ref=e483]:
+                    - generic [ref=e484]: 店内维修
+                    - generic [ref=e486]: 待开工
+                    - generic [ref=e488]: 加急
+                    - generic [ref=e490]: 超期
+                - cell "【测试】更换机油机滤、【测试】全车检查" [ref=e492]
+                - cell "0/2" [ref=e494]
+                - cell "2026/10/17 23:17:13" [ref=e495]
+                - cell [ref=e496]:
+                  - button "详 情" [ref=e497] [cursor=pointer]
+              - row [ref=e499]:
+                - cell "鲁B90002 WT-MOCK-TECH-02" [ref=e500]:
+                  - button "鲁B90002" [ref=e501] [cursor=pointer]
+                  - generic [ref=e503]: WT-MOCK-TECH-02
+                - cell "李富强" [ref=e504]
+                - cell "店内维修 正在维修 超期" [ref=e505]:
+                  - generic [ref=e506]:
+                    - generic [ref=e507]: 店内维修
+                    - generic [ref=e509]: 正在维修
+                    - generic [ref=e511]: 超期
+                - cell "【模拟】检查空调" [ref=e513]
+                - cell "0/1" [ref=e515]
+                - cell "2026/9/15 16:14:28" [ref=e516]
+                - cell [ref=e517]:
+                  - button "详 情" [ref=e518] [cursor=pointer]
+              - row [ref=e520]:
+                - cell "鲁B90003 WT-MOCK-TECH-03" [ref=e521]:
+                  - button "鲁B90003" [ref=e522] [cursor=pointer]
+                  - generic [ref=e524]: WT-MOCK-TECH-03
+                - cell "李富强" [ref=e525]
+                - cell "店内维修 正在维修 超期" [ref=e526]:
+                  - generic [ref=e527]:
+                    - generic [ref=e528]: 店内维修
+                    - generic [ref=e530]: 正在维修
+                    - generic [ref=e532]: 超期
+                - cell "【模拟】制动系统检修" [ref=e534]
+                - cell "0/1" [ref=e536]
+                - cell "2026/9/15 16:14:28" [ref=e537]
+                - cell [ref=e538]:
+                  - button "详 情" [ref=e539] [cursor=pointer]
+              - row [ref=e541]:
+                - cell "鲁B90004 WT-MOCK-TECH-04" [ref=e542]:
+                  - button "鲁B90004" [ref=e543] [cursor=pointer]
+                  - generic [ref=e545]: WT-MOCK-TECH-04
+                - cell "李富强" [ref=e546]
+                - cell "外修（员工外派） 正在维修 超期" [ref=e547]:
+                  - generic [ref=e548]:
+                    - generic [ref=e549]: 外修（员工外派）
+                    - generic [ref=e551]: 正在维修
+                    - generic [ref=e553]: 超期
+                - cell "【模拟】外派维修冷却系统" [ref=e555]
+                - cell "0/1" [ref=e557]
+                - cell "2026/9/15 16:14:28" [ref=e558]
+                - cell [ref=e559]:
+                  - button "详 情" [ref=e560] [cursor=pointer]
+              - row [ref=e562]:
+                - cell "鲁B90005 WT-MOCK-TECH-05" [ref=e563]:
+                  - button "鲁B90005" [ref=e564] [cursor=pointer]
+                  - generic [ref=e566]: WT-MOCK-TECH-05
+                - cell "李富强" [ref=e567]
+                - cell "店内维修 待结算" [ref=e568]:
+                  - generic [ref=e569]:
+                    - generic [ref=e570]: 店内维修
+                    - generic [ref=e572]: 待结算
+                - cell "【模拟】轮胎及四轮定位" [ref=e574]
+                - cell "1/1" [ref=e576]
+                - cell "2026/9/15 16:14:28" [ref=e577]
+                - cell [ref=e578]:
+                  - button "详 情" [ref=e579] [cursor=pointer]
+              - row [ref=e581]:
+                - cell "鲁B90006 WT-MOCK-TECH-06" [ref=e582]:
+                  - button "鲁B90006" [ref=e583] [cursor=pointer]
+                  - generic [ref=e585]: WT-MOCK-TECH-06
+                - cell "李富强" [ref=e586]
+                - cell "店内维修 正在维修 超期 返工" [ref=e587]:
+                  - generic [ref=e588]:
+                    - generic [ref=e589]: 店内维修
+                    - generic [ref=e591]: 正在维修
+                    - generic [ref=e593]: 超期
+                    - generic [ref=e595]: 返工
+                - cell "【模拟】转向系统异响" [ref=e597]
+                - cell "0/1" [ref=e599]
+                - cell "2026/9/15 16:14:28" [ref=e600]
+                - cell [ref=e601]:
+                  - button "详 情" [ref=e602] [cursor=pointer]
+              - row [ref=e604]:
+                - cell "鲁B5P2Z7 WT-20260819-4FE1593B45C5" [ref=e605]:
+                  - button "鲁B5P2Z7" [ref=e606] [cursor=pointer]
+                  - generic [ref=e608]: WT-20260819-4FE1593B45C5
+                - cell "张明" [ref=e609]
+                - cell "店内维修 未接单 超期" [ref=e610]:
+                  - generic [ref=e611]:
+                    - generic [ref=e612]: 店内维修
+                    - generic [ref=e614]: 未接单
+                    - generic [ref=e616]: 超期
+                - cell "油管" [ref=e618]
+                - cell "0/1" [ref=e620]
+                - cell "2026/9/17 10:06:00" [ref=e621]
+                - cell [ref=e622]:
+                  - button "详 情" [ref=e623] [cursor=pointer]
+              - row [ref=e625]:
+                - cell "鲁BTEST01 WT-20260817-18ACD5A6E34D" [ref=e626]:
+                  - button "鲁BTEST01" [ref=e627] [cursor=pointer]
+                  - generic [ref=e629]: WT-20260817-18ACD5A6E34D
+                - cell "刘峰" [ref=e630]
+                - cell "店内维修 未接单 超期" [ref=e631]:
+                  - generic [ref=e632]:
+                    - generic [ref=e633]: 店内维修
+                    - generic [ref=e635]: 未接单
+                    - generic [ref=e637]: 超期
+                - cell "更换机油机滤、全车检查" [ref=e639]
+                - cell "0/2" [ref=e641]
+                - cell "2026/9/18 23:06:00" [ref=e642]
+                - cell [ref=e643]:
+                  - button "详 情" [ref=e644] [cursor=pointer]
+              - row [ref=e646]:
+                - cell "鲁B96003 A996003" [ref=e647]:
+                  - button "鲁B96003" [ref=e648] [cursor=pointer]
+                  - generic [ref=e650]: A996003
+                - cell "李富强" [ref=e651]
+                - cell "店内维修 正在维修 超期" [ref=e652]:
+                  - generic [ref=e653]:
+                    - generic [ref=e654]: 店内维修
+                    - generic [ref=e656]: 正在维修
+                    - generic [ref=e658]: 超期
+                - cell "【测试】检查空调异响" [ref=e660]
+                - cell "0/1" [ref=e662]
+                - cell "2026/10/16 00:17:13" [ref=e663]
+                - cell [ref=e664]:
+                  - button "详 情" [ref=e665] [cursor=pointer]
+              - row [ref=e667]:
+                - cell "鲁B96005 A996005" [ref=e668]:
+                  - button "鲁B96005" [ref=e669] [cursor=pointer]
+                  - generic [ref=e671]: A996005
+                - cell "李富强" [ref=e672]
+                - cell "外修（员工外派） 暂停 超期" [ref=e673]:
+                  - generic [ref=e674]:
+                    - generic [ref=e675]: 外修（员工外派）
+                    - generic [ref=e677]: 暂停
+                    - generic [ref=e679]: 超期
+                - cell "【测试】检修冷却系统" [ref=e681]
+                - cell "0/1" [ref=e683]
+                - cell "2026/10/16 17:17:13" [ref=e684]
+                - cell [ref=e685]:
+                  - button "详 情" [ref=e686] [cursor=pointer]
+              - row [ref=e688]:
+                - cell "鲁B96002 A996002" [ref=e689]:
+                  - button "鲁B96002" [ref=e690] [cursor=pointer]
+                  - generic [ref=e692]: A996002
+                - cell "李富强" [ref=e693]
+                - cell "店内维修 待开工 超期" [ref=e694]:
+                  - generic [ref=e695]:
+                    - generic [ref=e696]: 店内维修
+                    - generic [ref=e698]: 待开工
+                    - generic [ref=e700]: 超期
+                - cell "【测试】检修制动系统" [ref=e702]
+                - cell "0/1" [ref=e704]
+                - cell "2026/10/16 23:17:13" [ref=e705]
+                - cell [ref=e706]:
+                  - button "详 情" [ref=e707] [cursor=pointer]
+              - row [ref=e709]:
+                - cell "鲁B96006 A996006" [ref=e710]:
+                  - button "鲁B96006" [ref=e711] [cursor=pointer]
+                  - generic [ref=e713]: A996006
+                - cell "李富强" [ref=e714]
+                - cell "店内维修 待检验 超期" [ref=e715]:
+                  - generic [ref=e716]:
+                    - generic [ref=e717]: 店内维修
+                    - generic [ref=e719]: 待检验
+                    - generic [ref=e721]: 超期
+                - cell "【测试】轮胎及四轮定位" [ref=e723]
+                - cell "1/1" [ref=e725]
+                - cell "2026/10/16 23:17:13" [ref=e726]
+                - cell [ref=e727]:
+                  - button "详 情" [ref=e728] [cursor=pointer]
+              - row [ref=e730]:
+                - cell "鲁B96008 A996008" [ref=e731]:
+                  - button "鲁B96008" [ref=e732] [cursor=pointer]
+                  - generic [ref=e734]: A996008
+                - cell "李富强" [ref=e735]
+                - cell "店内维修 未接单 超期 返工第 1 轮" [ref=e736]:
+                  - generic [ref=e737]:
+                    - generic [ref=e738]: 店内维修
+                    - generic [ref=e740]: 未接单
+                    - generic [ref=e742]: 超期
+                    - generic [ref=e744]: 返工第 1 轮
+                - cell "【测试】转向系统检查、【测试】路试复查" [ref=e746]
+                - cell "0/2" [ref=e748]
+                - cell "2026/10/16 23:17:13" [ref=e749]
+                - cell [ref=e750]:
+                  - button "详 情" [ref=e751] [cursor=pointer]
+              - row [ref=e753]:
+                - cell "鲁B96004 A996004" [ref=e754]:
+                  - button "鲁B96004" [ref=e755] [cursor=pointer]
+                  - generic [ref=e757]: A996004
+                - cell "李富强" [ref=e758]
+                - cell "店内维修 正在维修 超期" [ref=e759]:
+                  - generic [ref=e760]:
+                    - generic [ref=e761]: 店内维修
+                    - generic [ref=e763]: 正在维修
+                    - generic [ref=e765]: 超期
+                - cell "【测试】更换空气滤芯、【测试】常规保养" [ref=e767]
+                - cell "0/2" [ref=e769]
+                - cell "2026/10/17 11:17:13" [ref=e770]
+                - cell [ref=e771]:
+                  - button "详 情" [ref=e772] [cursor=pointer]
+              - row [ref=e774]:
+                - cell "鲁B90007 WT-MOCK-TECH-07" [ref=e775]:
+                  - button "鲁B90007" [ref=e776] [cursor=pointer]
+                  - generic [ref=e778]: WT-MOCK-TECH-07
+                - cell "李富强" [ref=e779]
+                - cell "店内维修 正在维修 超期 返工第 1 轮" [ref=e780]:
+                  - generic [ref=e781]:
+                    - generic [ref=e782]: 店内维修
+                    - generic [ref=e784]: 正在维修
+                    - generic [ref=e786]: 超期
+                    - generic [ref=e788]: 返工第 1 轮
+                - cell "【模拟】发动机常规保养、【验收】检查保养后异响" [ref=e790]
+                - cell "0/2" [ref=e792]
+                - cell "2026/10/18 18:00:00" [ref=e793]
+                - cell [ref=e794]:
+                  - button "详 情" [ref=e795] [cursor=pointer]
+              - row [ref=e797]:
+                - cell "鲁B279X6 DEMO-HISTORY-01" [ref=e798]:
+                  - button "鲁B279X6" [ref=e799] [cursor=pointer]
+                  - generic [ref=e801]: DEMO-HISTORY-01
+                - cell "李富强" [ref=e802]
+                - cell "店内维修 待开工 超期" [ref=e803]:
+                  - generic [ref=e804]:
+                    - generic [ref=e805]: 店内维修
+                    - generic [ref=e807]: 待开工
+                    - generic [ref=e809]: 超期
+                - cell "【测试】历史用料查询与配件交接验证" [ref=e811]
+                - cell "0/1" [ref=e813]
+                - cell "2026/10/19 16:31:40" [ref=e814]
+                - cell [ref=e815]:
+                  - button "详 情" [ref=e816] [cursor=pointer]
+              - row [ref=e818]:
+                - cell "鲁BWL030 DEMO-HISTORY-02" [ref=e819]:
+                  - button "鲁BWL030" [ref=e820] [cursor=pointer]
+                  - generic [ref=e822]: DEMO-HISTORY-02
+                - cell "李富强" [ref=e823]
+                - cell "店内维修 待开工 超期" [ref=e824]:
+                  - generic [ref=e825]:
+                    - generic [ref=e826]: 店内维修
+                    - generic [ref=e828]: 待开工
+                    - generic [ref=e830]: 超期
+                - cell "【测试】历史用料查询与配件交接验证" [ref=e832]
+                - cell "0/1" [ref=e834]
+                - cell "2026/10/19 16:31:40" [ref=e835]
+                - cell [ref=e836]:
+                  - button "详 情" [ref=e837] [cursor=pointer]
+              - row [ref=e839]:
+                - cell "鲁BPL970 DEMO-HISTORY-03" [ref=e840]:
+                  - button "鲁BPL970" [ref=e841] [cursor=pointer]
+                  - generic [ref=e843]: DEMO-HISTORY-03
+                - cell "李富强" [ref=e844]
+                - cell "店内维修 待开工 超期" [ref=e845]:
+                  - generic [ref=e846]:
+                    - generic [ref=e847]: 店内维修
+                    - generic [ref=e849]: 待开工
+                    - generic [ref=e851]: 超期
+                - cell "【测试】历史用料查询与配件交接验证" [ref=e853]
+                - cell "0/1" [ref=e855]
+                - cell "2026/10/19 16:31:40" [ref=e856]
+                - cell [ref=e857]:
+                  - button "详 情" [ref=e858] [cursor=pointer]
+              - row [ref=e860]:
+                - cell "鲁UP1913 DEMO-HISTORY-04" [ref=e861]:
+                  - button "鲁UP1913" [ref=e862] [cursor=pointer]
+                  - generic [ref=e864]: DEMO-HISTORY-04
+                - cell "李富强" [ref=e865]
+                - cell "店内维修 正在维修 超期" [ref=e866]:
+                  - generic [ref=e867]:
+                    - generic [ref=e868]: 店内维修
+                    - generic [ref=e870]: 正在维修
+                    - generic [ref=e872]: 超期
+                - cell "【测试】历史用料查询与配件交接验证" [ref=e874]
+                - cell "0/1" [ref=e876]
+                - cell "2026/10/19 16:31:40" [ref=e877]
+                - cell [ref=e878]:
+                  - button "详 情" [ref=e879] [cursor=pointer]
+          - list [ref=e881]:
+            - listitem "上一页" [ref=e882]:
+              - button [disabled] [ref=e883]:
+                - img "left" [ref=e884]
+            - listitem "1" [ref=e887] [cursor=pointer]
+            - listitem "2" [ref=e889] [cursor=pointer]
+            - listitem "下一页" [ref=e891] [cursor=pointer]:
+              - button [ref=e892]:
+                - img "right" [ref=e893]
+  - dialog "鲁B96001 · 维修任务" [ref=e897]:
+    - generic [ref=e899]:
+      - button "关闭" [ref=e900] [cursor=pointer]:
+        - img "close" [ref=e901]
+      - generic [ref=e904]: 鲁B96001 · 维修任务
+    - generic [ref=e906]:
+      - region "任务概览" [ref=e907]:
+        - generic [ref=e908]:
+          - generic [ref=e909]:
+            - generic [ref=e910]: 店内维修
+            - generic [ref=e912]: 待开工
+            - generic [ref=e914]: 加急
+            - generic [ref=e916]: 超期
+          - generic "维修与领料批次" [ref=e918]: 本轮第 1 批
+        - generic [ref=e920]: 派工号 A996001
+        - generic [ref=e921]:
+          - generic [ref=e922]:
+            - term [ref=e923]: 托修单位
+            - definition [ref=e924]: 【测试】托修单位1号车队
+          - generic [ref=e925]:
+            - term [ref=e926]: 车型 / 里程
+            - definition [ref=e927]: 五菱荣光 · 57162 km
+          - generic [ref=e928]:
+            - term [ref=e929]: 维修员工
+            - definition [ref=e930]: 李富强
+          - generic [ref=e931]:
+            - term [ref=e932]: 预计完工
+            - definition [ref=e933]: 2026/10/17 23:17:13
+      - generic [ref=e934]:
+        - heading "维修项目 · 0/2 已提报或通过" [level=3] [ref=e935]
+        - generic [ref=e936]:
+          - generic [ref=e937]:
+            - generic [ref=e938]:
+              - text: 共
+              - strong [ref=e939]: "2"
+              - text: 项
+            - button "＋ 新增增修项目" [ref=e940] [cursor=pointer]:
+              - img "plus" [ref=e942]
+              - generic [ref=e946]: 新增增修项目
+          - list [ref=e947]:
+            - listitem [ref=e948]:
+              - generic [ref=e949]: "01"
+              - generic [ref=e950]:
+                - generic [ref=e951]: 原维修项目
+                - textbox "维修项目 1 名称" [ref=e953]:
+                  - /placeholder: 填写维修项目名称
+                  - text: 【测试】更换机油机滤
+                - generic [ref=e954]:
+                  - generic [ref=e955]: 负责人
+                  - generic [ref=e956] [cursor=pointer]:
+                    - generic "李富强" [ref=e957]:
+                      - text: 李富强
+                      - combobox "维修项目 1 负责人" [ref=e958]
+                    - img "down" [ref=e960]
+                - generic [ref=e963]:
+                  - generic [ref=e964]: 待开工
+                  - generic [ref=e965]: 开工：未记录
+                  - generic [ref=e966]: 完工提报：未记录
+                  - generic [ref=e967]: 检验：未检验 · 未记录
+                  - generic [ref=e968]: 领料确认：未记录
+            - listitem [ref=e969]:
+              - generic [ref=e970]: "02"
+              - generic [ref=e971]:
+                - generic [ref=e972]: 原维修项目
+                - textbox "维修项目 2 名称" [ref=e974]:
+                  - /placeholder: 填写维修项目名称
+                  - text: 【测试】全车检查
+                - generic [ref=e975]:
+                  - generic [ref=e976]: 负责人
+                  - generic [ref=e977] [cursor=pointer]:
+                    - generic "李富强" [ref=e978]:
+                      - text: 李富强
+                      - combobox "维修项目 2 负责人" [ref=e979]
+                    - img "down" [ref=e981]
+                - generic [ref=e984]:
+                  - generic [ref=e985]: 待开工
+                  - generic [ref=e986]: 开工：未记录
+                  - generic [ref=e987]: 完工提报：未记录
+                  - generic [ref=e988]: 检验：未检验 · 未记录
+                  - generic [ref=e989]: 领料确认：未记录
+        - paragraph [ref=e990]: 可逐项选择本店维修工；变更负责人只影响对应项目，新增项目需由维修工开工。
+        - paragraph [ref=e991]: 需要配件的任务由仓管确认出库后自动开工；无需配件直接开工。
+      - region "所需配件" [ref=e992]:
+        - heading "所需配件" [level=3] [ref=e993]
+        - paragraph [ref=e994]: 无需配件
+        - paragraph [ref=e995]: 李富强 · 2026/10/17 12:24:17
+      - generic [ref=e996]:
+        - generic [ref=e998]:
+          - generic [ref=e999]: 本车历史用料
+          - button "loading 刷新历史" [ref=e1001]:
+            - img "loading" [ref=e1003]
+            - generic [ref=e1006]: 刷新历史
+        - status [ref=e1008]: 正在按车牌查询维修历史…
+      - button "collapsed 任务信息与关键时间" [ref=e1018] [cursor=pointer]:
+        - img "collapsed" [ref=e1020]
+        - generic [ref=e1023]: 任务信息与关键时间
+      - button "collapsed 完整派工单与接车照片" [ref=e1026] [cursor=pointer]:
+        - img "collapsed" [ref=e1028]
+        - generic [ref=e1031]: 完整派工单与接车照片
+      - button "collapsed 通知与操作记录" [ref=e1034] [cursor=pointer]:
+        - img "collapsed" [ref=e1036]
+        - generic [ref=e1039]: 通知与操作记录
+      - generic [ref=e1041]:
+        - button "改 派" [ref=e1043] [cursor=pointer]
+        - button "撤销派工" [ref=e1046] [cursor=pointer]
+        - button "催 办" [ref=e1049] [cursor=pointer]

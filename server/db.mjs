@@ -165,10 +165,15 @@ export async function createSignatureTokenForOrder(id, actor) {
   return transaction(async (client) => {
     const order = await findWorkOrderById(client, id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
-    if (order.status !== "草稿") throw new HttpError(409, `当前状态“${order.status}”不能发起签字`);
+    if (!["草稿", "待客户签字"].includes(order.status) || order.signatures.customer) throw new HttpError(409, `当前状态“${order.status}”不能发起签字`);
     if (order.paperOrder) throw new HttpError(409, "纸质委托书无需电子签字，请提交纸质委托单");
+    const { rows: sessions } = await client.query(
+      "select token from signature_tokens where order_id=$1 and not used and (expires_at is null or expires_at>clock_timestamp()) order by created_at desc,token desc limit 1 for update", [id]
+    );
+    if (order.status === "待客户签字" && sessions[0]) return { ...order, signatureToken: sessions[0].token, signatureTokenUsed: false };
     assertOrderReadyForSignature(order);
     assertPreRepairPhotosReady(order);
+    await client.query("update signature_tokens set expires_at=clock_timestamp() where order_id=$1", [id]);
     const token = createSignatureToken(id);
     await upsertWorkOrder(client, { ...order, status: "待客户签字", updatedAt: nowString() });
     await client.query(
@@ -178,8 +183,8 @@ export async function createSignatureTokenForOrder(id, actor) {
       `,
       [token, id]
     );
-    await addAudit(client, id, actor, "生成客户签字链接");
-    return findWorkOrderById(client, id);
+    await addAudit(client, id, actor, order.status === "草稿" ? "发起客户签字" : "恢复客户签字会话");
+    return { ...await findWorkOrderById(client, id), signatureToken: token, signatureTokenUsed: false };
   });
 }
 
@@ -199,12 +204,18 @@ export async function findWorkOrderByToken(token) {
 
 export async function signWorkOrderByToken(token, signature, signatureFileId) {
   return transaction(async (client) => {
+    // Resolve the parent without a token lock, then use the same parent -> token
+    // lock order as session creation. Recheck validity after acquiring the parent.
+    const { rows: references } = await client.query("select order_id from signature_tokens where token=$1", [token]);
+    if (!references[0]) throw new HttpError(404, "签字链接不存在或已失效");
+    const order = await findWorkOrderById(client, references[0].order_id, true);
+    if (!order) throw new HttpError(404, "委托单不存在");
     const tokenResult = await client.query(
       `
         select *
         from signature_tokens
         where token = $1
-          and (expires_at is null or expires_at > now())
+          and (expires_at is null or expires_at > clock_timestamp())
         for update
       `,
       [token]
@@ -213,8 +224,6 @@ export async function signWorkOrderByToken(token, signature, signatureFileId) {
     if (!tokenRow) throw new HttpError(404, "签字链接不存在或已失效");
     if (tokenRow.used) throw new HttpError(409, "签字链接已使用");
 
-    const order = await findWorkOrderById(client, tokenRow.order_id, true);
-    if (!order) throw new HttpError(404, "委托单不存在");
     if (order.status !== "待客户签字") throw new HttpError(409, "当前委托单已签字或不能签字");
     if (!signatureFileId) throw new HttpError(400, "请完成手写签名");
     const signatureFile = await client.query(

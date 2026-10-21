@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {createServer} from 'node:http';
 import path from 'node:path';
+import os from 'node:os';
 import pg from 'pg';
 const adminUrl=process.env.DISPATCH_TEST_ADMIN_URL;
 // Opt-in only: never infer a database from .env or touch application data.
@@ -12,7 +13,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
   assert.ok(['localhost','127.0.0.1','[::1]'].includes(parsed.hostname),'Only a local test server is allowed');
   const name=`codex_dispatch_test_${process.pid}_${Date.now()}`;
   const admin=new pg.Client({connectionString:adminUrl,connectionTimeoutMillis:5000});
-  let pool,server;
+  let pool,server,uiUploadRoot;
   const inFlight=new Set();
   const connectionsClosed=[];
   await admin.connect();
@@ -303,7 +304,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,original_name,mime_type,size_bytes,uploaded_by) values($1,'team','repair_order_photo','local','','test','repair.png','image/png',1,$2)",[file,advisor.id]);
       await assertFileReadAccess(file,tech2);
       await execute(tech2,'accept');
-      await execute(tech2,'edit-repair-items',{repairItems:team.items.map((i,n)=>({id:i.id,name:i.name,responsibleId:n?tech.id:tech2.id}))});
+      await execute(tech2,'edit-repair-items',{reason:'团队确认分工',repairItems:team.items.map((i,n)=>({id:i.id,name:i.name,responsibleId:n?tech.id:tech2.id}))});
       await execute(tech2,'finish',{itemId:1});
       await execute(tech,'finish',{itemId:2});
       await assert.rejects(()=>execute(tech2,'submit',{inspectorId:inspector.id}),/本轮维修照片/);
@@ -338,6 +339,60 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
           assert.ok((await pool.query('select recipient_id from dispatch_notifications where order_id=$1',[id])).rows.every(r=>![tech.id,tech2.id].includes(r.recipient_id)));
         } else assert.deepEqual(task.technicianIds,[tech.id,tech2.id]);
       }
+    });
+    await t.test('scheduler project edits and selective reassignment persist owners, audit and affected notifications atomically',async()=>{
+      const id='scheduler-project-dispatch';await seed(id);
+      let local=(await service.executeDispatchAction(advisor,id,{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianIds:[tech.id,tech2.id],dueAt,repairItems:[{id:1,name:'更换机油',responsibleId:tech.id},{id:2,name:'检查刹车',responsibleId:tech2.id}]})).task;
+      local=(await service.executeDispatchAction(tech,id,{action:'accept',expectedVersion:local.version,requestId:randomUUID(),partsRequirement:{mode:'none'}})).task;
+      await pool.query('update repair_items set labor_fee=123 where order_id=$1 and client_item_id=1',[id]);
+      const before=structuredClone(local);
+      const request={action:'reassign',reassignItemIds:[1],repairItems:[{id:1,name:local.items[0].name,responsibleId:unique.id}],reason:'指定项目交接',expectedVersion:local.version,requestId:randomUUID()};
+      local=(await service.executeDispatchAction(advisor,id,request)).task;
+      await service.executeDispatchAction(advisor,id,request);
+      assert.deepEqual(local.items[1],before.items[1]);assert.equal(local.items[0].responsibleId,unique.id);
+      assert.equal(local.items[0].startedBy,tech.id);assert.equal(local.items[0].startAt,before.items[0].startAt);
+      for(const key of ['stage','acceptedAt','firstStartedAt','dueAt'])assert.equal(local[key],before[key]);
+      assert.ok(local.technicianIds.includes(tech2.id));assert.ok(local.participantIds.includes(tech.id));
+      const event=(await pool.query("select id,detail from dispatch_events where order_id=$1 and action='reassign'",[id])).rows;
+      assert.equal(event.length,1);assert.deepEqual(event[0].detail.reassignItemIds,[1]);assert.equal(event[0].detail.previousItems[0].responsibleId,tech.id);
+      const notices=(await pool.query('select recipient_id,kind,payload from dispatch_notifications where event_id=$1',[event[0].id])).rows;
+      assert.deepEqual(notices.map(n=>n.recipient_id).sort(),[tech.id,unique.id].sort());assert.ok(notices.every(n=>n.kind==='项目改派'&&!n.payload.summary.includes('检查刹车')));
+      const updated=local.items.map(({id,name,responsibleId})=>({id,name,responsibleId}));updated[0].name='更换机油机滤';updated.push({name:'新增检测',responsibleId:tech2.id});
+      const staleVersion=local.version;
+      local=(await service.executeDispatchAction(manager,id,{action:'edit-repair-items',repairItems:updated,expectedVersion:local.version,requestId:randomUUID()})).task;
+      assert.equal(local.items[2].status,'待开工');assert.equal(local.items[2].startAt,undefined);
+      const stored=(await pool.query('select name,owner,labor_fee from repair_items where order_id=$1 order by item_no',[id])).rows;
+      assert.equal(stored[0].name,'更换机油机滤');assert.equal(stored[0].owner,unique.name);assert.equal(Number(stored[0].labor_fee),123);assert.equal(stored[2].owner,tech2.name);
+      await assert.rejects(()=>service.executeDispatchAction(advisor,id,{action:'reassign',reassignItemIds:[2],repairItems:[{id:2,name:'检查刹车',responsibleId:unique.id}],reason:'过期改派',expectedVersion:staleVersion,requestId:randomUUID()}),/任务已更新/);
+      const invalid=local.items.map(({id,name,responsibleId})=>({id,name,responsibleId}));invalid[0]={...invalid[0],name:'不应保存',responsibleId:outside.id};
+      await assert.rejects(()=>service.executeDispatchAction(advisor,id,{action:'edit-repair-items',repairItems:invalid,expectedVersion:local.version,requestId:randomUUID()}),/有效负责人/);
+      assert.equal((await service.dispatchDetail(manager,id)).task.items[0].name,'更换机油机滤');
+      assert.equal((await pool.query('select name from repair_items where order_id=$1 and client_item_id=1',[id])).rows[0].name,'更换机油机滤');
+    });
+    await t.test('project deletion commits rows, audit and owner notifications together, with idempotency and rollback',async()=>{
+      const id='delete-repair-project';await seed(id);
+      let local=(await service.executeDispatchAction(advisor,id,{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianIds:[tech.id,tech2.id],dueAt,repairItems:[{id:1,name:'取消的维修',responsibleId:tech.id},{id:2,name:'保留的检查',responsibleId:tech2.id}]})).task;
+      local=(await service.executeDispatchAction(tech,id,{action:'accept',expectedVersion:local.version,requestId:randomUUID(),partsRequirement:{mode:'none'}})).task;
+      await pool.query('update repair_items set labor_fee=321 where order_id=$1 and client_item_id=2',[id]);
+      const original=structuredClone(local),kept=local.items[1];
+      const request={action:'edit-repair-items',expectedVersion:local.version,requestId:randomUUID(),repairItems:[{id:kept.id,name:kept.name,responsibleId:kept.responsibleId}]};
+      const invalid={...request,requestId:randomUUID(),repairItems:[{...request.repairItems[0],responsibleId:outside.id}]};
+      await assert.rejects(()=>service.executeDispatchAction(advisor,id,invalid),/有效负责人/);
+      assert.equal((await service.dispatchDetail(manager,id)).task.items.length,2);
+      assert.equal((await pool.query("select 1 from dispatch_notifications where order_id=$1 and kind='维修项目已删除'",[id])).rowCount,0);
+      local=(await service.executeDispatchAction(advisor,id,request)).task;
+      await service.executeDispatchAction(advisor,id,request);
+      assert.deepEqual(local.items,[kept]);assert.equal(local.stage,original.stage);assert.equal(local.acceptedAt,original.acceptedAt);
+      assert.ok(local.participantIds.includes(tech.id));assert.deepEqual(local.technicianIds,[tech2.id]);
+      const stored=(await pool.query('select client_item_id,labor_fee from repair_items where order_id=$1',[id])).rows;
+      assert.equal(stored.length,1);assert.equal(Number(stored[0].client_item_id),2);assert.equal(Number(stored[0].labor_fee),321);
+      const detail=await service.dispatchDetail(manager,id),events=detail.events.filter(e=>e.action==='edit-repair-items');
+      assert.equal(events.length,1);assert.equal(events[0].detail.previousItems[0].name,'取消的维修');assert.equal(events[0].detail.items.length,1);
+      const notices=(await pool.query("select * from dispatch_notifications where order_id=$1 and kind='维修项目已删除'",[id])).rows;
+      assert.equal(notices.length,1);assert.equal(notices[0].recipient_id,tech.id);assert.equal(notices[0].payload.summary,'取消的维修');
+      assert.equal(notices[0].payload.actorName,advisor.name);assert.match(notices[0].payload.notice,/无需继续施工/);
+      assert.equal((await pool.query('select 1 from dispatch_events where order_id=$1 and request_id=$2',[id,invalid.requestId])).rowCount,0);
+      await assert.rejects(()=>service.executeDispatchAction(advisor,id,{...request,requestId:randomUUID(),repairItems:[]}),e=>e.status===400);
     });
     await t.test('repair project edits retain prices and IDs and roll back together with rejected completion',async()=>{
       const id='editable-repair-items';await seed(id);
@@ -641,6 +696,8 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await pool.query("update repair_writebacks set next_attempt_at=now()+interval '1 day' where order_id=$1 and status='pending'",[id]);
     });
     if(process.env.DISPATCH_UI_TEST==='true') await t.test('desktop and mobile UI complete assignment, acceptance, repair and inspection',async()=>{
+      uiUploadRoot=await fs.mkdtemp(path.join(os.tmpdir(),'repair-dispatch-ui-'));
+      process.env.LOCAL_UPLOAD_ROOT=uiUploadRoot;
       const {chromium}=await import(process.env.DISPATCH_PLAYWRIGHT_MODULE||'playwright');
       const {createTokenForUser}=await import('../server/auth.mjs');
       const {createAuthSession}=await import('../server/repositories/userRepository.mjs');
@@ -657,6 +714,23 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
           const page=await context.newPage();pages.push(page);page.setDefaultTimeout(12000);page.on('pageerror',e=>browserErrors.push(e.message));
           await page.addInitScript(token=>localStorage.setItem('repair-h5-auth-token',token),token);
           await page.goto(`${base}/?dispatchOrder=${orderId}`);return page;
+        }
+        async function assertNoDuplicateProjectActions(detail) {
+          await detail.getByRole('heading',{name:/维修项目 ·/}).waitFor();
+          assert.equal(await detail.getByRole('button',{name:/^改\s*派$/}).count(),0,'项目区域已支持改派，不显示重复底栏按钮');
+          assert.equal(await detail.getByRole('button',{name:'调整派工信息',exact:true}).count(),0,'不恢复已移除的底栏入口');
+        }
+        async function assertActionBarLayout(page) {
+          const geometry=await page.locator('.task-detail-actions').evaluate(bar=>{
+            const bounds=bar.getBoundingClientRect();
+            const buttons=[...bar.querySelectorAll('button')].map(button=>button.getBoundingClientRect()).filter(rect=>rect.width&&rect.height);
+            return {
+              overlap:buttons.some((a,index)=>buttons.slice(index+1).some(b=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1)),
+              overflow:buttons.some(rect=>rect.left<0||rect.right>innerWidth+1),
+              reserved:parseFloat(getComputedStyle(document.querySelector('.dispatch-detail')).paddingBottom),height:bounds.height
+            };
+          });
+          assert.equal(geometry.overlap,false);assert.equal(geometry.overflow,false);assert.ok(geometry.reserved>=geometry.height);
         }
         const managerPage=await pageFor(manager);
         await managerPage.locator('.ant-drawer-close').click();
@@ -676,52 +750,64 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await managerPage.getByRole('button',{name:'重置筛选',exact:true}).click();
         await managerPage.goto(`${base}/?dispatchOrder=ui-order`);
         const managerDrawer=managerPage.locator('.dispatch-detail');
-        await managerDrawer.getByRole('button',{name:'指派维修工',exact:true}).click();
-        const dialog=managerPage.getByRole('dialog',{name:'指派维修工',exact:true});
+        assert.equal(await managerDrawer.getByRole('button',{name:'指派维修工',exact:true}).count(),0);
+        const dialog=managerDrawer;
         await dialog.getByRole('combobox',{name:'执行方式',exact:true}).click();
-        await managerPage.locator('.ant-select-item-option-content').filter({hasText:'外修（员工外派）'}).click();
+        await managerPage.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText('外修（员工外派）',{exact:true}).click();
         await dialog.getByLabel('服务单位',{exact:true}).fill('客户车队');
         await dialog.getByLabel('施工地址',{exact:true}).fill('客户停车场');
-        await dialog.getByRole('combobox',{name:'维修工',exact:true}).click();
-        await managerPage.locator('.ant-select-item-option-content').filter({hasText:'同名技师'}).first().click();
-        await managerPage.locator('.ant-select-item-option-content').filter({hasText:'同名技师'}).nth(1).click();
         await dialog.getByLabel('预计完工时间',{exact:true}).fill('2026-12-31T18:00');
-        await dialog.getByRole('button',{name:/^确\s*认$/}).click();
-        await dialog.waitFor({state:'hidden'});
+        for(const [index,ownerId] of [[1,'tech'],[2,'tech2']]) {
+          await dialog.getByRole('combobox',{name:`维修项目 ${index} 负责人`,exact:true}).click();
+          await managerPage.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText(`同名技师（账号 ${ownerId}）`,{exact:true}).click();
+          await managerPage.locator('.ant-select-dropdown:visible').waitFor({state:'hidden'});
+        }
+        await dialog.getByRole('button',{name:'确认派工并通知',exact:true}).click();
+        await dialog.locator('.inline-dispatch-form').waitFor({state:'hidden'});
         let ui=(await service.dispatchDetail(manager,'ui-order')).task;
         assert.equal(ui.stage,'待接单');assert.equal(ui.executionMode,'field');assert.equal(ui.technicianIds.length,2);
         const uiTech=people.find(p=>p.id===ui.technicianIds[1]);
         const workerPage=await pageFor(uiTech,true);
-        const drawer=workerPage.locator('.dispatch-detail');
+        const drawer=workerPage.locator('.technician-detail');
         await drawer.getByRole('button',{name:'确认接单',exact:true}).click();
+        const acceptance=workerPage.getByRole('dialog',{name:'确认接单 · 登记所需配件',exact:true});
+        await acceptance.getByText('无需配件',{exact:true}).click();
+        await acceptance.getByRole('button',{name:'接单并开始维修',exact:true}).click();
+        await acceptance.waitFor({state:'hidden'});
+        const {default:sharp}=await import('sharp');
+        const photo=await sharp({create:{width:100,height:100,channels:3,background:'#447799'}}).png().toBuffer();
+        await drawer.getByLabel('维修记录从相册选择').setInputFiles({name:'维修记录.png',mimeType:'image/png',buffer:photo});
+        await drawer.getByText(/已保存/).first().waitFor();
+        await drawer.getByRole('button',{name:'提交完工',exact:true}).click();
+        const workerDialog=workerPage.getByRole('dialog',{name:'确认维修完成？',exact:true});
         for(const itemId of [1,2]) {
-          await drawer.getByRole('button',{name:`开工：项目${itemId}`,exact:true}).click();
-          await drawer.getByRole('button',{name:`项目完成：项目${itemId}`,exact:true}).click();
+          await workerDialog.getByRole('combobox',{name:`维修项目 ${itemId} 负责人`,exact:true}).click();
+          await workerDialog.getByRole('combobox',{name:`维修项目 ${itemId} 负责人`,exact:true}).press('ArrowDown');
+          await workerDialog.getByRole('combobox',{name:`维修项目 ${itemId} 负责人`,exact:true}).press('Enter');
         }
-        await drawer.getByRole('button',{name:'提报检验',exact:true}).click();
-        const workerDialog=workerPage.getByRole('dialog',{name:'提报检验',exact:true});
-        await workerDialog.getByRole('combobox',{name:'指定检验员',exact:true}).click();
-        await workerPage.locator('.ant-select-item-option-content').filter({hasText:/^检验员$/}).click();
-        await workerDialog.getByRole('button',{name:/^确\s*认$/}).click();
+        if(await workerDialog.getByLabel('原因或交接说明',{exact:true}).count())await workerDialog.getByLabel('原因或交接说明',{exact:true}).fill('完工责任确认');
+        await workerDialog.getByRole('button',{name:'确认提交',exact:true}).click();
         await workerDialog.waitFor({state:'hidden'});
         ui=(await service.dispatchDetail(manager,'ui-order')).task;assert.equal(ui.stage,'待检验');
         const inspectorPage=await pageFor(inspector,true);
-        await inspectorPage.locator('.dispatch-detail').getByRole('button',{name:'检验处理',exact:true}).click();
-        const inspectionDialog=inspectorPage.getByRole('dialog',{name:'检验处理',exact:true});
-        await inspectionDialog.getByRole('button',{name:/^确\s*认$/}).click();
+        const inspection=inspectorPage.locator('.dispatch-detail');
+        await inspection.getByRole('button',{name:'开始检验',exact:true}).click();
+        for(const itemId of [1,2])await inspection.getByLabel(`检验结果：项目${itemId}`,{exact:true}).getByText('通过',{exact:true}).click();
+        await inspection.getByRole('button',{name:/提交检验结果/}).click();
+        const inspectionDialog=inspectorPage.getByRole('dialog',{name:'提交检验结果',exact:true});
+        await inspectionDialog.getByRole('button',{name:'确认提交检验结果',exact:true}).click();
         await inspectionDialog.waitFor({state:'hidden'});
         assert.equal((await service.dispatchDetail(manager,'ui-order')).task.stage,'维修完成');
-        await fs.mkdir('/tmp/repair-dispatch-qa',{recursive:true});
-        await workerPage.screenshot({path:'/tmp/repair-dispatch-qa/mobile.png'});
+        await fs.mkdir('output/playwright/dispatch-qa',{recursive:true});
+        await workerPage.screenshot({path:'output/playwright/dispatch-qa/mobile.png'});
         await managerPage.locator('.ant-drawer-close').click();
         await managerPage.locator('.ant-drawer-section').waitFor({state:'hidden'});
-        await managerPage.screenshot({path:'/tmp/repair-dispatch-qa/desktop.png',fullPage:true});
+        await managerPage.screenshot({path:'output/playwright/dispatch-qa/desktop.png',fullPage:true});
         assert.equal(await workerPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'mobile page has no horizontal overflow');
         for(const outsourcingMode of ['onsite','offsite']) {
           const id=`ui-outsourced-${outsourcingMode}`;await seed(id);
           const page=await pageFor(advisor,true,id);
-          await page.locator('.dispatch-detail').getByRole('button',{name:'指派维修工',exact:true}).click();
-          const form=page.getByRole('dialog',{name:'指派维修工',exact:true});
+          const form=page.locator('.dispatch-detail');
           await form.getByRole('combobox',{name:'执行方式',exact:true}).click();
           await page.locator('.ant-select-item-option-content').filter({hasText:/^外包$/}).click();
           if(outsourcingMode==='offsite') {
@@ -733,23 +819,205 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
           await form.getByLabel('承包方',{exact:true}).fill('测试外包单位');
           await form.getByLabel('约定费用',{exact:true}).fill('500');
           await form.getByLabel('预计完工时间',{exact:true}).fill('2026-12-31T18:00');
-          await page.screenshot({path:`/tmp/repair-dispatch-qa/${outsourcingMode}-form-mobile.png`});
-          await form.getByRole('button',{name:/^确\s*认$/}).click();await form.waitFor({state:'hidden'});
+          await page.screenshot({path:`output/playwright/dispatch-qa/${outsourcingMode}-form-mobile.png`});
+          await form.getByRole('button',{name:'确认派工并通知',exact:true}).click();await form.locator('.inline-dispatch-form').waitFor({state:'hidden'});
           const task=(await service.dispatchDetail(advisor,id)).task;
           assert.equal(task.executionMode,'outsourced');assert.equal(task.outsourcingMode,outsourcingMode);assert.equal(task.agreedFee,500);
+          assert.equal(await page.locator('.dispatch-detail').getByRole('button',{name:/^改\s*派$/}).count(),0);
           await page.locator('.dispatch-detail').getByRole('button',{name:'确认接单',exact:true}).click();
-          await page.locator('.dispatch-detail').getByRole('button',{name:'开工：项目1',exact:true}).waitFor();
-          await page.screenshot({path:`/tmp/repair-dispatch-qa/${outsourcingMode}-mobile.png`});
+          const acceptForm=page.getByRole('dialog',{name:'确认接单 · 登记所需配件',exact:true});
+          await acceptForm.getByText('无需配件',{exact:true}).click();
+          await acceptForm.getByRole('button',{name:'接单并开始维修',exact:true}).click();
+          await acceptForm.waitFor({state:'hidden'});
+          assert.equal((await service.dispatchDetail(advisor,id)).task.stage,'维修中');
+          // Outsourced progress must remain available inside the project editor.
+          await form.getByRole('button',{name:'＋ 新增增修项目',exact:true}).click();
+          await form.getByLabel('维修项目 3 名称',{exact:true}).fill('外包增项');
+          await form.getByRole('button',{name:'保存维修项目',exact:true}).click();
+          await form.getByRole('button',{name:'开工：外包增项',exact:true}).click();
+          await form.getByRole('button',{name:'项目完成：外包增项',exact:true}).waitFor();
+          for(const name of ['项目1','项目2','外包增项']) {
+            const finish=form.getByRole('button',{name:`项目完成：${name}`,exact:true});
+            await finish.click();await finish.waitFor({state:'hidden'});
+          }
+          await form.getByLabel('维修记录从相册选择').setInputFiles({name:'外包维修记录.png',mimeType:'image/png',buffer:photo});
+          await form.getByText(/已保存/).first().waitFor();
+          await form.getByRole('button',{name:'提报检验',exact:true}).click();
+          const submit=page.getByRole('dialog',{name:'提报检验',exact:true});
+          await submit.getByRole('combobox',{name:'指定检验员',exact:true}).click();
+          await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText(inspector.name,{exact:true}).click();
+          await submit.getByRole('button',{name:/^确\s*认$/}).click();await submit.waitFor({state:'hidden'});
+          assert.equal((await service.dispatchDetail(advisor,id)).task.stage,'待检验');
+          await page.screenshot({path:`output/playwright/dispatch-qa/${outsourcingMode}-mobile.png`});
           assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
         }
+        // Reopen a completed order and exercise a rejected inspection through the UI.
+        await managerPage.goto(`${base}/?dispatchOrder=ui-order`);
+        await managerPage.locator('.dispatch-detail').getByRole('button',{name:'发起返工',exact:true}).click();
+        const rework=managerPage.getByRole('dialog',{name:'发起返工',exact:true});
+        await rework.getByText('项目1',{exact:true}).click();
+        await rework.getByLabel('预计完工时间',{exact:true}).fill('2026-12-31T18:00');
+        await rework.getByLabel('原因或交接说明',{exact:true}).fill('浏览器返工验收');
+        await rework.getByRole('button',{name:/^确\s*认$/}).click();await rework.waitFor({state:'hidden'});
+        await workerPage.goto(`${base}/?dispatchOrder=ui-order`);
+        await drawer.getByRole('button',{name:'确认接单',exact:true}).click();
+        const again=workerPage.getByRole('dialog',{name:'确认接单 · 登记所需配件',exact:true});
+        await again.getByText('无需配件',{exact:true}).click();await again.getByRole('button',{name:'接单并开始维修',exact:true}).click();await again.waitFor({state:'hidden'});
+        await drawer.getByLabel('维修记录从相册选择').setInputFiles({name:'返工记录.png',mimeType:'image/png',buffer:photo});
+        async function submitRework() {
+          await drawer.getByRole('button',{name:'提交完工',exact:true}).click();
+          const form=workerPage.getByRole('dialog',{name:'确认维修完成？',exact:true});
+          const owner=form.getByRole('combobox',{name:'维修项目 1 负责人',exact:true});
+          await owner.click();await owner.press('ArrowDown');await owner.press('Enter');
+          if(await form.getByLabel('原因或交接说明',{exact:true}).count())await form.getByLabel('原因或交接说明',{exact:true}).fill('返工责任确认');
+          await form.getByRole('button',{name:'确认提交',exact:true}).click();await form.waitFor({state:'hidden'});
+        }
+        await submitRework();
+        async function inspectRework(result) {
+          await inspectorPage.goto(`${base}/?dispatchOrder=ui-order`);
+          await inspection.getByRole('button',{name:'开始检验',exact:true}).click();
+          await inspection.getByLabel('检验结果：项目1',{exact:true}).getByText(result,{exact:true}).click();
+          await inspection.getByRole('button',{name:/提交检验结果/}).click();
+          const form=inspectorPage.getByRole('dialog',{name:'提交检验结果',exact:true});
+          if(result==='退回')await form.getByRole('textbox',{name:'备注',exact:true}).fill('需要复查');
+          await form.getByRole('button',{name:'确认提交检验结果',exact:true}).click();await form.waitFor({state:'hidden'});
+        }
+        await inspectRework('退回');
+        await workerPage.goto(`${base}/?dispatchOrder=ui-order`);
+        await drawer.getByRole('button',{name:'开始返工',exact:true}).click();
+        await submitRework();await inspectRework('通过');
+        const repaired=(await service.dispatchDetail(manager,'ui-order')).task;
+        assert.equal(repaired.stage,'维修完成');assert.equal(repaired.repairRound,1);assert.equal(repaired.reworkCount,1);
+        await inspectorPage.screenshot({path:'output/playwright/dispatch-qa/mobile-rework-inspection.png',fullPage:true});
+
+        // Material requests must remain unstarted until a warehouse handover.
+        await seed('ui-parts');
+        await service.executeDispatchAction(advisor,'ui-parts',{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianIds:[tech.id],dueAt});
+        const partsWorker=await pageFor(tech,true,'ui-parts');
+        await partsWorker.locator('.technician-detail').getByRole('button',{name:'确认接单',exact:true}).click();
+        const partsForm=partsWorker.getByRole('dialog',{name:'确认接单 · 登记所需配件',exact:true});
+        await partsForm.getByText('填写配件',{exact:true}).click();
+        await partsForm.getByText('机油',{exact:true}).click();
+        await partsForm.getByRole('button',{name:'接单并提交配件需求',exact:true}).click();await partsForm.waitFor({state:'hidden'});
+        assert.equal((await service.dispatchDetail(manager,'ui-parts')).task.stage,'待开工');
+        const warehousePage=await pageFor({id:'warehouse',role:'warehouse',shopId:'shop-hq',active:true},true,'ui-parts');
+        await Promise.all([warehousePage.waitForResponse(response=>response.url().endsWith('/actions')&&response.request().method()==='POST'),warehousePage.getByRole('button',{name:'备料完成并通知领取',exact:true}).click()]);
+        await warehousePage.reload();
+        await warehousePage.getByRole('button',{name:'确认出库',exact:true}).click();
+        assert.equal((await service.dispatchDetail(manager,'ui-parts')).task.stage,'待开工');
+        const issue=warehousePage.getByRole('dialog',{name:'确认配件交接出库',exact:true});
+        await issue.getByRole('button',{name:'确认出库',exact:true}).click();await issue.waitFor({state:'hidden'});
+        const issued=(await service.dispatchDetail(manager,'ui-parts')).task;assert.equal(issued.stage,'维修中');assert.ok(issued.partsRequirement.issuedAt);
+        await warehousePage.screenshot({path:'output/playwright/dispatch-qa/mobile-warehouse-issued.png',fullPage:true});
+        assert.equal(await warehousePage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+        for(const mobile of [false,true]) {
+          const id=`ui-inline-${mobile?'mobile':'desktop'}`;await seed(id);
+          const page=await pageFor(manager,mobile,id),detail=page.locator('.dispatch-detail');
+          await detail.getByLabel('维修项目 1 名称',{exact:true}).fill('批量派工项目1');
+          await detail.getByRole('button',{name:'仅保存项目',exact:true}).click();
+          await page.waitForFunction(()=>[...document.querySelectorAll('.inline-dispatch-actions button')].some(button=>button.textContent==='仅保存项目'&&button.disabled));
+          assert.equal((await service.dispatchDetail(manager,id)).task.stage,'待派工');
+          await detail.getByRole('checkbox',{name:'全选可分配项目',exact:true}).check();
+          await detail.getByRole('combobox',{name:'维修项目 1 负责人',exact:true}).click();
+          await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText('同名技师（账号 tech）',{exact:true}).click();
+          await page.locator('.ant-select-dropdown:visible').waitFor({state:'hidden'});
+          assert.match(await detail.locator('.repair-item-row').nth(1).innerText(),/同名技师（账号 tech）/);
+          await detail.getByRole('checkbox',{name:'全选可分配项目',exact:true}).uncheck();
+          await detail.getByRole('combobox',{name:'维修项目 2 负责人',exact:true}).click();
+          await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText('同名技师（账号 tech2）',{exact:true}).click();
+          await page.locator('.ant-select-dropdown:visible').waitFor({state:'hidden'});
+          await detail.getByLabel('预计完工时间',{exact:true}).fill('2026-12-31T18:00');
+          assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+          await page.screenshot({path:`output/playwright/dispatch-qa/inline-assign-${mobile?'mobile':'desktop'}.png`});
+          await detail.getByRole('button',{name:'确认派工并通知',exact:true}).click();
+          await detail.locator('.inline-dispatch-form').waitFor({state:'hidden'});
+          const assigned=(await service.dispatchDetail(manager,id)).task;
+          assert.equal(assigned.stage,'待接单');assert.equal(assigned.items[0].name,'批量派工项目1');
+          assert.equal(assigned.items[0].responsibleId,tech.id);assert.equal(assigned.items[1].responsibleId,tech2.id);
+          assert.equal((await pool.query('select 1 from dispatch_notifications where order_id=$1',[id])).rowCount,2);
+        }
+        for(const mobile of [false,true]) {
+          const id=`ui-projects-${mobile?'mobile':'desktop'}`;await seed(id);
+          let projectTask=(await service.executeDispatchAction(advisor,id,{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianIds:[tech.id,tech2.id],dueAt,repairItems:[{id:1,name:'项目1',responsibleId:tech.id},{id:2,name:'项目2',responsibleId:tech2.id}]})).task;
+          projectTask=(await service.executeDispatchAction(tech,id,{action:'accept',expectedVersion:projectTask.version,requestId:randomUUID(),partsRequirement:{mode:'none'}})).task;
+          const unchanged=structuredClone(projectTask.items[1]),acceptedAt=projectTask.acceptedAt;
+          const page=await pageFor(manager,mobile,id),detail=page.locator('.dispatch-detail');
+          await assertNoDuplicateProjectActions(detail);
+          await detail.getByLabel('维修项目 1 名称',{exact:true}).fill('修改项目1');
+          await detail.getByRole('combobox',{name:'维修项目 1 负责人',exact:true}).click();
+          await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText('唯一技师',{exact:true}).click();
+          await page.locator('.ant-select-dropdown:visible').waitFor({state:'hidden'});
+          await detail.getByRole('button',{name:'＋ 新增增修项目',exact:true}).click();
+          await detail.getByLabel('维修项目 3 名称',{exact:true}).fill('新增检测');
+          await detail.getByRole('combobox',{name:'维修项目 3 负责人',exact:true}).click();
+          await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText('同名技师（账号 tech2）',{exact:true}).click();
+          await page.locator('.ant-select-dropdown:visible').waitFor({state:'hidden'});
+          assert.equal(await detail.locator('.task-projects .repair-items-save').count(),0);
+          await detail.locator('.task-detail-actions').getByRole('button',{name:'保存维修项目',exact:true}).waitFor();
+          await detail.getByRole('button',{name:'保存维修项目',exact:true}).click();
+          await detail.getByText('请填写原因或交接说明',{exact:true}).waitFor();
+          assert.equal((await service.dispatchDetail(manager,id)).task.items[0].responsibleId,tech.id);
+          await detail.getByLabel('原因或交接说明',{exact:true}).fill('测试项目交接');
+          await detail.getByRole('button',{name:'保存维修项目',exact:true}).click();
+          await detail.locator('.task-detail-actions .repair-items-save button').first().waitFor({state:'hidden'});
+          projectTask=(await service.dispatchDetail(manager,id)).task;
+          assert.equal(projectTask.items[0].name,'修改项目1');assert.equal(projectTask.items[0].responsibleId,unique.id);assert.deepEqual(projectTask.items[1],unchanged);
+          assert.equal(projectTask.items[2].name,'新增检测');assert.equal(projectTask.items[2].status,'待开工');assert.equal(projectTask.items[2].responsibleId,tech2.id);
+          assert.equal(await detail.getByRole('button',{name:/^改\s*派$/}).count(),0);
+          await detail.getByRole('checkbox',{name:'选取维修项目 1',exact:true}).check();
+          await detail.getByRole('checkbox',{name:'选取维修项目 3',exact:true}).check();
+          await detail.getByRole('combobox',{name:'维修项目 1 负责人',exact:true}).click();
+          await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText('唯一技师',{exact:true}).click();
+          await page.locator('.ant-select-dropdown:visible').waitFor({state:'hidden'});
+          assert.match(await detail.locator('.repair-item-row').nth(2).innerText(),/唯一技师/);
+          await detail.getByRole('combobox',{name:'维修项目 1 负责人',exact:true}).click();
+          await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText('同名技师（账号 tech）',{exact:true}).click();
+          await page.locator('.ant-select-dropdown:visible').waitFor({state:'hidden'});
+          await detail.getByRole('heading',{name:/维修项目 ·/}).scrollIntoViewIfNeeded();
+          await assertNoDuplicateProjectActions(detail);
+          await assertActionBarLayout(page);
+          await page.screenshot({path:`output/playwright/dispatch-qa/projects-reassign-${mobile?'mobile':'desktop'}.png`});
+          assert.equal(await detail.locator('.task-projects .repair-items-save').count(),0);
+          await detail.locator('.task-detail-actions').getByRole('button',{name:'保存维修项目',exact:true}).waitFor();
+          if(await detail.getByLabel('原因或交接说明',{exact:true}).count())await detail.getByLabel('原因或交接说明',{exact:true}).fill('测试项目交接');
+          await detail.getByRole('button',{name:'保存维修项目',exact:true}).click();
+          await detail.locator('.task-detail-actions .repair-items-save button').first().waitFor({state:'hidden'});
+          const reassigned=(await service.dispatchDetail(manager,id)).task;
+          assert.equal(reassigned.items[0].responsibleId,tech.id);assert.equal(reassigned.items[2].responsibleId,tech.id);assert.deepEqual(reassigned.items[1],unchanged);assert.equal(reassigned.acceptedAt,acceptedAt);assert.equal(reassigned.stage,'维修中');
+          assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+          await page.screenshot({path:`output/playwright/dispatch-qa/projects-edit-${mobile?'mobile':'desktop'}.png`});
+          const beforeDelete=(await pool.query("select count(*)::int as n from dispatch_notifications where order_id=$1 and kind='维修项目已删除'",[id])).rows[0].n;
+          await detail.getByRole('button',{name:'删除维修项目 1',exact:true}).click();
+          assert.equal(await detail.locator('.repair-item-row').count(),2);
+          assert.equal((await service.dispatchDetail(manager,id)).task.items.length,3);
+          await detail.getByRole('button',{name:'取消修改',exact:true}).click();
+          assert.equal(await detail.locator('.repair-item-row').count(),3);
+          assert.equal((await pool.query("select count(*)::int as n from dispatch_notifications where order_id=$1 and kind='维修项目已删除'",[id])).rows[0].n,beforeDelete);
+          await detail.getByRole('button',{name:'删除维修项目 1',exact:true}).click();
+          if(await detail.getByLabel('原因或交接说明',{exact:true}).count())await detail.getByLabel('原因或交接说明',{exact:true}).fill('测试项目交接');
+          await detail.getByRole('button',{name:'保存维修项目',exact:true}).click();
+          await detail.locator('.task-detail-actions .repair-items-save button').first().waitFor({state:'hidden'});
+          const afterDelete=await service.dispatchDetail(manager,id);
+          assert.equal(afterDelete.task.items.length,2);assert.equal(afterDelete.task.items.some(i=>i.id===reassigned.items[0].id),false);
+          assert.deepEqual(afterDelete.task.items[0],unchanged);
+          assert.equal((await pool.query("select count(*)::int as n from dispatch_notifications where order_id=$1 and kind='维修项目已删除'",[id])).rows[0].n,beforeDelete+1);
+          await detail.getByRole('heading',{name:/维修项目 ·/}).scrollIntoViewIfNeeded();
+          await page.screenshot({path:`output/playwright/dispatch-qa/projects-delete-${mobile?'mobile':'desktop'}.png`});
+          await assertNoDuplicateProjectActions(detail);
+          await assertActionBarLayout(page);
+          await page.reload();
+          await assertNoDuplicateProjectActions(detail);
+
+        }
         assert.deepEqual(browserErrors,[]);
-      } catch(e) {for(const page of pages){console.log('UI state:',await page.locator('body').innerText());console.log('Buttons:',await page.locator('.dispatch-detail button').evaluateAll(nodes=>nodes.map(n=>({html:n.outerHTML,hiddenAncestor:n.closest('[aria-hidden=true]')?.className}))));await fs.mkdir('/tmp/repair-dispatch-qa',{recursive:true});await page.screenshot({path:'/tmp/repair-dispatch-qa/failure.png',fullPage:true});}console.log('Browser errors:',browserErrors);throw e;} finally {await browser.close();}
+      } catch(e) {for(const page of pages){console.log('UI state:',await page.locator('body').innerText());console.log('Buttons:',await page.locator('.dispatch-detail button').evaluateAll(nodes=>nodes.map(n=>({html:n.outerHTML,hiddenAncestor:n.closest('[aria-hidden=true]')?.className}))));await fs.mkdir('output/playwright/dispatch-qa',{recursive:true});await page.screenshot({path:'output/playwright/dispatch-qa/failure.png',fullPage:true});}console.log('Browser errors:',browserErrors);throw e;} finally {await browser.close();}
     });
   } finally {
     if(server) await new Promise(resolve=>server.close(resolve));
     await Promise.allSettled([...inFlight]);
     if(pool) await pool.end();
     await Promise.all(connectionsClosed);
+    if(uiUploadRoot)await fs.rm(uiUploadRoot,{recursive:true,force:true});
     if(/^codex_dispatch_test_\d+_\d+$/.test(name)) await admin.query(`drop database if exists "${name}" with (force)`);
     await admin.end();
   }

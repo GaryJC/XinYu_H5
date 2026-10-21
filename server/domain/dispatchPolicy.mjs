@@ -1,4 +1,5 @@
-import {resolveRepairResponsibilities} from './repairResponsibilities.mjs';
+import {resolveRepairResponsibilities,transferUnfinishedResponsibilities} from './repairResponsibilities.mjs';
+import {validateProjectReassignment,reassignProjects} from './projectReassignment.mjs';
 import {validateRepairItemEdits,editRepairItems} from './repairItemEditing.mjs';
 import { validatePartsRequirement,beginPendingItems,assertPartsIssued } from './partsRequirement.mjs';
 import { reopenRepairTask,validateReopenItems } from './repairRounds.mjs';
@@ -20,6 +21,7 @@ export function assertDispatchAccess(task, actor) {
 export function validateDispatchRequest(input) {
   validateReopenItems(input||{});
   validateRepairItemEdits(input||{});
+  validateProjectReassignment(input||{});
   const actions = ['edit-repair-items','edit-parts','issue-parts','confirm-parts','record-parts','reopen-repair','start-order','submit-order','claim-inspection','reassign-inspection','retry-inspection-notifications','retry-scheduler-notifications','record-hours','assign','reassign','reoffer','cancel','accept','decline','start','finish','pick','pause','resume','submit','inspect','update','remind','retry-notification','reconcile'];
   if (!input || !actions.includes(input.action) || !Number.isInteger(input.expectedVersion) || input.expectedVersion < 0 || typeof input.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(input.requestId)) fail('操作参数无效：需要版本号及唯一请求编号',400);
   for (const key of ['note','reason','pauseReason','technicianId','inspectorId','notificationId','notificationJobId']) {
@@ -54,7 +56,12 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   const item = () => { const found = next.items.find(i=>i.id===input.itemId); if(!found) fail('维修项目不存在',404); return found; };
   if (task.stage==='待检验' && task.items.some(i=>!['待检验','已完工'].includes(i.status))) fail('任务与项目进度不一致，请联系管理员');
   if (task.needsReview && !['reconcile','remind','retry-notification','retry-scheduler-notifications'].includes(action)) fail('历史任务需要管理员先核对归属和进度');
-  if (['assign','reassign','reconcile','reopen-repair'].includes(action)) {
+  if(action==='reassign'&&input.reassignItemIds!==undefined) {
+    requireSchedule();stage('待接单','待开工','维修中','暂停');reason();
+    reassignProjects(next,input,people);
+    // An accepted team task keeps its progress; new members join that repair team.
+    if(input.note!==undefined)next.note=input.note;
+  } else if (['assign','reassign','reconcile','reopen-repair'].includes(action)) {
     requireSchedule();
     if(action==='reconcile') { if(actor.role!=='manager' || !task.needsReview) fail('仅管理员可核对历史任务',403); reason(); }
     else if(action==='assign') stage('待派工'); else if(action==='reopen-repair') stage('维修完成'); else { stage('待接单','待开工','维修中','暂停'); reason(); }
@@ -65,7 +72,11 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     const worker={id:workers[0]?.id,name:workers.map(p=>p.name).join('、') || input.contractor || task.contractor};
     const execution=executionDetails({...next,...input,executionMode:mode});
     if(action==='reassign' && mode===(task.executionMode||'internal') && [...ids].sort().join() === [...technicianIds(task)].sort().join() && (mode!=='outsourced' || execution.contractor===task.contractor && execution.outsourcingMode===task.outsourcingMode)) fail('改派请选择其他维修员工或承包方');
+    if(action==='reassign') {
+      next.participantIds=[...new Set([...(task.participantIds||[]),...task.items.flatMap(i=>[i.startedBy,i.finishedBy,...(['待检验','已完工'].includes(i.status)?[i.responsibleId]:[])]).filter(Boolean)])];
+    }
     Object.assign(next,execution,{technicianIds:ids});
+    if(action==='reassign')transferUnfinishedResponsibilities(next);
     if(action==='reconcile' && task.stage==='维修完成') {
       Object.assign(next,{technicianId:worker.id,technicianName:worker.name,needsReview:false,version:task.version+1});
       resolveRepairResponsibilities(next,people);
@@ -74,6 +85,10 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     if (!input.dueAt) fail('请填写预计完工时间',400);
     Object.assign(next,{ technicianId:worker.id, technicianName:worker.name, assignedBy:actor.id, assignedAt:now, acceptedAt:undefined, inspectorId:undefined, inspectorName:undefined, stage:'待接单', feedback:undefined, pausedAt:undefined,pauseReason:undefined,pauseNote:undefined, needsReview:false, dueAt:new Date(input.dueAt).toISOString(), urgent:input.urgent ?? task.urgent ?? false, note:input.note ?? task.note ?? '' });
     next.items.forEach(i=> { if(['待派工','待领料'].includes(i.status)) i.status='待开工'; });
+    if(input.repairItems!==undefined) {
+      editRepairItems(next,input.repairItems,actor,now,{startNewItems:false,allowRemoval:true});
+      resolveRepairResponsibilities(next,people,{required:true});
+    }
   } else if(action==='cancel') {
     requireSchedule(); stage('待接单','待开工'); reason();
     if(task.firstStartedAt || task.startHistoryUnknown || task.items.some(i=>i.startAt || ['维修中','待检验','已完工'].includes(i.status))) fail('已开工任务只能改派，不能撤销');
@@ -142,9 +157,24 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     next.firstStartedAt ||= now; next.stage='维修中';
     next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])];
   } else if(action==='edit-repair-items') {
-    requireOwner(); stage('待开工','维修中','暂停');
-    editRepairItems(next,input.repairItems,actor,now);
-    resolveRepairResponsibilities(next,people,{rejectInvalid:true});
+    const scheduler=scheduling.includes(actor.role);
+    if(scheduler) stage('待派工','待接单','待开工','维修中','暂停');
+    else {requireOwner();stage('待开工','维修中','暂停');}
+    if(scheduler&&task.stage==='待派工')transferUnfinishedResponsibilities(next);
+    editRepairItems(next,input.repairItems,actor,now,{startNewItems:!scheduler,allowRemoval:scheduler});
+    if(scheduler&&task.stage==='待派工'&&next.items.some(i=>i.responsibleId)) fail('请在指派维修工时分配项目负责人',400);
+    if(scheduler&&task.stage!=='待派工'&&task.executionMode!=='outsourced') {
+      for(const item of task.items) {
+        const edited=next.items.find(i=>i.id===item.id);
+        if(item.startAt&&edited?.responsibleId!==item.responsibleId)
+          next.participantIds=[...new Set([...(next.participantIds||[]),item.responsibleId,item.startedBy,item.finishedBy].filter(Boolean))];
+      }
+      const fallback=next.items.some(i=>!i.responsibleId)?technicianIds(task):[];
+      next.technicianIds=[...new Set([...fallback,...next.items.map(i=>i.responsibleId).filter(Boolean)])];
+      next.technicianId=next.technicianIds[0];
+      next.technicianName=next.technicianIds.map(id=>people.find(p=>p.id===id)?.name||next.items.find(i=>i.responsibleId===id)?.responsibleName||id).join('、');
+    }
+    resolveRepairResponsibilities(next,people,{required:scheduler&&task.stage!=='待派工',rejectInvalid:true});
   } else if(action==='submit-order') {
     requireOwner(); stage('维修中');
     assertPartsIssued(task);
@@ -196,7 +226,13 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     if(rejected.some(id=>!next.items.some(i=>i.id===id && i.status==='待检验'))) fail('退回项目不在本次待检验项目中',400);
     for(const current of next.items) {
       if(current.status!=='待检验') continue;
-      if(rejected.includes(current.id)) { current.status='待开工'; current.finishAt=undefined; current.rejectionReason=input.reason.trim(); }
+      if(rejected.includes(current.id)) {
+        next.participantIds=[...new Set([...(next.participantIds||[]),current.responsibleId,current.startedBy,current.finishedBy].filter(Boolean))];
+        current.status='待开工'; current.finishAt=undefined; current.rejectionReason=input.reason.trim();
+        const handover={executionMode:next.executionMode,technicianIds:technicianIds(next),items:[current]};
+        const ownerStillValid=next.executionMode!=='outsourced'&&people.some(p=>p.id===current.responsibleId&&p.active&&p.role==='technician'&&p.shopId===next.shopId&&technicianIds(next).includes(p.id));
+        if(!ownerStillValid)transferUnfinishedResponsibilities(handover);
+      }
       else { delete current.rejectionReason; current.status='已完工'; current.inspectedBy=actor.id; current.inspectorName=actor.name; current.inspectedAt=now; }
     }
     if(rejected.length) { next.reworkReason=input.reason; next.rejectedItemIds=rejected; next.stage='维修中'; next.rework=true; next.reworkCount=(task.reworkCount||0)+1; }
@@ -220,7 +256,11 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   } else if(['remind','retry-notification'].includes(action)) {
     requireSchedule(); if(action==='remind' && ['待派工','维修完成'].includes(task.stage)) fail('当前任务没有待处理人');
   }
-  if(['assign','reassign','reconcile','reopen-repair','accept','edit-repair-items'].includes(action))resolveRepairResponsibilities(next,people);
+  if(['assign','reassign','reconcile','reopen-repair','accept','edit-repair-items','inspect'].includes(action)&&input.reassignItemIds===undefined)resolveRepairResponsibilities(next,people);
+  if(['edit-repair-items','submit-order'].includes(action)&&task.stage!=='待派工'&&task.executionMode!=='outsourced') {
+    const handover=task.items.some(item=>item.responsibleId&&next.items.some(edited=>edited.id===item.id&&edited.responsibleId!==item.responsibleId));
+    if(handover)reason();
+  }
   next.version += 1;
   return next;
 }

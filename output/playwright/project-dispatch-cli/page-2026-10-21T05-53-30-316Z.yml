@@ -1,0 +1,96 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e6]:
+        - generic [ref=e13]:
+          - strong [ref=e14]: 修理委托
+          - generic [ref=e15]: 钉钉自建 H5
+        - navigation "主导航" [ref=e16]:
+          - button "工作台" [ref=e17] [cursor=pointer]
+          - button "委托开单" [ref=e24] [cursor=pointer]
+          - button "派工台" [ref=e29] [cursor=pointer]
+        - paragraph [ref=e39]: 按门店与岗位权限使用委托开单、签字与归档功能。
+    - main [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e43]:
+          - heading "机动车修理委托书数字化工作台" [level=1] [ref=e44]
+          - paragraph [ref=e45]: 0 张委托单 · 抚顺路店 · 新建草稿
+        - generic [ref=e46]:
+          - generic [ref=e47]: 钉钉组织已同步
+          - generic [ref=e54] [cursor=pointer]:
+            - generic [ref=e55]:
+              - generic: 选择测试身份
+              - combobox "切换本地测试身份" [expanded] [active] [ref=e56]:
+                - listbox:
+                  - option "张三｜服务顾问": advisor
+                  - option "Gary｜门店管理员": manager
+            - img "down" [ref=e58]
+          - generic [ref=e61]: 未登录
+      - region "待办统计" [ref=e67]:
+        - generic [ref=e70]:
+          - generic [ref=e71]: 待客户签字
+          - generic [ref=e73]:
+            - generic [ref=e74]: "0"
+            - generic [ref=e75]: 较昨日 +0
+        - generic [ref=e79]:
+          - generic [ref=e80]: 待派工
+          - generic [ref=e82]:
+            - generic [ref=e83]: "0"
+            - generic [ref=e84]: 较昨日 +0
+        - generic [ref=e88]:
+          - generic [ref=e89]: 维修中
+          - generic [ref=e91]:
+            - generic [ref=e92]: "0"
+            - generic [ref=e93]: 较昨日 +0
+        - generic [ref=e97]:
+          - generic [ref=e98]: 待结算
+          - generic [ref=e100]:
+            - generic [ref=e101]: "0"
+            - generic [ref=e102]: 较昨日 +0
+      - generic [ref=e104]:
+        - generic [ref=e105]:
+          - strong [ref=e106]: 服务顾问工作区
+          - generic [ref=e107]: 查看本店委托单、维修任务和维修工负荷
+        - paragraph [ref=e108]: 开单、客户签字、提交润丰同步、指派和改派维修工
+        - generic [ref=e109]:
+          - generic [ref=e110]: 不能配置门店权限
+          - generic [ref=e111]: 不能检验通过
+      - generic [ref=e113]:
+        - generic [ref=e114]:
+          - generic [ref=e115]:
+            - heading "归档查询" [level=2] [ref=e116]
+            - paragraph [ref=e117]: 点击任一委托单可查看完整归档内容。
+          - generic [ref=e118]:
+            - button "刷新列表" [ref=e119] [cursor=pointer]
+            - button "全部从润丰更新（0）" [disabled] [ref=e121]
+            - generic [ref=e122]:
+              - searchbox "搜索车牌 / VIN / 工单号 / 派工号" [ref=e124]
+              - button [ref=e126] [cursor=pointer]:
+                - img "search" [ref=e128]
+        - paragraph [ref=e131]: 更新全部已同步且有权限的委托单，不受搜索和分页影响；保留签名、照片和维修进度。更新期间请保持页面打开。
+        - table [ref=e138]:
+          - rowgroup [ref=e149]:
+            - row [ref=e150]:
+              - columnheader "委托单号" [ref=e151]
+              - columnheader "车牌" [ref=e152]
+              - columnheader "车主" [ref=e153]
+              - columnheader "服务顾问" [ref=e154]
+              - columnheader "维修技师" [ref=e155]
+              - columnheader "业务状态" [ref=e156]
+              - columnheader "润丰同步" [ref=e157]
+              - columnheader "金额" [ref=e158]
+              - columnheader "更新时间" [ref=e159]
+          - rowgroup [ref=e160]:
+            - row [ref=e161]:
+              - cell "暂无数据 暂无数据" [ref=e162]:
+                - generic [ref=e163]:
+                  - img "暂无数据" [ref=e165]
+                  - generic [ref=e171]: 暂无数据
+  - generic [ref=e177]:
+    - generic "张三｜服务顾问" [ref=e178] [cursor=pointer]
+    - generic "Gary｜门店管理员" [ref=e180] [cursor=pointer]
+    - generic "仓管｜测试" [ref=e182] [cursor=pointer]
+    - generic "李富强｜维修工（测试）" [ref=e184] [cursor=pointer]
+    - generic "检验员｜测试" [ref=e186] [cursor=pointer]
+    - generic "未分配角色员工" [ref=e188] [cursor=pointer]
+    - generic "已停用员工" [ref=e190] [cursor=pointer]

@@ -69,11 +69,11 @@ test('wrong vehicle, department, identifiers, missing document or settled header
 test('downstream business records prevent any delete',async()=>{
  const mock=sqlHarness({downstream:1});await assert.rejects(()=>replaceLegacyRepairItems(snapshot,{executeTransaction:mock.executeTransaction,source:'test'}),/已有派工明细/);assert.ok(!mock.state().statements.some(s=>s.query.startsWith('delete')));
 });
-test('reassignment invalidates unfinished owners instead of silently assigning the first collaborator',()=>{
+test('single technician reassignment transfers unfinished ownership before acceptance',()=>{
  const advisor={id:'a',name:'顾问',role:'advisor',active:true,shopId:'s'};
  const original={...task(),items:task().items.map(i=>({...i,responsibleId:'t',responsibleName:'甲'}))};
  const next=applyDispatchAction(original,{action:'reassign',expectedVersion:1,requestId:'owner-reassignment',technicianIds:['u'],dueAt:'2026-12-01T12:00:00Z',reason:'换班'},advisor,[advisor,tech,second]);
- assert.ok(next.items.every(i=>i.responsibleId===undefined));assert.equal(original.items[0].responsibleId,'t');
+ assert.ok(next.items.every(i=>i.responsibleId==='u'&&i.responsibleName==='乙'));assert.equal(original.items[0].responsibleId,'t');
  const accepted=applyDispatchAction(next,{action:'accept',expectedVersion:next.version,requestId:'owner-reacceptance',partsRequirement:{mode:'none'}},second,[advisor,tech,second]);
  assert.ok(accepted.items.every(i=>i.responsibleId==='u'&&i.responsibleName==='乙'));
 });

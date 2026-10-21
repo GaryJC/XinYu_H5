@@ -204,3 +204,45 @@ test('inspection return reasons stay with rejected items during repair and clear
  task=act(task,'finish',technician,{itemId:1});task=act(task,'submit',technician,{inspectorId:'i'});task=act(task,'inspect',inspector);
  assert.equal(task.items[0].rejectionReason,undefined);
 });
+
+
+test('handover keeps submitted owners, transfers unfinished work and completes inspection',()=>{
+  let task=act(assigned(),'accept');
+  task=act(task,'finish',technician,{itemId:1});
+  task=act(task,'reassign',advisor,{technicianIds:['t2'],dueAt:due,reason:'换班'});
+  assert.equal(task.items[0].responsibleId,'t');assert.equal(task.items[1].responsibleId,'t2');
+  assert.ok(task.participantIds.includes('t'));
+  task=act(task,'accept',second);
+  assert.throws(()=>act(task,'edit-repair-items',second,{repairItems:task.items.map(i=>({id:i.id,name:i.name,responsibleId:'t2'}))}),/不可修改/);
+  task=act(task,'submit-order',second);
+  assert.equal(task.items[0].responsibleName,technician.name);
+  task=act(task,'claim-inspection',inspector);
+  task=act(task,'inspect',inspector,{rejectedItemIds:[1],reason:'重新检查'});
+  assert.equal(task.items[0].responsibleId,'t2');assert.equal(task.items[1].status,'已完工');
+  task=act(task,'start-order',second);task=act(task,'submit-order',second);
+  task=act(task,'claim-inspection',inspector);task=act(task,'inspect',inspector);
+  assert.equal(task.stage,'维修完成');
+});
+
+test('multi-person handover and rejected historical work require explicit current owners',()=>{
+  const third={...technician,id:'t3',name:'第三技师'};
+  const team=[...people,third].map(p=>({...p}));
+  const apply=(task,action,actor,extra={})=>applyDispatchAction(task,{action,expectedVersion:task.version,requestId:randomUUID(),...extra},actor,team,now);
+  let task=act(assigned(),'accept');task=act(task,'finish',technician,{itemId:1});
+  task=apply(task,'reassign',advisor,{technicianIds:['t2','t3'],dueAt:due,reason:'多人交接'});
+  assert.equal(task.items[0].responsibleId,'t');assert.equal(task.items[1].responsibleId,undefined);
+  task=apply(task,'accept',second);
+  assert.throws(()=>apply(task,'submit-order',second),/指定有效负责人/);
+  task=apply(task,'submit-order',second,{repairItems:task.items.map(i=>({id:i.id,name:i.name,responsibleId:i.id===1?'t':'t3'}))});
+  // Historical submitted responsibility remains valid after the employee is deactivated.
+  const old=team.find(p=>p.id==='t');old.active=false;
+  task=apply(task,'claim-inspection',inspector);
+  task=apply(task,'inspect',inspector,{rejectedItemIds:[1],reason:'返修'});
+  assert.equal(task.items[0].responsibleId,undefined);assert.equal(task.items[1].responsibleId,'t3');
+  task=apply(task,'start-order',second);
+  assert.throws(()=>apply(task,'submit-order',second),/指定有效负责人/);
+  task=apply(task,'submit-order',second,{repairItems:task.items.map(i=>({id:i.id,name:i.name,responsibleId:i.id===1?'t2':i.responsibleId}))});
+  assert.equal(task.stage,'待检验');old.active=true;
+  const former={...technician,role:'manager'};
+  assert.throws(()=>apply(task,'inspect',former),/不能自检/);
+});

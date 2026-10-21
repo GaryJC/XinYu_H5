@@ -149,3 +149,5 @@
 .dispatch-execution-filter{display:flex;flex-direction:column;gap:10px}
 .dispatch-execution-filter .ant-checkbox-group{display:flex;flex-wrap:wrap;gap:8px 16px}
 .dispatch-execution-filter .ant-checkbox-wrapper{min-height:36px;align-items:center;margin:0}
+.project-reassignment-row{margin-top:16px;padding:14px;border:1px solid #e3e8ef;border-radius:10px}
+.project-reassignment-row p{margin:8px 0;color:#637188;font-size:13px}

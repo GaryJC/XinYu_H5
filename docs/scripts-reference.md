@@ -377,3 +377,13 @@ node --env-file-if-exists=.env.production --env-file-if-exists=.env.local script
 | `scripts/create-deployment-package.mjs` | `npm run package:deploy` |
 | `scripts/deploy-windows.ps1` | 云效部署内层脚本 |
 | `scripts/verify-legacy-sync-batch.mjs` | 无 npm 别名，专项验证时直接执行 |
+
+
+## 浏览器闭环回归（独立测试数据）
+
+先运行 `npm run build`。指定已安装的 Playwright 模块与 Chrome：`DISPATCH_PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs`、`DISPATCH_CHROME_PATH=/absolute/path/to/chrome`。
+
+- 派工、手机接单、真实文件上传、项目负责人、检验、返工退回复检、外修／两种外包及仓管备料出库：显式设置本机 `DISPATCH_TEST_ADMIN_URL`、`DISPATCH_UI_TEST=true`，运行 `node --test test/dispatch.integration.test.mjs`。
+- 过期补签、手机横屏手写签名、供应商验证与报价、采购员结束报价和结标、供应商查看中标结果：显式设置本机 `WORKFLOW_TEST_ADMIN_URL`、`WORKFLOW_UI_TEST=true`，运行 `node --test test/workflowRecovery.integration.test.mjs`。Playwright 与 Chrome 路径沿用上述变量。
+
+两组测试均创建并删除自己的 PostgreSQL 数据库和临时 HTTP 服务，通知模拟发送，不连接真实润丰业务单；两组测试的上传目录自动清理。截图保存于 `output/playwright/dispatch-qa/` 与 `output/playwright/workflow-qa/`。未开启 UI 标志时只运行现有非浏览器测试，不能据此声称浏览器验收通过。

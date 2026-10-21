@@ -42,3 +42,13 @@
 }
 
 .technician-detail{padding-bottom:132px}.repair-item-return-reason{color:#a83b29;font-size:13px;white-space:pre-wrap}.repair-round-reason{white-space:pre-wrap;overflow-wrap:anywhere}
+
+.task-detail-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px}
+.project-actions-slot,.task-detail-actions .repair-items-save{display:contents}
+.task-detail-actions .repair-items-save .ant-btn{min-width:0;margin:0}
+.task-detail-actions .repair-items-save .ant-btn-primary{min-width:140px}
+@media(max-width:700px){
+ .task-detail-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
+ .task-detail-actions>.ant-space,.task-detail-actions>.ant-space>.ant-space-item{display:contents}
+ .task-detail-actions .repair-items-save>.ant-btn,.task-detail-actions .ant-btn{width:100%;padding-inline:10px;min-width:0}
+}

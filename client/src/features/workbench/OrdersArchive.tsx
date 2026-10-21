@@ -40,6 +40,8 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
       <li key={failure.id}>{failure.id}：{failure.message}</li>)}</ul> : "已更新本地数据库，可查看最新详情或打印。"} /> : null;
   const [dispatchOrder, setDispatchOrder] = useState<WorkOrder>();
   const canAssign = (order: WorkOrder) => dispatchEnabled && ["advisor","manager"].includes(role) && order.shop.id===currentUser?.shopId && workOrderDisplayStatus(order) === "待派工" && (!order.technician || order.technician === "待派工");
+  const canOpenDispatch = Boolean(detailOrder && dispatchEnabled && ["advisor","manager"].includes(role)
+    && detailOrder.shop.id === currentUser?.shopId && !["草稿","待客户签字","待处理纸质委托书"].includes(detailOrder.status));
   const [deleteError, setDeleteError] = useState("");
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
@@ -171,6 +173,11 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
               <Button type="primary" icon={<PencilLine size={16} />} onClick={() => resumeDraft(detailOrder)}>继续编辑草稿</Button>
             ) : null}
             {detailOrder && canAssign(detailOrder) && <Button type="primary" onClick={() => { setDispatchOrder(detailOrder); setDetailOrderId(undefined); }}>派工</Button>}
+            {canOpenDispatch && detailOrder && <Button onClick={() => {
+              const orderId = detailOrder.id;
+              setDetailOrderId(undefined);
+              controller.openDispatch(orderId);
+            }}>查看派工单</Button>}
             <Button onClick={() => setDetailOrderId(undefined)}>关闭</Button>
           </div>
         )}

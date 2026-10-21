@@ -55,9 +55,10 @@ export async function saveDispatchTask(client, task) {
   const started=task.firstStartedAt || task.startHistoryUnknown || task.items.some(i=>i.startAt || ['维修中','待检验','已完工'].includes(i.status));
   const status=stage==='维修完成'?(orderStatus==='完成'?'完成':'待结算'):started?'维修中':'待派工';
   await client.query(`update work_orders set status=$2,technician=$3,inspector=$4,updated_at=now() where id=$1`,[orderId,status,task.technicianName||'待派工',task.inspectorName||'待检验']);
+  await client.query('delete from repair_items where order_id=$1 and not (client_item_id=any($2::bigint[]))',[orderId,task.items.map(item=>item.id)]);
   for(const [index,item] of task.items.entries()) await client.query(`insert into repair_items(order_id,client_item_id,item_no,name) values($1,$2,$3,$4)
-    on conflict(order_id,client_item_id) do update set name=excluded.name`,[orderId,item.id,index+1,item.name]);
-  for(const item of task.items) await client.query(`update repair_items set owner=$3,status=$4,start_at=$5,finish_at=$6,inspector=$7 where order_id=$1 and client_item_id=$2`,[orderId,item.id,task.technicianName||'待派工',item.status,item.startAt||'',item.finishAt||'',item.inspectorName||'待检验']);
+    on conflict(order_id,client_item_id) do update set name=excluded.name,item_no=excluded.item_no`,[orderId,item.id,index+1,item.name]);
+  for(const item of task.items) await client.query(`update repair_items set owner=$3,status=$4,start_at=$5,finish_at=$6,inspector=$7 where order_id=$1 and client_item_id=$2`,[orderId,item.id,item.responsibleName||task.technicianName||'待派工',item.status,item.startAt||'',item.finishAt||'',item.inspectorName||'待检验']);
 }
 export async function dispatchDetail(actor,id,client=pool) {
   const task=await getDispatchTask(client,id,actor);

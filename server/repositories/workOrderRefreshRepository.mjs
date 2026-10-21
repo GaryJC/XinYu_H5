@@ -32,14 +32,15 @@ export async function applyLegacyRefresh(client, order, change, header, actor) {
       item_no=excluded.item_no,name=excluded.name,labor_fee=excluded.labor_fee,legacy_item_reid=excluded.legacy_item_reid`,
       [order.id,item.clientId,item.itemNo,item.name,item.laborFee,item.sourceId]);
   }
-  // Dispatch keeps execution state in JSON; update names there too and invalidate stale action versions.
-  await client.query(`update dispatch_tasks dt set data=jsonb_set(dt.data,'{items}',
+  // Only the original round mirrors repair_items. Later rounds own their execution
+  // list independently; still invalidate stale action versions after an archive refresh.
+  await client.query(`update dispatch_tasks dt set data=case when coalesce((dt.data->>'repairRound')::integer,0)>0 then dt.data else jsonb_set(dt.data,'{items}',
     coalesce((select jsonb_agg(coalesce(previous.entry,'{}'::jsonb) ||
         jsonb_build_object('id',ri.client_item_id,'name',ri.name,'status',ri.status) order by ri.item_no)
       from repair_items ri left join lateral (
         select entry from jsonb_array_elements(coalesce(dt.data->'items','[]'::jsonb)) entry
         where (entry->>'id')::bigint=ri.client_item_id limit 1
-      ) previous on true where ri.order_id=$1),'[]'::jsonb)),
+      ) previous on true where ri.order_id=$1),'[]'::jsonb)) end,
     version=version+1,updated_at=now() where order_id=$1`, [order.id]);
   await client.query("insert into audit_logs(order_id,actor,action) values($1,$2,$3)",
     [order.id,actor.name,`从润丰更新归档内容（派工号 ${change.fields.dispatch_no}，维修项目 ${change.items.length} 项）`]);

@@ -16,7 +16,7 @@ test('item editing enforces ownership, allowed stages, retained IDs and inspecti
  const t=task();
  for(const actor of [{...tech,id:'other'},{...tech,role:'warehouse'},{...tech,shopId:'other'}])assert.throws(()=>act(t,rows(),'edit-repair-items',actor),e=>e.status===403);
  for(const stage of ['待接单','待检验','维修完成'])assert.throws(()=>act({...t,stage},rows()),e=>e.status===409);
- assert.throws(()=>act(t,[{id:1,name:'项目'}]),/不可删除/);
+ assert.throws(()=>act(t,[{id:1,name:'项目'}]),e=>e.status===403);
  assert.throws(()=>act(t,[...rows(),{id:99,name:'伪造项目'}]),/不存在/);
  assert.throws(()=>act(t,[{id:1,name:'项目'},{id:2,name:'改动已检验'}]),/不可修改/);
  for(const invalid of [[],[{name:''}],Array(201).fill({name:'项目'}),[{id:1,name:'a'},{id:1,name:'b'}]])assert.throws(()=>act(t,invalid),e=>e.status===400);

@@ -27,18 +27,18 @@ function setup(api = {}, account = user) {
   return { actions, state, updates, get summaryRefreshes() { return summaryRefreshes; } };
 }
 
-test("archive resumes the saved order token and uploads its signature to that exact order", async () => {
+test("archive requests a usable session and uploads its signature to that exact order", async () => {
   const calls = [];
   const signed = { ...pending, status: "已委托", signatures: { customer: "车主" } };
   const h = setup({
-    async findByToken(token) { calls.push(["find", token]); return pending; },
+    async createSignatureToken(id,actor) { calls.push(["session", id,actor]); return pending; },
     async uploadFile(file) { calls.push(["upload", file.orderId, file.imageBase64]); return { id: "signature-file" }; },
     async signByToken(...args) { calls.push(["sign", ...args]); return signed; }
   });
   await h.actions.start(pending);
   assert.equal(h.state[0].order.id, "old-order");
   await h.actions.completeSignature(h.state[0].order, h.state[0].token, "drawn-signature");
-  assert.deepEqual(calls, [["find", "old-token"], ["upload", "old-order", "drawn-signature"], ["sign", "old-token", "车主", "signature-file"]]);
+  assert.deepEqual(calls, [["session", "old-order", "张三"], ["upload", "old-order", "drawn-signature"], ["sign", "old-token", "车主", "signature-file"]]);
   assert.equal(h.updates.at(-1), signed);
   assert.equal(h.summaryRefreshes, 1);
 });
@@ -63,7 +63,7 @@ test("archive permits the owning advisor or manager and hides signing for signed
 
 test("stale sessions and server validation failures stay visible and do not open a signing dialog", async () => {
   for (const result of [undefined, { ...pending, id: "another-order" }, { ...pending, signatureTokenUsed: true }, { ...pending, status: "已委托" }]) {
-    const h = setup({ async findByToken() { return result; } });
+    const h = setup({ async createSignatureToken() { return result; } });
     await h.actions.start(pending);
     assert.equal(h.state[0], undefined);
     assert.match(h.state[1], /签字会话/);
@@ -77,7 +77,7 @@ test("stale sessions and server validation failures stay visible and do not open
 
 test("repeated clicks create only one signature request while a request is pending", async () => {
   let resolve, count = 0;
-  const h = setup({ findByToken() { count++; return new Promise(done => { resolve = done; }); } });
+  const h = setup({ createSignatureToken() { count++; return new Promise(done => { resolve = done; }); } });
   const first = h.actions.start(pending);
   await h.actions.start(pending);
   assert.equal(count, 1);
@@ -99,4 +99,14 @@ test("paper orders and cross-shop records never offer electronic signing",()=>{
   const h=setup();
   assert.equal(h.actions.canSign({...pending,paperOrder:{mode:"dingtalk",photoIds:["photo"]}}),false);
   assert.equal(h.actions.canSign({...pending,shop:{id:"other"}}),false);
+});
+
+
+test("archive recovers a pending order without a saved token using the returned session", async () => {
+  const renewed = { ...pending, signatureToken: "renewed-token" };
+  const calls = [];
+  const h = setup({ async createSignatureToken(id) { calls.push(id); return renewed; } });
+  await h.actions.start({ ...pending, signatureToken: undefined });
+  assert.deepEqual(calls, [pending.id]);
+  assert.equal(h.state[0].token, "renewed-token");
 });

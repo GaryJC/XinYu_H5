@@ -88,6 +88,22 @@ test("Runfeng refresh transaction, item identities, permissions and rollback", {
       assert.equal(task.data.items.length, 1); assert.equal(task.data.items[0].name, "新增项目");
       assert.equal(task.data.items[0].status, "待派工");
     });
+    await t.test("refresh preserves independent rework items, progress and parts in every stage", async () => {
+      const base = { repairRound: 1, items: [
+        { id: 7, name: '本轮原项目', status: '维修中', responsibleId: 'tech', startedBy: 'tech' },
+        { id: -1, name: '返工新增项目', status: '待开工' }
+      ], partsRequirement: { mode: 'list', items: [{name:'配件',quantity:1,unit:'个'}], batch:2, preparedAt:'2026-10-20T00:00:00Z' } };
+      for (const stage of ['待接单', '维修中', '暂停', '待检验', '维修完成']) {
+        const data=structuredClone(base);
+        if(stage==='暂停')data.resumeStage='维修中';
+        if(stage==='待检验')data.items.forEach(i=>i.status='待检验');
+        await pool.query("update dispatch_tasks set stage=$1,data=$2 where order_id='test-order'",[stage,JSON.stringify(data)]);
+        const before=(await pool.query("select version from dispatch_tasks where order_id='test-order'")).rows[0].version;
+        await refresh('test-order',actor,{readSource});
+        const task=(await pool.query("select * from dispatch_tasks where order_id='test-order'")).rows[0];
+        assert.equal(task.stage,stage);assert.equal(task.version,before+1);assert.deepEqual(task.data,data);
+      }
+    });
     await t.test("pending pushes prevent reverse-sync races", async () => {
       await pool.query("update work_orders set legacy_sync_status='processing' where id='test-order'");
       await assert.rejects(() => refresh("test-order", actor, { readSource }), /推送成功/);

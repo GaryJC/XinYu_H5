@@ -55,3 +55,12 @@ VITE_DINGTALK_CLIENT_ID=
 - 生产环境必须配置强随机 `JWT_SECRET`。
 - 使用本地存储时，`LOCAL_UPLOAD_ROOT` 必须指向 ECS 的持久化目录并纳入磁盘备份；多台 ECS 不能共享本地文件。
 - 钉钉应用首页必须是 HTTPS 公网地址，不能是 localhost。
+
+
+## 客户现场签字会话
+
+开单页和归档补签均通过 `POST /api/work-orders/:id/signature-token` 获取可用会话。有效会话直接复用；未签字的“待客户签字”工单缺少会话或会话过期时，自动重新签发 7 天有效的会话并使旧会话失效，记录操作人及时间。已签字或纸质委托单不允许重新签发。创建会话与提交签名均先锁定父工单，再处理令牌，防止并发重复签发或重复提交。
+
+签字仍要求服务顾问／管理员登录并在员工当前设备上让客户手写签名，不提供客户免登录远程签字入口。
+
+独立临时 PostgreSQL 回归：显式设置本机 `WORKFLOW_TEST_ADMIN_URL` 后运行 `node --test test/workflowRecovery.integration.test.mjs`。测试创建并删除自己的数据库，覆盖过期／缺失会话、并发签发与签署、旧会话拒绝、改派责任留痕和检验写回快照，不读取应用 `.env`。

@@ -6,14 +6,9 @@
 .repair-item-row{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid #eef0f4}
 .repair-item-row:last-child{border-bottom:0;padding-bottom:0}
 .is-editing .repair-item-row{padding:14px;background:#f7f9fc;border:1px solid #e8edf4;border-radius:10px}
-.is-editing .repair-item-row.is-additional{background:#f5f9ff;border-color:#dceaff}
 .repair-item-number{display:flex;align-items:center;justify-content:center;flex:none;width:26px;height:26px;border-radius:7px;background:#edf1f6;font-size:11px;font-weight:600;color:#758197;margin-top:1px}
-.is-additional .repair-item-number{background:#e7f0ff;color:#3976ca}
 .repair-item-content{flex:1;min-width:0}
-.repair-item-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:26px;margin-bottom:8px}
-.repair-item-kind{font-size:12px;color:#7b8493}
-.repair-item-status{display:flex;align-items:center;gap:6px;flex-shrink:0}
-.repair-item-status .ant-btn{width:26px;min-height:26px!important;height:26px;padding:0}
+.repair-item-meta{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:26px;margin-bottom:8px}
 .repair-item-content .ant-input{width:100%;min-height:42px;font-size:14px;border-color:#dce2ea;border-radius:8px;background:#fff;padding:8px 12px}
 .repair-item-title{font-size:14px;line-height:1.6;overflow-wrap:anywhere}
 .repair-item-title .anticon{margin-left:8px;color:#9ba4b2;font-size:12px}
@@ -23,7 +18,7 @@
 .repair-items-heading>.ant-btn{font-size:13px}
 .repair-items-save{display:grid;grid-template-columns:88px minmax(0,1fr);gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid #edf0f4}
 .repair-items-save .ant-btn{min-height:40px;font-size:14px}
-@media(max-width:400px){.is-editing .repair-item-row{padding:12px;gap:8px}.repair-item-number{width:22px;height:24px}.repair-item-kind{font-size:11px}}
+@media(max-width:400px){.is-editing .repair-item-row{padding:12px;gap:8px}.repair-item-number{width:22px;height:24px}}
 
 .technician-completion-dialog .ant-modal-body>p{margin:0 0 20px;line-height:1.7}
 .technician-completion-dialog .ant-modal-body>section>h3{font-size:15px;margin:0 0 12px}
@@ -31,3 +26,16 @@
 .repair-completion-note .ant-input{font-weight:400}
 
 .repair-item-owner{display:flex;align-items:center;gap:12px;margin-top:12px;color:#778399;font-size:13px}.repair-item-owner>span{flex-shrink:0}
+.repair-item-leading{display:flex;flex-direction:column;align-items:center;gap:12px;flex:none}
+.inline-dispatch-form{margin-top:20px;padding-top:16px;border-top:1px solid #e3e8ef}
+.inline-dispatch-form h4{margin:0 0 16px}
+.inline-dispatch-form>.ant-checkbox-wrapper{margin-bottom:16px}
+.inline-dispatch-actions{display:flex;flex-wrap:wrap;gap:8px}
+.inline-dispatch-actions>.ant-btn-primary{flex:1;min-width:150px}
+@media(max-width:480px){.inline-dispatch-actions>.ant-btn-primary{flex-basis:100%}}
+
+.repair-items-summary{display:flex;align-items:center;flex-wrap:wrap;gap:12px}
+
+.repair-item-name-row{display:flex;align-items:flex-start;gap:6px}
+.repair-item-name-row>.ant-input,.repair-item-name-row>.repair-item-title{flex:1;min-width:0}
+.repair-item-name-row>.ant-btn{flex:none;min-height:36px;height:36px;width:28px;padding:0}
