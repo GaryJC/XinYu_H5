@@ -3,8 +3,8 @@ import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import { EmployeeBindingGate } from "../employee-binding/EmployeeBindingGate";
 import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
 import { lazy, Suspense, useState } from "react";
-import { ClipboardCheck, LockKeyhole, Menu, RefreshCcw, UserRound } from "lucide-react";
-import { Alert, Button, Drawer, Grid, Layout, Select, Space } from "antd";
+import { ArrowUp, ClipboardCheck, LockKeyhole, Menu, RefreshCcw, UserRound } from "lucide-react";
+import { Alert, Button, Drawer, FloatButton, Grid, Layout, Select, Space } from "antd";
 import { DevelopmentPersonaKey } from "../../../../shared/types";
 import { MetricCard } from "../../shared/ui/Status";
 import { roles } from "../work-orders/domain/workOrderDomain";
@@ -79,7 +79,6 @@ export function WorkbenchPage() {
       <Layout.Content className="main">
         <header className="topbar">
           <div className="topbar-title">
-            {isMobile ? <Button aria-label="打开菜单" icon={<Menu size={19} />} onClick={() => setMenuOpen(true)} /> : null}
             <div>
               <h1>{isMobile ? "修理委托工作台" : "机动车修理委托书数字化工作台"}</h1>
               <p>{isDispatchNavigation(activeNav)?`抚顺路店 · ${activeNav}`:<>{orders.length} 张委托单 · 抚顺路店 · {selectedOrder ? workOrderDisplayStatus(selectedOrder) : "新建草稿"}</>}</p>
@@ -124,7 +123,8 @@ export function WorkbenchPage() {
 
         {activeNav === "工作台" && (dispatchEnabled || !["technician", "inspector", "warehouse"].includes(role)) ? (
           <>
-            <section className="metric-grid" aria-label="待办统计">
+            <div className="all-todos-label">全部待办</div>
+            <section className="metric-grid" aria-label="全部待办统计">
               {counters.map((counter) => <MetricCard key={counter.label} label={counter.label} value={counter.value} />)}
             </section>
             <section className="role-focus-strip">
@@ -158,6 +158,15 @@ export function WorkbenchPage() {
           </Suspense>
         ) : null}
       </Layout.Content>
+      <FloatButton.BackTop className="workbench-back-top" style={{ bottom: isMobile ? "calc(80px + env(safe-area-inset-bottom, 0px))" : 48, right: isMobile ? 16 : 24, zIndex: 101 }} aria-label="回到顶部" tooltip="回到顶部" icon={<ArrowUp size={20} />} visibilityHeight={300} duration={300} />
+      {isMobile && <nav className="mobile-bottom-nav" aria-label="底部主导航">
+        {visibleNavItems.slice(0, 3).map(item => {
+          const Icon = item.icon;
+          return <button type="button" key={item.label} aria-current={activeNav === item.label ? 'page' : undefined} onClick={() => { setActiveNav(item.label); setMenuOpen(false); }}><Icon size={20} /><span>{item.label}</span></button>;
+        })}
+        <button type="button" aria-label="打开菜单" aria-expanded={menuOpen} aria-current={!visibleNavItems.slice(0, 3).some(item => item.label === activeNav) ? 'page' : undefined} onClick={() => setMenuOpen(true)}><Menu size={20} /><span>更多</span></button>
+      </nav>}
+
     </Layout>
   );
 }

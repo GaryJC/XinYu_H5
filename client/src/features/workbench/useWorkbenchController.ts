@@ -1,3 +1,4 @@
+import { useArchiveFilters } from "./useArchiveFilters";
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import { usePaperOrderPhotos } from "../work-orders/hooks/usePaperOrderPhotos";
 import {isCurrentVehicleLicenseException} from '../work-orders/domain/vehicleLicenseException';
@@ -39,7 +40,7 @@ export function useWorkbenchController() {
   const paperPhotos = usePaperOrderPhotos(setDraft);
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [apiError, setApiError] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
+
   const [syncLabel, setSyncLabel] = useState("钉钉组织已同步");
   const [dashboard, setDashboard] = useState<DashboardSummary>();
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -77,22 +78,17 @@ export function useWorkbenchController() {
   const technicianOptions = useMemo(() => users.filter((user) => user.active && hasRole(user, 'technician')).map((user) => user.name), [users]);
   const inspectorOptions = useMemo(() => users.filter((user) => user.active && hasRole(user, 'inspector')).map((user) => user.name), [users]);
 
-  const searchedOrders = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return orders;
-    return orders.filter((order) =>
-      [order.id, order.dispatchNo, order.vehicle.plate, order.vehicle.vin, order.vehicle.model, order.customer.name].some((value) =>
-        value.toLowerCase().includes(term)
-      )
-    );
-  }, [orders, searchTerm]);
+  const archive = useArchiveFilters(orders, currentUser?.id);
+  const searchTerm = archive.filters.search;
+  const setSearchTerm = (search: string) => archive.setFilters({ ...archive.filters, search });
+  const searchedOrders = archive.filteredOrders;
 
   const counters = useMemo(() => {
     return [
       { label: "待客户签字", value: orders.filter((item) => item.status === "待客户签字").length },
       { label: "待派工", value: orders.filter((item) => workOrderDisplayStatus(item) === "待派工").length },
       { label: "维修中", value: orders.filter((item) => workOrderDisplayStatus(item) === "维修中").length },
-      { label: "待结算", value: orders.filter((item) => item.status === "待结算").length }
+      { label: "待检验", value: orders.filter((item) => workOrderDisplayStatus(item) === "待检验").length }
     ];
   }, [orders]);
 
@@ -498,6 +494,7 @@ export function useWorkbenchController() {
     technicianOptions,
     inspectorOptions,
     searchedOrders,
+    archive,
     counters,
     loginForDevelopment,
     selectOrder,

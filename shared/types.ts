@@ -321,6 +321,8 @@ export type WorkOrder = {
   status: WorkOrderStatus;
   createdAt: string;
   updatedAt: string;
+  createdAtIso?: string;
+  updatedAtIso?: string;
   shop: ShopProfile;
   department: {
     code: string;

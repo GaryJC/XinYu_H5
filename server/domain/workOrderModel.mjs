@@ -53,6 +53,8 @@ export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecord
     status: row.status,
     createdAt: formatDate(row.created_at),
     updatedAt: formatDate(row.updated_at),
+    createdAtIso: timestampIso(row.created_at),
+    updatedAtIso: timestampIso(row.updated_at),
     shop: {
       id: row.shop_id || "shop-hq",
       name: row.shop_name || "上海虹桥店",
@@ -297,4 +299,10 @@ export function nowString() {
 export function formatDate(value) {
   if (!value) return "";
   return new Date(value).toLocaleString("zh-CN", { hour12: false });
+}
+
+function timestampIso(value) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
 }

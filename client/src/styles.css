@@ -139,9 +139,12 @@ body { margin: 0; background: #f5f5f5; }
 .archive-order-statuses { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .archive-order-statuses .ant-tag { margin-inline-end: 0; }
 .archive-order-card-title strong { font-size: 17px; }
-.archive-order-owner, .archive-order-id { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.archive-order-owner { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-order-owner { margin-top: 4px; font-size: 14px; }
-.archive-order-id { margin-top: 2px; color: rgba(0, 0, 0, .45); font-size: 12px; }
+.archive-order-id { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 8px; padding: 8px 10px; border-radius: 6px; background: #e6f4ff; }
+.archive-order-id > span { color: #52647a; font-size: 12px; }
+.archive-order-id > strong { color: #0958d9; font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+.archive-order-id > strong.unassigned { color: #52647a; font-size: 14px; font-weight: 500; }
 .archive-order-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .archive-order-meta span { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
 .archive-order-meta b { display: block; margin-bottom: 2px; color: rgba(0, 0, 0, .45); font-size: 11px; font-weight: 400; }
@@ -327,4 +330,45 @@ html, body { touch-action: pan-x pan-y; }
   .work-order-print-modal .ant-modal-body { min-height:0; overflow-y:auto; }
   .archive-detail-modal .ant-modal-footer,
   .work-order-print-modal .ant-modal-footer { padding-bottom:0; padding-bottom:constant(safe-area-inset-bottom); padding-bottom:env(safe-area-inset-bottom, 0px); }
+}
+
+/* Archive controls share one result set across desktop and DingTalk mobile views. */
+.all-todos-label { color: #657085; font-size: 13px; margin-bottom: 8px; }
+.archive-filter-bar { margin: 12px 0 16px; }
+.archive-filter-toolbar, .archive-date-shortcuts, .archive-filter-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.archive-filter-toolbar { margin-bottom: 12px; }
+.archive-sort { min-width: 160px; }
+.archive-filter-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.archive-filter-fields label, .archive-date-inputs label, .archive-drawer-fields > label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.archive-filter-fields .ant-select, .archive-drawer-fields .ant-select { width: 100%; }
+.archive-filter-summary { margin-top: 12px; font-size: 13px; color: #657085; }
+.archive-filter-summary .ant-tag { white-space: normal; overflow-wrap: anywhere; }
+.archive-date-inputs { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.archive-custom-dates { margin-bottom: 12px; }
+.archive-custom-dates > button { margin-right: 8px; }
+.archive-drawer-fields { display: grid; gap: 16px; }
+.archive-filter-footer { display: flex; justify-content: flex-end; gap: 12px; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.archive-filter-drawer .archive-filter-fields { grid-template-columns: 1fr; }
+.mobile-bottom-nav { position: fixed; z-index: 100; bottom: 0; left: 0; right: 0; display: flex; background: #fff; border-top: 1px solid #e8e8e8; padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -2px 12px rgb(0 0 0 / 5%); }
+.mobile-bottom-nav button { flex: 1; min-width: 0; min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 0; border-radius: 8px; background: transparent; color: #657085; font: inherit; font-size: 12px; }
+.mobile-bottom-nav button[aria-current="page"] { background: #e6f4ff; color: #1677ff; }
+.mobile-bottom-nav button:focus-visible { outline: 2px solid #1677ff; outline-offset: -2px; }
+@media (max-width: 767px) {
+  .app-shell > .main { padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
+  .topbar-actions { padding-left: 0; }
+  .archive-date-shortcuts { gap: 6px; }
+  .archive-filter-toolbar > span { width: 100%; }
+  .archive-date-inputs { flex-direction: column; }
+  .archive-order-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  .archive-date-popup .ant-picker-date-panel { width: min(300px, calc(100vw - 32px)); }
+  .archive-date-popup .ant-picker-content { width: 100%; }
+  .archive-date-popup .ant-picker-cell { padding: 2px 0; }
+  .archive-date-popup .ant-picker-cell-inner { min-width: 0; width: 32px; height: 32px; line-height: 32px; }
+}
+
+.archive-list-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 767px) {
+  .archive-list-controls { width: 100%; }
 }

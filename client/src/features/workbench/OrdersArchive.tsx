@@ -1,3 +1,5 @@
+import { ArchiveFilterBar } from "./ArchiveFilterBar";
+import { archiveTimeLabel } from "./archiveFilters";
 import { CustomerSignatureSection } from "../signature/CustomerSignatureSection";
 import { SignatureReview } from "../signature/SignatureReview";
 import { PaperOrderResolution } from "../work-orders/components/PaperOrderResolution";
@@ -94,6 +96,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
       </div>
       {["advisor", "manager"].includes(role) && <p style={{ color: "#657085", fontSize: 13 }}>更新全部已同步且有权限的委托单，不受搜索和分页影响；保留签名、照片和维修进度。更新期间请保持页面打开。</p>}
       {refreshReport}
+      <ArchiveFilterBar key={currentUser?.id} archive={controller.archive} isMobile={isMobile} />
 
       {isMobile ? (
         <div className="archive-mobile-list">
@@ -109,28 +112,29 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
                   </span>
                 </div>
                 <span className="archive-order-owner">{order.customer.name || "未登记车主"}</span>
-                <span className="archive-order-id">{order.id}</span>
+                <span className="archive-order-id"><span>派工单号</span><strong className={order.dispatchNo ? undefined : "unassigned"}>{order.dispatchNo || "暂无派工号"}</strong></span>
                 <div className="archive-order-meta">
                   <span><b>服务顾问</b>{order.advisor || "-"}</span>
-                  <span><b>金额</b>{order.settlementAmount || order.estimatedFee ? `¥${order.settlementAmount || order.estimatedFee}` : "-"}</span>
-                  <span><b>更新时间</b>{order.updatedAt || "-"}</span>
+                  <span><b>创建时间</b>{archiveTimeLabel(order, "created")}</span>
                 </div>
               </div>
               <ChevronRight size={18} />
             </button>
-          )) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无委托单" />}
+          )) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无符合条件的委托单"><Button onClick={controller.archive.reset}>清空筛选</Button></Empty>}
         </div>
       ) : (
         <Table
           className="orders-table"
           size="small"
           rowKey="id"
-          pagination={{ pageSize: 8, showSizeChanger: false }}
+          scroll={{ x: "max-content" }}
+          pagination={{ pageSize: 8, showSizeChanger: false, current: controller.archive.page, onChange: controller.archive.setPage }}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无符合条件的委托单"><Button onClick={controller.archive.reset}>清空筛选</Button></Empty> }}
           rowClassName={(order) => order.id === selectedId ? "selected" : ""}
           onRow={(order) => ({ onClick: () => openDetail(order) })}
           dataSource={searchedOrders}
           columns={[
-            { title: "委托单号", dataIndex: "id", width: 160 },
+            { title: "派工号", render: (_, order) => order.dispatchNo || "暂无派工号", width: 160 },
             { title: "车牌", render: (_, order) => order.vehicle.plate || "-" },
             { title: "车主", render: (_, order) => order.customer.name || "-" },
             { title: "服务顾问", dataIndex: "advisor" },
@@ -138,7 +142,8 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
             { title: "业务状态", render: (_, order) => <><StatusChip status={workOrderDisplayStatus(order)} />{order.paperOrder && <Tag color="orange">纸质委托书</Tag>}</> },
             { title: "润丰同步", render: (_, order) => <OrderLegacySyncStatus order={order} /> },
             { title: "金额", render: (_, order) => order.settlementAmount || order.estimatedFee ? `¥${order.settlementAmount || order.estimatedFee}` : "-" },
-            { title: "更新时间", dataIndex: "updatedAt", width: 145 }
+            { title: "创建时间", render: (_, order) => archiveTimeLabel(order, "created"), width: 145 },
+            { title: "更新时间", render: (_, order) => archiveTimeLabel(order, "updated"), width: 145 }
           ]}
         />
       )}
