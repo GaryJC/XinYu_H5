@@ -34,3 +34,33 @@ test('scheduler roster selects only service advisors and managers and preserves 
  const audience=await syncSchedulerRoster('s',{list:async()=>({ids:['0','1','2','3'],accessToken:''}),profile:async({userId})=>profiles[Number(userId)],find:async id=>id==='0'?undefined:{id,active:id!=='2',shopId:id==='3'?'other':'s'},snapshot:async()=>{},upsert:async({profile,mapping,existingUser})=>({id:profile.userId,role:mapping.role,shopId:mapping.shopId,active:profile.active&&existingUser?.active!==false})});
  assert.deepEqual(audience,['0','1']);
 });
+
+test('inspection role discovery includes managers and deduplicates dual memberships',async()=>{
+ const result=await listInspectorRoleMembers({token:async()=>'',fetcher:async(url,input)=>{
+  const {role_id}=JSON.parse(input.body);
+  return {ok:true,json:async()=>({errcode:0,result:url.pathname.endsWith('/list')
+   ?{list:[{roles:[{id:1,name:'检验员'},{id:2,name:'门店管理员'},{id:3,name:'服务顾问'}]}]}
+   :{list:(role_id===1?['inspector','dual']:['manager','dual']).map(userid=>({userid}))}})};
+ }});
+ assert.deepEqual(result.ids,['inspector','dual','manager']);
+});
+
+test('inspection audience includes active local managers without granting inspector membership',async()=>{
+ const queries=[];
+ const profiles=[
+  {userId:'manager',roles:[{name:'门店管理员'}]},
+  {userId:'dual',roles:[{name:'门店管理员'},{name:'检验员'}]},
+  {userId:'disabled',roles:[{name:'门店管理员'}]},
+  {userId:'other',roles:[{name:'门店管理员'}]},
+  {userId:'revoked',roles:[{name:'服务顾问'}]}
+ ].map(p=>({...p,active:true}));
+ const ids=await syncInspectorRoster('s',{
+  list:async()=>({ids:profiles.map(p=>p.userId),accessToken:''}),
+  profile:async({userId})=>profiles.find(p=>p.userId===userId),
+  find:async id=>({id,shopId:id==='other'?'elsewhere':'s',active:id!=='disabled'}),snapshot:async()=>{},
+  upsert:async({profile,mapping,existingUser})=>({id:profile.userId,...mapping,active:existingUser.active}),
+  database:{query:async(...args)=>queries.push(args)}
+ });
+ assert.deepEqual(ids,['manager','dual']);
+ assert.deepEqual(queries[0][1],['s',['dual']]);
+});

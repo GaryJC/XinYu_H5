@@ -23,7 +23,7 @@ export function DispatchPage({user,view}:{user:UserProfile;view:string}) {
   if(view==='配件申请' && hasRole(user, 'warehouse')) return <WarehousePartsPage controller={c}/>;
   if(view==='我的维修' && (hasAnyRole(user, ['technician','outsourcing'])||user.outsourcingRoleMember)) return <TechnicianRepairPage controller={c} user={user}/>;
   return <section className="dispatch-page" aria-label={view}>
-    <div className="dispatch-heading"><div><h2>{view}</h2><p>{c.manager?'默认显示本店全部未完结工单，可按状态筛选并安排维修与检验。':c.inspectionLead?'查看本店检验任务，可按状态筛选和处理检验结果。':'及时确认任务，记录项目进度。'}{c.updatedAt?` 更新于 ${c.updatedAt}`:''}</p></div><Button onClick={()=>{c.setError('');void c.refresh();}} loading={c.loading}>刷新</Button></div>
+    <div className="dispatch-heading"><div><h2>{view}</h2><p>{view==='派工台'?'默认显示本店未派工工单，可切换状态查看其他工单。':c.manager?'查看本店工单，可按状态筛选并安排维修与检验。':c.inspectionLead?'查看本店检验任务，可按状态筛选和处理检验结果。':'及时确认任务，记录项目进度。'}{c.updatedAt?` 更新于 ${c.updatedAt}`:''}</p></div><Button onClick={()=>{c.setError('');void c.refresh();}} loading={c.loading}>刷新</Button></div>
     {c.error?<Alert type="error" showIcon closable title={c.error} onClose={()=>c.setError('')}/>:null}
     <DispatchFilterBar controller={c} inspection={inspection}/>
     {c.inspectionLead?<DispatchWorkloadBoard summaries={c.summaries} filters={c.filters} onSelect={(technicianId,metric)=>{

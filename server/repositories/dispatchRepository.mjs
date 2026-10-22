@@ -31,6 +31,14 @@ export async function getDispatchTask(client, id, actor, lock=false) {
   if(!rows[0]) throw new HttpError(404,'委托单不存在');
   const task=mapTask(rows[0]); assertDispatchAccess(task,actor); return task;
 }
+// Recheck queued inspection messages against the current task before delivery.
+export async function validateInspectionRecipient(notification, user, client=pool) {
+  if(!user?.active) return false;
+  const {rows}=await client.query(`${projection} where wo.id=$1`,[notification.order_id]);
+  if(!rows[0]) return false;
+  const task=mapTask(rows[0]);
+  return task.stage==='待检验' && !task.needsReview && (!task.inspectorId || task.inspectorId===user.id) && Boolean(canInspect(task,user));
+}
 export async function listDispatchTasks(actor, client=pool) {
   if(!actor?.active || !hasAnyRole(actor, ['manager','advisor','technician','inspector','warehouse','outsourcing'])) throw new HttpError(403,'无权访问派工模块');
   const {rows}=await client.query(`${projection} where wo.shop_id=$1 and wo.status <> '待处理纸质委托书'

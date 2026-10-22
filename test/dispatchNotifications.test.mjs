@@ -117,3 +117,31 @@ test('obsolete pickup messages are canceled before sending; database failures re
  await processNotification({...deps,validateParts:async()=>{throw new Error('db unavailable');}});assert.equal(sent,0);assert.equal(finished.retryable,true);
  await processNotification({...deps,validateParts:async()=>true});assert.equal(sent,1);
 });
+
+test('inspection delivery rechecks manager rights, shop, participants and current task state',async()=>{
+ const {validateInspectionRecipient:validate}=await import('../server/repositories/dispatchRepository.mjs');
+ const user={id:'m',active:true,role:'manager',shopId:'s',inspectorRoleMember:false};
+ const row={id:'inspection',order_id:'o',recipient_id:'m',kind:'待检验',previous_status:'pending'};
+ const task={order_id:'o',shop_id:'s',order_status:'维修中',stage:'待检验',technician_id:'t',repair_items:[],data:{items:[{id:1,status:'待检验',responsibleId:'t'}]}};
+ const database={query:async()=>({rows:[task]})};
+ assert.equal(await validate(row,user,database),true);
+ for(const patch of [{active:false},{shopId:'other'},{role:'advisor'},{role:'inspector',inspectorRoleMember:false}]) {
+  assert.equal(await validate(row,{...user,...patch},database),false);
+ }
+ for(const data of [{participantIds:['m']},{technicianIds:['m']},{items:[{id:1,responsibleId:'m'}]},{items:[{id:1,startedBy:'m'}]},{items:[{id:1,finishedBy:'m'}]},{needsReview:true}]) {
+  assert.equal(await validate(row,user,{query:async()=>({rows:[{...task,data:{...task.data,...data}}]})}),false);
+ }
+ for(const patch of [{stage:'维修完成'},{stage:'回审'},{inspector_id:'other'},{order_status:'待客户签字'}]) {
+  assert.equal(await validate(row,user,{query:async()=>({rows:[{...task,...patch}]})}),false);
+ }
+ assert.equal(await validate(row,user,{query:async()=>({rows:[]})}),false);
+ assert.equal(await validate(row,user,{query:async()=>({rows:[{...task,inspector_id:'m'}]})}),true);
+ let sent=0,finished;
+ const deps={claim:async()=>row,recipient:async()=>user,send:async()=>{sent++;return {status:'sent'};},finish:async(_,r)=>{finished=r;}};
+ await processNotification({...deps,validateInspection:(r,u)=>validate(r,u,database)});
+ assert.equal(sent,1);assert.equal(finished.status,'sent');
+ await processNotification({...deps,validateInspection:async()=>false});
+ assert.equal(sent,1);assert.equal(finished.retryable,false);
+ await processNotification({...deps,validateInspection:async()=>{throw new Error('db unavailable');}});
+ assert.equal(sent,1);assert.equal(finished.retryable,true);
+});

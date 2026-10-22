@@ -32,3 +32,21 @@ test('ownership, current role, version, self-inspection and administrative reass
  assert.throws(()=>action(task(),'submit-order'),e=>e.status===409);
  assert.equal(action(action(task(),'start-order'),'submit-order').stage,'待检验');
 });
+
+test('manager without inspector role can claim, reassign to self and complete inspection',()=>{
+ const actor={...manager,inspectorRoleMember:false};
+ const pending=action(action(task(),'start-order'),'submit-order');
+ let claimed=action(pending,'claim-inspection',actor);
+ assert.equal(claimed.inspectorId,actor.id);
+ assert.equal(action(claimed,'inspect',actor).stage,'维修完成');
+ claimed=action(pending,'claim-inspection',inspector);
+ claimed=action(claimed,'reassign-inspection',actor,{inspectorId:manager.id,reason:'管理员接手'});
+ assert.equal(claimed.inspectorId,manager.id);
+ assert.equal(action(claimed,'inspect',actor).stage,'维修完成');
+ for(const patch of [{technicianIds:[actor.id]},{participantIds:[actor.id]},{items:[{id:1,status:'待检验',responsibleId:actor.id}]}]) {
+  assert.throws(()=>action({...pending,...patch},'claim-inspection',actor),e=>e.status===403);
+ }
+ for(const patch of [{active:false},{shopId:'other'}]) {
+  assert.throws(()=>action(pending,'claim-inspection',{...actor,...patch}),e=>e.status===403);
+ }
+});

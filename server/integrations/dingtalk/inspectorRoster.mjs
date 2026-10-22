@@ -35,10 +35,12 @@ export async function listDingTalkRoleMembers(roleKeys,{fetcher=fetch,token=getD
   }
   return {ids:[...ids],accessToken};
 }
-export const listInspectorRoleMembers=options=>listDingTalkRoleMembers(['inspector'],options);
+export const listInspectorRoleMembers=options=>listDingTalkRoleMembers(['inspector','manager'],options);
 export async function syncInspectorRoster(shopId,{list=listInspectorRoleMembers,profile=getDingTalkUserProfile,find=findUserByDingTalkUserId,upsert=upsertUserFromDingTalk,snapshot=saveDingTalkUserSnapshot,database=pool}={}) {
   const {ids,accessToken}=await list();
-  const eligible=[];
+  const eligible=[],inspectorIds=[];
+  const inspectionNames=definitions.filter(d=>['inspector','manager'].includes(d.role)).flatMap(d=>d.names);
+  const inspectorNames=definitions.find(d=>d.role==='inspector').names;
   // Never use a partially fetched roster as the notification audience.
   const profiles=[];
   for(const userId of ids) profiles.push(await profile({userId,accessToken}));
@@ -47,8 +49,11 @@ export async function syncInspectorRoster(shopId,{list=listInspectorRoleMembers,
     const mapping=resolveDingTalkOrganizationMapping(p,{shopId:existing?.shopId||shopId});
     await snapshot(p);
     const user=await upsert({profile:p,mapping,existingUser:existing});
-    if(user?.active && user.shopId===shopId && hasAnyRole(user, ['inspector','manager']) && p.roles.some(r=>definitions.find(d=>d.role==='inspector').names.includes(r.name))) eligible.push(user.id);
+    if(user?.active && user.shopId===shopId && hasAnyRole(user, ['inspector','manager']) && p.roles.some(r=>inspectionNames.includes(r.name))) {
+      eligible.push(user.id);
+      if(p.roles.some(r=>inspectorNames.includes(r.name))) inspectorIds.push(user.id);
+    }
   }
-  await database.query('update users set inspector_role_member=(id=any($2::text[])) where shop_id=$1 and dingtalk_user_id is not null',[shopId,eligible]);
+  await database.query('update users set inspector_role_member=(id=any($2::text[])) where shop_id=$1 and dingtalk_user_id is not null',[shopId,inspectorIds]);
   return eligible;
 }

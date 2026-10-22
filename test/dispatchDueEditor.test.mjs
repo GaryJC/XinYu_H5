@@ -59,8 +59,9 @@ test('failed saves retain the chosen time and cancellation never submits',async(
   assert.ok(h.render().some(node=>node.type==='Alert'&&node.props.title==='网络中断'));
   h.find('FormDialog').props.onCancel();assert.equal(h.calls.length,1);
 });
-test('workers do not see an editor and completed tasks lose the editing entrypoint',()=>{
+test('workers do not see an editor and managers can edit completed repairs',()=>{
   assert.ok(!setup('technician').render().some(node=>node.type==='Button'));
   const h=setup('manager');h.c.detail.task.stage='维修完成';
-  assert.ok(!h.render().some(node=>node.type==='Button'));
+  h.c.detail.task.orderStatus='完成';
+  assert.ok(h.render().some(node=>node.type==='Button'&&node.props['aria-label']==='编辑预计完工时间'));
 });

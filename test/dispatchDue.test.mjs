@@ -32,8 +32,8 @@ test('cross-shop and inactive users are rejected; secondary inspector roles work
   assert.equal(canEditDispatchDue(task,user),true);
   assert.equal(apply(user).version,8);
 });
-test('unsigned, completed and unreconciled tasks cannot be edited',()=>{
-  for(const patch of [{orderStatus:'草稿'},{orderStatus:'待客户签字'},{orderStatus:'待处理纸质委托书'},{orderStatus:'完成'},{stage:'维修完成'},{needsReview:true}]) {
+test('unsigned and unreconciled tasks cannot be edited',()=>{
+  for(const patch of [{orderStatus:'草稿'},{orderStatus:'待客户签字'},{orderStatus:'待处理纸质委托书'},{needsReview:true}]) {
     assert.equal(canEditDispatchDue({...task,...patch},actor('inspector')),false);
     assert.throws(()=>apply(actor('inspector'),patch),error=>error.status===409);
   }
@@ -59,4 +59,13 @@ test('new due time is used by overdue metrics, including Beijing day boundaries'
   const next=apply(actor('advisor'),{},input({dueAt:'2026-10-23T00:00:00+08:00'}));
   assert.equal(next.dueAt,'2026-10-22T16:00:00.000Z');
   assert.equal(dispatchMetric(next,'overdue',undefined,undefined,new Date(now)),false);
+});
+
+test('completed and settled repairs allow due-date edits without changing completion history',()=>{
+ for(const role of ['advisor','manager','inspector'])for(const orderStatus of ['待结算','完成']){
+  const original={...structuredClone(task),orderStatus,stage:'维修完成',completedAt:'2026-10-21T08:00:00Z',completedBy:'inspector',workHours:3,items:[{...task.items[0],status:'已完工',finishAt:'2026-10-21T07:00:00Z',inspectedBy:'inspector'}]};
+  const next=applyDispatchAction(original,input(),actor(role),[],now);
+  assert.equal(canEditDispatchDue(original,actor(role)),true);
+  assert.deepEqual(next,{...original,dueAt:'2026-10-23T10:00:00.000Z',version:8});
+ }
 });

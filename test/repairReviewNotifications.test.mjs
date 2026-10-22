@@ -50,8 +50,13 @@ test('partial review submission stays quiet; final submission queues inspector a
  await assert.rejects(()=>executeDispatchActionInTransaction(missingPhoto,tech2,'o',input(task,'submit-review')),/维修照片/);
  assert.equal(queued(missingPhoto,'dispatch_inspection_notifications').length,0);
 });
-test('inspection worker delivers the final review event to independent inspectors',async()=>{
+for(const mode of ['mock','dingtalk']) test(`inspection worker includes independent managers in ${mode} mode`,async()=>{
  const task=initial();const calls=[];
+ const manager={...inspector,id:'manager',role:'manager',inspectorRoleMember:false};
+ const audience=[...people,manager,{...manager,id:'disabled',active:false},{...manager,id:'other',shopId:'other'},
+  {...manager,id:'participant'},{...manager,id:'responsible'},{...manager,id:'revoked'}];
+ task.participantIds=['participant'];task.items.push({id:3,status:'待检验',responsibleId:'responsible'});
+
  const db={async query(sql,params=[]) {
   calls.push({sql,params});
   if(sql.startsWith('with candidate'))return {rows:[{event_id:99,order_id:'o',lease_id:'lease'}]};
@@ -61,12 +66,12 @@ test('inspection worker delivers the final review event to independent inspector
   // The worker uses its generated lease to claim and then verify ownership.
   if(sql.includes('select lease_id'))return {rows:[{lease_id:calls[0].params[0]}]};
   if(sql.includes('select max(id)')){assert.match(sql,/'submit-review'/);return {rows:[{id:99}]};}
-  if(sql.includes('select id,name,role,active,shop_id'))return {rows:people.map(p=>({...p,shop_id:p.shopId}))};
+  if(sql.includes('select id,name,role,active,shop_id'))return {rows:audience.map(p=>({...p,shop_id:p.shopId}))};
   return {rows:[],rowCount:1};
  }};
- await processInspectionNotifications({database:db,runTransaction:callback=>callback(db),env:{APP_ENV:'test',DISPATCH_NOTIFICATION_MODE:'mock'}});
+ await processInspectionNotifications({database:db,runTransaction:callback=>callback(db),sync:async()=>audience.filter(p=>p.id!=='revoked').map(p=>p.id),env:{APP_ENV:'test',DISPATCH_NOTIFICATION_MODE:mode,DINGTALK_AGENT_ID:'1',DINGTALK_APP_KEY:'test',DINGTALK_APP_SECRET:'test',DISPATCH_APP_URL:'https://example.com'}});
  const notices=calls.filter(c=>c.sql.includes('insert into dispatch_notifications'));
- assert.equal(notices.length,1);assert.equal(notices[0].params[3],'i');
+ assert.deepEqual(notices.map(n=>n.params[3]),mode==='mock'?['i','manager','revoked']:['i','manager']);
 });
 test('review scheduler notices recheck recipients before delivery and use the existing retry path',async()=>{
  const row={id:'n',kind:'回审已提交',previous_status:'pending',recipient_id:'a',attempts:1,payload:{orderId:'o'}};

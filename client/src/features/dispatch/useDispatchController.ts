@@ -7,7 +7,7 @@ export type ActionInput=Omit<DispatchActionRequest,'expectedVersion'|'requestId'
 export function useDispatchController(user:UserProfile,view:string,initialOrderId?:string) {
   const manager=hasAnyRole(user, ['manager','advisor']);
   const inspectionLead=manager || view==='检验任务' && hasRole(user, 'inspector');
-  const [filters,setFilters]=useState<DispatchFilters>({stage:view==='检验任务'?'待检验':view==='我的维修'?'进行中':undefined});
+  const [filters,setFilters]=useState<DispatchFilters>({stage:view==='检验任务'?'待检验':view==='我的维修'?'进行中':view==='派工台'?'待派工':undefined});
   const [taskCounts,setTaskCounts]=useState<RepairTaskCounts>();
   const [tasks,setTasks]=useState<DispatchTask[]>([]);
   const [people,setPeople]=useState<DispatchPeople>({technicians:[],inspectors:[],contractors:[]});

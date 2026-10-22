@@ -253,6 +253,8 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       const token=createTokenForUser(manager.id);await createAuthSession({token,userId:manager.id,expiresAt:new Date(Date.now()+3600000)});
       const call=(path,body)=>fetch(base+path,{method:body?'POST':'GET',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
       assert.equal((await fetch(base+'/api/dispatch/tasks')).status,401);
+      const selectable=await (await call('/api/dispatch/people')).json();
+      assert.ok(selectable.inspectors.some(person=>person.id===manager.id),'manager can select self for independent inspection');
       assert.equal((await call('/api/work-orders/new/transition',{status:'待结算'})).status,409);
       assert.equal((await call('/api/work-orders/new/repair-items/1/action',{action:'assign'})).status,409);
       assert.equal((await call('/api/dispatch/tasks/absent')).status,404);
@@ -494,9 +496,9 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await assert.rejects(()=>uploadRepairPhoto(tech,'whole',{...photoBody,requestId:randomUUID()},{save}),e=>e.status===409);
       const {processInspectionNotifications}=await import('../server/workers/inspectionNotifications.mjs');
       await processInspectionNotifications();
-      assert.equal((await pool.query("select count(*) from dispatch_notifications where order_id='whole' and kind='待检验'")).rows[0].count,'2');
+      assert.equal((await pool.query("select count(*) from dispatch_notifications where order_id='whole' and kind='待检验'")).rows[0].count,'3');
       await processInspectionNotifications();
-      assert.equal((await pool.query("select count(*) from dispatch_notifications where order_id='whole' and kind='待检验'")).rows[0].count,'2');
+      assert.equal((await pool.query("select count(*) from dispatch_notifications where order_id='whole' and kind='待检验'")).rows[0].count,'3');
       const command={action:'claim-inspection',expectedVersion:whole.version,requestId:randomUUID()};
       const results=await Promise.allSettled([service.executeDispatchAction(inspector,'whole',command),service.executeDispatchAction(otherInspector,'whole',{...command,requestId:randomUUID()})]);
       assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
