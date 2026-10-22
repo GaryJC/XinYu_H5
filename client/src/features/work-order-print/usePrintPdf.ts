@@ -1,10 +1,14 @@
+import { isDingTalkMobile, savePrintFile } from "../../integrations/dingtalk/printFile";
+import { preparePdfDownload } from "./preparePdfDownload";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export function usePrintPdf() {
+export function usePrintPdf(orderId: string) {
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File>();
   const [generating, setGenerating] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const sharingRef = useRef(false);
+  const [downloadUrl, setDownloadUrl] = useState("");
   const generatingRef = useRef(false);
   const [error, setError] = useState("");
   const urlRef = useRef("");
@@ -25,6 +29,7 @@ export function usePrintPdf() {
     generatingRef.current = true;
     setGenerating(true);
     setError("");
+    setDownloadUrl("");
     try {
       // PDF libraries are loaded only when the user requests a PDF.
       const { createPrintPdf } = await import("./createPrintPdf");
@@ -42,18 +47,33 @@ export function usePrintPdf() {
     }
   }, []);
 
-  const canShare = Boolean(file && typeof navigator.share === "function" && typeof navigator.canShare === "function" && navigator.canShare({ files: [file] }));
+  const dingTalk = isDingTalkMobile();
+  let canShare = false;
+  try {
+    canShare = Boolean(file && typeof navigator.share === "function" && navigator.canShare?.({ files: [file] }));
+  } catch { /* Some WebViews expose a canShare implementation that throws. */ }
   async function share() {
-    if (!file || !canShare || sharing) return;
+    if (!file || sharingRef.current) return;
+    sharingRef.current = true;
     setSharing(true);
     setError("");
-    try { await navigator.share({ files: [file], title: file.name }); }
-    catch (reason) {
+    try {
+      if (canShare) {
+        await navigator.share({ files: [file], title: file.name });
+      } else {
+        const download = await preparePdfDownload(orderId, file);
+        if (!active.current) return;
+        const fileUrl = new URL(download.path, window.location.origin).href;
+        setDownloadUrl(fileUrl);
+        if (dingTalk) await savePrintFile(fileUrl, file.name);
+      }
+    } catch (reason) {
       if (reason instanceof Error && reason.name === "AbortError") return;
-      if (active.current) setError("发送未能完成，请重试或在支持系统分享的手机浏览器中打开本页面。");
+      if (active.current) setError(reason instanceof Error ? reason.message : "文件保存或发送未完成，请重试；也可使用下方链接下载 PDF。");
     } finally {
+      sharingRef.current = false;
       if (active.current) setSharing(false);
     }
   }
-  return { url, file, generating, error, generate, canShare, share, sharing };
+  return { url, file, generating, error, generate, canShare, share, sharing, dingTalk, downloadUrl };
 }

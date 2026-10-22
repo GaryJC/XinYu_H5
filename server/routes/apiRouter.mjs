@@ -1,3 +1,4 @@
+import { handlePrintPdfDownload, handlePrintPdfUpload } from "./printPdfRouter.mjs";
 import { handleCustomerSignature } from "./customerSignatureRouter.mjs";
 import { resolvePaperOrder, submitPaperDingTalkOrder } from "../services/paperOrderService.mjs";
 import { saveWorkOrderPhoto, deleteWorkOrderPhotos } from "../services/workOrderPhotoService.mjs";
@@ -50,6 +51,7 @@ import { assertOcrRecordAccess, assertWorkOrderAccess } from "../repositories/ac
 import { confirmOcrRecord, createOcrRecord } from "../repositories/ocrRecordRepository.mjs";
 
 export async function handleApiRequest(req, res, url) {
+  if (handlePrintPdfDownload(req, res, url)) return true;
   if (await handleCustomerSignature(req, res, url)) return true;
   if (await handleSupplierPortal(req,res,url)) return true;
   if (req.method === "GET" && url.pathname === "/api/health") {
@@ -89,6 +91,7 @@ export async function handleApiRequest(req, res, url) {
   }
   if (await handleProcurement(req,res,url,currentUser)) return true;
   assertEmployeeBound(currentUser);
+  if (await handlePrintPdfUpload(req, res, url, currentUser)) return true;
   if (await handleDispatchRequest(req, res, url, currentUser)) return true;
 
   if (req.method === "GET" && url.pathname === "/api/work-orders") {

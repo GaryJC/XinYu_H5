@@ -55,7 +55,7 @@ function PrintPreview({ order, arrivalDate, printSignature, onClose }: { order: 
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState("");
   const documentRef = useRef<HTMLDivElement>(null);
-  const pdf = usePrintPdf();
+  const pdf = usePrintPdf(order.id);
   const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
     || window.matchMedia("(pointer: coarse)").matches;
   const busy = printing || pdf.generating;
@@ -103,13 +103,19 @@ function PrintPreview({ order, arrivalDate, printSignature, onClose }: { order: 
     <Button onClick={onClose}>关闭</Button>
     {!mobile && <Button icon={<Printer size={16}/>} onClick={handlePrint} loading={printing} disabled={loading || Boolean(error) || pdf.generating}>打印</Button>}
     {mobile ? <Button type="primary" onClick={pdf.share} loading={pdf.generating || pdf.sharing}
-      disabled={loading || Boolean(error) || !pdf.file || !pdf.canShare || pdf.generating}>发送到</Button>
+      disabled={loading || Boolean(error) || !pdf.file || pdf.generating}>{pdf.canShare ? "发送到" : pdf.dingTalk ? "保存到钉盘" : "下载 PDF"}</Button>
       : <Button type="primary" icon={<Printer size={16}/>} onClick={handlePdf} loading={pdf.generating} disabled={loading || Boolean(error) || printing}>导出 PDF</Button>}
   </div>}>
     <style>{printStyles}</style>
     {error && <Alert type="error" showIcon title="签名加载失败，暂不能打印" description={error} action={<Button onClick={retry}>重试</Button>} style={{marginBottom:12}}/>}
-    {pdf.error && <Alert type="error" showIcon title={mobile ? "文件准备或发送失败" : "PDF 生成或分享失败"} description={pdf.error} action={<Button onClick={handlePdf} loading={pdf.generating}>重试</Button>} style={{marginBottom:12}}/>}
-    {mobile && pdf.file && !pdf.canShare && <Alert type="warning" showIcon title="当前环境不支持发送文件" description="请使用支持系统分享的手机浏览器打开本页面。" style={{marginBottom:12}}/>}
+    {pdf.error && <Alert type="error" showIcon title={mobile ? "文件准备或发送失败" : "PDF 生成或分享失败"} description={pdf.error} action={<Button onClick={pdf.file ? pdf.share : handlePdf} loading={pdf.generating || pdf.sharing}>重试</Button>} style={{marginBottom:12}}/>}
+    {mobile && pdf.file && !pdf.canShare && <Alert type="info" showIcon title={pdf.dingTalk ? "通过钉盘保存 PDF" : "下载 PDF 后打印"}
+      description={pdf.dingTalk ? "点击“保存到钉盘”，选择位置后打开文件，可转发或下载后使用打印应用打印。文件会临时上传，下载链接 5 分钟后失效。" : "点击“下载 PDF”准备下载链接，保存文件后使用手机的 PDF 或打印应用打开。下载链接 5 分钟后失效。"} style={{marginBottom:12}}/>}
+    {mobile && pdf.downloadUrl && <Alert type="success" showIcon title="PDF 下载链接已准备好" description={<>
+      <p>链接 5 分钟内有效。钉钉内无法下载时，可复制链接到手机浏览器打开。</p>
+      <Button href={pdf.downloadUrl} target="_blank" rel="noopener noreferrer">下载 PDF</Button>
+      <p style={{wordBreak:"break-all",userSelect:"all",fontSize:12}}>{pdf.downloadUrl}</p>
+    </>} style={{marginBottom:12}}/>}
     {!mobile && pdf.url && <Alert type="success" showIcon title="单页 PDF 已生成" description={<>
       <p>打开 PDF 后可通过系统菜单打印或保存。</p>
       <div className="wop-print-actions">

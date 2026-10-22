@@ -581,3 +581,13 @@ export type CustomerSignatureSession =
   | { state: "pending"; expiresAt: string | null; order: CustomerSignatureOrder }
   | { state: "signed" };
 export type CustomerSignatureInput = { token: string; imageBase64: string; confirmed: boolean };
+
+export interface PrintPdfUpload {
+  pdfBase64: string;
+  fileName: string;
+}
+
+export interface PrintPdfDownload {
+  path: string;
+  expiresAt: string;
+}
