@@ -1,3 +1,4 @@
+import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import {resolveRepairWriteback,retryRepairWriteback} from '../services/repairWritebackService.mjs';
 import { warehouseVehiclePartsHistory,warehouseHistoricalPartStock,warehouseStockOptions,searchWarehouseStock } from '../services/warehouseStockService.mjs';
 import { uploadRepairPhoto, deleteRepairPhoto } from '../services/repairPhotoService.mjs';
@@ -14,7 +15,7 @@ export async function handleDispatchRequest(req,res,url,actor) {
   if(req.method==='GET' && url.pathname==='/api/dispatch/technicians') { sendJson(res,200,await technicianSummaries(actor,query)); return true; }
   if(req.method==='GET' && url.pathname==='/api/dispatch/people') {
     const people=await dispatchPeople(actor);
-    sendJson(res,200,{contractors:people.filter(p=>p.active && (p.role==='outsourcing'||p.outsourcingRoleMember)),technicians:people.filter(p=>p.active && p.role==='technician'),inspectors:people.filter(p=>p.active && (p.role==='manager'||p.inspectorRoleMember!==false) && ['inspector','manager'].includes(p.role) && p.id!==actor.id)}); return true;
+    sendJson(res,200,{contractors:people.filter(p=>p.active && (hasRole(p, 'outsourcing')||p.outsourcingRoleMember)),technicians:people.filter(p=>p.active && hasRole(p, 'technician')),inspectors:people.filter(p=>p.active && (hasRole(p, 'manager')||p.inspectorRoleMember!==false) && hasAnyRole(p, ['inspector','manager']) && p.id!==actor.id)}); return true;
   }
   const resolveWriteback=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)\/repair-writeback\/resolve$/);
   if(resolveWriteback&&req.method==='POST'){sendJson(res,200,await resolveRepairWriteback(actor,decodeURIComponent(resolveWriteback[1]),await readJson(req)));return true;}

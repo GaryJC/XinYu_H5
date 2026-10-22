@@ -1,3 +1,4 @@
+import { hasRole } from "../../../../shared/roles.mjs";
 import { Alert } from "antd";
 import type { UserProfile, WorkOrder } from "../../../../shared/types";
 import { OrderPhotoGallery } from "./OrderPhotoGallery";
@@ -9,7 +10,7 @@ export function SubmittedOrderPhotos({order, user, onUpdated, section = "all"}: 
 }) {
   const upload = useOrderPhotoUpload(order.id, user?.id, onUpdated);
   const canUpload = order.status !== "草稿" && user?.active && user.shopId === order.shop.id
-    && (user.role === "manager" || user.role === "advisor" && user.name === order.advisor);
+    && (hasRole(user, 'manager') || hasRole(user, 'advisor') && user.name === order.advisor);
   const busy = Boolean(upload.uploading);
   const visibleFiles = (order.files || []).filter(file => !order.inspection.replacedPhotoIds?.includes(file.id));
   const controls = canUpload ? {

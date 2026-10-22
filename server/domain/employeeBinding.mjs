@@ -1,7 +1,8 @@
+import { hasRole } from "../../shared/roles.mjs";
 import { HttpError } from "../http/HttpError.mjs";
 
 export function requiresEmployeeBinding(user) {
-  return user?.role === "technician" && !user.legacyEmployeeCode;
+  return hasRole(user, 'technician') && !user.legacyEmployeeCode;
 }
 
 export function assertEmployeeBound(user) {
@@ -33,7 +34,7 @@ export function createEmployeeBindingService({ findEmployees, saveBinding }) {
       return { required: true, candidates: found };
     },
     async confirm(user, code) {
-      if (user.role !== "technician") throw new HttpError(403, "仅维修工需要匹配员工编码");
+      if (!hasRole(user, 'technician')) throw new HttpError(403, "仅维修工需要匹配员工编码");
       if (user.legacyEmployeeCode) {
         if (code !== user.legacyEmployeeCode) throw new HttpError(409, "员工编码已绑定，不能自行更换");
         return { required: false, employeeCode: user.legacyEmployeeCode, candidates: [] };

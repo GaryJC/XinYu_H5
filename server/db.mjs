@@ -1,3 +1,4 @@
+import { userRoles, hasRole, hasAnyRole } from "../shared/roles.mjs";
 import { queueCustomerSignatureReview } from "./repositories/customerSignatureReviewRepository.mjs";
 import { isRemoteSignatureToken } from "./domain/customerSignaturePolicy.mjs";
 import { assertPaperPhotoIds, attachPaperPhotos, enqueuePaperNotifications } from "./repositories/paperOrderRepository.mjs";
@@ -296,8 +297,8 @@ export async function confirmCustomerSignature(id, actor) {
   return transaction(async client => {
     const order = await findWorkOrderById(client, id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
-    if (!actor?.active || actor.shopId !== order.shop.id || !["advisor", "manager"].includes(actor.role)
-      || actor.role === "advisor" && actor.name !== order.advisor) throw new HttpError(403, "仅负责此单的服务顾问或本店管理员可以确认签字");
+    if (!actor?.active || actor.shopId !== order.shop.id || !hasAnyRole(actor, ["advisor", "manager"])
+      || !hasRole(actor, 'manager') && hasRole(actor, 'advisor') && actor.name !== order.advisor) throw new HttpError(403, "仅负责此单的服务顾问或本店管理员可以确认签字");
     if (order.customerSignatureReview?.state === "confirmed") return order;
     if ((!order.customerSignatureReview?.supplemental && order.status !== "待客户签字") || order.customerSignatureReview?.state !== "pending"
       || !order.signatures.customer || !order.customerSignatureFileId) throw new HttpError(409, "当前委托单没有待确认的客户签字");
@@ -665,6 +666,12 @@ async function addAudit(client, orderId, actor, action) {
 }
 
 export function roleFilter(role, user) {
+  const memberships = userRoles(user);
+  if (memberships.length > 1) {
+    const filters = memberships.map(member => roleFilter(member, {...user, role: member, roles: [member], outsourcingRoleMember: false}));
+    return {where: 'where (' + filters.map(filter => '(' + filter.where.replace(/^where /, '') + ')').join(' or ') + ')',
+      params: filters.reduce((longest, filter) => filter.params.length > longest.length ? filter.params : longest, [])};
+  }
   if (!validRoles.has(role) || !user?.shopId) return { where: "where false", params: [] };
   const base = "where wo.shop_id = $1";
   if (["technician","outsourcing"].includes(role)) return { where: `${base} and exists (select 1 from dispatch_tasks dt where dt.order_id=wo.id and (dt.technician_id=$2 or dt.data->'technicianIds' ? $2))`, params: [user.shopId,user.id] };
@@ -717,7 +724,7 @@ async function refreshOutboundPickedState(client, orderId, repairItems) {
 }
 
 export async function getWorkOrderDetail(id,user) {
-  if(user.role==='warehouse') await getDispatchTask(pool,id,user);
+  if(hasRole(user, 'warehouse')) await getDispatchTask(pool,id,user);
   else await assertWorkOrderAccess(id,user);
   const order=await findWorkOrderById(pool,id);
   if(!order)throw new HttpError(404,'委托单不存在');

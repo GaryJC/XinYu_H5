@@ -9,7 +9,7 @@ export async function dueReminderCandidates(client,now) {
       and not coalesce((dt.data->>'needsReview')::boolean,false) and coalesce(dt.data->>'feedback','')=''
       and nullif(dt.data->>'dueAt','')::timestamptz>$1::timestamptz
       and nullif(dt.data->>'dueAt','')::timestamptz<=$1::timestamptz+interval '48 hours'
-      and exists(select 1 from users u where u.active and u.role='technician' and u.shop_id=wo.shop_id
+      and exists(select 1 from users u where u.active and (u.role='technician' or 'technician'=any(u.roles)) and u.shop_id=wo.shop_id
         and (dt.technician_id=u.id or dt.data->'technicianIds' ? u.id)
         and not exists(select 1 from dispatch_due_reminders r where r.order_id=wo.id and r.recipient_id=u.id
           and r.repair_round=coalesce((dt.data->>'repairRound')::integer,0) and r.due_at=(dt.data->>'dueAt')::timestamptz

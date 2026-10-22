@@ -14,7 +14,7 @@ export function useRepairItemsEditor(task:DispatchTask,c:DispatchController) {
   if(!valid||stale||c.busy)return false;
   if(submit&&task.executionMode!=='outsourced'&&rows.some(row=>!row.responsibleId)){c.setError('请为每个维修项目选择负责人');return false;}
   if(handover&&!handoverReason.trim()){c.setError('请填写原因或交接说明');return false;}
-  const success=await c.act({action:submit?'submit-order':'edit-repair-items',repairItems:rows,note,...(handover?{reason:handoverReason.trim()}:{})});
+  const success=await c.act({action:submit?(task.stage==='回审'?'submit-review':'submit-order'):'edit-repair-items',repairItems:rows,note,...(handover?{reason:handoverReason.trim()}:{})});
   if(success)cancel();return success;
  }
  return {editing,rows,setRows,begin,cancel,valid,stale,save,handover,handoverReason,setHandoverReason};

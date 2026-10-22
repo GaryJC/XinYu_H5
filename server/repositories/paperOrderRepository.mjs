@@ -1,3 +1,4 @@
+import { hasAnyRole } from "../../shared/roles.mjs";
 import { randomUUID } from 'node:crypto';
 import { HttpError } from '../http/HttpError.mjs';
 
@@ -16,7 +17,7 @@ export async function attachPaperPhotos(client, order, userId) {
   await client.query('update files set order_id=$2 where id=any($1::text[])',[ids,order.id]);
 }
 export async function enqueuePaperNotifications(client, order) {
-  const { rows } = await client.query("select id from users where active=true and role in ('advisor','manager')");
+  const { rows } = await client.query("select id from users where active=true and (role in ('advisor','manager') or roles && array['advisor','manager']::text[])");
   for (const user of rows) await client.query(`insert into dispatch_notifications(id,order_id,recipient_id,kind,payload)
     values($1,$2,$3,'纸质委托书已创建',$4::jsonb) on conflict do nothing`,
     [randomUUID(),order.id,user.id,JSON.stringify({ orderId:order.id, paperOrder:true, summary:`${order.advisor} 创建了纸质委托书，请选择关联润丰派工单或在钉钉补全开单。` })]);
@@ -25,7 +26,7 @@ export async function lockPaperOrder(client, id, actor) {
   const { rows } = await client.query('select * from work_orders where id=$1 for update',[id]);
   const order=rows[0];
   if (!order) throw new HttpError(404,'委托单不存在');
-  if (!actor?.active || !['advisor','manager'].includes(actor.role) || !actor.shopId || order.shop_id!==actor.shopId) throw new HttpError(403,'无权处理此纸质委托书');
+  if (!actor?.active || !hasAnyRole(actor, ['advisor','manager']) || !actor.shopId || order.shop_id!==actor.shopId) throw new HttpError(403,'无权处理此纸质委托书');
   if (!order.paper_order) throw new HttpError(409,'此委托单不是纸质委托书');
   return order;
 }

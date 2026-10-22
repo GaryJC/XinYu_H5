@@ -1,3 +1,4 @@
+import { hasAnyRole } from "../../../shared/roles.mjs";
 import { pool } from '../../database/pool.mjs';
 import { getDingTalkAccessToken } from './accessToken.mjs';
 import { getDingTalkUserProfile, resolveDingTalkOrganizationMapping } from './organization.mjs';
@@ -46,7 +47,7 @@ export async function syncInspectorRoster(shopId,{list=listInspectorRoleMembers,
     const mapping=resolveDingTalkOrganizationMapping(p,{shopId:existing?.shopId||shopId});
     await snapshot(p);
     const user=await upsert({profile:p,mapping,existingUser:existing});
-    if(user?.active && user.shopId===shopId && ['inspector','manager'].includes(user.role) && p.roles.some(r=>definitions.find(d=>d.role==='inspector').names.includes(r.name))) eligible.push(user.id);
+    if(user?.active && user.shopId===shopId && hasAnyRole(user, ['inspector','manager']) && p.roles.some(r=>definitions.find(d=>d.role==='inspector').names.includes(r.name))) eligible.push(user.id);
   }
   await database.query('update users set inspector_role_member=(id=any($2::text[])) where shop_id=$1 and dingtalk_user_id is not null',[shopId,eligible]);
   return eligible;

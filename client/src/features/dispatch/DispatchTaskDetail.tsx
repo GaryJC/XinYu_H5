@@ -1,3 +1,4 @@
+import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import {RepairWritebackStatus} from './RepairWritebackStatus';
 import {DispatchProjectsEditor} from './DispatchProjectsEditor';
 import {DispatchItemProgressActions} from './DispatchItemProgressActions';
@@ -5,7 +6,6 @@ import {RepairProjectChanges} from './RepairProjectChanges';
 import {InspectionItems,PassedInspectionItems} from './InspectionItems';
 import {useInspectionDraft} from './useInspectionDraft';
 import type {InspectionReview} from './inspectionReview';
-import { WarehouseStockSearch } from './WarehouseStockSearch';
 import { TaskOverview } from './TaskOverview';
 import './task-detail.css';
 import { RepairPhotoPanel } from './RepairPhotoPanel';
@@ -37,31 +37,32 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
   const {task,events,notifications,files}=detail;
   const unsigned=['草稿','待客户签字'].includes(task.orderStatus);
   const workers=task.technicianIds??(task.technicianId?[task.technicianId]:[]);
-  const owner=workers.includes(user.id) && (['technician','outsourcing'].includes(user.role)||user.outsourcingRoleMember) || task.executionMode==='outsourced'&&controller.manager;
-  const inspect=task.stage==='待检验' && (user.role==='manager'||(user.role==='inspector'&&task.inspectorId===user.id)) && !workers.includes(user.id) && !task.participantIds?.includes(user.id) && !task.items.some(i=>i.startedBy===user.id||i.finishedBy===user.id);
+  const owner=workers.includes(user.id) && (hasAnyRole(user, ['technician','outsourcing'])||user.outsourcingRoleMember) || task.executionMode==='outsourced'&&controller.manager;
+  const inspect=task.stage==='待检验' && hasAnyRole(user, ['manager','inspector']) && !workers.includes(user.id) && !task.participantIds?.includes(user.id) && !task.items.some(i=>i.responsibleId===user.id||i.startedBy===user.id||i.finishedBy===user.id);
   const waitingForParts=Boolean(task.partsRequirement&&task.partsRequirement.mode!=='none'&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt);
   const actions:DispatchActionName[]=[];
   if(controller.manager&&!unsigned) {
-    if(task.needsReview) {if(user.role==='manager') actions.push('reconcile');}
+    if(task.needsReview) {if(hasRole(user, 'manager')) actions.push('reconcile');}
     else {
-      if(task.stage==='维修完成') actions.push('reopen-repair');
       if(['待接单','待开工'].includes(task.stage)&&!task.firstStartedAt&&!task.startHistoryUnknown&&!task.items.some(i=>i.startAt||['维修中','待检验','已完工'].includes(i.status))) actions.push('cancel');
       if(task.stage==='待接单'&&task.feedback) actions.push('reoffer');
       if(task.executionMode==='outsourced'&&task.stage!=='维修完成') actions.push('update');
     }
     if(!['待派工','维修完成'].includes(task.stage)) actions.push('remind');
   }
+  if(task.stage==='维修完成'&&!unsigned&&!task.needsReview&&hasAnyRole(user, ['manager','advisor','inspector'])) actions.push('reopen-repair');
   if(owner&&!unsigned&&!task.needsReview) {
     if(task.stage==='待接单'&&!task.feedback) actions.push('accept','decline');
     if(['待开工','维修中'].includes(task.stage)) actions.push('pause');
     if(task.stage==='暂停') actions.push('resume');
     if(!waitingForParts&&task.stage==='维修中'&&task.items.length&&task.items.every(i=>['待检验','已完工'].includes(i.status))) actions.push('submit');
   }
-  const independent=!workers.includes(user.id)&&!task.participantIds?.includes(user.id)&&!task.items.some(i=>i.startedBy===user.id||i.finishedBy===user.id);
-  if(task.stage==='待检验'&&!task.inspectorId&&independent&&['inspector','manager'].includes(user.role)&&!task.needsReview) actions.push('claim-inspection');
-  if(task.stage==='待检验'&&task.inspectorId&&user.role==='manager') actions.push('reassign-inspection');
+  const independent=!workers.includes(user.id)&&!task.participantIds?.includes(user.id)&&!task.items.some(i=>i.responsibleId===user.id||i.startedBy===user.id||i.finishedBy===user.id);
+  if(['待检验','维修完成'].includes(task.stage)&&(task.orderStatus!=='完成'||Boolean(task.repairRound))&&independent&&hasAnyRole(user,['inspector','manager'])&&!task.needsReview) actions.push('send-review');
+  if(task.stage==='待检验'&&!task.inspectorId&&independent&&hasAnyRole(user, ['inspector','manager'])&&!task.needsReview) actions.push('claim-inspection');
+  if(task.stage==='待检验'&&task.inspectorId&&hasAnyRole(user, ['manager','inspector'])) actions.push('reassign-inspection');
   if(inspect&&task.inspectorId&&!unsigned&&!task.needsReview) actions.push('inspect');
-  if(controller.manager&&task.stage==='待检验'&&!task.inspectorId&&detail.inspectionNotification?.error) actions.push('retry-inspection-notifications');
+  if(controller.inspectionLead&&task.stage==='待检验'&&!task.inspectorId&&detail.inspectionNotification?.error) actions.push('retry-inspection-notifications');
   async function openFile(id:string,name:string) {
     try {const blob=await requestBlob(`/api/files/${encodeURIComponent(id)}/content`);const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);}
     catch(e){controller.setError(e instanceof Error?e.message:'附件加载失败');}
@@ -88,13 +89,12 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     <p className="dispatch-muted">需要配件的任务由仓管确认出库后自动开工；无需配件直接开工。</p>
     </section>}
     {task.stage==='待检验'?<PassedInspectionItems items={task.items}/>:null}
-    <RepairWritebackStatus controller={controller} admin={user.role==='manager'}/>
+    <RepairWritebackStatus controller={controller} admin={hasRole(user, 'manager')}/>
     <PartsRequirementSummary value={task.partsRequirement}/>
-    {user.role==='manager'&&(task.partsRequirement||task.hasPartsHistory)?<WarehouseStockSearch key={`stock-${task.orderId}`} orderId={task.orderId} requirement={task.partsRequirement}/>:null}
     {owner?<RepairPhotoPanel controller={controller} editable={!unsigned&&!task.needsReview&&['待开工','维修中','暂停'].includes(task.stage)} onBlocked={setPhotoBlocked}/>:null}
     {owner&&['待开工','维修中','暂停'].includes(task.stage)?<Button onClick={()=>setPartsDialog(true)} disabled={controller.busy}>{(task.partsRequirement?.issuedAt||task.partsRequirement?.preparedAt)?"追加配件申请":"补充／修改配件需求"}</Button>:null}
     {files.length?<><h3>维修附件</h3><Space wrap>{files.map(file=>file.mimeType.startsWith('image/')?<AuthenticatedImage key={file.id} fileId={file.id} alt={file.originalName} width={140} height={100}/>:<Button key={file.id} onClick={()=>void openFile(file.id,file.originalName)}>{file.originalName}</Button>)}</Space></>:null}
-    {controller.manager&&detail.inspectionNotification&&detail.inspectionNotification.status!=='ready'&&detail.inspectionNotification.status!=='obsolete'?<Alert type={detail.inspectionNotification.error?'warning':'info'} title={detail.inspectionNotification.error||'正在安排检验通知'} description="工单已进入待检验队列，可重试检验通知。"/>:null}
+    {controller.inspectionLead&&detail.inspectionNotification&&detail.inspectionNotification.status!=='ready'&&detail.inspectionNotification.status!=='obsolete'?<Alert type={detail.inspectionNotification.error?'warning':'info'} title={detail.inspectionNotification.error||'正在安排检验通知'} description="工单已进入待检验队列，可重试检验通知。"/>:null}
     {controller.manager?detail.schedulerNotifications?.filter(job=>job.error).map(job=><Alert key={job.eventId} type="warning" showIcon title={`${job.kind}通知未完成`} description={job.error} action={<Button loading={controller.busy} disabled={controller.busy} onClick={()=>void controller.act({action:'retry-scheduler-notifications',notificationJobId:job.eventId})}>重试</Button>}/>):null}
     <Collapse size="small" items={[{key:"info",label:"任务信息与关键时间",children:<Descriptions column={1} size="small" items={[
       {key:'number',label:'委托单',children:task.orderId},

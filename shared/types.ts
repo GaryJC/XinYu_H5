@@ -154,6 +154,7 @@ export type UserProfile = {
   id: string;
   name: string;
   role: RoleKey;
+  roles?: RoleKey[];
   dingtalkUserId?: string;
   active: boolean;
   shopId?: string;
@@ -407,7 +408,7 @@ export type DispatchExecution = {
   handedOverAt?: string;
   receivedAt?: string;
 };
-export type DispatchStage = "草稿" | "待客户签字" | "待派工" | "待接单" | "待开工" | "维修中" | "暂停" | "待检验" | "维修完成";
+export type DispatchStage = "回审" | "草稿" | "待客户签字" | "待派工" | "待接单" | "待开工" | "维修中" | "暂停" | "待检验" | "维修完成";
 export type DispatchItem = {
   id: number; name: string; status: RepairItemStatus;
   responsibleId?: string; responsibleName?: string;
@@ -415,7 +416,7 @@ export type DispatchItem = {
   inspectorName?: string; inspectedBy?: string; inspectedAt?: string; pickedAt?: string; rejectionReason?: string;
 };
 export type RepairPhotoUploadRequest = {requestId:string;fileName:string;mimeType:string;imageBase64:string;repairRound?:number;purpose?:"progress"|"parts"};
-export type PartsRequirement = { preparationOnly?:boolean; applicantId?:string; applicantName?:string; ownerId?:string; ownerName?:string; sourcePhotoIds?:string[]; revision?:number; batch?:number; preparedBy?:string; preparedName?:string; preparedAt?:string; issuedBy?:string; issuedName?:string; issuedAt?:string; recipientIds?:string[]; recipientName?:string; confirmedBy?:string; confirmedName?:string; confirmedAt?:string; mode:"none"|"list"|"photo"; items:Array<{name:string;quantity:number;unit:string;recipientId?:string;recipientName?:string;issuedAt?:string;issuedBy?:string;issuedName?:string;preparedAt?:string;preparedBy?:string;preparedName?:string}>; photoIds:string[]; recordedBy?:string; recordedName?:string; recordedAt?:string };
+export type PartsRequirement = { referencePhotoIds?:string[]; preparationOnly?:boolean; applicantId?:string; applicantName?:string; ownerId?:string; ownerName?:string; sourcePhotoIds?:string[]; revision?:number; batch?:number; preparedBy?:string; preparedName?:string; preparedAt?:string; issuedBy?:string; issuedName?:string; issuedAt?:string; recipientIds?:string[]; recipientName?:string; confirmedBy?:string; confirmedName?:string; confirmedAt?:string; mode:"none"|"list"|"photo"; items:Array<{name:string;quantity:number;unit:string;recipientId?:string;recipientName?:string;issuedAt?:string;issuedBy?:string;issuedName?:string;preparedAt?:string;preparedBy?:string;preparedName?:string}>; photoIds:string[]; recordedBy?:string; recordedName?:string; recordedAt?:string };
 export type DispatchTask = DispatchExecution & {
   hasPartsHistory?:boolean;
   partsRequirement?:PartsRequirement;
@@ -441,7 +442,7 @@ export type DispatchTask = DispatchExecution & {
 };
 export type RepairItemEdit = {id?:number;name:string;responsibleId?:string;responsibleName?:string};
 export type PartsPreparationGroup = {partsOwnerId?:string;items:Array<{index:number;recipientId:string}>};
-export type DispatchActionName = "edit-repair-items" | "edit-parts" | "issue-parts" | "confirm-parts" | "record-parts" | "reopen-repair" | "retry-scheduler-notifications" | "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
+export type DispatchActionName = "send-review" | "submit-review" | "edit-repair-items" | "edit-parts" | "issue-parts" | "confirm-parts" | "record-parts" | "reopen-repair" | "retry-scheduler-notifications" | "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
 export type DispatchActionRequest = DispatchExecution & {
   preparationGroups?:PartsPreparationGroup[];
   partsOwnerId?:string;
@@ -500,7 +501,7 @@ export type WorkOrderCustomerVehicleUpdate = {
   organization: string;
   organizationLegacyCode: string;
 };
-export type RepairTaskCounts = { pendingAccept: number; inProgress: number; inspection: number; completed: number };
+export type RepairTaskCounts = { pendingAccept: number; inProgress: number; inspection: number; review: number; completed: number };
 
 export type RunfengWarehouse = {id:number;departmentCode:string;departmentName:string;name:string};
 export type RunfengStock = {departmentCode:string;departmentName:string;warehouse:string;location:string;quantity:number|null};

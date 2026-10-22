@@ -1,3 +1,4 @@
+import { hasAnyRole } from "../../shared/roles.mjs";
 import {HttpError} from '../http/HttpError.mjs';
 const workers=task=>task.technicianIds??(task.technicianId?[task.technicianId]:[]);
 export const individualRepair=task=>workers(task).length>1||Boolean(task.partsRequests?.length);
@@ -10,7 +11,7 @@ export function actionParts(task,input,actor) {
 export function applyIndividualAction(task,input,actor,people,now,apply) {
   const repairActions=['start-order','submit-order','start','finish','pick','edit-repair-items'];
   const warehouse=['edit-parts','confirm-parts','issue-parts'].includes(input.action);
-  const personal=workers(task).includes(actor.id)&&(['technician','outsourcing'].includes(actor.role)||actor.outsourcingRoleMember);
+  const personal=workers(task).includes(actor.id)&&(hasAnyRole(actor, ['technician','outsourcing'])||actor.outsourcingRoleMember);
   const scopedParts=warehouse&&input.partsOwnerId || personal&&['accept','record-parts'].includes(input.action)&&individualRepair(task);
   const scopedRepair=personal&&repairActions.includes(input.action)&&individualRepair(task);
   if(!scopedParts&&!scopedRepair)return;

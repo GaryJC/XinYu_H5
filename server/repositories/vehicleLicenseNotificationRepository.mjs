@@ -9,7 +9,7 @@ export async function queueLicenseManagers(job,ids,runTransaction) {
   return runTransaction(async client=>{
     const {rows:current}=await client.query('select lease_id from vehicle_license_exceptions where id=$1 for update',[job.id]);
     if(current[0]?.lease_id!==job.lease_id)return;
-    const {rows:managers}=await client.query("select id from users where active and role='manager' and shop_id=$1",[job.payload.shopId]);
+    const {rows:managers}=await client.query("select id from users where active and (role='manager' or 'manager'=any(roles)) and shop_id=$1",[job.payload.shopId]);
     const targets=managers.filter(p=>!ids||ids.includes(p.id));
     if(!targets.length)throw new Error('本店暂无有效门店管理员，无法发送备案通知');
     for(const p of targets)await client.query('insert into vehicle_license_exception_notifications(id,exception_id,recipient_id) values($1,$2,$3) on conflict(exception_id,recipient_id) do nothing',[randomUUID(),job.id,p.id]);
@@ -28,7 +28,7 @@ export async function claimLicenseDelivery(database) {
     from candidate c where n.id=c.id returning n.*,c.previous_status`,[randomUUID()])).rows[0];
 }
 export async function licenseDeliveryContext(row,database) {
-  return (await database.query('select e.payload,u.dingtalk_user_id,u.active,u.role,u.shop_id from vehicle_license_exceptions e join users u on u.id=$2 where e.id=$1',[row.exception_id,row.recipient_id])).rows[0];
+  return (await database.query('select e.payload,u.dingtalk_user_id,u.active,u.role,u.roles,u.shop_id from vehicle_license_exceptions e join users u on u.id=$2 where e.id=$1',[row.exception_id,row.recipient_id])).rows[0];
 }
 export async function finishLicenseDelivery(row,result,database) {
   const {status,delay}=notificationNextState(row,result);

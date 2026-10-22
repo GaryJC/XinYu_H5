@@ -4,19 +4,19 @@ import { pool } from "../database/pool.mjs";
 
 export async function listUsers(shopId) {
   const { rows } = await pool.query(
-    `select id, name, role, active, shop_id, ${outsourcingMembership} from users where shop_id = $1 order by role, name`, [shopId]
+    `select id, name, role, active, shop_id, roles, inspector_role_member, ${outsourcingMembership} from users where shop_id = $1 order by role, name`, [shopId]
   );
   return rows.map(rowToUser);
 }
 
 export async function listAccessUsers(shopId, database=pool) {
-  const {rows}=await database.query(`select id,name,role,active,shop_id,dingtalk_user_id,last_login_at, ${outsourcingMembership} from users where shop_id=$1 order by role,name`,[shopId]);
+  const {rows}=await database.query(`select id,name,role,active,shop_id,dingtalk_user_id,last_login_at, roles, inspector_role_member, ${outsourcingMembership} from users where shop_id=$1 order by role,name`,[shopId]);
   return rows.map(row=>({...rowToUser(row),lastLoginAt:row.last_login_at?new Date(row.last_login_at).toISOString():undefined}));
 }
 
 export async function findUserById(id) {
   const { rows } = await pool.query(
-    `select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, inspector_role_member, legacy_employee_code, ${outsourcingMembership} from users where id = $1`,
+    `select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, legacy_employee_code, roles, inspector_role_member, ${outsourcingMembership} from users where id = $1`,
     [id]
   );
   return rows[0] ? rowToUser(rows[0]) : undefined;
@@ -24,7 +24,7 @@ export async function findUserById(id) {
 
 export async function findUserByDingTalkUserId(dingTalkUserId) {
   const { rows } = await pool.query(
-    `select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, inspector_role_member, legacy_employee_code, ${outsourcingMembership} from users where dingtalk_user_id = $1`,
+    `select id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, legacy_employee_code, roles, inspector_role_member, ${outsourcingMembership} from users where dingtalk_user_id = $1`,
     [dingTalkUserId]
   );
   return rows[0] ? rowToUser(rows[0]) : undefined;
@@ -37,14 +37,15 @@ export async function markUserLogin(id) {
 export async function upsertDevelopmentUser({ id, name, role, active, shopId }) {
   const { rows } = await pool.query(
     `
-      insert into users (id, name, role, active, shop_id)
-      values ($1, $2, $3, $4, $5)
+      insert into users (id, name, role, active, shop_id, roles)
+      values ($1, $2, $3, $4, $5, array[$3]::text[])
       on conflict (id) do update set
         name = excluded.name,
         role = excluded.role,
+        roles = excluded.roles,
         active = excluded.active,
         shop_id = excluded.shop_id
-      returning id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, legacy_employee_code
+      returning id, name, role, roles, inspector_role_member, dingtalk_user_id, active, shop_id, phone, last_login_at, legacy_employee_code
     `,
     [id, name, role, active, shopId]
   );
@@ -59,15 +60,17 @@ export async function upsertUserFromDingTalk({ profile, mapping, existingUser })
 
   const { rows } = await pool.query(
     `
-      insert into users (id, name, role, dingtalk_user_id, active, shop_id, phone)
-      values ($1, $2, $3, $4, $5, $6, $7)
+      insert into users (id, name, role, dingtalk_user_id, active, shop_id, phone, roles, inspector_role_member)
+      values ($1, $2, $3, $4, $5, $6, $7, $8::text[], $9)
       on conflict (dingtalk_user_id) do update set
         name = excluded.name,
         role = excluded.role,
+        roles = excluded.roles,
         active = excluded.active,
         shop_id = excluded.shop_id,
-        phone = excluded.phone
-      returning id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, legacy_employee_code
+        phone = excluded.phone,
+        inspector_role_member = excluded.inspector_role_member
+      returning id, name, role, roles, inspector_role_member, dingtalk_user_id, active, shop_id, phone, last_login_at, legacy_employee_code
     `,
     [
       id,
@@ -76,7 +79,9 @@ export async function upsertUserFromDingTalk({ profile, mapping, existingUser })
       profile.userId,
       profile.active && existingUser?.active !== false,
       shopId,
-      profile.phone || existingUser?.phone || null
+      profile.phone || existingUser?.phone || null,
+      mapping.roles || [role],
+      (mapping.roles || [role]).includes("inspector")
     ]
   );
   return {...rowToUser(rows[0]),outsourcingRoleMember:profile.roles.some(role=>role.name.trim()==='外包')};
@@ -241,6 +246,7 @@ function rowToUser(row) {
     id: row.id,
     name: row.name,
     role: row.role,
+    roles: row.roles?.length ? row.roles : [row.role],
     dingtalkUserId: row.dingtalk_user_id || undefined,
     active: row.active,
     shopId: row.shop_id || "shop-hq",

@@ -1,3 +1,4 @@
+import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import { pool, transaction } from "../database/pool.mjs";
 import { createId, formatDate, nowString } from "../domain/workOrderModel.mjs";
 import { HttpError } from "../http/HttpError.mjs";
@@ -73,17 +74,17 @@ export async function attachFileToOrder(fileId, orderId, runTransaction = transa
 
 export async function assertFileReadAccess(fileId, user, database = pool) {
   const file = await findFileAccess(fileId, database);
-  if (user.active && user.id && ["advisor", "manager"].includes(user.role) && file.paper_order && file.shop_id !== user.shopId) {
+  if (user.active && user.id && hasAnyRole(user, ["advisor", "manager"]) && file.paper_order && file.shop_id !== user.shopId) {
     const notification = await database.query("select 1 from dispatch_notifications where order_id=$1 and recipient_id=$2 and kind='纸质委托书已创建' limit 1", [file.order_id, user.id]);
     if (notification.rows.length) return;
   }
   if (!user.shopId || file.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店文件");
-  if (user.role === "manager") return;
-  if (user.role === "advisor" && (file.uploaded_by === user.id || file.advisor)) return;
-  if (user.active && user.role === "warehouse" && file.kind === "repair_parts_photo" && !["草稿","待客户签字"].includes(file.status)) return;
+  if (hasRole(user, 'manager')) return;
+  if (hasRole(user, 'advisor') && (file.uploaded_by === user.id || file.advisor)) return;
+  if (user.active && hasRole(user, 'warehouse') && file.kind === "repair_parts_photo" && !["草稿","待客户签字"].includes(file.status)) return;
   if (["repair_parts_photo", "repair_progress_photo", "repair_order_photo", "damage_photo", "other"].includes(file.kind)) {
-    if ((["technician","outsourcing"].includes(user.role)||user.outsourcingRoleMember) && (file.technician_id === user.id || file.technician_ids?.includes(user.id))) return;
-    if (user.role === "inspector" && user.inspectorRoleMember!==false && (file.inspector_id === user.id || file.stage==='待检验' && ![file.technician_id,...(file.technician_ids||[]),...(file.participant_ids||[])].includes(user.id) && !(file.items||[]).some(i=>i.startedBy===user.id || i.finishedBy===user.id))) return;
+    if ((hasAnyRole(user, ["technician","outsourcing"])||user.outsourcingRoleMember) && (file.technician_id === user.id || file.technician_ids?.includes(user.id))) return;
+    if (hasRole(user, 'inspector') && user.inspectorRoleMember!==false && (file.inspector_id === user.id || file.stage==='待检验' && ![file.technician_id,...(file.technician_ids||[]),...(file.participant_ids||[])].includes(user.id) && !(file.items||[]).some(i=>i.startedBy===user.id || i.finishedBy===user.id))) return;
   }
   throw new HttpError(403, "无权查看该文件");
 }
@@ -91,8 +92,8 @@ export async function assertFileReadAccess(fileId, user, database = pool) {
 export async function assertFileAccess(fileId, user, database = pool) {
   const file = await findFileAccess(fileId, database);
   if (!user.shopId || file.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店文件");
-  if (user.role === "manager") return;
-  if (user.role === "advisor" && (file.uploaded_by === user.id || file.advisor === user.name)) return;
+  if (hasRole(user, 'manager')) return;
+  if (hasRole(user, 'advisor') && (file.uploaded_by === user.id || file.advisor === user.name)) return;
   throw new HttpError(403, "无权访问该文件");
 }
 

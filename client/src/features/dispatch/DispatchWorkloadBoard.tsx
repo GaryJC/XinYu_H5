@@ -1,4 +1,6 @@
 import { Button, Empty } from 'antd';
+import { DownOutlined } from '@ant-design/icons';
+import { useState } from 'react';
 import type { DispatchMetric, TechnicianSummary } from '../../../../shared/types';
 import type { DispatchFilters } from './dispatchApi';
 import { personDisplayName } from './dispatchLabels';
@@ -19,6 +21,7 @@ export function DispatchWorkloadBoard({ summaries, filters, onSelect }: {
   filters: DispatchFilters;
   onSelect: (personId: string, metric: WorkloadMetric) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const localNow = new Date(Date.now() + 8 * 3600000);
   const month = `${localNow.getUTCFullYear()}-${String(localNow.getUTCMonth() + 1).padStart(2, '0')}`;
   const monthEnd = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
@@ -34,8 +37,10 @@ export function DispatchWorkloadBoard({ summaries, filters, onSelect }: {
   }
 
   return <section className="dispatch-workload workload-board" aria-label="工作负荷看板">
-    <h3>工作负荷看板 <span>· {summaries.length} 人</span></h3>
-      <div className="workload-list">
+    <h3><button className="workload-board-toggle" type="button" aria-expanded={expanded} aria-controls="workload-board-list" onClick={() => setExpanded(value => !value)}>
+      <span>工作负荷看板 <small>· {summaries.length} 人</small></span><span className="workload-board-toggle-hint">{expanded ? '收起' : '展开'}<DownOutlined aria-hidden="true" className={expanded ? 'is-expanded' : ''}/></span>
+    </button></h3>
+      {expanded ? <div id="workload-board-list" className="workload-list">
         {!summaries.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无维修工" /> : summaries.map(person => {
           return <div key={person.id} className={`workload-person ${filters.technicianId === person.id ? 'is-selected-person' : ''}`}>
             <div className="workload-person-name"><strong>{personDisplayName(person, summaries)}</strong>{!person.active ? <span>停用</span> : null}</div>
@@ -47,6 +52,6 @@ export function DispatchWorkloadBoard({ summaries, filters, onSelect }: {
             <div className="workload-completion-range">完成量统计：{range}</div>
           </div>;
         })}
-      </div>
+      </div> : null}
   </section>;
 }

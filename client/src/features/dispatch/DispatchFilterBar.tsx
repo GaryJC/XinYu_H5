@@ -5,7 +5,7 @@ import {executionLabels} from './DispatchExecutionFields';
 import {personDisplayName,statusFilters} from './dispatchLabels';
 import {activeFilterCount,advancedFilterCount,useDispatchFilterDraft} from './useDispatchFilterDraft';
 import './dispatch-filter-bar.css';
-const inspectionStatuses=[{value:'',label:'全部未完结'},{value:'待检验',label:'待检验'},{value:'维修完成',label:'已检验'},{value:'完成',label:'已完结'}];
+const inspectionStatuses=[{value:'',label:'全部未完结'},{value:'待检验',label:'待检验'},{value:'回审',label:'回审'},{value:'维修完成',label:'已检验'},{value:'完成',label:'已完结'}];
 export function DispatchFilterBar({controller:c,inspection}:{controller:DispatchController;inspection:boolean}) {
  const {token}=theme.useToken(),f=useDispatchFilterDraft(c.filters,c.setFilters);
  const advanced=advancedFilterCount(c.filters),active=activeFilterCount(c.filters);
@@ -29,7 +29,7 @@ export function DispatchFilterBar({controller:c,inspection}:{controller:Dispatch
      <label>开始日期<Input aria-label="完成记录起始日期" type="date" value={f.draft.from||''} max={f.draft.to||undefined} onChange={e=>patch('from',e.target.value||undefined)}/></label>
      <label>结束日期<Input aria-label="完成记录结束日期" type="date" value={f.draft.to||''} min={f.draft.from||undefined} onChange={e=>patch('to',e.target.value||undefined)}/></label>
     </div><p>仅筛选已完结记录和个人完成量，未填写时默认本月。</p></fieldset>
-    {c.manager?<label className="dispatch-filter-worker">维修工<Select aria-label="筛选维修工" allowClear placeholder="全部维修工" value={f.draft.technicianId} onChange={value=>patch('technicianId',value)} options={c.summaries.map(person=>({value:person.id,label:`${personDisplayName(person,c.summaries)}${person.active?'':'（停用）'}`}))}/></label>:null}
+    {c.inspectionLead?<label className="dispatch-filter-worker">维修工<Select aria-label="筛选维修工" allowClear placeholder="全部维修工" value={f.draft.technicianId} onChange={value=>patch('technicianId',value)} options={c.summaries.map(person=>({value:person.id,label:`${personDisplayName(person,c.summaries)}${person.active?'':'（停用）'}`}))}/></label>:null}
     {f.error?<Alert type="error" showIcon title={f.error}/>:null}
     <p className="dispatch-filter-note">全部未完结包含待结算工单。</p>
    </div>

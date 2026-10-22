@@ -59,8 +59,13 @@
 }
 
 .workload-board{border:1px solid #e5e9ef;border-radius:12px;background:#fff;overflow:hidden}
-.workload-board>h3{margin:0;padding:16px;background:#f0f6ff;font-size:16px;color:#263247}
-.workload-board>h3>span{font-size:13px;font-weight:400;color:#657085}
+.workload-board>h3{margin:0;background:#f0f6ff;font-size:16px;color:#263247}
+.workload-board-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:52px;padding:14px 16px;border:0;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}
+.workload-board-toggle:focus-visible{outline:2px solid #1677ff;outline-offset:-3px}
+.workload-board-toggle small{font-size:13px;font-weight:400;color:#657085}
+.workload-board-toggle-hint{display:inline-flex;align-items:center;gap:8px;flex:none;font-size:13px;font-weight:400;color:#657085}
+.workload-board-toggle-hint .anticon{transition:transform .2s}
+.workload-board-toggle-hint .anticon.is-expanded{transform:rotate(180deg)}
 .workload-list{padding:0 16px}
 .workload-person{padding:16px 0;border-bottom:1px solid #edf0f4}
 .workload-person:last-child{border-bottom:0}

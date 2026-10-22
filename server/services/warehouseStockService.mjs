@@ -1,3 +1,4 @@
+import { hasAnyRole } from "../../shared/roles.mjs";
 import { findVehiclePartsHistory } from '../repositories/runfengVehiclePartsRepository.mjs';
 import { pool } from '../database/pool.mjs';
 import { hasSqlServerConfig } from '../config/sqlServerConfig.mjs';
@@ -18,7 +19,7 @@ export function parseStockSearch(input={}) {
   return {query,tokens,warehouseId,inStockOnly:input.inStockOnly!=='false'};
 }
 async function authorize(actor,orderId,{getTask=getDispatchTask,database=pool,configured=hasSqlServerConfig}={}) {
-  if(!actor?.active||!['warehouse','manager'].includes(actor.role))throw new HttpError(403,'仅仓管或管理员可检索润丰仓库');
+  if(!actor?.active||!hasAnyRole(actor, ['warehouse','manager']))throw new HttpError(403,'仅仓管或管理员可检索润丰仓库');
   const task=await getTask(database,orderId,actor);
   if(['草稿','待客户签字'].includes(task.orderStatus)||(!task.partsRequirement&&!task.partsRequests?.length&&!task.hasPartsHistory))throw new HttpError(409,'登记配件需求后可检索润丰仓库');
   if(!configured())throw new HttpError(503,'润丰仓库检索尚未配置，请联系管理员');

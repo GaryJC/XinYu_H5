@@ -1,3 +1,4 @@
+import { hasAnyRole } from "../../shared/roles.mjs";
 import { pool } from '../database/pool.mjs';
 import { freezeDue } from '../repositories/procurementRepository.mjs';
 import * as repository from '../repositories/procurementNotificationRepository.mjs';
@@ -16,7 +17,7 @@ export async function deliverProcurementNotification({claim=repository.claimDeli
   try {
     const user=await recipient(row.recipient_id);
     if(row.previous_status!=='pending')result=await query(row,user?.dingtalk_user_id,{env});
-    else if(!user?.active||user.shopId!==row.shop_id||!['manager','warehouse'].includes(user.role))result={status:'failed',error:'收件人已无本门店竞价管理权限',retryable:false};
+    else if(!user?.active||user.shopId!==row.shop_id||!hasAnyRole(user, ['manager','warehouse']))result={status:'failed',error:'收件人已无本门店竞价管理权限',retryable:false};
     else {started=true;result=await send(row,user.dingtalk_user_id,{env,buildMessage:procurementMessageBody});}
   }catch{result=started||row.previous_status!=='pending'?{status:'unknown',error:'发送结果不确定，请核对钉钉记录'}:{status:'failed',error:'发送前校验失败',retryable:true};}
   await finish(row,result);return true;

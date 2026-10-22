@@ -1,3 +1,4 @@
+import { hasAnyRole } from "../../shared/roles.mjs";
 import { HttpError } from '../http/HttpError.mjs';
 export const hasActiveRepairRound = task => Boolean(task.repairRound && task.stage!=='维修完成');
 export function validateReopenItems(input) {
@@ -6,7 +7,7 @@ export function validateReopenItems(input) {
   if(input.action!=='reopen-repair' && (input.reworkItemIds!==undefined||input.additionalItems!==undefined)) throw new HttpError(400,'返工项目只能用于发起返工');
 }
 export function reopenRepairTask(task,input,actor,now) {
-  if(!['manager','advisor'].includes(actor.role)) throw new HttpError(403,'仅服务顾问或管理员可发起返工');
+  if(!hasAnyRole(actor, ['manager','advisor','inspector'])) throw new HttpError(403,'仅检验员、服务顾问或管理员可发起返工');
   if(task.stage!=='维修完成') throw new HttpError(409,'仅维修完成的任务可以发起返工');
   if(!input.reason?.trim()) throw new HttpError(400,'请填写返工原因');
   if(!input.dueAt || Date.parse(input.dueAt)<=Date.parse(now)) throw new HttpError(400,'请填写新的预计完工时间，且晚于当前时间');

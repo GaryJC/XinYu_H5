@@ -8,7 +8,7 @@ import { usePhotoSelection } from '../../shared/ui/PhotoBatchActions';
 import './order-photo-gallery.css';
 
 export function OrderPhotoGallery({ title, files, editable, busy, multiple, onUpload, onRemove }: {
-  title:string; files:StoredFile[]; editable:boolean; busy:boolean; multiple:boolean;
+  title:string; files:Array<Pick<StoredFile,'id'|'originalName'>>; editable:boolean; busy:boolean; multiple:boolean;
   onUpload:(files:File[],replaceId?:string)=>Promise<unknown>;
   onRemove:(ids:string[])=>Promise<unknown>;
 }) {

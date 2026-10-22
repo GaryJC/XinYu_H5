@@ -1,3 +1,4 @@
+import { hasAnyRole } from "../../../../shared/roles.mjs";
 import { useState } from 'react';
 import { Alert,Button,Card,Drawer,Input,Modal,Space,Table,Tabs,Tag } from 'antd';
 import type { ProcurementSupplier,UserProfile } from '../../../../shared/types';
@@ -13,7 +14,7 @@ export function ProcurementPage({user}:{user:UserProfile}) {
   const [supplierEditor,setSupplierEditor]=useState<ProcurementSupplier|'new'>(),[createOpen,setCreateOpen]=useState(false),[tab,setTab]=useState('tenders');
   const initialReport=new URLSearchParams(location.search).has('procurementReport');
   const [reportVisible,setReportVisible]=useState(initialReport);
-  if(!['manager','warehouse'].includes(user.role))return <Alert type="error" title="仅门店管理员和仓管可使用配件竞价"/>;
+  if(!hasAnyRole(user, ['manager','warehouse']))return <Alert type="error" title="仅门店管理员和仓管可使用配件竞价"/>;
   return <section className="procurement" aria-label="配件竞价管理">
     <div className="procurement-heading"><div><h2>配件竞价</h2><span className="procurement-muted">本店仓管与管理员共同管理 · 最新刷新 {c.refreshAt||'加载中'}</span></div><Space><Button loading={c.busy} onClick={()=>void c.run(c.load)}>刷新</Button><Button type="primary" onClick={()=>setCreateOpen(true)}>新建配件询价</Button></Space></div>
     {c.error?<Alert role="alert" type="error" showIcon title={c.error}/>:null}

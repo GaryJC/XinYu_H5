@@ -1,3 +1,4 @@
+import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import { outsourcingMembership } from './outsourcingMembership.mjs';
 import {readRepairWriteback} from './repairWritebackRepository.mjs';
 import { readRepairRounds } from './repairRoundRepository.mjs';
@@ -31,17 +32,18 @@ export async function getDispatchTask(client, id, actor, lock=false) {
   const task=mapTask(rows[0]); assertDispatchAccess(task,actor); return task;
 }
 export async function listDispatchTasks(actor, client=pool) {
-  if(!actor?.active || !['manager','advisor','technician','inspector','warehouse','outsourcing'].includes(actor.role)) throw new HttpError(403,'无权访问派工模块');
-  const restriction=['technician','outsourcing'].includes(actor.role)?"and (dt.technician_id=$2 or dt.data->'technicianIds' ? $2)":actor.role==='inspector'?"and (dt.inspector_id=$2 or dt.stage='待检验' or dt.technician_id=$2 or dt.data->'technicianIds' ? $2)":'';
-  const {rows}=await client.query(`${projection} where wo.shop_id=$1 and wo.status <> '待处理纸质委托书' ${restriction}
+  if(!actor?.active || !hasAnyRole(actor, ['manager','advisor','technician','inspector','warehouse','outsourcing'])) throw new HttpError(403,'无权访问派工模块');
+  const {rows}=await client.query(`${projection} where wo.shop_id=$1 and wo.status <> '待处理纸质委托书'
     order by coalesce((dt.data->>'urgent')::boolean,false) desc,
-      nullif(dt.data->>'dueAt','')::timestamptz asc nulls last, wo.arrival_date asc, wo.id asc`,
-    restriction?[actor.shopId,actor.id]:[actor.shopId]);
-  return rows.map(mapTask).filter(t=>actor.role!=='warehouse' || actor.outsourcingRoleMember&&technicianIds(t).includes(actor.id) || (t.partsRequirement || t.partsRequests?.length || t.hasPartsHistory) && !['草稿','待客户签字'].includes(t.orderStatus)).filter(t=>actor.role!=='inspector' || actor.outsourcingRoleMember&&technicianIds(t).includes(actor.id) || t.inspectorId===actor.id || canInspect(t,actor));
+      nullif(dt.data->>'dueAt','')::timestamptz asc nulls last, wo.arrival_date asc, wo.id asc`, [actor.shopId]);
+  return rows.map(mapTask).filter(task => {
+    try { assertDispatchAccess(task, actor); return true; }
+    catch (error) { if (error.status === 403) return false; throw error; }
+  });
 }
 export async function dispatchPeople(actor, client=pool) {
-  const {rows}=await client.query(`select id,name,role,active,shop_id,inspector_role_member, ${outsourcingMembership} from users where shop_id=$1 order by name,id`,[actor.shopId]);
-  return rows.map(r=>({id:r.id,name:r.name,role:r.role,active:r.active,shopId:r.shop_id,inspectorRoleMember:r.inspector_role_member,outsourcingRoleMember:r.outsourcing_role_member}));
+  const {rows}=await client.query(`select id,name,role,active,shop_id,inspector_role_member, roles, ${outsourcingMembership} from users where shop_id=$1 order by name,id`,[actor.shopId]);
+  return rows.map(r=>({id:r.id,name:r.name,role:r.role,roles:r.roles,active:r.active,shopId:r.shop_id,inspectorRoleMember:r.inspector_role_member,outsourcingRoleMember:r.outsourcing_role_member}));
 }
 export async function saveDispatchTask(client, task) {
   const {hasPartsHistory,orderId,shopId,technicianId,inspectorId,stage,version,plate,dispatchNo,arrivalDate,orderStatus,faultDescription,overdue,repairCatalog,vehicleVin,vehicleModel,vehicleMileage,customerName,advisor,...data}=task;
@@ -66,10 +68,10 @@ export async function dispatchDetail(actor,id,client=pool) {
   const {rows:events}=await client.query('select id,actor_name,action,detail,at from dispatch_events where order_id=$1 order by id desc',[id]);
   const {rows:notifications}=await client.query(`select n.id,n.kind,n.status,n.error,n.created_at,n.attempts,n.task_id,u.name
     from dispatch_notifications n join users u on u.id=n.recipient_id where n.order_id=$1
-    ${['manager','advisor'].includes(actor.role)?'':'and n.recipient_id=$2'} order by n.created_at desc`,['manager','advisor'].includes(actor.role)?[id]:[id,actor.id]);
+    ${hasAnyRole(actor, ['manager','advisor'])?'':'and n.recipient_id=$2'} order by n.created_at desc`,hasAnyRole(actor, ['manager','advisor'])?[id]:[id,actor.id]);
   const {rows:files}=await client.query("select repair_round,id,kind,original_name,mime_type,size_bytes,created_at,uploaded_by,(select name from users where users.id=files.uploaded_by) as uploaded_name from files where order_id=$1 and kind in ('repair_parts_photo','repair_progress_photo','repair_order_photo','damage_photo','other') order by created_at",[id]);
   const {rows:jobs}=await client.query('select status,error from dispatch_inspection_notifications where order_id=$1 order by event_id desc limit 1',[id]);
-  const schedulerNotifications=['manager','advisor'].includes(actor.role)?(await client.query('select event_id::text as "eventId",kind,status,error from dispatch_scheduler_notifications where order_id=$1 order by event_id desc limit 20',[id])).rows:undefined;
+  const schedulerNotifications=hasAnyRole(actor, ['manager','advisor'])?(await client.query('select event_id::text as "eventId",kind,status,error from dispatch_scheduler_notifications where order_id=$1 order by event_id desc limit 20',[id])).rows:undefined;
   const repairRounds=await readRepairRounds(client,id);
   const catalog=new Map();
   for(const r of repairRounds) for(const i of r.task.items) catalog.set(i.id,{id:i.id,name:i.name});

@@ -1,3 +1,4 @@
+import { hasAnyRole } from "../../../shared/roles.mjs";
 import {getDingTalkAccessToken} from './accessToken.mjs';
 import {getDingTalkUserProfile,resolveDingTalkOrganizationMapping} from './organization.mjs';
 import {findUserByDingTalkUserId,upsertUserFromDingTalk,saveDingTalkUserSnapshot} from '../../repositories/userRepository.mjs';
@@ -29,7 +30,7 @@ export async function syncManagerRoster(shopId,{fetcher=fetch,token=getDingTalkA
   for(const p of profiles) {
     const existing=await find(p.userId),mapping=resolveDingTalkOrganizationMapping(p,{shopId:existing?.shopId||shopId});
     await snapshot(p);const user=await upsert({profile:p,mapping,existingUser:existing});
-    if(user?.active&&user.shopId===shopId&&roleKeys.includes(user.role)&&p.roles.some(r=>names.includes(r.name)))eligible.push(user.id);
+    if(user?.active&&user.shopId===shopId&&hasAnyRole(user, roleKeys)&&p.roles.some(r=>names.includes(r.name)))eligible.push(user.id);
   }
   return eligible;
 }

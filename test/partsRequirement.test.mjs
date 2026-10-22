@@ -171,3 +171,13 @@ test('reassigned acceptance cannot bypass an unissued requirement by selecting n
  assert.equal(accepted.stage,'待开工');assert.deepEqual(accepted.partsRequirement,original.partsRequirement);
  assert.throws(()=>applyDispatchAction(accepted,request(accepted,'start-order'),tech,[tech]),/等待仓管/);
 });
+
+test('typed material lists accept optional part photos and reject invalid attachment references',()=>{
+ const parts={mode:'list',items:[{name:'滤芯',quantity:1,unit:'个'}],referencePhotoIds:['photo-a','photo-b']};
+ const valid=validatePartsRequirement(parts);assert.deepEqual(valid.referencePhotoIds,['photo-a','photo-b']);assert.deepEqual(valid.photoIds,[]);
+ for(const referencePhotoIds of [null,'photo',Array.from({length:11},(_,i)=>String(i)),['same','same'],[''],[123]])assert.throws(()=>validatePartsRequirement({...parts,referencePhotoIds}),e=>e.status===400);
+ assert.throws(()=>validatePartsRequirement({mode:'none',referencePhotoIds:['photo']}),e=>e.status===400);
+ const initial=applyDispatchAction(waiting(),input(parts),tech,[tech]);assert.deepEqual(initial.partsRequirement.referencePhotoIds,parts.referencePhotoIds);
+ const edited=applyDispatchAction(initial,request(initial,'edit-parts',{partsRequirement:{mode:'list',items:parts.items}}),warehouse,[tech]);assert.deepEqual(edited.partsRequirement.referencePhotoIds,parts.referencePhotoIds);
+ const removed=applyDispatchAction(edited,request(edited,'record-parts',{partsRequirement:{...parts,referencePhotoIds:['photo-b']}}),tech,[tech]);assert.deepEqual(removed.partsRequirement.referencePhotoIds,['photo-b']);assert.deepEqual(initial.partsRequirement.referencePhotoIds,['photo-a','photo-b']);
+});

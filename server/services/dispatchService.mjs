@@ -1,3 +1,4 @@
+import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import {actionParts,individualRepair} from '../domain/individualRepair.mjs';
 import {enqueueRepairWriteback} from '../repositories/repairWritebackRepository.mjs';
 import {wakeRepairWriteback} from '../workers/repairWritebackWorker.mjs';
@@ -27,7 +28,7 @@ export async function queryDispatchTasks(actor, query={}) {
     if(query.urgent==='true' && !t.urgent) return false;
     if(query.overdue==='true' && !t.overdue) return false;
     if(query.search && ![t.orderId,t.dispatchNo,t.plate].some(v=>v.toLowerCase().includes(query.search.toLowerCase()))) return false;
-    if(actor.role==='warehouse') return true;
+    if(hasRole(actor, 'warehouse')) return true;
     if(t.orderStatus==='完成' && !hasActiveRepairRound(t) && !['完成','维修完成'].includes(query.stage) && query.metric!=='completed') return false;
     if(query.metric) return dispatchMetric(t,query.metric,range.from,range.to);
     // Only an explicit historical view includes closed orders. Unsettled repairs
@@ -37,21 +38,22 @@ export async function queryDispatchTasks(actor, query={}) {
   });
 }
 export async function myRepairCounts(actor) {
-  if(!['technician','outsourcing'].includes(actor.role)&&!actor.outsourcingRoleMember) throw new HttpError(403,'仅维修工可查看本人任务数量');
-  const tasks=await listDispatchTasks(actor);
+  if(!hasAnyRole(actor, ['technician','outsourcing'])&&!actor.outsourcingRoleMember) throw new HttpError(403,'仅维修工可查看本人任务数量');
+  const tasks=(await listDispatchTasks(actor)).filter(task=>technicianIds(task).includes(actor.id));
   const range=completionRange();
   return {
     pendingAccept:tasks.filter(t=>t.stage==='待接单').length,
     inProgress:tasks.filter(t=>['待开工','维修中','暂停'].includes(t.stage)).length,
     inspection:tasks.filter(t=>t.stage==='待检验').length,
+    review:tasks.filter(t=>t.stage==='回审').length,
     completed:tasks.filter(t=>t.stage==='维修完成' && (!t.completedAt || dispatchMetric(t,'completed',range.from,range.to))).length
   };
 }
 export async function technicianSummaries(actor,query={}) {
-  if(!['manager','advisor'].includes(actor.role)) throw new HttpError(403,'无权查看维修工负荷');
+  if(!hasAnyRole(actor, ['manager','advisor','inspector'])) throw new HttpError(403,'无权查看维修工负荷');
   const range=completionRange(query.from,query.to);
   const tasks=await listDispatchTasks(actor); const people=await dispatchPeople(actor);
-  return people.filter(p=>p.role==='technician' || tasks.some(t=>technicianIds(t).includes(p.id))).map(p=> {
+  return people.filter(p=>hasRole(p, 'technician') || tasks.some(t=>technicianIds(t).includes(p.id))).map(p=> {
     const own=tasks.filter(t=>technicianIds(t).includes(p.id));
     return {id:p.id,name:p.name,active:p.active,current:own.filter(t=>t.stage!=='维修完成').length,
       ...Object.fromEntries(metricKeys.map(k=>[k,own.filter(t=>dispatchMetric(t,k,range.from,range.to)).length]))};
@@ -84,15 +86,15 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
     }
     if(input.action==='reopen-repair'||input.action==='edit-repair-items'||input.repairItems!==undefined) task.repairCatalog=await repairCatalog(client,task);
     const next=applyDispatchAction(task,input,currentActor,people);
-    if(['submit-order','submit'].includes(input.action)) await assertRepairPhotoRecorded(client,task,individualRepair(task)?actor.id:undefined);
+    if(['submit-review','submit-order','submit'].includes(input.action)) await assertRepairPhotoRecorded(client,task,individualRepair(task)?actor.id:undefined);
     const parts=actionParts(next,input,actor);
     const preparationGroups=input.preparationGroups?.map(group=>({...group,partsRequirement:actionParts(next,{partsOwnerId:group.partsOwnerId},actor)}));
     const preparedForRecipient=recipient=>preparationGroups?.map(group=>({...group,items:group.items.filter(item=>item.recipientId===recipient)})).filter(group=>group.items.length);
-    if(['accept','record-parts'].includes(input.action))await assertPartsPhotos(client,task,parts);
+    if(['accept','record-parts','edit-parts'].includes(input.action))await assertPartsPhotos(client,task,parts,input.action==='edit-parts'?undefined:actor.id);
     await saveRepairRound(client,task,next,currentActor,input.action);
     await saveDispatchTask(client,next);
     if(input.action==='assign') await markDispatchPlan(client,id);
-    const detail={preparationGroups,partsPreparation:input.partsPreparation,partsIssue:input.partsIssue,reassignItemIds:input.reassignItemIds,previousItems:input.repairItems||['reassign','inspect'].includes(input.action)?task.items:undefined,partsRequirement:parts,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
+    const detail={preparationGroups,partsPreparation:input.partsPreparation,partsIssue:input.partsIssue,reassignItemIds:input.reassignItemIds,previousItems:input.repairItems||['send-review','reassign','inspect'].includes(input.action)?task.items:undefined,partsRequirement:parts,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
       technicianName:next.technicianName,previousTechnicianName:task.technicianName,inspectorName:next.inspectorName,dueAt:next.dueAt,urgent:next.urgent,previousDueAt:task.dueAt};
     const {rows:[event]}=await client.query(`insert into dispatch_events(order_id,actor_id,actor_name,request_id,request_body,action,detail) values($1,$2,$3,$4,$5,$6,$7) returning id`,[id,actor.id,actor.name,input.requestId,JSON.stringify(input),input.action,JSON.stringify(detail)]);
     if(input.action==='inspect'&&next.stage==='维修完成')await enqueueRepairWriteback(client,next,event.id);
@@ -113,7 +115,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
     }
     const recipients=[];
     const add=(recipient,kind)=>{ if(recipient) recipients.push({recipient,kind}); };
-    const handlers=t=>t.executionMode==='outsourced' && !technicianIds(t).length ? people.filter(p=>p.active && ['manager','advisor'].includes(p.role)).map(p=>p.id) : technicianIds(t);
+    const handlers=t=>t.executionMode==='outsourced' && !technicianIds(t).length ? people.filter(p=>p.active && hasAnyRole(p, ['manager','advisor'])).map(p=>p.id) : technicianIds(t);
     const addHandlers=(t,kind)=>handlers(t).forEach(id=>add(id,kind));
     const removedProjects=input.repairItems?task.items.filter(item=>!next.items.some(current=>current.id===item.id)):[];
     const removedFor=recipient=>removedProjects.filter(item=>item.responsibleId?item.responsibleId===recipient:technicianIds(task).includes(recipient));
@@ -128,15 +130,15 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
       if(['assign','reassign','reoffer','reconcile','reopen-repair'].includes(input.action) && next.stage!=='维修完成') addHandlers(next,input.action==='reopen-repair'?'返工派工':'新派工');
       if(['reassign','cancel'].includes(input.action)) addHandlers(task,input.action==='cancel'?'派工已撤销':'任务已改派');
     }
-    const schedulerKind={decline:'无法接单',pause:'维修暂停','submit-order':'维修已提检',submit:'维修已提检'}[input.action];
-    if(schedulerKind && (input.action!=='submit-order'||next.stage==='待检验')) {
+    const schedulerKind={decline:'无法接单',pause:'维修暂停','submit-review':'回审已提交','submit-order':'维修已提检',submit:'维修已提检'}[input.action];
+    if(schedulerKind && (!['submit-order','submit-review'].includes(input.action)||next.stage==='待检验')) {
       const payload={orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,actorName:actor.name,reason:input.action==='pause'?[input.pauseReason,input.note].filter(Boolean).join('：'):input.reason||input.note||''};
       await client.query('insert into dispatch_scheduler_notifications(event_id,order_id,kind,payload) values($1,$2,$3,$4)',[event.id,id,schedulerKind,JSON.stringify(payload)]);
     }
-    if(['submit-order','retry-inspection-notifications'].includes(input.action)&&next.stage==='待检验') {
+    if(['submit-review','submit-order','retry-inspection-notifications'].includes(input.action)&&next.stage==='待检验') {
       await client.query(`insert into dispatch_inspection_notifications(event_id,order_id) values($1,$2) on conflict do nothing`,[event.id,id]);
     }
-    if(['accept','record-parts'].includes(input.action) && parts?.mode!=='none'&&!parts?.preparedAt&&!parts?.issuedAt) people.filter(p=>p.active && p.role==='warehouse').forEach(p=>add(p.id,'配件申请'));
+    if(['accept','record-parts'].includes(input.action) && parts?.mode!=='none'&&!parts?.preparedAt&&!parts?.issuedAt) people.filter(p=>p.active && hasRole(p, 'warehouse')).forEach(p=>add(p.id,'配件申请'));
     const addPartsHandlers=kind=>parts?.ownerId?add(parts.ownerId,kind):addHandlers(next,kind);
     if(input.action==='edit-parts') addPartsHandlers('配件需求已调整');
     if(input.action==='accept'&&parts?.preparedAt&&!parts?.issuedAt) addPartsHandlers('配件可领取');
@@ -146,6 +148,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
       issuedIds.forEach(id=>add(id,'配件已出库'));
     }
     if(input.action==='submit' || input.action==='reassign-inspection') add(next.inspectorId,'待检验');
+    if(input.action==='send-review') addHandlers(next,'维修单回审');
     if(input.action==='inspect' && next.stage==='维修中') addHandlers(next,'退回返工');
     if(input.action==='remind') {
       const targets=task.stage==='待检验'?[task.inspectorId]:task.feedback?[task.assignedBy]:handlers(task);
@@ -157,5 +160,5 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
       add(recipient,'人工催办');
       }
     }
-    for(const {recipient,kind} of recipients) await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),id,event.id,recipient,kind,JSON.stringify({shopId:next.shopId,repairRound:next.repairRound||0,orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,actorName:actor.name,summary:(kind==='配件可领取'&&preparationGroups?preparedForRecipient(recipient).flatMap(group=>group.items.map(row=>{const item=group.partsRequirement.items[row.index];return `${item.name} ${item.quantity}${item.unit}`;})):kind==='配件可领取'&&input.partsPreparation?input.partsPreparation.filter(row=>row.recipientId===recipient).map(row=>{const item=parts.items[row.index];return `${item.name} ${item.quantity}${item.unit}`;}):kind==='配件已出库'&&input.partsIssue?input.partsIssue.filter(row=>row.recipientId===recipient).map(row=>{const item=parts.items[row.index];return `${item.name} ${item.quantity}${item.unit}`;}):kind==='维修项目已删除'?removedFor(recipient).map(i=>i.name):projectReassignment?next.items.filter(i=>changedProjectIds.includes(i.id)).map(i=>`${i.name} → ${i.responsibleName}`):next.items.map(i=>i.name)).join('、').slice(0,200),dueAt:next.dueAt,preparationGroups:preparedForRecipient(recipient)?.map(group=>({partsOwnerId:group.partsOwnerId,partsRecordedAt:group.partsRequirement.recordedAt,partsRevision:group.partsRequirement.revision,items:group.items.map(row=>({index:row.index,preparedAt:group.partsRequirement.items[row.index].preparedAt}))})),partsPreparation:input.partsPreparation?.filter(row=>row.recipientId===recipient).map(row=>({index:row.index,preparedAt:parts.items[row.index].preparedAt})),partsOwnerId:parts?.ownerId,partsRecordedAt:parts?.recordedAt,partsRevision:parts?.revision,notice:kind==='维修项目已删除'?'所列维修项目已删除，无需继续施工；其他项目按原安排执行。':projectReassignment?'仅所列项目变更负责人，其他项目及工单进度保持不变。':input.action==='edit-parts'?'仓管已整理配件需求，请查看最新清单。':input.action==='confirm-parts'?'本次所列配件已备齐，请到仓库领取；其他未通知配件仍在备料。':input.action==='issue-parts'?(parts?.issuedAt?'本批配件已全部交接出库，请查看本人领料明细。':'本次所列配件已交接出库，其余配件继续待处理。'):'',reason:input.reason||''})]);
+    for(const {recipient,kind} of recipients) await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),id,event.id,recipient,kind,JSON.stringify({shopId:next.shopId,repairRound:next.repairRound||0,orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,actorName:actor.name,summary:(kind==='配件可领取'&&preparationGroups?preparedForRecipient(recipient).flatMap(group=>group.items.map(row=>{const item=group.partsRequirement.items[row.index];return `${item.name} ${item.quantity}${item.unit}`;})):kind==='配件可领取'&&input.partsPreparation?input.partsPreparation.filter(row=>row.recipientId===recipient).map(row=>{const item=parts.items[row.index];return `${item.name} ${item.quantity}${item.unit}`;}):kind==='配件已出库'&&input.partsIssue?input.partsIssue.filter(row=>row.recipientId===recipient).map(row=>{const item=parts.items[row.index];return `${item.name} ${item.quantity}${item.unit}`;}):kind==='维修项目已删除'?removedFor(recipient).map(i=>i.name):projectReassignment?next.items.filter(i=>changedProjectIds.includes(i.id)).map(i=>`${i.name} → ${i.responsibleName}`):next.items.map(i=>i.name)).join('、').slice(0,200),dueAt:next.dueAt,preparationGroups:preparedForRecipient(recipient)?.map(group=>({partsOwnerId:group.partsOwnerId,partsRecordedAt:group.partsRequirement.recordedAt,partsRevision:group.partsRequirement.revision,items:group.items.map(row=>({index:row.index,preparedAt:group.partsRequirement.items[row.index].preparedAt}))})),partsPreparation:input.partsPreparation?.filter(row=>row.recipientId===recipient).map(row=>({index:row.index,preparedAt:parts.items[row.index].preparedAt})),partsOwnerId:parts?.ownerId,partsRecordedAt:parts?.recordedAt,partsRevision:parts?.revision,notice:input.action==='send-review'?'维修单已进入回审，请重新核对并编辑本人维修项目后提交回审。':kind==='维修项目已删除'?'所列维修项目已删除，无需继续施工；其他项目按原安排执行。':projectReassignment?'仅所列项目变更负责人，其他项目及工单进度保持不变。':input.action==='edit-parts'?'仓管已整理配件需求，请查看最新清单。':input.action==='confirm-parts'?'本次所列配件已备齐，请到仓库领取；其他未通知配件仍在备料。':input.action==='issue-parts'?(parts?.issuedAt?'本批配件已全部交接出库，请查看本人领料明细。':'本次所列配件已交接出库，其余配件继续待处理。'):'',reason:input.reason||(input.action==='send-review'?input.note:'')||''})]);
 }

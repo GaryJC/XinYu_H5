@@ -1,11 +1,12 @@
+import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import { HttpError } from "../http/HttpError.mjs";
 
 export async function lockRefreshOrder(client, id, actor) {
   const { rows } = await client.query("select * from work_orders where id=$1 for update", [id]);
   const order = rows[0];
   if (!order) throw new HttpError(404, "委托单不存在");
-  if (!actor.active || !["advisor","manager"].includes(actor.role) || !actor.shopId || actor.shopId !== order.shop_id
-      || (actor.role === "advisor" && actor.name !== order.advisor)) throw new HttpError(403, "无权更新该委托单");
+  if (!actor.active || !hasAnyRole(actor, ["advisor","manager"]) || !actor.shopId || actor.shopId !== order.shop_id
+      || (!hasRole(actor, 'manager') && hasRole(actor, 'advisor') && actor.name !== order.advisor)) throw new HttpError(403, "无权更新该委托单");
   if (["草稿","待客户签字"].includes(order.status)) throw new HttpError(409, "客户签字完成后才能从润丰更新");
   if (order.legacy_sync_status !== "synced") throw new HttpError(409, "请等待润丰推送成功后再更新，避免双向同步冲突");
   const pending = await client.query("select 1 from legacy_sync_outbox where order_id=$1 and status <> 'synced' limit 1", [id]);

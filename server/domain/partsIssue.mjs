@@ -1,3 +1,4 @@
+import { hasAnyRole } from "../../shared/roles.mjs";
 import {HttpError} from '../http/HttpError.mjs';
 export function validatePartsIssue(input) {
  if(input.preparationGroups!==undefined){
@@ -38,7 +39,7 @@ export function issueParts(task,input,actor,people,now,recipientScope) {
   const item=items[row.index];
   if(!item)throw new HttpError(409,'配件清单已变化，请刷新');
   if(item.issuedAt)throw new HttpError(409,'所选配件已出库，请勿重复操作');
-  const person=people.find(p=>p.id===row.recipientId&&p.active&&p.shopId===task.shopId&&ids.includes(p.id)&&(['technician','outsourcing'].includes(p.role)||p.outsourcingRoleMember));
+  const person=people.find(p=>p.id===row.recipientId&&p.active&&p.shopId===task.shopId&&ids.includes(p.id)&&(hasAnyRole(p, ['technician','outsourcing'])||p.outsourcingRoleMember));
   if(!person)throw new HttpError(400,'领料人必须是本单有效维修工');
   Object.assign(item,{recipientId:person.id,recipientName:person.name,issuedAt:now,issuedBy:actor.id,issuedName:actor.name});
  }
@@ -54,7 +55,7 @@ export function prepareParts(task,input,actor,people,now,recipientScope) {
   const item=items[row.index];
   if(!item)throw new HttpError(409,'配件清单已变化，请刷新');
   if(item.preparedAt||item.issuedAt)throw new HttpError(409,'所选配件已备齐，请勿重复操作');
-  const person=people.find(p=>p.id===row.recipientId&&p.active&&p.shopId===task.shopId&&ids.includes(p.id)&&(['technician','outsourcing'].includes(p.role)||p.outsourcingRoleMember));
+  const person=people.find(p=>p.id===row.recipientId&&p.active&&p.shopId===task.shopId&&ids.includes(p.id)&&(hasAnyRole(p, ['technician','outsourcing'])||p.outsourcingRoleMember));
   if(!person)throw new HttpError(400,'领料人必须是本单有效维修工');
   Object.assign(item,{recipientId:person.id,recipientName:person.name,preparedAt:now,preparedBy:actor.id,preparedName:actor.name});
  }

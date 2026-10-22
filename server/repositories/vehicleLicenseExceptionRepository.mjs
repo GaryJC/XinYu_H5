@@ -9,7 +9,7 @@ export async function readLicenseExceptions(client,ids) {
 }
 
 export async function lockLicenseOrder(client,id) {return (await client.query('select * from work_orders where id=$1 for update',[id])).rows[0];}
-export async function licenseActor(client,id) {return (await client.query('select id,name,role,active,shop_id from users where id=$1',[id])).rows[0];}
+export async function licenseActor(client,id) {return (await client.query('select id,name,role,roles,active,shop_id from users where id=$1',[id])).rows[0];}
 export async function licenseRequest(client,id,requestId) {return (await client.query('select * from vehicle_license_exceptions where order_id=$1 and request_id=$2',[id,requestId])).rows[0];}
 export async function orderHasLicense(client,id) {return Boolean((await client.query("select id from files where order_id=$1 and kind='vehicle_license' limit 1",[id])).rows.length);}
 export async function latestLicenseReport(client,id) {return (await client.query('select * from vehicle_license_exceptions where order_id=$1 order by reported_at desc,id desc limit 1',[id])).rows[0];}

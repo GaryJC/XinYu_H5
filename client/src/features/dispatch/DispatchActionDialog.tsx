@@ -74,6 +74,7 @@ export function DispatchActionDialog({action,task,controller,onClose,inspectionR
         {additionalItems.map((name,index)=><div className="reopen-extra-item" key={index}><Input aria-label={`补充项目 ${index+1}`} value={name} maxLength={200} placeholder="填写补充维修项目名称" onChange={e=>setAdditionalItems(items=>items.map((v,i)=>i===index?e.target.value:v))}/><Button aria-label={`移除补充项目 ${index+1}`} onClick={()=>setAdditionalItems(items=>items.filter((_,i)=>i!==index))}>移除</Button></div>)}
         <Button disabled={additionalItems.length>=50} onClick={()=>setAdditionalItems(items=>[...items,''])}>添加补充项目</Button>
       </FormSection>:null}
+      {action==='send-review'?<Alert type="info" showIcon title="发送后维修单进入回审，维修工可重新编辑维修项目" description="维修工提交回审后，工单重新进入待检验。原检验结果保留在操作记录中。"/>:null}
       {action==='record-hours'?<><Alert type="info" title="检验通过时填写本轮维修的实际工时，并一并保存。"/><Form.Item label="实际工时（小时）" required><InputNumber aria-label="实际工时" min={0.01} max={10000} precision={2} value={workHours} onChange={value=>{setWorkHours(value);setError('');}}/></Form.Item></>:null}
       {error||controller.error?<Alert type="error" showIcon title={error||controller.error}/>:null}
       {(assign&&!historical)||action==='update'?<FormSection title="执行方式"><DispatchExecutionFields contractors={controller.people.contractors} value={execution} onChange={setExecution} allowModeChange={assign} hideFee={reopening||Boolean(task.repairRound)}/></FormSection>:null}

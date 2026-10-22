@@ -1,3 +1,4 @@
+import {PartsReferencePhotos} from './PartsReferencePhotos';
 import {partsHistoryEvents} from './partsHistory';
 import {partsController,warehouseRequests} from './individualRepair';
 import {WarehouseVehicleInfo} from './WarehouseVehicleInfo';
@@ -14,6 +15,10 @@ import { canProcessParts, isSupplementalParts, partsStatus } from './partsProgre
 import { dispatchEventLabel, displayTime } from './dispatchLabels';
 
 function PartsTable({value}:{value?:PartsRequirement}) {
+  return <><PartsContent value={value}/><PartsReferencePhotos ids={value?.referencePhotoIds}/></>;
+}
+
+function PartsContent({value}:{value?:PartsRequirement}) {
   if(!value) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="本轮尚未登记配件"/>;
   if(value.mode==='none') return <p className="warehouse-muted">本次维修无需配件</p>;
   if(value.mode==='photo') return <div className="repair-photo-grid">{value.photoIds.map(id=><AuthenticatedImage key={id} fileId={id} alt="手写配件清单" width="100%" height={160}/>)}</div>;

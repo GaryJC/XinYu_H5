@@ -8,7 +8,7 @@ export async function claimResolution(db=pool) {
 export async function resolveRecipients(job,ids,runTransaction=transaction) {
   await runTransaction(async db=>{
     const current=(await db.query('select * from procurement_notification_jobs where id=$1 for update',[job.id])).rows[0];if(current.lease_id!==job.lease_id)return;
-    const {rows:users}=await db.query("select id from users where shop_id=$1 and active and role in ('manager','warehouse')",[job.shop_id]);
+    const {rows:users}=await db.query("select id from users where shop_id=$1 and active and (role in ('manager','warehouse') or roles && array['manager','warehouse']::text[])",[job.shop_id]);
     const recipients=users.filter(u=>!ids||ids.includes(u.id));if(!recipients.length)throw new Error('暂无本店管理员或仓管，请检查钉钉角色及通讯录授权');
     for(const user of recipients)await db.query('insert into procurement_notifications(id,shop_id,tender_id,report_id,recipient_id,payload) values($1,$2,$3,$4,$5,$6)',[randomUUID(),job.shop_id,job.tender_id,job.report_id,user.id,JSON.stringify(job.payload)]);
     await db.query("update procurement_notification_jobs set status='ready',lease_id=null,locked_until=null,error='' where id=$1",[job.id]);

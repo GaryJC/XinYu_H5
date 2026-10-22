@@ -1,3 +1,5 @@
+import { userRoles } from "../../../../shared/roles.mjs";
+import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import { EmployeeBindingGate } from "../employee-binding/EmployeeBindingGate";
 import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
 import { lazy, Suspense, useState } from "react";
@@ -35,7 +37,7 @@ export function WorkbenchPage() {
     devLoginLoading, loginForDevelopment
   } = controller;
 
-  if (currentUser?.role === "technician" && !currentUser.legacyEmployeeCode) {
+  if (currentUser && hasRole(currentUser, 'technician') && !currentUser.legacyEmployeeCode) {
     return <EmployeeBindingGate key={currentUser.id} user={currentUser} onBound={controller.setCurrentUser} />;
   }
 
@@ -111,7 +113,7 @@ export function WorkbenchPage() {
             ) : null}
             <Space className="role-switcher">
               <UserRound size={16} />
-              <span>{currentUser ? roles[role].name : "未登录"}</span>
+              <span>{currentUser ? userRoles(currentUser).map(role=>roles[role].name).join(" · ") : "未登录"}</span>
             </Space>
           </div>
         </header>
@@ -146,7 +148,7 @@ export function WorkbenchPage() {
           </Suspense>
         ) : null}
 
-        {activeNav === "配件竞价" && currentUser && ["manager","warehouse"].includes(currentUser.role) ? (
+        {activeNav === "配件竞价" && currentUser && hasAnyRole(currentUser, ["manager","warehouse"]) ? (
           <Suspense fallback={<div role="status">正在加载配件竞价…</div>}><ProcurementPage key={currentUser.id} user={currentUser}/></Suspense>
         ) : null}
 

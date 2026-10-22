@@ -1,3 +1,5 @@
+import {OrderPhotoGallery} from '../work-order-photos/OrderPhotoGallery';
+import {usePartsPhotoAttachments} from './usePartsPhotoAttachments';
 import {RepairContext} from './RepairContext';
 import {PartsRequirementSummary} from './PartsRequirementSummary';
 import { useEffect,useState } from 'react';
@@ -29,8 +31,10 @@ export function PartsRequirementDialog({controller:c,accepting,onClose,onUploadi
   const [mode,setMode]=useState<PartsRequirement['mode']|undefined>(saved?.mode);
   const [items,setItems]=useState<PartsRequirement['items']>(saved?.items||[]);
   const [photoIds,setPhotoIds]=useState<string[]>(saved?.photoIds||[]);
+  const [referencePhotoIds,setReferencePhotoIds]=useState<string[]>(saved?.referencePhotoIds||[]);
+  const attachments=usePartsPhotoAttachments(c,referencePhotoIds,setReferencePhotoIds);
   const [uploads,setUploads]=useState<Upload[]>([]),[error,setError]=useState('');
-  const uploading=uploads.some(u=>u.state==='uploading');
+  const uploading=uploads.some(u=>u.state==='uploading')||attachments.uploading;
   useEffect(()=>{onUploading?.(uploading);return()=>onUploading?.(false);},[uploading,onUploading]);
   const busy=c.busy||uploading;
   const photos=c.detail!.files.filter(f=>f.kind==='repair_parts_photo'&&(f.repairRound||0)===round);
@@ -44,10 +48,10 @@ export function PartsRequirementDialog({controller:c,accepting,onClose,onUploadi
     setError('');if(stale){setError('工单或配件需求已更新，请关闭后重新打开核对');return;}
     if(inherited){if(await c.act({action:'accept',partsRequirement:task.partsRequirement}))onClose();return;}
     if(!mode){setError('请选择所需配件的登记方式');return;}
-    if(uploads.length){setError('请等待照片上传完成，失败照片可重试或移除');return;}
+    if(uploads.length||attachments.uploads.length){setError('请等待照片上传完成，失败照片可重试或移除');return;}
     if(mode==='list'&&(!items.length||items.some(i=>!i.name.trim()||!i.quantity||!i.unit.trim()))){setError('请填写配件名称、数量和单位');return;}
     if(mode==='photo'&&!photoIds.length){setError('请拍摄手写配件清单，或从相册选择');return;}
-    const requirement:PartsRequirement={mode,items:mode==='list'?items:[],photoIds:mode==='photo'?photoIds:[]};
+    const requirement:PartsRequirement={mode,items:mode==='list'?items:[],photoIds:mode==='photo'?photoIds:[],referencePhotoIds:mode==='none'?[]:referencePhotoIds};
     if(await c.act({action:accepting?'accept':'record-parts',partsRequirement:requirement}))onClose();
   }
   function add(name='',unit='个'){setMode('list');setItems(rows=>rows.some(i=>name&&i.name===name)?rows:rows.length<100?[...rows,{name,quantity:1,unit}]:rows);}
@@ -69,6 +73,7 @@ export function PartsRequirementDialog({controller:c,accepting,onClose,onUploadi
           {title:'',width:44,render:(_,item)=><Button type="text" danger icon={<DeleteOutlined/>} aria-label={`移除配件 ${item.key+1}`} disabled={busy} onClick={()=>setItems(rows=>rows.filter((_,i)=>i!==item.key))}/>}
         ]}/>:<div className="parts-empty-selection">从下方选择常用配件，或点击“手动添加”</div>}
       </section>
+      <div className="parts-reference-upload"><OrderPhotoGallery title="配件照片（选填）" files={referencePhotoIds.map((id,index)=>({id,originalName:c.detail!.files.find(file=>file.id===id)?.originalName||`配件照片 ${index+1}`}))} editable busy={busy||stale} multiple onUpload={attachments.upload} onRemove={attachments.remove}/><p className="parts-photo-hint">最多 10 张，支持相册多选；照片随本次申请发送仓库，删除后提交生效。</p></div>
       <section aria-label="常用配件"><div className="parts-section-heading"><h3>常用配件</h3><span>点击添加，可修改数量和单位</span></div>
         <Collapse className="parts-catalog" defaultActiveKey={['保养与耗材']} items={commonPartsGroups.map(group=>({key:group.label,label:group.label,extra:<span className="parts-catalog-count">{group.parts.length} 项</span>,children:<div className="parts-catalog-options">{group.parts.map(([name,unit])=>{const selected=items.some(item=>item.name===name);return <Button key={name} icon={selected?<CheckOutlined/>:<PlusOutlined/>} className={selected?'is-selected':''} onClick={()=>add(name,unit)} disabled={busy||selected||items.length>=100}>{name}</Button>;})}</div>}))}/>
       </section>
@@ -78,6 +83,8 @@ export function PartsRequirementDialog({controller:c,accepting,onClose,onUploadi
     </div>:null}
     </>:null}
     {uploads.map(row=><div key={row.id} role="status">{row.state==='uploading'?'手写清单上传中…':<><Alert type="error" title="清单照片上传失败" description={row.error}/><Button disabled={busy} onClick={()=>void upload(row)}>重试</Button><Button disabled={busy} onClick={()=>setUploads(rows=>rows.filter(r=>r.id!==row.id))}>移除失败照片</Button></>}</div>)}
+    {attachments.error?<Alert type="error" showIcon title={attachments.error}/>:null}
+    {attachments.uploads.map(row=><div key={row.id} className="repair-photo-upload" role="status">{row.state==='uploading'?<span>{row.file.name} · 配件照片上传中…</span>:<><Alert type="error" showIcon title={`${row.file.name} 上传失败`} description={row.error}/><Button disabled={busy||stale} onClick={()=>void attachments.retry(row)}>重试</Button><Button disabled={busy} onClick={()=>attachments.removeFailed(row.id)}>移除失败照片</Button></>}</div>)}
     {error||c.error?<Alert type="error" showIcon title={error||c.error}/>:null}
   </FormDialog>;
 }

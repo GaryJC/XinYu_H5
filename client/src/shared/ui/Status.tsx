@@ -12,6 +12,7 @@ const statusColor: Record<WorkOrderStatus | DispatchStage | "需确认用户签�
   待开工: "cyan",
   暂停: "orange",
   待检验: "purple",
+  回审: "orange",
   维修完成: "success",
   维修中: "green",
   待结算: "purple",

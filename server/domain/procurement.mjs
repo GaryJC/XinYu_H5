@@ -1,7 +1,8 @@
+import { hasAnyRole } from "../../shared/roles.mjs";
 import { procurementTotalFen } from "../../shared/procurementMoney.mjs";
 import { HttpError } from '../http/HttpError.mjs';
 export function procurementAccess(user) {
-  if (!user?.active || !['manager','warehouse'].includes(user.role) || !user.shopId) throw new HttpError(403,'仅本门店管理员和仓管可管理配件竞价');
+  if (!user?.active || !hasAnyRole(user, ['manager','warehouse']) || !user.shopId) throw new HttpError(403,'仅本门店管理员和仓管可管理配件竞价');
 }
 export function text(value, label, max=500, required=true) {
   if (typeof value !== 'string' || value.trim().length > max || (required && !value.trim())) throw new HttpError(400,`${label}格式无效`);

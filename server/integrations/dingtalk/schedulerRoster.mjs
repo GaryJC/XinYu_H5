@@ -1,3 +1,4 @@
+import { hasAnyRole } from "../../../shared/roles.mjs";
 import { listDingTalkRoleMembers } from './inspectorRoster.mjs';
 import { getDingTalkUserProfile,resolveDingTalkOrganizationMapping } from './organization.mjs';
 import { findUserByDingTalkUserId,upsertUserFromDingTalk,saveDingTalkUserSnapshot } from '../../repositories/userRepository.mjs';
@@ -13,7 +14,7 @@ export async function syncSchedulerRoster(shopId,{list=()=>listDingTalkRoleMembe
     const mapping=resolveDingTalkOrganizationMapping(p,{shopId:existing?.shopId||shopId});
     await snapshot(p);
     const user=await upsert({profile:p,mapping,existingUser:existing});
-    if(user?.active && user.shopId===shopId && ['advisor','manager'].includes(user.role) && p.roles.some(r=>names.includes(r.name))) eligible.push(user.id);
+    if(user?.active && user.shopId===shopId && hasAnyRole(user, ['advisor','manager']) && p.roles.some(r=>names.includes(r.name))) eligible.push(user.id);
   }
   return [...new Set(eligible)];
 }

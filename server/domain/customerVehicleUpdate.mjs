@@ -1,3 +1,4 @@
+import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import { HttpError } from "../http/HttpError.mjs";
 
 const limits = { contact: 50, phone: 50, model: 100, modelLegacyCode: 10, organization: 150, organizationLegacyCode: 50 };
@@ -30,8 +31,8 @@ export function customerVehicleValues(order) {
 }
 
 export function assertCustomerVehicleEditable(order, actor, expectedRevision) {
-  if (!actor?.active || !["manager", "advisor"].includes(actor.role) || !actor.shopId || actor.shopId !== order.shop_id
-      || (actor.role === "advisor" && actor.name !== order.advisor)) throw new HttpError(403, "无权修改该委托单");
+  if (!actor?.active || !hasAnyRole(actor, ["manager", "advisor"]) || !actor.shopId || actor.shopId !== order.shop_id
+      || (!hasRole(actor, 'manager') && hasRole(actor, 'advisor') && actor.name !== order.advisor)) throw new HttpError(403, "无权修改该委托单");
   if (["草稿", "待客户签字", "待处理纸质委托书"].includes(order.status) || !["pending", "processing", "synced"].includes(order.legacy_sync_status)) throw new HttpError(409, "仅可修改待拉取、拉取中或已同步的委托单");
   const needsLink = order.legacy_sync_status === "synced" || order.legacy_reid != null || order.legacy_document_no != null || Boolean(order.dispatch_no);
   if (needsLink && (!Number.isSafeInteger(Number(order.legacy_reid)) || Number(order.legacy_reid) < 1

@@ -1,3 +1,4 @@
+import { hasRole } from "../../shared/roles.mjs";
 import {HttpError} from '../http/HttpError.mjs';
 
 export function validateProjectReassignment(input) {
@@ -19,7 +20,7 @@ export function reassignProjects(next,input,people) {
     if(!item)throw new HttpError(409,'维修项目不存在，请刷新');
     if(['待检验','已完工'].includes(item.status))throw new HttpError(409,'已提检或检验通过的项目不可改派');
     if(row.name!==item.name)throw new HttpError(400,'请通过维修项目编辑入口修改名称');
-    const person=people.find(p=>p.id===row.responsibleId&&p.active&&p.shopId===next.shopId&&p.role==='technician');
+    const person=people.find(p=>p.id===row.responsibleId&&p.active&&p.shopId===next.shopId&&hasRole(p, 'technician'));
     if(!person)throw new HttpError(400,`请为维修项目“${item.name}”选择本店有效维修工`);
     if(person.id===item.responsibleId)throw new HttpError(409,`维修项目“${item.name}”请选择其他维修工`);
     if(item.startAt)for(const id of [item.responsibleId,item.startedBy,item.finishedBy])if(id)previousParticipants.add(id);

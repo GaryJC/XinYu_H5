@@ -1,3 +1,4 @@
+import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import { usePaperOrderPhotos } from "../work-orders/hooks/usePaperOrderPhotos";
 import {isCurrentVehicleLicenseException} from '../work-orders/domain/vehicleLicenseException';
 import {createRequestId} from '../../shared/api/requestId';
@@ -65,7 +66,7 @@ export function useWorkbenchController() {
   } = useVehicleIdentityRecognition({ setDraft });
   const { ocrState, vehicleLicenseOcr, vehicleLicenseFileId, isUploading: isVehicleLicenseUploading, resetOcr, scanVehicleLicense, confirmVehicleLicenseOcr } =
     useVehicleLicenseOcr({ actor, draft, setDraft, onRecognized: lookupVehicleLicense });
-  const visibleNavItems = useMemo(() => navItems.filter((item) => (item.roles.includes(role)||item.label==='我的维修'&&currentUser?.outsourcingRoleMember) && (dispatchEnabled || !isDispatchNavigation(item.label))), [role,currentUser?.outsourcingRoleMember]);
+  const visibleNavItems = useMemo(() => navItems.filter((item) => hasAnyRole(currentUser || {role}, item.roles) && (dispatchEnabled || !isDispatchNavigation(item.label))), [role,currentUser]);
   const canEditForm = canCreateOrder(role) && (
     !selectedOrder || (
       selectedOrder.status === "草稿" && selectedOrder.shop.id === currentUser?.shopId
@@ -73,8 +74,8 @@ export function useWorkbenchController() {
     )
   );
   const totalLabor = useMemo(() => sumLabor(draft.repairItems), [draft.repairItems]);
-  const technicianOptions = useMemo(() => users.filter((user) => user.active && user.role === "technician").map((user) => user.name), [users]);
-  const inspectorOptions = useMemo(() => users.filter((user) => user.active && user.role === "inspector").map((user) => user.name), [users]);
+  const technicianOptions = useMemo(() => users.filter((user) => user.active && hasRole(user, 'technician')).map((user) => user.name), [users]);
+  const inspectorOptions = useMemo(() => users.filter((user) => user.active && hasRole(user, 'inspector')).map((user) => user.name), [users]);
 
   const searchedOrders = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -103,7 +104,7 @@ export function useWorkbenchController() {
     const generation = ++sessionGeneration.current;
     preRepairPhotos.reset();
     paperPhotos.reset();
-    if (!currentUser || (currentUser.role === "technician" && !currentUser.legacyEmployeeCode)) {
+    if (!currentUser || (hasRole(currentUser, 'technician') && !currentUser.legacyEmployeeCode)) {
       setOrders([]);
       setDashboard(undefined);
       setUsers([]);
@@ -114,7 +115,7 @@ export function useWorkbenchController() {
     void loadOrders(currentUser.role, selectedId, generation);
     void loadDashboard(currentUser.role, generation);
     void loadUsers(generation);
-    if (["advisor", "manager"].includes(currentUser.role)) void loadDepartments(generation);
+    if (hasAnyRole(currentUser, ["advisor", "manager"])) void loadDepartments(generation);
     return () => {
       if (sessionGeneration.current === generation) sessionGeneration.current += 1;
     };
@@ -235,7 +236,7 @@ export function useWorkbenchController() {
   useEffect(()=>{
     setLinkedOrderDetail(undefined);
     const id=new URLSearchParams(location.search).get('workOrder');
-    if(!currentUser || !id || !['manager','advisor'].includes(currentUser.role))return;
+    if(!currentUser || !id || !hasAnyRole(currentUser, ['manager','advisor']))return;
     let active=true;
     void workOrderApi.get(id).then(order=>{if(active){setLinkedOrderDetail(order);setActiveNav('工作台');}}).catch(e=>{if(active)setApiError(e instanceof Error?e.message:'无法查看通知中的委托单');});
     return()=>{active=false;};

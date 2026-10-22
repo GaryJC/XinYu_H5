@@ -1,3 +1,4 @@
+import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import { useEffect, useRef, useState } from "react";
 import type { UserProfile, WorkOrder, WorkOrderCustomerVehicleUpdate } from "../../../../shared/types";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
@@ -18,8 +19,8 @@ export function useCustomerVehicleEditor(order: WorkOrder, user: UserProfile | u
 
   const canSee = Boolean(!["草稿", "待客户签字", "待处理纸质委托书"].includes(order.status)
     && user?.active && user.shopId === order.shop.id
-    && ["manager", "advisor"].includes(user.role));
-  const hasPermission = Boolean(user?.role === "manager" || user?.role === "advisor" && user.name === order.advisor);
+    && hasAnyRole(user, ["manager", "advisor"]));
+  const hasPermission = Boolean(hasRole(user, 'manager') || hasRole(user, 'advisor') && user?.name === order.advisor);
   const disabledReason = !hasPermission ? `本单服务顾问为${order.advisor}；仅本人或本店管理员可编辑`
     : !order.customerVehicleEditEnabled ? "待启用：润丰完成更新事件适配后，由管理员开启"
     : !(Number.isSafeInteger(order.legacySyncRevision) && order.legacySyncRevision! >= 0) || order.legacySyncStatus === "synced" && !order.customerVehicleLinkComplete ? "缺少完整润丰关联，请先核对原单"

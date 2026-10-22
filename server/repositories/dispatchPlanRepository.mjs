@@ -1,3 +1,4 @@
+import { hasAnyRole } from "../../shared/roles.mjs";
 import { applyDispatchAction } from '../domain/dispatchPolicy.mjs';
 import { dispatchPeople } from './dispatchRepository.mjs';
 import { HttpError } from '../http/HttpError.mjs';
@@ -7,7 +8,7 @@ export async function saveDispatchPlan(client, order, actor, plan) {
     await client.query('delete from work_order_dispatch_plans where order_id=$1',[order.id]);
     return;
   }
-  if (!actor?.active || !['advisor','manager'].includes(actor.role) || actor.shopId!==order.shop.id) throw new HttpError(403,'无权预先指派维修工');
+  if (!actor?.active || !hasAnyRole(actor, ['advisor','manager']) || actor.shopId!==order.shop.id) throw new HttpError(403,'无权预先指派维修工');
   const ids=plan.technicianIds??(plan.technicianId?[plan.technicianId]:[]);
   await client.query('select id from users where shop_id=$1 order by id for share',[actor.shopId]);
   const people=await dispatchPeople(actor,client);

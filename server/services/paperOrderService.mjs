@@ -1,3 +1,4 @@
+import { hasRole } from "../../shared/roles.mjs";
 import { transaction } from '../database/pool.mjs';
 import { findWorkOrderById, upsertWorkOrder } from '../db.mjs';
 import { HttpError } from '../http/HttpError.mjs';
@@ -20,7 +21,7 @@ export async function resolvePaperOrder(id, input, actor, dependencies={}) {
     const row=await lockPaperOrder(client,id,actor);
     const isDraft = row.status === '草稿' && row.paper_order.mode === 'dingtalk';
     if (isDraft && input.mode === 'runfeng') {
-      if (actor.role === 'advisor' && row.advisor !== actor.name) throw new HttpError(403,'只能更改自己负责的纸质委托单开单方式');
+      if (!hasRole(actor, 'manager') && hasRole(actor, 'advisor') && row.advisor !== actor.name) throw new HttpError(403,'只能更改自己负责的纸质委托单开单方式');
       await assertPaperDraftUnsubmitted(client, row);
     } else if (row.status!=='待处理纸质委托书' || row.paper_order.mode!=='pending') {
       throw new HttpError(409,'此纸质委托书已处理，请刷新后重试');
@@ -56,7 +57,7 @@ export async function submitPaperDingTalkOrder(id,actor,dependencies={}) {
   return runTransaction(async client=>{
     const row=await lockPaperOrder(client,id,actor);
     if (row.status!=='草稿' || row.paper_order.mode!=='dingtalk') throw new HttpError(409,'只能提交在钉钉创建的纸质委托单草稿');
-    if (actor.role==='advisor' && row.advisor!==actor.name) throw new HttpError(403,'只能提交自己负责的委托单');
+    if (!hasRole(actor, 'manager') && hasRole(actor, 'advisor') && row.advisor!==actor.name) throw new HttpError(403,'只能提交自己负责的委托单');
     const order=await readResult(client,id);
     assertOrderReadyForSignature(order);
     await attachPaperPhotos(client,order,actor.id);

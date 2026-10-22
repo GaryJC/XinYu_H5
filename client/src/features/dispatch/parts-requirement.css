@@ -58,3 +58,7 @@
  .parts-selected .ant-table-tbody>tr>td:last-child{align-self:end}
  .parts-selected .ant-input,.parts-selected .ant-input-number{width:100%!important;min-height:44px}
 }
+.parts-reference-upload .order-photo-gallery{margin-top:0}
+.parts-reference-upload>.parts-photo-hint{margin:8px 0 0}
+.parts-reference-photos{margin:16px 0}
+.parts-reference-photos h4{margin:0 0 10px;font-size:14px}

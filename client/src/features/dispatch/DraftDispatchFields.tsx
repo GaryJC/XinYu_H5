@@ -1,3 +1,4 @@
+import { hasRole } from "../../../../shared/roles.mjs";
 import { FormSection } from '../../shared/ui/BusinessForm';
 import './dispatch.css';
 import { DispatchExecutionFields } from './DispatchExecutionFields';
@@ -6,7 +7,7 @@ import type { UserProfile, WorkOrderDispatchPlan } from '../../../../shared/type
 
 type Props={plan?:WorkOrderDispatchPlan|null;users:UserProfile[];shopId?:string;disabled:boolean;signed:boolean;technician?:string;onChange:(plan:WorkOrderDispatchPlan|null)=>void;onOpen:()=>void};
 export function DraftDispatchFields({plan,users,shopId,disabled,signed,technician,onChange,onOpen}:Props) {
-  const workers=users.filter(p=>p.active && p.role==='technician' && p.shopId===shopId);
+  const workers=users.filter(p=>p.active && hasRole(p, 'technician') && p.shopId===shopId);
   const options=workers.map(p=>({value:p.id,label:workers.filter(other=>other.name===p.name).length>1?`${p.name}（员工编号 ${p.id}）`:p.name}));
   const patch=(value:Partial<WorkOrderDispatchPlan>)=>onChange({...plan!,...value});
   const localTime=plan?.dueAt && Number.isFinite(Date.parse(plan.dueAt))?new Date(Date.parse(plan.dueAt)+8*3600000).toISOString().slice(0,16):'';
@@ -19,7 +20,7 @@ export function DraftDispatchFields({plan,users,shopId,disabled,signed,technicia
       <p className="dispatch-muted">可预选维修工，确认客户签字后自动派工；也可确认后提交润丰，再安排派工。</p>
       <Checkbox disabled={disabled} checked={Boolean(plan)} onChange={e=>onChange(e.target.checked?{technicianIds:[],executionMode:'internal',dueAt:'',urgent:false,note:''}:null)}>确认客户签字后自动派工</Checkbox>
       {plan && <>
-        <FormSection title="执行方式"><fieldset disabled={disabled} style={{border:0,padding:0,margin:0}}><div className="dispatch-execution-fields"><DispatchExecutionFields contractors={users.filter(p=>p.active&&p.shopId===shopId&&(p.role==='outsourcing'||p.outsourcingRoleMember))} disabled={disabled} value={plan} onChange={value=>onChange({...value,technicianIds:plan.technicianIds??(plan.technicianId?[plan.technicianId]:[]),dueAt:plan.dueAt,urgent:plan.urgent,note:plan.note})}/></div></fieldset></FormSection>
+        <FormSection title="执行方式"><fieldset disabled={disabled} style={{border:0,padding:0,margin:0}}><div className="dispatch-execution-fields"><DispatchExecutionFields contractors={users.filter(p=>p.active&&p.shopId===shopId&&(hasRole(p, 'outsourcing')||p.outsourcingRoleMember))} disabled={disabled} value={plan} onChange={value=>onChange({...value,technicianIds:plan.technicianIds??(plan.technicianId?[plan.technicianId]:[]),dueAt:plan.dueAt,urgent:plan.urgent,note:plan.note})}/></div></fieldset></FormSection>
         {plan.executionMode!=='outsourced'?<FormSection title="人员安排"><Form.Item label="预选维修工（可多选）"><Select mode="multiple" aria-label="预选维修工" allowClear showSearch optionFilterProp="label" disabled={disabled} value={plan.technicianIds??(plan.technicianId?[plan.technicianId]:[])} options={options} placeholder="选择共同维修的员工" onChange={technicianIds=>patch({technicianIds,technicianId:undefined})}/></Form.Item></FormSection>:null}
         <FormSection title="时间与备注">
         <Form.Item label="预计完工时间" required><Input type="datetime-local" aria-label="派工预计完工时间" disabled={disabled} value={localTime} onChange={e=>patch({dueAt:e.target.value?new Date(`${e.target.value}:00+08:00`).toISOString():''})}/></Form.Item>

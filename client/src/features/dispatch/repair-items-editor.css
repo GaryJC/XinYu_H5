@@ -10,7 +10,7 @@
 .repair-item-content{flex:1;min-width:0}
 .repair-item-meta{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:26px;margin-bottom:8px}
 .repair-item-content .ant-input{width:100%;min-height:42px;font-size:14px;border-color:#dce2ea;border-radius:8px;background:#fff;padding:8px 12px}
-.repair-item-title{font-size:14px;line-height:1.6;overflow-wrap:anywhere}
+.repair-item-title{font-size:14px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
 .repair-item-title .anticon{margin-left:8px;color:#9ba4b2;font-size:12px}
 .repair-items-lock-note{display:flex;align-items:center;gap:6px;margin:12px 0 0;color:#8a94a4;font-size:12px}
 .repair-items-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}

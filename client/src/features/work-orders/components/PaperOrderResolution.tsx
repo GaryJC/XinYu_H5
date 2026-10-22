@@ -1,3 +1,4 @@
+import { hasRole } from "../../../../../shared/roles.mjs";
 import { usePaperOrderResolution } from "../hooks/usePaperOrderResolution";
 import { Alert, Button, Input, Radio, Space, Tag } from "antd";
 import type { WorkOrder, UserProfile } from "../../../../../shared/types";
@@ -23,7 +24,7 @@ export function PaperOrderResolution({order,user,onUpdated,onEdit}:{order:WorkOr
     </> : <>
       <Alert type={order.status === "草稿" ? "info" : "success"} showIcon
         title={order.paperOrder.mode === "runfeng" ? `已关联润丰派工号：${order.dispatchNo}` : order.status === "草稿" ? "已选择在钉钉创建，请补全并提交" : "凭纸质委托书开单，无需电子签字"} />
-      {order.status === "草稿" && canProcess && (user?.role === "manager" || user?.name === order.advisor) &&
+      {order.status === "草稿" && canProcess && (hasRole(user, 'manager') || user?.name === order.advisor) &&
         <Button type="primary" style={{ marginTop: 12 }} onClick={() => onEdit(order)}>继续补全钉钉委托单</Button>}
     </>}
     {error && <Alert type="error" showIcon title={error} style={{marginTop:12}}/>}

@@ -1,3 +1,4 @@
+import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import { useRef, useState } from "react";
 import type { UserProfile, WorkOrder } from "../../../../shared/types";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
@@ -9,8 +10,8 @@ export function useArchiveSignature(user: UserProfile | undefined, onUpdated: (o
   const [starting, setStarting] = useState(false);
   const running = useRef(false);
   function canSign(order: WorkOrder) {
-    return Boolean(user?.active && user.shopId === order.shop.id && ["advisor", "manager"].includes(user.role)
-      && (user.role === "manager" || order.advisor === user.name)
+    return Boolean(user?.active && user.shopId === order.shop.id && hasAnyRole(user, ["advisor", "manager"])
+      && (hasRole(user, 'manager') || order.advisor === user.name)
       && !order.customerSignatureFileId);
   }
   async function start(order: WorkOrder) {

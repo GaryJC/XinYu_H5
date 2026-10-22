@@ -1,3 +1,4 @@
+import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import {DispatchFilterBar} from './DispatchFilterBar';
 import { WarehousePartsPage } from './WarehousePartsPage';
 import { TechnicianRepairPage } from './TechnicianRepairPage';
@@ -19,13 +20,13 @@ export function DispatchPage({user,view}:{user:UserProfile;view:string}) {
   useEffect(()=>{setPage(1);},[c.filters]);
   const chosen=c.summaries.find(s=>s.id===c.filters.technicianId);
   function badges(t:DispatchTask) {return <Space className="dispatch-badges" size={[8,8]} wrap><Tag>{executionLabels[t.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(t)}</Tag>{t.urgent?<Tag color="red">加急</Tag>:null}{t.overdue?<Tag color="red">超期</Tag>:null}{t.repairRound?<Tag color="orange">返工第 {t.repairRound} 轮</Tag>:t.rework?<Tag color="orange">返工</Tag>:null}{t.feedback?<Tag color="orange">无法接单</Tag>:null}{t.needsReview?<Tag>待核对</Tag>:null}</Space>;}
-  if(user.role==='warehouse') return <WarehousePartsPage controller={c}/>;
-  if(view==='我的维修' && (['technician','outsourcing'].includes(user.role)||user.outsourcingRoleMember)) return <TechnicianRepairPage controller={c} user={user}/>;
+  if(view==='配件申请' && hasRole(user, 'warehouse')) return <WarehousePartsPage controller={c}/>;
+  if(view==='我的维修' && (hasAnyRole(user, ['technician','outsourcing'])||user.outsourcingRoleMember)) return <TechnicianRepairPage controller={c} user={user}/>;
   return <section className="dispatch-page" aria-label={view}>
-    <div className="dispatch-heading"><div><h2>{view}</h2><p>{c.manager?'默认显示本店全部未完结工单，可按状态筛选并安排维修与检验。':'及时确认任务，记录项目进度。'}{c.updatedAt?` 更新于 ${c.updatedAt}`:''}</p></div><Button onClick={()=>{c.setError('');void c.refresh();}} loading={c.loading}>刷新</Button></div>
+    <div className="dispatch-heading"><div><h2>{view}</h2><p>{c.manager?'默认显示本店全部未完结工单，可按状态筛选并安排维修与检验。':c.inspectionLead?'查看本店检验任务，可按状态筛选和处理检验结果。':'及时确认任务，记录项目进度。'}{c.updatedAt?` 更新于 ${c.updatedAt}`:''}</p></div><Button onClick={()=>{c.setError('');void c.refresh();}} loading={c.loading}>刷新</Button></div>
     {c.error?<Alert type="error" showIcon closable title={c.error} onClose={()=>c.setError('')}/>:null}
     <DispatchFilterBar controller={c} inspection={inspection}/>
-    {c.manager?<DispatchWorkloadBoard summaries={c.summaries} filters={c.filters} onSelect={(technicianId,metric)=>{
+    {c.inspectionLead?<DispatchWorkloadBoard summaries={c.summaries} filters={c.filters} onSelect={(technicianId,metric)=>{
       c.setFilters(f=>({from:f.from,to:f.to,technicianId,metric}));
       if(mobile) taskHeading.current?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
     }}/>:null}

@@ -309,6 +309,31 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       await assert.rejects(()=>act(tech,'record-parts',{partsRequirement:requirement('追加')}),/本人项目已提交/);
       const forged=structuredClone(notices[1]);forged.payload.preparationGroups[0].partsRevision='stale';assert.equal(await validatePartsPickupNotification(forged,nextTech,pool),false);
     });
+    await t.test('parts reference photos persist per applicant, can be removed and survive warehouse edits',async()=>{
+      await seed('parts-photo-reference','已委托');
+      const service=await import('../server/services/dispatchService.mjs');
+      const warehouse={id:'w',name:'仓管',role:'warehouse',active:true,shopId:'shop-hq'};
+      const act=async(user,action,extra={})=>service.executeDispatchAction(user,'parts-photo-reference',{action,expectedVersion:(await service.dispatchDetail(manager,'parts-photo-reference')).task.version,requestId:randomUUID(),...extra});
+      await act(manager,'assign',{technicianIds:['t','u'],dueAt:new Date(Date.now()+86400000).toISOString(),repairItems:[{id:1,name:'保养',responsibleId:'t'},{id:2,name:'制动',responsibleId:'u'}]});
+      const photoA=randomUUID(),photoB=randomUUID(),other=randomUUID(),old=randomUUID(),wrongKind=randomUUID(),wrongOrder=randomUUID();
+      await seed('parts-photo-other-order','已委托');
+      for(const [id,owner,round,kind,orderId] of [[photoA,'t',0,'repair_parts_photo','parts-photo-reference'],[photoB,'t',0,'repair_parts_photo','parts-photo-reference'],[other,'u',0,'repair_parts_photo','parts-photo-reference'],[old,'t',1,'repair_parts_photo','parts-photo-reference'],[wrongKind,'t',0,'repair_progress_photo','parts-photo-reference'],[wrongOrder,'t',0,'repair_parts_photo','parts-photo-other-order']])await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by,repair_round) values($1,$2,$3,'local','','fixture','image/png',8,$4,$5)",[id,orderId,kind,owner,round]);
+      const requirement={mode:'list',items:[{name:'滤芯',quantity:1,unit:'个'}],photoIds:[],referencePhotoIds:[photoA,photoB]};
+      await act(tech,'accept',{partsRequirement:requirement});
+      const read=()=>service.dispatchDetail(warehouse,'parts-photo-reference');
+      let saved=await read();assert.deepEqual(saved.task.partsRequests.find(p=>p.ownerId==='t').referencePhotoIds,[photoA,photoB]);
+      const originalVersion=saved.task.version;
+      for(const invalid of [other,old,wrongKind,wrongOrder,'missing'])await assert.rejects(()=>act(tech,'record-parts',{partsRequirement:{...requirement,referencePhotoIds:[invalid]}}),/本人在本单当前维修轮次/);
+      assert.equal((await read()).task.version,originalVersion);
+      await act(warehouse,'edit-parts',{partsOwnerId:'t',partsRequirement:{mode:'list',items:[{name:'滤芯型号A',quantity:1,unit:'个'}],photoIds:[]}});
+      assert.deepEqual((await read()).task.partsRequests.find(p=>p.ownerId==='t').referencePhotoIds,[photoA,photoB]);
+      await act(tech,'record-parts',{partsRequirement:{...requirement,referencePhotoIds:[photoB]}});
+      saved=await read();assert.deepEqual(saved.task.partsRequests.find(p=>p.ownerId==='t').referencePhotoIds,[photoB]);
+      assert.ok(saved.events.some(event=>event.detail.partsRequirement?.referencePhotoIds?.length===2));
+      assert.equal((await pool.query('select count(*) from files where id=any($1::text[])',[[photoA,photoB]])).rows[0].count,'2');
+      await act(nextTech,'record-parts',{partsRequirement:{...requirement,referencePhotoIds:[other]}});
+      saved=await read();assert.deepEqual(saved.task.partsRequests.find(p=>p.ownerId==='u').referencePhotoIds,[other]);assert.deepEqual(saved.task.partsRequests.find(p=>p.ownerId==='t').referencePhotoIds,[photoB]);
+    });
     if(process.env.WORKFLOW_UI_TEST==='true')await t.test('mobile signing recovery and supplier quote through real browser forms',async()=>{
       const {createServer}=await import('node:http');
       const path=await import('node:path');const os=await import('node:os');

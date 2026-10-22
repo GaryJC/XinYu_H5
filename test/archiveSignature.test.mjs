@@ -1,3 +1,4 @@
+import * as rolePermissions from "../shared/roles.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -16,6 +17,7 @@ function setup(api = {}, account = user) {
   let summaryRefreshes = 0;
   const exports = {};
   vm.runInNewContext(compiled, { exports, require(name) {
+    if (name.endsWith("shared/roles.mjs")) return rolePermissions;
     if (name === "react") return {
       useState(initial) { const i = state.length; state.push(initial); return [initial, value => { state[i] = value; }]; },
       useRef(value) { return { current: value }; }

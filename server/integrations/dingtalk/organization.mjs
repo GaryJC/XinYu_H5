@@ -48,6 +48,7 @@ export function resolveDingTalkOrganizationMapping(profile, { shopId = "shop-hq"
   if (!selected) return undefined;
   return {
     role: selected.role,
+    roles: [...new Set(candidates.map(candidate => candidate.role))],
     shopId,
     homeRoute: selected.homeRoute,
     source: { dingtalkRoleId: selected.dingtalkRoleId }

@@ -1,3 +1,4 @@
+import { hasRole, hasAnyRole } from "../../../../../shared/roles.mjs";
 import { useEffect, useRef, useState } from "react";
 import type { WorkOrder, UserProfile } from "../../../../../shared/types";
 import { workOrderApi } from "../api/workOrderApi";
@@ -17,8 +18,8 @@ export function usePaperOrderResolution(order: WorkOrder, user: UserProfile | un
   }, [order.id, order.paperOrder?.mode, user?.id]);
   const isDingTalkDraft = order.status === "草稿" && order.paperOrder?.mode === "dingtalk";
   const canChoose = order.status === "待处理纸质委托书" && order.paperOrder?.mode === "pending" || isDingTalkDraft;
-  const canProcess = Boolean(user?.active && ["advisor", "manager"].includes(user.role) && user.shopId === order.shop.id
-    && (!isDingTalkDraft || user.role === "manager" || user.name === order.advisor));
+  const canProcess = Boolean(user?.active && hasAnyRole(user, ["advisor", "manager"]) && user.shopId === order.shop.id
+    && (!isDingTalkDraft || hasRole(user, 'manager') || user.name === order.advisor));
   async function resolve() {
     if (running.current || !canProcess || !canChoose) return;
     if (isDingTalkDraft && mode === "dingtalk") { onEdit(order); return; }

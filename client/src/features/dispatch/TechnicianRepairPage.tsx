@@ -7,7 +7,7 @@ import type { DispatchController } from './useDispatchController';
 import {partsStatus} from './partsProgress';
 import { displayTaskTime, taskStatusLabel } from './dispatchLabels';
 import { TechnicianTaskDetail } from './TechnicianTaskDetail';
-const categories=[{label:'待接单',value:'待接单',key:'pendingAccept'},{label:'进行中',value:'进行中',key:'inProgress'},{label:'待检验',value:'待检验',key:'inspection'},{label:'已完成',value:'维修完成',key:'completed'}] as const;
+const categories=[{label:'待接单',value:'待接单',key:'pendingAccept'},{label:'进行中',value:'进行中',key:'inProgress'},{label:'待检验',value:'待检验',key:'inspection'},{label:'回审',value:'回审',key:'review'},{label:'已完成',value:'维修完成',key:'completed'}] as const;
 export function TechnicianRepairPage({controller:c,user}:{controller:DispatchController;user:UserProfile}) {
   useEffect(()=>{if(!c.filters.stage)c.setFilters({stage:'进行中'});},[c.filters.stage,c.setFilters]);
   const mobile=!Grid.useBreakpoint().md;
