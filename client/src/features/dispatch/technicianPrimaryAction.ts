@@ -1,6 +1,6 @@
 import type {DispatchTask} from '../../../../shared/types';
 export function technicianPrimaryAction(task:Pick<DispatchTask,'stage'|'feedback'|'partsRequirement'|'items'>) {
- const waitingForParts=Boolean(task.partsRequirement&&task.partsRequirement.mode!=='none'&&!task.partsRequirement.issuedAt);
+ const waitingForParts=Boolean(task.partsRequirement&&task.partsRequirement.mode!=='none'&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt);
  if(task.stage==='待接单'&&!task.feedback)return 'accept';
  if(task.stage==='暂停')return 'resume';
  if(waitingForParts)return;

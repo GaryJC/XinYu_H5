@@ -19,6 +19,6 @@ export function beginPendingItems(next,actor,now) {
 
 // Preserve legacy tasks; current requests must be issued before starting or completing.
 export function assertPartsIssued(task) {
-  if(task.partsRequirement && task.partsRequirement.mode!=='none' && !task.partsRequirement.issuedAt)
-    throw new HttpError(409,'请等待仓管确认配件出库后再开工或提交完工');
+  if(task.partsRequirement && task.partsRequirement.mode!=='none' && !task.partsRequirement.issuedAt && !task.partsRequirement.preparedAt)
+    throw new HttpError(409,'请等待仓管确认配件备齐后再开工或提交完工');
 }

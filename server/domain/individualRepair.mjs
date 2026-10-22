@@ -22,15 +22,15 @@ export function applyIndividualAction(task,input,actor,people,now,apply) {
   if(input.action==='record-parts'&&own.every(i=>['待检验','已完工'].includes(i.status)))throw new HttpError(409,'本人项目已提交，不能再申请领料');
   const requirement=personalParts(task,ownerId);
   if(warehouse&&!requirement)throw new HttpError(409,'领料申请不存在，请刷新');
-  if(scopedRepair&&task.partsRequirement?.mode!=='none'&&task.partsRequirement&&!task.partsRequirement.issuedAt)
-    throw new HttpError(409,'历史共同配件尚未出库，请等待仓库确认');
+  if(scopedRepair&&task.partsRequirement?.mode!=='none'&&task.partsRequirement&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt)
+    throw new HttpError(409,'历史共同配件尚未备齐，请等待仓库确认');
   if(input.repairItems?.some(row=>row.id!==undefined&&!own.some(i=>i.id===row.id)||row.responsibleId&&row.responsibleId!==ownerId))throw new HttpError(403,'只能编辑和提交本人负责的项目');
   if(input.itemId!==undefined&&!own.some(i=>i.id===input.itemId))throw new HttpError(403,'只能操作本人负责的项目');
   const owner=people.find(p=>p.id===ownerId);
   const scoped={...task,items:own,repairCatalog:task.repairCatalog||task.items,technicianIds:[ownerId],technicianId:ownerId,technicianName:owner?.name||own[0]?.responsibleName||ownerId,partsRequirement:requirement,partsRequests:undefined};
   if(scopedParts&&task.stage==='维修中'&&own.length&&own.every(i=>['待开工','待派工','待领料'].includes(i.status)))scoped.stage='待开工';
   if(scopedRepair&&input.action==='submit-order'&&own.every(i=>['待检验','已完工'].includes(i.status))&&(task.workerSubmissions?.[ownerId]||own.every(i=>i.status==='已完工')))throw new HttpError(409,'本人项目已提交，请勿重复操作');
-  const changed=apply(scoped,{...input,partsOwnerId:undefined,repairItems:input.repairItems?.map(row=>({...row,responsibleId:ownerId}))},actor,people,now);
+  const changed=apply(scoped,{...input,partsOwnerId:undefined,repairItems:input.repairItems?.map(row=>({...row,responsibleId:ownerId}))},actor,people,now,warehouse?workers(task):undefined);
   const next={...task,version:changed.version,items:task.items.map(i=>own.some(o=>o.id===i.id)?changed.items.find(c=>c.id===i.id)||i:i)};
   next.items.push(...changed.items.filter(i=>!own.some(o=>o.id===i.id)));
   next.participantIds=[...new Set([...(task.participantIds||[]),...(changed.participantIds||[])])];

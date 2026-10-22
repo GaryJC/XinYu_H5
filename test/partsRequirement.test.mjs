@@ -44,11 +44,11 @@ test('working tasks cannot silently start unfinished projects during completion'
 const warehouse={id:'w',name:'仓管',role:'warehouse',active:true,shopId:'s'};
 const request=(task,action,extra={})=>({action,expectedVersion:task.version,requestId:randomUUID(),...extra});
 const withParts=()=>applyDispatchAction(waiting(),input({mode:'list',items:[{name:'机油',quantity:4,unit:'升'}]}),tech,[tech]);
-test('warehouse preparation records real identity without starting repair',()=>{
+test('warehouse preparation starts repair under the technician identity',()=>{
  const task=withParts(),before=structuredClone(task),now='2026-10-16T12:00:00Z';
  const next=applyDispatchAction(task,request(task,'confirm-parts'),warehouse,[],now);
  assert.deepEqual(task,before);assert.equal(next.partsRequirement.preparedBy,'w');assert.equal(next.partsRequirement.preparedName,'仓管');assert.equal(next.partsRequirement.preparedAt,now);
- assert.deepEqual(next.items,task.items);assert.equal(next.stage,task.stage);assert.equal(next.version,task.version+1);
+ assert.deepEqual(next.items[1],task.items[1]);assert.equal(next.items[0].startedBy,tech.id);assert.equal(next.stage,'维修中');assert.equal(next.version,task.version+1);
  assert.throws(()=>applyDispatchAction(next,request(next,'confirm-parts'),warehouse,[]),e=>e.status===409);
  assert.throws(()=>applyDispatchAction(next,request(task,'confirm-parts'),warehouse,[]),e=>e.status===409);
 });
@@ -76,20 +76,20 @@ test('no parts begins immediately; removing an unissued requirement starts waiti
 });
 test('unissued requests block all start and completion bypasses including legacy endpoints',()=>{
  const task=withParts();
- for(const action of ['start-order','start','pick']) assert.throws(()=>applyDispatchAction(task,request(task,action,{itemId:1}),tech,[tech]),/确认配件出库/);
+ for(const action of ['start-order','start','pick']) assert.throws(()=>applyDispatchAction(task,request(task,action,{itemId:1}),tech,[tech]),/确认配件备齐/);
  assert.throws(()=>applyDispatchAction(task,request(task,'submit-order'),tech,[tech]),/当前待开工/);
  const ready=applyDispatchAction(task,request(task,'confirm-parts'),warehouse,[tech]);
- assert.throws(()=>applyDispatchAction(ready,request(ready,'start-order'),tech,[tech]),/确认配件出库/);
+ assert.equal(ready.stage,'维修中');assert.doesNotThrow(()=>applyDispatchAction(ready,request(ready,'submit-order'),tech,[tech]));
  const working={...task,stage:'维修中',items:task.items.map(i=>({...i,status:'待检验'}))};
- assert.throws(()=>applyDispatchAction(working,request(working,'submit-order'),tech,[tech]),/确认配件出库/);
- assert.throws(()=>applyDispatchAction(working,request(working,'submit',{inspectorId:'i'}),tech,[tech]),/确认配件出库/);
+ assert.throws(()=>applyDispatchAction(working,request(working,'submit-order'),tech,[tech]),/确认配件备齐/);
+ assert.throws(()=>applyDispatchAction(working,request(working,'submit',{inspectorId:'i'}),tech,[tech]),/确认配件备齐/);
 });
 test('issue requires preparation and starts repair using technician identity, never warehouse identity',()=>{
  const task=withParts(),before=structuredClone(task),now='2026-10-17T01:00:00Z';
  assert.throws(()=>applyDispatchAction(task,request(task,'issue-parts'),warehouse,[tech]),/先确认备料/);
  const ready=applyDispatchAction(task,request(task,'confirm-parts'),warehouse,[tech]);
  const issued=applyDispatchAction(ready,request(ready,'issue-parts'),warehouse,[tech],now);
- assert.deepEqual(task,before);assert.equal(issued.stage,'维修中');assert.equal(issued.firstStartedAt,now);
+ assert.deepEqual(task,before);assert.equal(issued.stage,'维修中');assert.equal(issued.firstStartedAt,ready.firstStartedAt);
  assert.equal(issued.partsRequirement.issuedBy,'w');assert.equal(issued.partsRequirement.issuedName,'仓管');assert.equal(issued.partsRequirement.issuedAt,now);
  assert.deepEqual(issued.partsRequirement.recipientIds,['t']);assert.equal(issued.items[0].startedBy,'t');assert.equal(issued.items[0].pickedAt,now);
  assert.ok(!issued.participantIds.includes('w'));assert.deepEqual(issued.items[1],task.items[1]);
@@ -124,7 +124,7 @@ test('old application confirmations are not treated as preparation or issue',()=
 });
 
 test('warehouse can add, edit and delete unissued requirements, invalidating preparation and forged metadata',()=>{
- const task=withParts(),ready=applyDispatchAction(task,request(task,'confirm-parts'),warehouse,[tech]),before=structuredClone(ready);
+ const task=withParts(),ready=task,before=structuredClone(ready);
  const parts={mode:'list',items:[{name:'机油 SN5W30',quantity:4,unit:'升'},{name:'滤清器',quantity:1,unit:'只'}],photoIds:[],issuedAt:'forged',preparedAt:'forged'};
  const edited=applyDispatchAction(ready,request(ready,'edit-parts',{partsRequirement:parts}),warehouse,[tech]);
  assert.deepEqual(ready,before);assert.equal(edited.stage,'待开工');assert.equal(edited.partsRequirement.items.length,2);assert.equal(edited.partsRequirement.recordedBy,'w');assert.equal(edited.partsRequirement.preparedAt,undefined);assert.equal(edited.partsRequirement.issuedAt,undefined);
@@ -138,7 +138,7 @@ test('warehouse cannot alter issued history, act across stores, or forge clear-l
  for(const user of [tech,{...warehouse,active:false},{...warehouse,shopId:'other'},{...warehouse,role:'manager'}])assert.throws(()=>applyDispatchAction(task,request(task,'edit-parts',{partsRequirement:{mode:'none'}}),user,[tech]),e=>e.status===403);
  const ready=applyDispatchAction(task,request(task,'confirm-parts'),warehouse,[tech]);
  const issued=applyDispatchAction(ready,request(ready,'issue-parts'),warehouse,[tech]);
- assert.throws(()=>applyDispatchAction(issued,request(issued,'edit-parts',{partsRequirement:{mode:'none'}}),warehouse,[tech]),/已出库/);
+ assert.throws(()=>applyDispatchAction(issued,request(issued,'edit-parts',{partsRequirement:{mode:'none'}}),warehouse,[tech]),/已完成/);
  assert.throws(()=>applyDispatchAction(task,request(task,'edit-parts',{partsRequirement:{mode:'photo',photoIds:['other-photo']}}),warehouse,[tech]),e=>e.status===400);
  const photoTask={...task,partsRequirement:{mode:'photo',items:[],photoIds:['original-photo']}};
  const transcribed=applyDispatchAction(photoTask,request(photoTask,'edit-parts',{partsRequirement:{mode:'list',items:[{name:'机油',quantity:1,unit:'桶'}],sourcePhotoIds:['forged-photo']}}),warehouse,[tech]);
@@ -150,7 +150,9 @@ test('outsourced start keeps the scheduling owner after warehouse transcription'
  const task={...withParts(),executionMode:'outsourced',technicianIds:[],technicianId:undefined,assignedBy:'advisor',partsRequirement:{mode:'list',items:[{name:'机油',quantity:1,unit:'桶'}],photoIds:[],recordedBy:'w'}};
  const edited=applyDispatchAction(task,request(task,'edit-parts',{partsRequirement:{mode:'none'}}),warehouse,[]);
  assert.equal(edited.items[0].startedBy,'advisor');assert.ok(!edited.participantIds.includes('w'));
- const ready=applyDispatchAction(task,request(task,'confirm-parts'),warehouse,[]),issued=applyDispatchAction(ready,request(ready,'issue-parts'),warehouse,[]);
+ const ready=applyDispatchAction(task,request(task,'confirm-parts'),warehouse,[]);
+ assert.throws(()=>applyDispatchAction(ready,request(ready,'issue-parts'),warehouse,[]),/领料人必须/);
+ const issued=applyDispatchAction({...ready,technicianId:'t',technicianIds:['t']},request(ready,'issue-parts'),warehouse,[tech]);
  assert.equal(issued.items[0].startedBy,'advisor');assert.ok(!issued.participantIds.includes('w'));
 });
 
@@ -164,7 +166,7 @@ test('reassigned acceptance preserves issued batches instead of requesting mater
  assert.deepEqual(accepted.partsRequirement,original.partsRequirement);assert.equal(accepted.partsRequirement.batch,3);
 });
 test('reassigned acceptance cannot bypass an unissued requirement by selecting no material',()=>{
- const original={...waiting(),partsRequirement:{mode:'list',items:[{name:'机油',quantity:4,unit:'升'}],photoIds:[],preparedAt:'2026-10-18',batch:2}};
+ const original={...waiting(),partsRequirement:{mode:'list',items:[{name:'机油',quantity:4,unit:'升'}],photoIds:[],batch:2}};
  const accepted=applyDispatchAction(original,request(original,'accept',{partsRequirement:{mode:'none'}}),tech,[tech]);
  assert.equal(accepted.stage,'待开工');assert.deepEqual(accepted.partsRequirement,original.partsRequirement);
  assert.throws(()=>applyDispatchAction(accepted,request(accepted,'start-order'),tech,[tech]),/等待仓管/);

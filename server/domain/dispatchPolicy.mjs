@@ -1,3 +1,4 @@
+import {validatePartsIssue,issueParts,prepareParts} from './partsIssue.mjs';
 import {applyIndividualAction} from './individualRepair.mjs';
 import {resolveRepairResponsibilities,transferUnfinishedResponsibilities} from './repairResponsibilities.mjs';
 import {validateProjectReassignment,reassignProjects} from './projectReassignment.mjs';
@@ -20,6 +21,7 @@ export function assertDispatchAccess(task, actor) {
   fail('任务已改派或不属于当前员工',403);
 }
 export function validateDispatchRequest(input) {
+  validatePartsIssue(input||{});
   validateReopenItems(input||{});
   validateRepairItemEdits(input||{});
   validateProjectReassignment(input||{});
@@ -40,12 +42,18 @@ export function validateDispatchRequest(input) {
   if (input.dueAt !== undefined && (typeof input.dueAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(input.dueAt) || !Number.isFinite(Date.parse(input.dueAt)))) fail('预计完工时间必须包含时区',400);
   return input;
 }
-export function applyDispatchAction(task, input, actor, people, now = new Date().toISOString()) {
+export function applyDispatchAction(task, input, actor, people, now = new Date().toISOString(), recipientScope) {
   validateDispatchRequest(input);
   assertDispatchAccess(task,actor);
   if (['草稿','待客户签字','待处理纸质委托书'].includes(task.orderStatus) || ['草稿','待客户签字','待处理纸质委托书'].includes(task.stage)) fail('客户签字后才能执行派工操作');
   if (task.version !== input.expectedVersion) fail('任务已更新，请刷新后重试');
   if(task.needsReview&&!['reconcile','remind','retry-notification','retry-scheduler-notifications'].includes(input.action))fail('历史任务需要管理员先核对归属和进度');
+  if(input.preparationGroups){
+    // Each transition works on a clone. Persist only after every group succeeds.
+    let prepared=task;
+    for(const group of input.preparationGroups)prepared=applyDispatchAction(prepared,{...input,preparationGroups:undefined,partsOwnerId:group.partsOwnerId,partsPreparation:group.items,expectedVersion:prepared.version},actor,people,now);
+    return {...prepared,version:task.version+1};
+  }
   const individual=applyIndividualAction(task,input,actor,people,now,applyDispatchAction);
   if(individual)return individual;
   let next = structuredClone(task);
@@ -114,27 +122,28 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     else {
       // Reassignment changes the handler, not the material handover.
       const parts=task.partsRequirement||validatePartsRequirement(input.partsRequirement);
-      if(!task.partsRequirement)next.partsRequirement={...parts,recordedBy:actor.id,recordedName:actor.name,recordedAt:now,revision:task.version+1,batch:1};
+      if(!task.partsRequirement)next.partsRequirement={...parts,applicantId:actor.id,applicantName:actor.name,recordedBy:actor.id,recordedName:actor.name,recordedAt:now,revision:task.version+1,batch:1};
       next.acceptedAt=now;
-      if(parts.mode==='none'||parts.issuedAt) beginPendingItems(next,actor,now);
+      if(parts.mode==='none'||parts.issuedAt||parts.preparedAt) beginPendingItems(next,actor,now);
       else next.stage='待开工';
     }
   } else if(action==='record-parts'||action==='edit-parts') {
     if(action==='edit-parts') {
       if(actor.role!=='warehouse')fail('仅仓管可整理配件需求',403);
       if(!task.acceptedAt)fail('请等待维修工接单后再整理需求');
-      if(task.partsRequirement?.issuedAt)fail('已出库配件不可修改，请由维修工追加申请');
+      if(task.partsRequirement?.issuedAt||task.partsRequirement?.preparedAt)fail('已完成配件不可修改，请由维修工追加申请');
       if(input.partsRequirement?.mode==='photo')fail('请将配件整理为明细，或选择无需配件',400);
     } else requireOwner();
     stage('待开工','维修中','暂停');
-    next.partsRequirement={...validatePartsRequirement(input.partsRequirement),recordedBy:actor.id,recordedName:actor.name,recordedAt:now,revision:task.version+1};
+    if(task.partsRequirement?.items?.some(i=>i.issuedAt||i.preparedAt)&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt)fail('本批已部分处理，不能修改申请，请先完成剩余备料');
+    next.partsRequirement={...validatePartsRequirement(input.partsRequirement),applicantId:action==='edit-parts'?(task.partsRequirement?.applicantId||task.partsRequirement?.ownerId||task.partsRequirement?.recordedBy):actor.id,applicantName:action==='edit-parts'?(task.partsRequirement?.applicantName||task.partsRequirement?.ownerName||task.partsRequirement?.recordedName):actor.name,recordedBy:actor.id,recordedName:actor.name,recordedAt:now,revision:task.version+1};
     if(action==='edit-parts') {
       const sourcePhotoIds=task.partsRequirement?.mode==='photo'?task.partsRequirement.photoIds:task.partsRequirement?.sourcePhotoIds;
       if(sourcePhotoIds?.length)next.partsRequirement.sourcePhotoIds=[...sourcePhotoIds];
     }
     const partsActor=action==='edit-parts'?{id:task.technicianId||technicianIds(task)[0]||task.assignedBy}:actor;
     // After issue, this is a new batch. Previous issued quantities remain in audit events.
-    next.partsRequirement.batch=(task.partsRequirement?.batch||1)+(task.partsRequirement?.issuedAt?1:0);
+    next.partsRequirement.batch=(task.partsRequirement?.batch||1)+(task.partsRequirement?.issuedAt||task.partsRequirement?.preparedAt?1:0);
     if(task.stage==='待开工' && next.partsRequirement.mode==='none') beginPendingItems(next,partsActor,now);
     if(task.stage==='暂停' && task.resumeStage==='待开工' && next.partsRequirement.mode==='none') {
       beginPendingItems(next,partsActor,now);next.stage='暂停';next.resumeStage='维修中';
@@ -147,17 +156,20 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     if(task.partsRequirement.issuedAt) fail('该批配件已出库，请勿重复操作');
     if(action==='confirm-parts') {
       if(task.partsRequirement.preparedAt) fail('该批配件已备料完成，请勿重复操作');
-      Object.assign(next.partsRequirement,{preparedBy:actor.id,preparedName:actor.name,preparedAt:now});
+      if(input.partsPreparation)next.partsRequirement=prepareParts(task,input,actor,people,now,recipientScope);
+      else Object.assign(next.partsRequirement,{preparedBy:actor.id,preparedName:actor.name,preparedAt:now});
+      if(next.partsRequirement.preparedAt&&(task.stage==='待开工'||task.stage==='暂停'&&task.resumeStage==='待开工')) {
+        beginPendingItems(next,{id:task.technicianId||technicianIds(task)[0]||task.assignedBy},now);
+        if(task.stage==='暂停'){next.stage='暂停';next.resumeStage='维修中';}
+      }
     } else {
-      if(!task.partsRequirement.preparedAt) fail('请先确认备料完成');
-      Object.assign(next.partsRequirement,{issuedBy:actor.id,issuedName:actor.name,issuedAt:now,
-        recipientIds:technicianIds(task),recipientName:task.technicianName || task.partsRequirement.recordedName});
-      if(task.stage==='待开工' || task.stage==='暂停' && task.resumeStage==='待开工') {
+      next.partsRequirement=issueParts(task,input,actor,people,now,recipientScope);
+      if(next.partsRequirement.issuedAt&&(task.stage==='待开工' || task.stage==='暂停' && task.resumeStage==='待开工')) {
         const repairActor={id:task.technicianId || technicianIds(task)[0] || task.assignedBy};
         beginPendingItems(next,repairActor,now);
         if(task.stage==='暂停') {next.stage='暂停';next.resumeStage='维修中';}
       }
-      next.items.forEach(i=>{if(i.status!=='已完工') i.pickedAt ||= now;});
+      if(next.partsRequirement.issuedAt)next.items.forEach(i=>{if(i.status!=='已完工'&&next.partsRequirement.recipientIds.includes(i.responsibleId||task.technicianId)) i.pickedAt ||= now;});
     }
   } else if(action==='start-order') {
     requireOwner(); stage('待开工','维修中');assertPartsIssued(task);

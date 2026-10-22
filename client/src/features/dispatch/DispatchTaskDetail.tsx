@@ -39,7 +39,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
   const workers=task.technicianIds??(task.technicianId?[task.technicianId]:[]);
   const owner=workers.includes(user.id) && (['technician','outsourcing'].includes(user.role)||user.outsourcingRoleMember) || task.executionMode==='outsourced'&&controller.manager;
   const inspect=task.stage==='待检验' && (user.role==='manager'||(user.role==='inspector'&&task.inspectorId===user.id)) && !workers.includes(user.id) && !task.participantIds?.includes(user.id) && !task.items.some(i=>i.startedBy===user.id||i.finishedBy===user.id);
-  const waitingForParts=Boolean(task.partsRequirement&&task.partsRequirement.mode!=='none'&&!task.partsRequirement.issuedAt);
+  const waitingForParts=Boolean(task.partsRequirement&&task.partsRequirement.mode!=='none'&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt);
   const actions:DispatchActionName[]=[];
   if(controller.manager&&!unsigned) {
     if(task.needsReview) {if(user.role==='manager') actions.push('reconcile');}
@@ -92,7 +92,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     <PartsRequirementSummary value={task.partsRequirement}/>
     {user.role==='manager'&&(task.partsRequirement||task.hasPartsHistory)?<WarehouseStockSearch key={`stock-${task.orderId}`} orderId={task.orderId} requirement={task.partsRequirement}/>:null}
     {owner?<RepairPhotoPanel controller={controller} editable={!unsigned&&!task.needsReview&&['待开工','维修中','暂停'].includes(task.stage)} onBlocked={setPhotoBlocked}/>:null}
-    {owner&&['待开工','维修中','暂停'].includes(task.stage)?<Button onClick={()=>setPartsDialog(true)} disabled={controller.busy}>{task.partsRequirement?.issuedAt?"追加配件申请":"补充／修改配件需求"}</Button>:null}
+    {owner&&['待开工','维修中','暂停'].includes(task.stage)?<Button onClick={()=>setPartsDialog(true)} disabled={controller.busy}>{(task.partsRequirement?.issuedAt||task.partsRequirement?.preparedAt)?"追加配件申请":"补充／修改配件需求"}</Button>:null}
     {files.length?<><h3>维修附件</h3><Space wrap>{files.map(file=>file.mimeType.startsWith('image/')?<AuthenticatedImage key={file.id} fileId={file.id} alt={file.originalName} width={140} height={100}/>:<Button key={file.id} onClick={()=>void openFile(file.id,file.originalName)}>{file.originalName}</Button>)}</Space></>:null}
     {controller.manager&&detail.inspectionNotification&&detail.inspectionNotification.status!=='ready'&&detail.inspectionNotification.status!=='obsolete'?<Alert type={detail.inspectionNotification.error?'warning':'info'} title={detail.inspectionNotification.error||'正在安排检验通知'} description="工单已进入待检验队列，可重试检验通知。"/>:null}
     {controller.manager?detail.schedulerNotifications?.filter(job=>job.error).map(job=><Alert key={job.eventId} type="warning" showIcon title={`${job.kind}通知未完成`} description={job.error} action={<Button loading={controller.busy} disabled={controller.busy} onClick={()=>void controller.act({action:'retry-scheduler-notifications',notificationJobId:job.eventId})}>重试</Button>}/>):null}

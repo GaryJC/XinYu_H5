@@ -25,7 +25,7 @@ test('completion applies item edits atomically without allowing waiting work to 
  const t=task(),next=act(t,rows(),'submit-order');assert.equal(next.stage,'待检验');assert.equal(next.items[2].status,'待检验');assert.equal(next.items[2].finishedBy,'t');
  assert.deepEqual(next.items[1],t.items[1]);
  assert.throws(()=>act({...t,stage:'待开工'},rows(),'submit-order'),/当前待开工/);
- const withParts={...t,partsRequirement:{mode:'list'}};assert.throws(()=>act(withParts,rows(),'submit-order'),/出库/);
+ const withParts={...t,partsRequirement:{mode:'list'}};assert.throws(()=>act(withParts,rows(),'submit-order'),/备齐/);
  assert.throws(()=>act(t,rows(),'pause'),e=>e.status===400);
 });
 test('new IDs never reuse previous repair round IDs and do not change closed snapshots',()=>{

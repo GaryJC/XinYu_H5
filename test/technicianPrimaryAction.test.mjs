@@ -15,7 +15,7 @@ test('returned items have an explicit start action before completion, even while
 });
 test('waiting parts cannot be bypassed and initial unstarted tasks still require explicit start',()=>{
  const withParts={...task,partsRequirement:{mode:'list',items:[]}};
- assert.equal(primary(withParts),undefined);assert.throws(()=>act(withParts,'start-order'),/确认配件出库/);
+ assert.equal(primary(withParts),undefined);assert.throws(()=>act(withParts,'start-order'),/确认配件备齐/);
  assert.equal(primary({...task,stage:'待开工',rework:false}),'start-order');
  assert.equal(primary({...task,stage:'待检验'}),undefined);
 });

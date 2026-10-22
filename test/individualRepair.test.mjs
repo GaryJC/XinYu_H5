@@ -20,14 +20,14 @@ test('requests, preparation and issue stay separate; other worker pending parts 
  const second=act(first,b,'record-parts',{partsRequirement:parts('雨刮')});
  assert.equal(second.partsRequests.length,2);assert.deepEqual(second.partsRequests[0],first.partsRequests[0]);
  assert.doesNotThrow(()=>assertDispatchAccess(second,w));
- assert.throws(()=>act(second,a,'submit-order'),/确认配件出库/);
+ assert.throws(()=>act(second,a,'submit-order'),/确认配件备齐/);
  let next=act(second,w,'confirm-parts',{partsOwnerId:'a'});
  assert.equal(next.partsRequests.find(p=>p.ownerId==='b').preparedAt,undefined);
- next=act(next,w,'issue-parts',{partsOwnerId:'a'});
- assert.deepEqual(next.partsRequests.find(p=>p.ownerId==='a').recipientIds,['a']);assert.equal(next.items[1].pickedAt,undefined);
+
+ assert.ok(next.partsRequests.find(p=>p.ownerId==='a').preparedAt);assert.equal(next.items[1].pickedAt,undefined);
  next=act(next,a,'submit-order');assert.equal(next.stage,'维修中');
- assert.throws(()=>act(next,b,'submit-order'),/确认配件出库/);
- next=act(next,w,'confirm-parts',{partsOwnerId:'b'});next=act(next,w,'issue-parts',{partsOwnerId:'b'});
+ assert.throws(()=>act(next,b,'submit-order'),/确认配件备齐/);
+ next=act(next,w,'confirm-parts',{partsOwnerId:'b'});
  assert.equal(act(next,b,'submit-order').stage,'待检验');
 });
 test('one worker cannot mutate another project or application, or bypass submission',()=>{
@@ -44,7 +44,7 @@ test('one worker cannot mutate another project or application, or bypass submiss
 test('issue auto-starts only requester pending projects even while coworker is already working',()=>{
  const task=base();task.items[1].status='待开工';delete task.items[1].startedBy;
  let next=act(task,b,'record-parts',{partsRequirement:parts('雨刮')});
- next=act(next,w,'confirm-parts',{partsOwnerId:'b'});next=act(next,w,'issue-parts',{partsOwnerId:'b'});
+ next=act(next,w,'confirm-parts',{partsOwnerId:'b'});
  assert.equal(next.items[1].status,'维修中');assert.equal(next.items[1].startedBy,'b');assert.deepEqual(next.items[0],task.items[0]);
 });
 test('acceptance starts only accepter work; others can request later, and stale submissions conflict',()=>{
