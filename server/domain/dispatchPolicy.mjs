@@ -1,3 +1,4 @@
+import { canEditDispatchDue } from '../../shared/dispatchDuePolicy.mjs';
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import {validatePartsIssue,issueParts,prepareParts} from './partsIssue.mjs';
 import {applyIndividualAction} from './individualRepair.mjs';
@@ -26,7 +27,7 @@ export function validateDispatchRequest(input) {
   validateReopenItems(input||{});
   validateRepairItemEdits(input||{});
   validateProjectReassignment(input||{});
-  const actions = ['send-review','submit-review','edit-repair-items','edit-parts','issue-parts','confirm-parts','record-parts','reopen-repair','start-order','submit-order','claim-inspection','reassign-inspection','retry-inspection-notifications','retry-scheduler-notifications','record-hours','assign','reassign','reoffer','cancel','accept','decline','start','finish','pick','pause','resume','submit','inspect','update','remind','retry-notification','reconcile'];
+  const actions = ['update-due','send-review','submit-review','edit-repair-items','edit-parts','issue-parts','confirm-parts','record-parts','reopen-repair','start-order','submit-order','claim-inspection','reassign-inspection','retry-inspection-notifications','retry-scheduler-notifications','record-hours','assign','reassign','reoffer','cancel','accept','decline','start','finish','pick','pause','resume','submit','inspect','update','remind','retry-notification','reconcile'];
   if (!input || !actions.includes(input.action) || !Number.isInteger(input.expectedVersion) || input.expectedVersion < 0 || typeof input.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(input.requestId)) fail('操作参数无效：需要版本号及唯一请求编号',400);
   for (const key of ['note','reason','pauseReason','technicianId','inspectorId','notificationId','notificationJobId']) {
     if (input[key] !== undefined && (typeof input[key] !== 'string' || input[key].length > 2000)) fail('文本参数无效',400);
@@ -41,6 +42,12 @@ export function validateDispatchRequest(input) {
   if (input.itemId !== undefined && !Number.isSafeInteger(input.itemId)) fail('维修项目编号无效',400);
   if (input.rejectedItemIds !== undefined && (!Array.isArray(input.rejectedItemIds) || input.rejectedItemIds.some(id=>!Number.isSafeInteger(id)) || new Set(input.rejectedItemIds).size !== input.rejectedItemIds.length)) fail('退回项目无效',400);
   if (input.dueAt !== undefined && (typeof input.dueAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(input.dueAt) || !Number.isFinite(Date.parse(input.dueAt)))) fail('预计完工时间必须包含时区',400);
+  if (input.action === 'update-due') {
+    if (!input.dueAt) fail('请填写预计完工时间',400);
+    if (Object.keys(input).some(key => !['action','expectedVersion','requestId','dueAt'].includes(key))) fail('此操作仅可修改预计完工时间',400);
+    const calendar = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/.exec(input.dueAt);
+    if (!calendar || new Date(`${calendar[1]}T00:00:00Z`).toISOString().slice(0,10)!==calendar[1] || +calendar[2]>23 || +calendar[3]>59 || +(calendar[4] || 0)>59) fail('预计完工时间无效',400);
+  }
   return input;
 }
 export function applyDispatchAction(task, input, actor, people, now = new Date().toISOString(), recipientScope) {
@@ -281,6 +288,10 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     if(input.workHours===undefined) fail('请填写实际工时',400);
     if(task.workHours!==undefined) reason();
     Object.assign(next,{workHours:input.workHours,workHoursRecordedBy:actor.id,workHoursRecordedName:actor.name,workHoursRecordedAt:now});
+  } else if(action==='update-due') {
+    if (!hasAnyRole(actor, ['manager','advisor','inspector'])) fail('仅服务顾问、管理员或检验员可修改预计完工时间',403);
+    if (!canEditDispatchDue(task,actor)) fail('当前任务不能修改预计完工时间');
+    next.dueAt=new Date(input.dueAt).toISOString();
   } else if(action==='update') {
     requireSchedule(); if(task.stage==='维修完成') fail('已完成任务不能调整');
     if(input.dueAt) next.dueAt=new Date(input.dueAt).toISOString();

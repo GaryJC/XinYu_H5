@@ -36,7 +36,7 @@ export function useWorkbenchController() {
   const [orders, setOrders] = useState<WorkOrder[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { draft, setDraft, resetDraft, updateDraft, updateVehicle, updateCustomer, updateRepairItem, toggleArrayField } = useWorkOrderDraft();
-  const preRepairPhotos = usePreRepairPhotos(setDraft);
+  const preRepairPhotos = usePreRepairPhotos(setDraft, draft.inspection.preRepairPhotos);
   const paperPhotos = usePaperOrderPhotos(setDraft);
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [apiError, setApiError] = useState("");

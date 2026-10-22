@@ -1,7 +1,7 @@
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import {resolveRepairWriteback,retryRepairWriteback} from '../services/repairWritebackService.mjs';
 import { warehouseVehiclePartsHistory,warehouseHistoricalPartStock,warehouseStockOptions,searchWarehouseStock } from '../services/warehouseStockService.mjs';
-import { uploadRepairPhoto, deleteRepairPhoto } from '../services/repairPhotoService.mjs';
+import { uploadRepairPhoto, deleteRepairPhoto, deleteRepairPhotos } from '../services/repairPhotoService.mjs';
 import { readJson, sendJson } from '../http/response.mjs';
 import { requireAnyRole } from '../domain/accessPolicy.mjs';
 import { DISPATCH_ROLES } from '../domain/dispatchPolicy.mjs';
@@ -34,6 +34,7 @@ export async function handleDispatchRequest(req,res,url,actor) {
   const deletePhoto=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)\/photos\/([^/]+)$/);
   if(deletePhoto && req.method==='DELETE') {sendJson(res,200,await deleteRepairPhoto(actor,decodeURIComponent(deletePhoto[1]),decodeURIComponent(deletePhoto[2])));return true;}
   const photo=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)\/photos$/);
+  if(photo && req.method==='DELETE') {sendJson(res,200,await deleteRepairPhotos(actor,decodeURIComponent(photo[1]),await readJson(req)));return true;}
   if(photo && req.method==='POST') {sendJson(res,201,await uploadRepairPhoto(actor,decodeURIComponent(photo[1]),await readJson(req)));return true;}
   const personal=url.pathname.match(/^\/api\/dispatch\/technicians\/([^/]+)\/tasks$/);
   if(req.method==='GET' && personal) { requireAnyRole(actor,['manager','advisor']); sendJson(res,200,await queryDispatchTasks(actor,{...query,technicianId:decodeURIComponent(personal[1])})); return true; }

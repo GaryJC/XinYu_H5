@@ -322,7 +322,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             <TextArea disabled={!canEditForm} label="故障描述 / 客户诉求" value={draft.faultDescription} onChange={(value) => updateDraft({ faultDescription: value })} />
 
             {selectedOrder && selectedOrder.status !== "草稿" ? <SubmittedOrderPhotos key={selectedOrder.id} section="repair" order={selectedOrder}
-              user={controller.currentUser} onUpdated={controller.acceptRefreshedOrder}/> : !draft.paperOrder && <PreRepairPhotos photos={draft.inspection.preRepairPhotos} disabled={!canEditForm || Boolean(actionLoading)} controls={controller.preRepairPhotos} errors={formErrors} />}
+              user={controller.currentUser} onUpdated={controller.acceptRefreshedOrder}/> : !draft.paperOrder && <PreRepairPhotos key={`${controller.currentUser?.id}-${controller.preRepairPhotos.sessionId}`} photos={draft.inspection.preRepairPhotos} disabled={!canEditForm || Boolean(actionLoading)} controls={controller.preRepairPhotos} errors={formErrors} />}
 
             <div className="check-section">
               <Checklist disabled={!canEditForm} title="随车物品" items={belongings} selected={draft.inspection.belongings} onToggle={(value) => toggleArrayField("belongings", value)} />

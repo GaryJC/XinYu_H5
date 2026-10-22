@@ -52,3 +52,9 @@
  .task-detail-actions>.ant-space,.task-detail-actions>.ant-space>.ant-space-item{display:contents}
  .task-detail-actions .repair-items-save>.ant-btn,.task-detail-actions .ant-btn{width:100%;padding-inline:10px;min-width:0}
 }
+
+.task-due-field { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.task-due-field .ant-input { width: 100%; }
+
+.task-overview dl > .task-due-row { align-items: center; }
+.task-due-display { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; vertical-align: top; }

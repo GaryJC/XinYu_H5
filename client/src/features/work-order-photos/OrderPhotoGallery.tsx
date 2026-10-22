@@ -7,15 +7,17 @@ import { ImageSourcePicker } from '../../shared/ui/ImageSourcePicker';
 import { usePhotoSelection } from '../../shared/ui/PhotoBatchActions';
 import './order-photo-gallery.css';
 
-export function OrderPhotoGallery({ title, files, editable, busy, multiple, onUpload, onRemove }: {
-  title:string; files:Array<Pick<StoredFile,'id'|'originalName'>>; editable:boolean; busy:boolean; multiple:boolean;
+export function OrderPhotoGallery({ title, files, editable, busy, multiple, onUpload, onRemove, canAdd = true, manageLabel = '管理', removeHint = '删除后将不再展示在当前委托单中。' }: {
+  title:string; files:Array<Pick<StoredFile,'id'|'originalName'>>; editable:boolean; busy:boolean; multiple:boolean; canAdd?:boolean;
   onUpload:(files:File[],replaceId?:string)=>Promise<unknown>;
   onRemove:(ids:string[])=>Promise<unknown>;
+  manageLabel?:string; removeHint?:string;
 }) {
   const [managing,setManaging]=useState(false),[open,setOpen]=useState<string>();
   const selection=usePhotoSelection(files.map(file=>file.id));
-  const remove=(ids:string[])=>Modal.confirm({title:`删除 ${ids.length} 张照片？`,content:'删除后将不再展示在当前委托单中。',okText:'删除照片',cancelText:'取消',okButtonProps:{danger:true},onOk:async()=>{
-    if(await onRemove(ids)!==false){selection.clear();setOpen(undefined);}
+  const remove=(ids:string[])=>Modal.confirm({title:`删除 ${ids.length} 张照片？`,content:removeHint,zIndex:1500,okText:'删除照片',cancelText:'取消',okButtonProps:{danger:true},onOk:async()=>{
+    if(await onRemove(ids)===false)throw new Error('删除未完成，请稍后重试');
+    selection.clear();setOpen(undefined);
   }});
   const picker=(replaceId?:string)=><div className="order-photo-source"><ImageSourcePicker label={title+(replaceId?'重新上传':'上传')} multiple={multiple&&!replaceId}
     disabled={busy} primaryActionLabel={replaceId?'重新拍摄':'拍照上传'} galleryActionLabel={multiple&&!replaceId?'相册多选':'从相册选择'}
@@ -24,10 +26,10 @@ export function OrderPhotoGallery({ title, files, editable, busy, multiple, onUp
   return <section className="order-photo-gallery" aria-label={title}>
     <div className="order-photo-heading"><div><h3>{title}<span>{files.length} 张</span></h3><p>点击照片查看原图</p></div>
       {editable&&<div className="order-photo-heading-actions">
-        {!!files.length&&multiple&&<Button type="text" disabled={busy} onClick={()=>{setManaging(!managing);selection.clear();}}>{managing?'完成':'管理'}</Button>}
-        <Popover content={picker()} trigger="click" placement="bottomRight" open={open==='add'&&!busy} onOpenChange={value=>setOpen(value?'add':undefined)}>
+        {!!files.length&&multiple&&<Button type="text" disabled={busy} onClick={()=>{setManaging(!managing);setOpen(undefined);selection.clear();}}>{managing?'完成':manageLabel}</Button>}
+        {canAdd && <Popover content={picker()} trigger="click" placement="bottomRight" open={open==='add'&&!busy} onOpenChange={value=>setOpen(value?'add':undefined)}>
           <Button type="primary" icon={<Plus size={16}/>} disabled={busy} loading={busy} aria-label={`添加${title}`}>添加</Button>
-        </Popover>
+        </Popover>}
       </div>}
     </div>
     {managing&&editable&&!!files.length&&<div className="order-photo-batch">
@@ -47,6 +49,6 @@ export function OrderPhotoGallery({ title, files, editable, busy, multiple, onUp
           </Popover>}
         </div>
       </article>)}
-    </div></AuthenticatedImagePreviewGroup>:<div className="order-photo-empty"><Images size={24}/><span>暂无{title}</span>{editable&&<small>支持拍照或从相册添加</small>}</div>}
+    </div></AuthenticatedImagePreviewGroup>:<div className="order-photo-empty"><Images size={24}/><span>暂无{title}</span>{editable&&canAdd&&<small>支持拍照或从相册添加</small>}</div>}
   </section>;
 }

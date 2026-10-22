@@ -1,3 +1,4 @@
+import { TaskDueDateEditor } from './TaskDueDateEditor';
 import {partsHistoryEvents} from './partsHistory';
 import {individualRepair,personalTask,partsController} from './individualRepair';
 import {technicianPrimaryAction} from './technicianPrimaryAction';
@@ -46,7 +47,7 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
   }
   return <div className="technician-detail">
     <RepairWritebackStatus controller={c}/>
-    <TaskOverview task={task}><RepairStatusTag status={taskStatusLabel(task)}/></TaskOverview>
+    <TaskOverview task={task} dueEditor={<TaskDueDateEditor key={`${task.orderId}-${user.id}`} controller={c} user={user} blocked={blocked} />}><RepairStatusTag status={taskStatusLabel(task)}/></TaskOverview>
     {c.error?<Alert type="error" showIcon title={c.error}/>:null}
     {task.needsReview?<Alert type="warning" title="请联系服务顾问核对任务后再维修"/>:null}
     {task.feedback?<Alert type="warning" title="已反馈无法接单，等待服务顾问处理" description={task.feedback}/>:null}
@@ -72,7 +73,7 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
     {individual?<Collapse items={[{key:'team',label:'全单项目进度',children:wholeTask.items.map(item=><p key={item.id}>{item.name} · {item.responsibleName||'未分配'} · {item.status}</p>)}]}/>:null}
     <RepairPhotoPanel controller={c} ownerId={individual?user.id:undefined} editable={canPhoto} onBlocked={photoBlocked}/>
     <Collapse items={[{key:"sheet",label:"完整派工单与接车照片",children:<DispatchSheetSummary task={task} files={c.detail!.files}/>}]} />
-    <Collapse items={[{key:'more',label:'更多信息',children:<><p>委托单：{task.orderId}</p><p>接单：{displayTime(task.acceptedAt)}</p><p>开工：{displayTime(task.firstStartedAt)}</p>{c.detail!.events.map(e=><p key={e.id}>{displayTime(e.at)} · {e.actorName} · {dispatchEventLabel(e)} · {e.detail.stage}{e.detail.reason?` · ${e.detail.reason}`:''}</p>)}</>}]} />
+    <Collapse items={[{key:'more',label:'更多信息',children:<><p>委托单：{task.orderId}</p><p>接单：{displayTime(task.acceptedAt)}</p><p>开工：{displayTime(task.firstStartedAt)}</p>{c.detail!.events.map(e=><p key={e.id}>{displayTime(e.at)} · {e.actorName} · {dispatchEventLabel(e)} · {e.detail.stage}{e.action==='update-due'?` · 预计完工：${displayTime(e.detail.previousDueAt)} → ${displayTime(e.detail.dueAt)}`:''}{e.detail.reason?` · ${e.detail.reason}`:''}</p>)}</>}]} />
     {!ownDone&&(primary||['待开工','维修中'].includes(task.stage))&&editable&&!task.needsReview?<div className="technician-action-bar"><div className="technician-action-buttons">
       {['待接单','待开工','维修中'].includes(task.stage)?<Button className={task.stage==='待接单'?'repair-decline-button':'repair-pause-button'} danger={task.stage==='待接单'} color={task.stage==='待接单'?'danger':'orange'} variant="outlined" onClick={()=>{setNote('');setReason(task.stage==='待接单'?'时间冲突':'待配件');setDialog(task.stage==='待接单'?'decline':'pause');}} disabled={c.busy||blocked||Boolean(task.feedback)}>{task.stage==='待接单'?'无法接单':'暂停维修'}</Button>:null}
       {waitingForParts&&['待开工','维修中'].includes(task.stage)?<Button type="primary" block disabled>提交完工</Button>:null}

@@ -45,15 +45,15 @@ export async function dispatchPeople(actor, client=pool) {
   const {rows}=await client.query(`select id,name,role,active,shop_id,inspector_role_member, roles, ${outsourcingMembership} from users where shop_id=$1 order by name,id`,[actor.shopId]);
   return rows.map(r=>({id:r.id,name:r.name,role:r.role,roles:r.roles,active:r.active,shopId:r.shop_id,inspectorRoleMember:r.inspector_role_member,outsourcingRoleMember:r.outsourcing_role_member}));
 }
-export async function saveDispatchTask(client, task) {
+export async function saveDispatchTask(client, task, { metadataOnly = false } = {}) {
   const {hasPartsHistory,orderId,shopId,technicianId,inspectorId,stage,version,plate,dispatchNo,arrivalDate,orderStatus,faultDescription,overdue,repairCatalog,vehicleVin,vehicleModel,vehicleMileage,customerName,advisor,...data}=task;
   await client.query(`insert into dispatch_tasks(order_id,shop_id,technician_id,inspector_id,stage,version,data)
     values($1,$2,$3,$4,$5,$6,$7) on conflict(order_id) do update set technician_id=excluded.technician_id,
     inspector_id=excluded.inspector_id,stage=excluded.stage,version=excluded.version,data=excluded.data,updated_at=now()`,
     [orderId,shopId,technicianId||null,inspectorId||null,stage,version,JSON.stringify(data)]);
-  if(task.repairRound) {
+  if(metadataOnly || task.repairRound) {
     await client.query('update work_orders set updated_at=now() where id=$1',[orderId]);
-    return; // Commercial fields and original repair_items are immutable during subsequent rounds.
+    return; // Date-only edits and subsequent rounds must not rewrite order status or original repair_items.
   }
   const started=task.firstStartedAt || task.startHistoryUnknown || task.items.some(i=>i.startAt || ['维修中','待检验','已完工'].includes(i.status));
   const status=stage==='维修完成'?(orderStatus==='完成'?'完成':'待结算'):started?'维修中':'待派工';

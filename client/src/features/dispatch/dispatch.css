@@ -159,3 +159,11 @@
 .dispatch-execution-filter .ant-checkbox-wrapper{min-height:36px;align-items:center;margin:0}
 .project-reassignment-row{margin-top:16px;padding:14px;border:1px solid #e3e8ef;border-radius:10px}
 .project-reassignment-row p{margin:8px 0;color:#637188;font-size:13px}
+
+.repair-photo-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.repair-photo-heading h3 { margin:0; }
+.repair-photo-batch { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:12px 0; font-size:13px; }
+.repair-photo-card { min-width:0; padding:4px; border:1px solid transparent; border-radius:8px; }
+.repair-photo-card.is-selected { border-color:#1677ff; background:#e6f4ff; }
+.repair-photo-thumbnail { position:relative; }
+.repair-photo-check { position:absolute; top:4px; left:4px; z-index:2; padding:8px; border-radius:4px; background:#fff; }

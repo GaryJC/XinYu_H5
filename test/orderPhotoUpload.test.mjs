@@ -86,3 +86,19 @@ test("failed batch deletion preserves the displayed order and surfaces the error
   assert.equal(h.updates.length,0);
   assert.equal(h.state[0],"");
 });
+
+test("submitted replacement failure keeps the old order and provides an awaited failure result", async () => {
+  const h = setup({async uploadFile() {return {id:"new"};}, async updatePhoto() {throw new Error("保存失败");}});
+  assert.equal(await h.actions.upload("front45",files[0],"old-front"),false);
+  assert.equal(h.updates.length,0);
+  assert.match(h.state[1],/保存失败/);
+});
+test("submitted photo feedback distinguishes adding, replacing and deletion", async () => {
+  const h=setup({async uploadFile(){return {id:"new"};},async updatePhoto(id){return {id};},async deletePhotos(id){return {id};}});
+  assert.equal(await h.actions.upload("extra",files[0]),true);
+  assert.equal(h.state[3],"已添加");
+  assert.equal(await h.actions.upload("extra",files[0],"old"),true);
+  assert.equal(h.state[3],"已更换");
+  assert.equal(await h.actions.remove(["old"]),true);
+  assert.equal(h.state[3],"已删除");
+});
