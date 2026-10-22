@@ -83,7 +83,7 @@ export function PreRepairPhotos({ photos = {}, disabled, controls, errors = [], 
       </div>
       <div className="pre-repair-group-heading"><h4>补充照片 <span>{extras.length} 张</span></h4>
         {editable && <div className="pre-repair-heading-actions">
-          {Boolean(extras.length && controls?.removeExtras) && <Button type="text" disabled={busy} onClick={() => { setManaging(!managing); selection.clear(); }}>{managing ? '完成' : '管理'}</Button>}
+          {Boolean(extras.length && controls?.removeExtras) && <Button icon={managing ? undefined : <Trash2 size={16}/>} disabled={busy} onClick={() => { setManaging(!managing); selection.clear(); }}>{managing ? '完成' : '多选删除'}</Button>}
           {!managing && controls && <PreRepairPhotoMenu label="补充照片" sourceLabel="维修前额外照片" adding multiple busy={busy} mobile={mobile}
             onSelect={file => controls.upload('extra', file)} onSelectMany={controls.uploadExtras} />}
         </div>}

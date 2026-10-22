@@ -20,7 +20,7 @@ export function PreRepairPhotoMenu({ label, busy, mobile, adding = false, multip
     {guide}
     {onRemove && <Button danger type="text" icon={<Trash2 size={16} />} aria-label={removeLabel} disabled={busy} onClick={() => { setOpen(false); onRemove(); }}>删除照片</Button>}
   </div>;
-  const trigger = <Button type={adding ? 'default' : 'text'} icon={adding ? <Plus size={16} /> : <MoreHorizontal size={19} />}
+  const trigger = <Button color={adding ? undefined : 'primary'} variant={adding ? 'outlined' : 'text'} icon={adding ? <Plus size={16} /> : <MoreHorizontal size={19} />}
     aria-label={adding ? `添加${label}` : `${label}操作`} disabled={busy} onClick={mobile ? () => setOpen(true) : undefined}>{adding ? '添加照片' : undefined}</Button>;
   return mobile ? <>
     {trigger}

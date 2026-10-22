@@ -50,12 +50,12 @@ test('uploaded photos render compact menus without permanent upload or delete co
   assert.doesNotMatch(html,/拍摄示例|重新拍摄|全选补充照片|删除所选/);
   assert.match(html,/斜前方 45°照片操作/);
   assert.match(html,/补充照片 1操作/);
-  assert.match(html,/管理/);
+  assert.match(html,/多选删除/);
 });
 test('read-only photos have previews but no add, manage, select or operation entrypoints', () => {
   const html = render({disabled:true,photos:{front45:'front',rear45:'rear',extra:['extra']}});
   assert.match(html,/斜前方 45°维修前照片/);
-  assert.doesNotMatch(html,/照片操作|1操作|添加照片|管理|全选补充照片/);
+  assert.doesNotMatch(html,/照片操作|1操作|添加照片|多选删除|全选补充照片/);
 });
 test('paper orders present optional photos and no missing-required warning', () => {
   const html = render({required:false});

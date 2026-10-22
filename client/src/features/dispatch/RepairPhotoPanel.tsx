@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, Image, Alert, Checkbox, Modal } from 'antd';
+import { Trash2 } from 'lucide-react';
 import { ImageSourcePicker } from '../../shared/ui/ImageSourcePicker';
 import { AuthenticatedImage } from '../../shared/ui/AuthenticatedImage';
 import { usePhotoSelection } from '../../shared/ui/PhotoBatchActions';
@@ -25,7 +26,7 @@ export function RepairPhotoPanel({controller,editable,onBlocked,ownerId}:{contro
   }
   return <section className="repair-photos" aria-label="维修照片">
     <div className="repair-photo-heading"><h3>维修照片 <span>（必填）</span></h3>
-      {editable&&currentPhotos.length>0&&<Button type="text" disabled={busy} onClick={()=>{setManaging(!managing);selection.clear();}}>{managing?'完成':'管理'}</Button>}
+      {editable&&currentPhotos.length>0&&<Button icon={managing?undefined:<Trash2 size={16}/>} disabled={busy} onClick={()=>{setManaging(!managing);selection.clear();}}>{managing?'完成':'多选删除'}</Button>}
     </div>
     {editable?<p className="dispatch-muted">提交完工前，须上传至少一张本轮维修照片。支持相册多选，上传后自动保存；本轮照片可多选删除。</p>:null}
     {editable&&!managing?<ImageSourcePicker label="维修记录" primaryActionLabel="拍照记录" galleryActionLabel="相册" loading={uploads.some(p=>p.state==='uploading')} disabled={controller.busy || deleting} multiple onSelectMany={selectMany} onSelect={select}/>:null}

@@ -7,7 +7,7 @@ import { ImageSourcePicker } from '../../shared/ui/ImageSourcePicker';
 import { usePhotoSelection } from '../../shared/ui/PhotoBatchActions';
 import './order-photo-gallery.css';
 
-export function OrderPhotoGallery({ title, files, editable, busy, multiple, onUpload, onRemove, canAdd = true, manageLabel = '管理', removeHint = '删除后将不再展示在当前委托单中。' }: {
+export function OrderPhotoGallery({ title, files, editable, busy, multiple, onUpload, onRemove, canAdd = true, manageLabel = '多选删除', removeHint = '删除后将不再展示在当前委托单中。' }: {
   title:string; files:Array<Pick<StoredFile,'id'|'originalName'>>; editable:boolean; busy:boolean; multiple:boolean; canAdd?:boolean;
   onUpload:(files:File[],replaceId?:string)=>Promise<unknown>;
   onRemove:(ids:string[])=>Promise<unknown>;
@@ -26,7 +26,7 @@ export function OrderPhotoGallery({ title, files, editable, busy, multiple, onUp
   return <section className="order-photo-gallery" aria-label={title}>
     <div className="order-photo-heading"><div><h3>{title}<span>{files.length} 张</span></h3><p>点击照片查看原图</p></div>
       {editable&&<div className="order-photo-heading-actions">
-        {!!files.length&&multiple&&<Button type="text" disabled={busy} onClick={()=>{setManaging(!managing);setOpen(undefined);selection.clear();}}>{managing?'完成':manageLabel}</Button>}
+        {!!files.length&&multiple&&<Button icon={managing?undefined:<Trash2 size={16}/>} disabled={busy} onClick={()=>{setManaging(!managing);setOpen(undefined);selection.clear();}}>{managing?'完成':manageLabel}</Button>}
         {canAdd && <Popover content={picker()} trigger="click" placement="bottomRight" open={open==='add'&&!busy} onOpenChange={value=>setOpen(value?'add':undefined)}>
           <Button type="primary" icon={<Plus size={16}/>} disabled={busy} loading={busy} aria-label={`添加${title}`}>添加</Button>
         </Popover>}
@@ -45,7 +45,7 @@ export function OrderPhotoGallery({ title, files, editable, busy, multiple, onUp
         </div>
         <div className="order-photo-caption"><span title={file.originalName}>{file.originalName||`照片 ${index+1}`}</span>
           {editable&&!managing&&<Popover trigger="click" placement="bottomRight" open={open===file.id&&!busy} onOpenChange={value=>setOpen(value?file.id:undefined)} content={<div className="order-photo-menu"><strong>更换照片</strong>{picker(file.id)}<Button type="text" danger icon={<Trash2 size={16}/>} disabled={busy} onClick={()=>{setOpen(undefined);remove([file.id]);}} aria-label={`删除${title} ${file.originalName||file.id}`}>删除照片</Button></div>}>
-            <Button type="text" icon={<MoreHorizontal size={19}/>} aria-label={`照片操作 ${file.originalName||file.id}`} disabled={busy}/>
+            <Button color="primary" variant="text" icon={<MoreHorizontal size={19}/>} aria-label={`照片操作 ${file.originalName||file.id}`} disabled={busy}/>
           </Popover>}
         </div>
       </article>)}
