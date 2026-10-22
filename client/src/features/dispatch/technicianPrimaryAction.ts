@@ -5,5 +5,5 @@ export function technicianPrimaryAction(task:Pick<DispatchTask,'stage'|'feedback
  if(task.stage==='暂停')return 'resume';
  if(waitingForParts)return;
  if(['待开工','维修中'].includes(task.stage)&&task.items.some(item=>['待开工','待派工','待领料'].includes(item.status)))return 'start-order';
- if(task.stage==='维修中')return 'submit-order';
+ if(task.stage==='维修中'&&task.items.some(item=>item.status==='维修中'))return 'submit-order';
 }

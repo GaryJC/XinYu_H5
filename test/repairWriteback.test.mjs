@@ -7,11 +7,13 @@ const tech={id:'t',name:'甲',role:'technician',active:true,shopId:'s'},second={
 const task=()=>({orderId:'o',shopId:'s',version:1,stage:'维修中',orderStatus:'维修中',technicianIds:['t','u'],items:[{id:1,name:'保养',status:'维修中'},{id:2,name:'检查',status:'维修中'}]});
 const run=(task,action,extra={})=>applyDispatchAction(task,{action,expectedVersion:task.version,requestId:'responsibility-test',...extra},tech,[tech,second]);
 test('multi technician completion requires each owner and rejects unassigned people',()=>{
- const initial=task();assert.throws(()=>run(initial,'submit-order'),/指定有效负责人/);
- assert.throws(()=>run(initial,'submit-order',{repairItems:initial.items.map(i=>({id:i.id,name:i.name,responsibleId:'intruder'}))}),/指定有效负责人/);
- const edited=run(initial,'edit-repair-items',{repairItems:initial.items.map((i,n)=>({id:i.id,name:i.name,responsibleId:n?'u':'t',responsibleName:'forged'}))});
+ const initial=task();assert.throws(()=>run(initial,'submit-order'),/尚未分配本人维修项目/);
+ assert.throws(()=>run(initial,'submit-order',{repairItems:initial.items.map(i=>({id:i.id,name:i.name,responsibleId:'intruder'}))}),/尚未分配本人维修项目/);
+ const scheduler={...tech,id:'advisor',role:'advisor'};
+ const edited=applyDispatchAction(initial,{action:'edit-repair-items',expectedVersion:initial.version,requestId:'assign-owner-test',repairItems:initial.items.map((i,n)=>({id:i.id,name:i.name,responsibleId:n?'u':'t',responsibleName:'forged'}))},scheduler,[tech,second,scheduler]);
  assert.deepEqual(edited.items.map(i=>i.responsibleName),['甲','乙']);
- const done=run(edited,'submit-order');assert.equal(done.stage,'待检验');assert.equal(done.items[1].responsibleId,'u');assert.equal(initial.items[0].responsibleId,undefined);
+ const done=run(edited,'submit-order');assert.equal(done.stage,'维修中');
+ const final=applyDispatchAction(done,{action:'submit-order',expectedVersion:done.version,requestId:'second-owner-submit'},second,[tech,second]);assert.equal(final.stage,'待检验');assert.equal(done.items[1].responsibleId,'u');assert.equal(initial.items[0].responsibleId,undefined);
 });
 test('single technician defaults ownership and inspector locks cannot change the owner',()=>{
  const t={...task(),technicianIds:['t'],technicianId:'t'};const next=run(t,'submit-order');assert.ok(next.items.every(i=>i.responsibleId==='t'));

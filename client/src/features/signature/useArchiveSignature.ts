@@ -20,7 +20,7 @@ export function useArchiveSignature(user: UserProfile | undefined, onUpdated: (o
     setError("");
     try {
       const updated = await workOrderApi.createSignatureToken(order.id, user!.name);
-      if (!updated || updated.id !== order.id || (updated.signaturePurpose !== "supplement" && updated.status !== "待客户签字") || !updated.signatureToken || updated.signatureTokenUsed) {
+      if (!updated || updated.id !== order.id || (updated.signaturePurpose !== "supplement" && !["草稿", "待客户签字"].includes(updated.status)) || !updated.signatureToken || updated.signatureTokenUsed) {
         throw new Error("签字会话不存在、已失效或已完成，请刷新委托单后重试。");
       }
       onUpdated(updated);

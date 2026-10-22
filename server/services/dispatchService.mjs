@@ -1,3 +1,4 @@
+import {actionParts,individualRepair} from '../domain/individualRepair.mjs';
 import {enqueueRepairWriteback} from '../repositories/repairWritebackRepository.mjs';
 import {wakeRepairWriteback} from '../workers/repairWritebackWorker.mjs';
 import { assertPartsPhotos } from '../repositories/partsRequirementRepository.mjs';
@@ -83,12 +84,13 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
     }
     if(input.action==='reopen-repair'||input.action==='edit-repair-items'||input.repairItems!==undefined) task.repairCatalog=await repairCatalog(client,task);
     const next=applyDispatchAction(task,input,currentActor,people);
-    if(['submit-order','submit'].includes(input.action)) await assertRepairPhotoRecorded(client,task);
-    if(['accept','record-parts'].includes(input.action))await assertPartsPhotos(client,task,next.partsRequirement);
+    if(['submit-order','submit'].includes(input.action)) await assertRepairPhotoRecorded(client,task,individualRepair(task)?actor.id:undefined);
+    const parts=actionParts(next,input,actor);
+    if(['accept','record-parts'].includes(input.action))await assertPartsPhotos(client,task,parts);
     await saveRepairRound(client,task,next,currentActor,input.action);
     await saveDispatchTask(client,next);
     if(input.action==='assign') await markDispatchPlan(client,id);
-    const detail={reassignItemIds:input.reassignItemIds,previousItems:input.repairItems||['reassign','inspect'].includes(input.action)?task.items:undefined,partsRequirement:next.partsRequirement,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
+    const detail={reassignItemIds:input.reassignItemIds,previousItems:input.repairItems||['reassign','inspect'].includes(input.action)?task.items:undefined,partsRequirement:parts,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
       technicianName:next.technicianName,previousTechnicianName:task.technicianName,inspectorName:next.inspectorName,dueAt:next.dueAt,urgent:next.urgent,previousDueAt:task.dueAt};
     const {rows:[event]}=await client.query(`insert into dispatch_events(order_id,actor_id,actor_name,request_id,request_body,action,detail) values($1,$2,$3,$4,$5,$6,$7) returning id`,[id,actor.id,actor.name,input.requestId,JSON.stringify(input),input.action,JSON.stringify(detail)]);
     if(input.action==='inspect'&&next.stage==='维修完成')await enqueueRepairWriteback(client,next,event.id);
@@ -125,18 +127,19 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
       if(['reassign','cancel'].includes(input.action)) addHandlers(task,input.action==='cancel'?'派工已撤销':'任务已改派');
     }
     const schedulerKind={decline:'无法接单',pause:'维修暂停','submit-order':'维修已提检',submit:'维修已提检'}[input.action];
-    if(schedulerKind) {
+    if(schedulerKind && (input.action!=='submit-order'||next.stage==='待检验')) {
       const payload={orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,actorName:actor.name,reason:input.action==='pause'?[input.pauseReason,input.note].filter(Boolean).join('：'):input.reason||input.note||''};
       await client.query('insert into dispatch_scheduler_notifications(event_id,order_id,kind,payload) values($1,$2,$3,$4)',[event.id,id,schedulerKind,JSON.stringify(payload)]);
     }
-    if(['submit-order','retry-inspection-notifications'].includes(input.action)) {
+    if(['submit-order','retry-inspection-notifications'].includes(input.action)&&next.stage==='待检验') {
       await client.query(`insert into dispatch_inspection_notifications(event_id,order_id) values($1,$2) on conflict do nothing`,[event.id,id]);
     }
-    if(['accept','record-parts'].includes(input.action) && next.partsRequirement.mode!=='none'&&!next.partsRequirement.preparedAt&&!next.partsRequirement.issuedAt) people.filter(p=>p.active && p.role==='warehouse').forEach(p=>add(p.id,'配件申请'));
-    if(input.action==='edit-parts') addHandlers(next,'配件需求已调整');
-    if(input.action==='accept'&&next.partsRequirement.preparedAt&&!next.partsRequirement.issuedAt) addHandlers(next,'配件可领取');
-    if(input.action==='confirm-parts') addHandlers(next,'配件可领取');
-    if(input.action==='issue-parts') addHandlers(next,'配件已出库');
+    if(['accept','record-parts'].includes(input.action) && parts?.mode!=='none'&&!parts?.preparedAt&&!parts?.issuedAt) people.filter(p=>p.active && p.role==='warehouse').forEach(p=>add(p.id,'配件申请'));
+    const addPartsHandlers=kind=>parts?.ownerId?add(parts.ownerId,kind):addHandlers(next,kind);
+    if(input.action==='edit-parts') addPartsHandlers('配件需求已调整');
+    if(input.action==='accept'&&parts?.preparedAt&&!parts?.issuedAt) addPartsHandlers('配件可领取');
+    if(input.action==='confirm-parts') addPartsHandlers('配件可领取');
+    if(input.action==='issue-parts') addPartsHandlers('配件已出库');
     if(input.action==='submit' || input.action==='reassign-inspection') add(next.inspectorId,'待检验');
     if(input.action==='inspect' && next.stage==='维修中') addHandlers(next,'退回返工');
     if(input.action==='remind') {
@@ -149,5 +152,5 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
       add(recipient,'人工催办');
       }
     }
-    for(const {recipient,kind} of recipients) await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),id,event.id,recipient,kind,JSON.stringify({shopId:next.shopId,repairRound:next.repairRound||0,orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,actorName:actor.name,summary:(kind==='维修项目已删除'?removedFor(recipient).map(i=>i.name):projectReassignment?next.items.filter(i=>changedProjectIds.includes(i.id)).map(i=>`${i.name} → ${i.responsibleName}`):next.items.map(i=>i.name)).join('、').slice(0,200),dueAt:next.dueAt,partsRecordedAt:next.partsRequirement?.recordedAt,partsRevision:next.partsRequirement?.revision,notice:kind==='维修项目已删除'?'所列维修项目已删除，无需继续施工；其他项目按原安排执行。':projectReassignment?'仅所列项目变更负责人，其他项目及工单进度保持不变。':input.action==='edit-parts'?'仓管已整理配件需求，请查看最新清单。':input.action==='confirm-parts'?'配件已备齐，请到仓库领取。':input.action==='issue-parts'?'仓管已确认配件交接出库，待开工任务已自动开工。':'',reason:input.reason||''})]);
+    for(const {recipient,kind} of recipients) await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),id,event.id,recipient,kind,JSON.stringify({shopId:next.shopId,repairRound:next.repairRound||0,orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,actorName:actor.name,summary:(kind==='维修项目已删除'?removedFor(recipient).map(i=>i.name):projectReassignment?next.items.filter(i=>changedProjectIds.includes(i.id)).map(i=>`${i.name} → ${i.responsibleName}`):next.items.map(i=>i.name)).join('、').slice(0,200),dueAt:next.dueAt,partsOwnerId:parts?.ownerId,partsRecordedAt:parts?.recordedAt,partsRevision:parts?.revision,notice:kind==='维修项目已删除'?'所列维修项目已删除，无需继续施工；其他项目按原安排执行。':projectReassignment?'仅所列项目变更负责人，其他项目及工单进度保持不变。':input.action==='edit-parts'?'仓管已整理配件需求，请查看最新清单。':input.action==='confirm-parts'?'配件已备齐，请到仓库领取。':input.action==='issue-parts'?'仓管已确认配件交接出库，待开工任务已自动开工。':'',reason:input.reason||''})]);
 }

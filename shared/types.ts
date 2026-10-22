@@ -296,6 +296,8 @@ export type WorkOrderDispatchPlan = DispatchExecution & {
   activatedAt?: string;
 };
 
+export type CustomerSignatureMode = "onsite" | "remote";
+
 export type PaperOrder = { mode: "pending" | "dingtalk" | "runfeng"; photoIds: string[] };
 export type PaperOrderResolution = { mode: "dingtalk" } | { mode: "runfeng"; dispatchNo: string };
 export type VehicleLicenseException = {
@@ -413,10 +415,12 @@ export type DispatchItem = {
   inspectorName?: string; inspectedBy?: string; inspectedAt?: string; pickedAt?: string; rejectionReason?: string;
 };
 export type RepairPhotoUploadRequest = {requestId:string;fileName:string;mimeType:string;imageBase64:string;repairRound?:number;purpose?:"progress"|"parts"};
-export type PartsRequirement = { sourcePhotoIds?:string[]; revision?:number; batch?:number; preparedBy?:string; preparedName?:string; preparedAt?:string; issuedBy?:string; issuedName?:string; issuedAt?:string; recipientIds?:string[]; recipientName?:string; confirmedBy?:string; confirmedName?:string; confirmedAt?:string; mode:"none"|"list"|"photo"; items:Array<{name:string;quantity:number;unit:string}>; photoIds:string[]; recordedBy?:string; recordedName?:string; recordedAt?:string };
+export type PartsRequirement = { ownerId?:string; ownerName?:string; sourcePhotoIds?:string[]; revision?:number; batch?:number; preparedBy?:string; preparedName?:string; preparedAt?:string; issuedBy?:string; issuedName?:string; issuedAt?:string; recipientIds?:string[]; recipientName?:string; confirmedBy?:string; confirmedName?:string; confirmedAt?:string; mode:"none"|"list"|"photo"; items:Array<{name:string;quantity:number;unit:string}>; photoIds:string[]; recordedBy?:string; recordedName?:string; recordedAt?:string };
 export type DispatchTask = DispatchExecution & {
   hasPartsHistory?:boolean;
   partsRequirement?:PartsRequirement;
+  partsRequests?:PartsRequirement[];
+  workerSubmissions?:Record<string,{at:string;note:string}>;
   vehicleVin?:string; vehicleModel?:string; vehicleMileage?:string; customerName?:string; advisor?:string;
   repairRound?: number; roundReason?: string; roundOpenedAt?: string; roundOpenedBy?: string; roundOpenedName?: string;
   repairCatalog?: Array<{id:number;name:string}>;
@@ -438,6 +442,7 @@ export type DispatchTask = DispatchExecution & {
 export type RepairItemEdit = {id?:number;name:string;responsibleId?:string;responsibleName?:string};
 export type DispatchActionName = "edit-repair-items" | "edit-parts" | "issue-parts" | "confirm-parts" | "record-parts" | "reopen-repair" | "retry-scheduler-notifications" | "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
 export type DispatchActionRequest = DispatchExecution & {
+  partsOwnerId?:string;
   reassignItemIds?: number[];
   repairItems?:RepairItemEdit[];
   partsRequirement?:PartsRequirement;

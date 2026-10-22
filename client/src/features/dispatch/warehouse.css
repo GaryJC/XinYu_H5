@@ -79,3 +79,6 @@
 .warehouse-repair-items ol{margin:0;padding-left:24px}
 .warehouse-repair-items li{padding:8px 0 8px 4px;line-height:1.6;overflow-wrap:anywhere}
 .warehouse-repair-items li+li{border-top:1px solid #edf0f4}
+
+.warehouse-sort{display:flex;align-items:center;gap:12px;color:#657085;font-size:13px}
+.warehouse-sort .ant-select{flex:1;max-width:240px;min-width:0}

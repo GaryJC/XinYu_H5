@@ -42,6 +42,37 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       const {rows:[expiry]}=await pool.query("select expires_at is null as valid from signature_tokens where token=$1",[a.signatureToken]);assert.equal(expiry.valid,true);
       await assert.rejects(()=>db.signWorkOrderByToken(first.signatureToken,'客户',null),e=>e.status===404);
     });
+    await t.test('onsite signing stays draft until signed; remote deferral requires explicit selection',async()=>{
+      const {customerSignatureSession}=await import('../server/domain/customerSignaturePolicy.mjs');
+      const file=await seed('onsite-choice');
+      const onsite=await db.createSignatureTokenForOrder('onsite-choice',manager.name);
+      assert.equal(onsite.status,'草稿');
+      assert.equal((await db.findWorkOrderById(pool,'onsite-choice')).status,'草稿','Cancelling or abandoning the dialog leaves a draft');
+      assert.throws(()=>customerSignatureSession(onsite),e=>e.status===409);
+      await assert.rejects(()=>db.createSignatureTokenForOrder('onsite-choice',manager.name,{signatureMode:'skip'}),e=>e.status===400);
+      const remote=await db.createSignatureTokenForOrder('onsite-choice',manager.name,{signatureMode:'remote'});
+      assert.equal(remote.status,'待客户签字');assert.equal(remote.signatureToken,onsite.signatureToken);
+      assert.equal(customerSignatureSession(remote).state,'pending');
+      assert.equal((await db.createSignatureTokenForOrder('onsite-choice',manager.name)).status,'待客户签字');
+      const returned=await db.createSignatureTokenForOrder('onsite-choice',manager.name,{signatureMode:'onsite'});
+      assert.equal(returned.status,'草稿');assert.throws(()=>customerSignatureSession(returned),e=>e.status===409);
+      let wroteRemoteFile=false;
+      await assert.rejects(()=>db.signWorkOrderByToken(returned.signatureToken,null,null,async()=>{wroteRemoteFile=true;}),e=>e.status===409);
+      assert.equal(wroteRemoteFile,false,'A stale public request cannot sign after switching back to onsite');
+      const signed=await db.signWorkOrderByToken(returned.signatureToken,'测试客户',file);
+      assert.equal(signed.status,'待客户签字');assert.equal(signed.customerSignatureReview.state,'pending');
+      assert.equal((await pool.query("select count(*) from legacy_sync_outbox where order_id='onsite-choice'")).rows[0].count,'0');
+      assert.ok((await pool.query("select action from audit_logs where order_id='onsite-choice'")).rows.some(row=>row.action.includes('车主不在现场')));
+      await db.confirmCustomerSignature('onsite-choice',manager);
+      assert.equal((await pool.query("select count(*) from legacy_sync_outbox where order_id='onsite-choice'")).rows[0].count,'1');
+    });
+    await t.test('editing an unsigned onsite draft revokes its old preview session',async()=>{
+      const file=await seed('onsite-edit');
+      const session=await db.createSignatureTokenForOrder('onsite-edit',manager.name);
+      await db.updateWorkOrder({...session,faultDescription:'修改后的故障描述'},manager.name,'修改草稿',manager);
+      await assert.rejects(()=>db.signWorkOrderByToken(session.signatureToken,'旧预览签名',file),e=>e.status===404);
+      assert.equal((await db.findWorkOrderById(pool,'onsite-edit')).status,'草稿');
+    });
     await t.test('missing sessions recover and renewal racing signature submits exactly once',async()=>{
       const file=await seed('race','待客户签字');
       const session=await db.createSignatureTokenForOrder('race',manager.name);
@@ -83,7 +114,7 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
         }
         await seed('remote');await pool.query("update work_orders set advisor='负责顾问' where id='remote'");
         await pool.query("insert into work_order_dispatch_plans(order_id,technician_id,assigned_by,due_at) values('remote','t','m',now()+interval '1 day')");
-        const first=await db.createSignatureTokenForOrder('remote',manager.name);
+        const first=await db.createSignatureTokenForOrder('remote',manager.name,{signatureMode:'remote'});
         assert.match(first.signatureToken,/^sig_[a-f0-9]{64}$/);
         const renewed=await db.createSignatureTokenForOrder('remote',manager.name,{renew:true});
         assert.notEqual(first.signatureToken,renewed.signatureToken);
@@ -188,6 +219,44 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       const snapshot=(await pool.query("select snapshot from repair_writebacks where order_id='handover'")).rows[0].snapshot;
       assert.deepEqual(snapshot.items.map(i=>i.employeeCode),['t','u']);
       const event=detail.events.find(e=>e.action==='reassign');assert.equal(event.detail.previousItems[1].responsibleId,'t');assert.equal(event.detail.items[1].responsibleId,'u');
+    });
+    await t.test('individual completion and material requests persist independently and notify only their owner',async()=>{
+      await seed('individual','已委托');
+      const warehouse={id:'w',name:'仓管',role:'warehouse',active:true,shopId:'shop-hq'};
+      await pool.query("insert into users(id,name,role,shop_id,active) values('w','仓管','warehouse','shop-hq',true)");
+      const service=await import('../server/services/dispatchService.mjs');
+      const {validatePartsPickupNotification}=await import('../server/repositories/partsRequirementRepository.mjs');
+      async function act(user,action,extra={}) {
+        const {task}=await service.dispatchDetail(manager,'individual');
+        return service.executeDispatchAction(user,'individual',{action,expectedVersion:task.version,requestId:randomUUID(),...extra});
+      }
+      const requirement=name=>({mode:'list',items:[{name,quantity:1,unit:'个'}],photoIds:[]});
+      await act(manager,'assign',{technicianIds:['t','u'],dueAt:new Date(Date.now()+86400000).toISOString(),repairItems:[{id:1,name:'检查',responsibleId:'t'},{id:2,name:'维修',responsibleId:'u'}]});
+      await act(tech,'accept',{partsRequirement:requirement('滤芯')});
+      await act(nextTech,'record-parts',{partsRequirement:requirement('雨刮')});
+      const materials=(await service.dispatchDetail(warehouse,'individual')).task.partsRequests;
+      assert.deepEqual(materials.map(p=>p.ownerId),['t','u']);
+      await act(warehouse,'confirm-parts',{partsOwnerId:'t'});
+      const notice=(await pool.query("select * from dispatch_notifications where order_id='individual' and kind='配件可领取'")).rows;
+      assert.deepEqual(notice.map(n=>n.recipient_id),['t']);assert.equal(notice[0].payload.partsOwnerId,'t');
+      assert.equal(await validatePartsPickupNotification(notice[0],tech,pool),true);
+      assert.equal(await validatePartsPickupNotification({...notice[0],recipient_id:'u'},nextTech,pool),false);
+      await act(warehouse,'issue-parts',{partsOwnerId:'t'});
+      await assert.rejects(()=>act(tech,'submit-order'),/维修照片/);
+      for(const user of [tech,nextTech])await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by) values($1,'individual','repair_progress_photo','local','','fixture','image/png',8,$2)",[randomUUID(),user.id]);
+      const first=await act(tech,'submit-order',{note:'甲完成'});
+      assert.equal(first.task.stage,'维修中');assert.equal(first.task.items[1].status,'待开工');
+      assert.equal((await pool.query("select count(*) from dispatch_inspection_notifications where order_id='individual'")).rows[0].count,'0');
+      await assert.rejects(()=>act(nextTech,'submit-order'),/确认配件出库/);
+      await act(warehouse,'confirm-parts',{partsOwnerId:'u'});await act(warehouse,'issue-parts',{partsOwnerId:'u'});
+      const current=(await service.dispatchDetail(nextTech,'individual')).task;
+      const request={action:'submit-order',expectedVersion:current.version,requestId:randomUUID(),note:'乙完成'};
+      await Promise.all([service.executeDispatchAction(nextTech,'individual',request),service.executeDispatchAction(nextTech,'individual',request)]);
+      const finished=(await service.dispatchDetail(manager,'individual')).task;
+      assert.equal(finished.stage,'待检验');assert.deepEqual(finished.items.map(i=>i.finishedBy),['t','u']);
+      assert.equal((await pool.query("select count(*) from dispatch_inspection_notifications where order_id='individual'")).rows[0].count,'1');
+      assert.equal((await pool.query("select count(*) from dispatch_scheduler_notifications where order_id='individual' and kind='维修已提检'")).rows[0].count,'1');
+      assert.equal(finished.partsRequests.length,2);
     });
     if(process.env.WORKFLOW_UI_TEST==='true')await t.test('mobile signing recovery and supplier quote through real browser forms',async()=>{
       const {createServer}=await import('node:http');

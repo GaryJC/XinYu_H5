@@ -119,13 +119,16 @@ test('removed dispatcher role cannot retain scheduling access',()=>{
   assert.throws(()=>act(initial(),'assign',{...advisor,role:'dispatcher'},{technicianId:'t',dueAt:due}),e=>e.status===403);
 });
 
-test('equal collaborators share one progress and reassignment removes access',()=>{
-  let task=act(initial(),'assign',advisor,{technicianIds:['t','t2'],dueAt:due});
+test('collaborators complete their assigned work and reassignment removes access',()=>{
+  let task=act(initial(),'assign',advisor,{technicianIds:['t','t2'],dueAt:due,repairItems:initial().items.map(i=>({id:i.id,name:i.name,responsibleId:'t2'}))});
   assert.deepEqual(task.technicianIds,['t','t2']);
   assert.doesNotThrow(()=>assertDispatchAccess(task,second));
   task=act(task,'accept',second);
   task=act(task,'edit-repair-items',second,{repairItems:task.items.map(i=>({id:i.id,name:i.name,responsibleId:'t2'}))});
-  task=act(task,'finish',second,{itemId:1});
+  task=act(task,'submit-order',second);
+  assert.equal(task.stage,'待检验');
+  task=act(task,'claim-inspection',inspector);
+  task=act(task,'inspect',inspector,{rejectedItemIds:[2],reason:'返修'});
   assert.equal(task.items[0].startedBy,'t2');assert.equal(task.items[0].finishedBy,'t2');
   task=act(task,'reassign',advisor,{technicianIds:['t2'],dueAt:due,reason:'人员调整'});
   assert.throws(()=>assertDispatchAccess(task,technician),e=>e.status===403);
@@ -141,7 +144,7 @@ test('invalid collaborator lists cannot bypass employee validation',()=>{
 
 test('field work means employees leave for a service unit and retains shared progress',()=>{
   assert.throws(()=>act(initial(),'assign',advisor,{executionMode:'field',technicianIds:['t','t2'],dueAt:due}),e=>e.status===400);
-  let task=act(initial(),'assign',advisor,{executionMode:'field',technicianIds:['t','t2'],serviceUnit:'客户车队',serviceAddress:'客户停车场',departureAt:now,expectedReturnAt:due,dueAt:due});
+  let task=act(initial(),'assign',advisor,{executionMode:'field',technicianIds:['t','t2'],serviceUnit:'客户车队',serviceAddress:'客户停车场',repairItems:initial().items.map(i=>({id:i.id,name:i.name,responsibleId:'t2'})),departureAt:now,expectedReturnAt:due,dueAt:due});
   assert.equal(task.serviceUnit,'客户车队');assert.equal(task.executionMode,'field');
   task=act(task,'accept',second);
   assert.equal(task.stage,'维修中');
@@ -232,17 +235,19 @@ test('multi-person handover and rejected historical work require explicit curren
   let task=act(assigned(),'accept');task=act(task,'finish',technician,{itemId:1});
   task=apply(task,'reassign',advisor,{technicianIds:['t2','t3'],dueAt:due,reason:'多人交接'});
   assert.equal(task.items[0].responsibleId,'t');assert.equal(task.items[1].responsibleId,undefined);
-  task=apply(task,'accept',second);
-  assert.throws(()=>apply(task,'submit-order',second),/指定有效负责人/);
-  task=apply(task,'submit-order',second,{repairItems:task.items.map(i=>({id:i.id,name:i.name,responsibleId:i.id===1?'t':'t3'}))});
+  assert.throws(()=>apply(task,'accept',second),/尚未分配/);
+  task=apply(task,'edit-repair-items',advisor,{repairItems:task.items.map(i=>({id:i.id,name:i.name,responsibleId:i.id===1?'t':'t3'}))});
+  task=apply(task,'accept',third,{partsRequirement:{mode:'none'}});
+  task=apply(task,'submit-order',third);
   // Historical submitted responsibility remains valid after the employee is deactivated.
   const old=team.find(p=>p.id==='t');old.active=false;
   task=apply(task,'claim-inspection',inspector);
   task=apply(task,'inspect',inspector,{rejectedItemIds:[1],reason:'返修'});
   assert.equal(task.items[0].responsibleId,undefined);assert.equal(task.items[1].responsibleId,'t3');
+  assert.throws(()=>apply(task,'start-order',second));
+  task=apply(task,'edit-repair-items',advisor,{repairItems:task.items.map(i=>({id:i.id,name:i.name,responsibleId:i.id===1?'t2':i.responsibleId}))});
   task=apply(task,'start-order',second);
-  assert.throws(()=>apply(task,'submit-order',second),/指定有效负责人/);
-  task=apply(task,'submit-order',second,{repairItems:task.items.map(i=>({id:i.id,name:i.name,responsibleId:i.id===1?'t2':i.responsibleId}))});
+  task=apply(task,'submit-order',second);
   assert.equal(task.stage,'待检验');old.active=true;
   const former={...technician,role:'manager'};
   assert.throws(()=>apply(task,'inspect',former),/不能自检/);

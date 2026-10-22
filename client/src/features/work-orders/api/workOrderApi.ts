@@ -1,5 +1,6 @@
 import {
   AuthResult,
+  CustomerSignatureMode,
   DispatchTask,
   DashboardSummary,
   DevelopmentPersonaKey,
@@ -56,7 +57,7 @@ export type WorkOrderApi = {
   updateCustomerVehicle(id: string, change: WorkOrderCustomerVehicleUpdate): Promise<WorkOrder>;
   deleteDraft(id: string): Promise<{ id: string }>;
   transition(id: string, status: WorkOrderStatus, actor: string, action: string, patch?: Partial<WorkOrder>): Promise<WorkOrder>;
-  createSignatureToken(id: string, actor: string, renew?: boolean): Promise<WorkOrder>;
+  createSignatureToken(id: string, actor: string, renew?: boolean, signatureMode?: CustomerSignatureMode): Promise<WorkOrder>;
   confirmCustomerSignature(id: string): Promise<WorkOrder>;
   signByToken(token: string, signature: string, signatureFileId: string): Promise<WorkOrder>;
   findByToken(token: string): Promise<WorkOrder | undefined>;
@@ -137,8 +138,8 @@ export const workOrderApi: WorkOrderApi = {
     return request(`/api/work-orders/${id}/transition`, { method: "POST", body: { status, actor, action, patch } });
   },
   confirmCustomerSignature(id) { return request(`/api/work-orders/${encodeURIComponent(id)}/confirm-customer-signature`, { method: "POST" }); },
-  createSignatureToken(id, actor, renew = false) {
-    return request(`/api/work-orders/${id}/signature-token`, { method: "POST", body: { actor, renew } });
+  createSignatureToken(id, actor, renew = false, signatureMode) {
+    return request(`/api/work-orders/${id}/signature-token`, { method: "POST", body: { actor, renew, signatureMode } });
   },
   signByToken(token, signature, signatureFileId) {
     return request(`/api/signatures/${token}/sign`, { method: "POST", body: { signature, signatureFileId } });

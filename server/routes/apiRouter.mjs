@@ -322,8 +322,8 @@ export async function handleApiRequest(req, res, url) {
   if (tokenMatch && req.method === "POST") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     await assertWorkOrderAccess(tokenMatch[1], currentUser);
-    const { actor, renew } = await readJson(req);
-    sendJson(res, 200, await createSignatureTokenForOrder(tokenMatch[1], currentUser.name || actor, { renew: renew === true }));
+    const { actor, renew, signatureMode } = await readJson(req);
+    sendJson(res, 200, await createSignatureTokenForOrder(tokenMatch[1], currentUser.name || actor, { renew: renew === true, signatureMode }));
     return true;
   }
 

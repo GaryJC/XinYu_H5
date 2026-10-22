@@ -47,13 +47,15 @@ test('inspection rejection preserves valid owners in an unchanged multi-person t
   }
   assert.deepEqual(next.items[2],original.items[2]);
   const started=act(next,{action:'start-order'},t1);
-  assert.equal(act(started,{action:'submit-order'},t1).stage,'待检验');
+  const first=act(started,{action:'submit-order'},t1);assert.equal(first.stage,'维修中');
+  const second=act(first,{action:'start-order'},t2);assert.equal(act(second,{action:'submit-order'},t2).stage,'待检验');
 });
 
 test('both editing and completion require a reason when an existing project changes owner',()=>{
   const original={...task(),items:task().items.filter(i=>i.id!==2)};
   const edited=rows(original).map(row=>row.id===1?{...row,responsibleId:'t2'}:row);
-  for(const action of ['edit-repair-items','submit-order']) {
+  assert.throws(()=>act(original,{action:'submit-order',repairItems:edited,reason:'换班交接'},t1),/本人负责/);
+  for(const action of ['edit-repair-items']) {
     const actor=action==='submit-order'?t1:advisor;
     for(const reason of [undefined,'','   '])assert.throws(()=>act(original,{action,repairItems:edited,reason},actor),/原因或交接说明/);
     const next=act(original,{action,repairItems:edited,reason:'换班交接'},actor);

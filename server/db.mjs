@@ -120,6 +120,8 @@ export async function updateWorkOrder(order, actor, action, actorUser) {
       updatedAt: nowString()
     };
     await upsertWorkOrder(client, next);
+    // Editing a draft invalidates onsite sessions so an old preview cannot be signed.
+    await client.query("update signature_tokens set expires_at=clock_timestamp() where order_id=$1 and not used", [next.id]);
     await attachPreRepairPhotos(client, next, actorUser?.id);
     await attachDraftVehicleLicense(client, next, actorUser?.id);
     await saveDispatchPlan(client, next, actorUser, next.dispatchPlan);
@@ -163,19 +165,29 @@ export async function transitionWorkOrder(id, status, actor, action, patch = {})
   });
 }
 
-export async function createSignatureTokenForOrder(id, actor, { renew = false } = {}) {
+export async function createSignatureTokenForOrder(id, actor, { renew = false, signatureMode } = {}) {
+  if (signatureMode !== undefined && !["onsite", "remote"].includes(signatureMode)) throw new HttpError(400, "请选择有效的客户签字方式");
   return transaction(async (client) => {
-    const order = await findWorkOrderById(client, id, true);
+    let order = await findWorkOrderById(client, id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
     const supplemental = Boolean(order.paperOrder || !["草稿", "待客户签字"].includes(order.status) || order.customerSignatureReview?.supplemental);
     const purpose = supplemental ? "supplement" : "authorization";
     const resign = renew && order.customerSignatureReview?.state === "pending";
     if (order.customerSignatureFileId && !resign) throw new HttpError(409, "客户签名已上传，无需再次发起签字");
+    if (!supplemental) {
+      assertOrderReadyForSignature(order); assertPreRepairPhotosReady(order);
+      // Opening the onsite dialog must not submit an unsigned draft.
+      const status = signatureMode === 'remote' ? '待客户签字' : signatureMode === 'onsite' ? '草稿' : order.status;
+      if (status !== order.status) {
+        await upsertWorkOrder(client, { ...order, status, updatedAt: nowString() });
+        await addAudit(client, id, actor, status === '待客户签字' ? '车主不在现场，选择后续发送签字链接' : '改为现场签字，未签字保留草稿');
+        order = { ...order, status };
+      }
+    }
     const { rows: sessions } = await client.query(
       "select token,purpose from signature_tokens where order_id=$1 and not used and (expires_at is null or expires_at>clock_timestamp()) order by created_at desc,token desc limit 1 for update", [id]
     );
     if (!renew && sessions[0]?.purpose === purpose && isRemoteSignatureToken(sessions[0].token)) return { ...order, signaturePurpose: purpose, signatureToken: sessions[0].token, signatureTokenUsed: false };
-    if (!supplemental) { assertOrderReadyForSignature(order); assertPreRepairPhotosReady(order); }
     await client.query("update signature_tokens set expires_at=clock_timestamp() where order_id=$1", [id]);
     const token = createSignatureToken();
     if (resign) {
@@ -185,7 +197,7 @@ export async function createSignatureTokenForOrder(id, actor, { renew = false } 
     if (supplemental) {
       if (resign) await client.query("delete from signatures where order_id=$1 and signer_type='customer'", [id]);
       await client.query("update work_orders set updated_at=now() where id=$1", [id]);
-    } else await upsertWorkOrder(client, { ...order, signatures: resign ? { ...order.signatures, customer: undefined } : order.signatures, status: "待客户签字", updatedAt: nowString() });
+    } else await upsertWorkOrder(client, { ...order, signatures: resign ? { ...order.signatures, customer: undefined } : order.signatures, status: order.status, updatedAt: nowString() });
     await client.query(
       `
         insert into signature_tokens (token, order_id, used, expires_at, purpose)
@@ -236,7 +248,11 @@ export async function signWorkOrderByToken(token, signature, signatureFileId, cr
     if (tokenRow.used) throw new HttpError(409, "签字链接已使用");
 
     const supplemental = tokenRow.purpose === "supplement";
-    if (order.customerSignatureFileId || !supplemental && (order.status !== "待客户签字" || order.paperOrder)) throw new HttpError(409, "当前委托单已签字或不能签字");
+    if (order.customerSignatureFileId || !supplemental && (!["草稿", "待客户签字"].includes(order.status) || order.paperOrder)) throw new HttpError(409, "当前委托单已签字或不能签字");
+    if (!supplemental) {
+      if (createSignatureFile && order.status !== '待客户签字') throw new HttpError(409, '尚未选择远程签字，请联系服务顾问');
+      assertOrderReadyForSignature(order); assertPreRepairPhotosReady(order);
+    }
     // A remote signature is stored only after locking and validating the session.
     // Its file metadata participates in the same transaction as the signature.
     if (createSignatureFile) {

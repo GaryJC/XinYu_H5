@@ -51,8 +51,8 @@ export function PartsRequirementDialog({controller:c,accepting,onClose,onUploadi
     if(await c.act({action:accepting?'accept':'record-parts',partsRequirement:requirement}))onClose();
   }
   function add(name='',unit='个'){setMode('list');setItems(rows=>rows.some(i=>name&&i.name===name)?rows:rows.length<100?[...rows,{name,quantity:1,unit}]:rows);}
-  return <FormDialog rootClassName="parts-requirement-modal" open title={accepting?'确认接单 · 登记所需配件':adding?'追加配件申请':'修改配件需求'} okText={inherited?'确认接单并保留原领料记录':accepting?(mode==='none'?'接单并开始维修':'接单并提交配件需求'):adding?'提交补料':task.repairRound?'提交返工领料':'发送仓库'} onOk={()=>void confirm()} confirmLoading={c.busy} okButtonProps={{disabled:busy||stale}} cancelButtonProps={{disabled:busy}} closable={!busy} mask={{closable:false}} onCancel={()=>{if(!busy)onClose();}}>
-    <div className="parts-dialog-intro"><strong>{task.plate}</strong><span>{task.dispatchNo || task.orderId}</span><p>{accepting?'需要配件时进入待开工，仓管确认出库后自动开工；无需配件直接开工。':adding?'填写本次追加的配件，已出库清单保留在历史记录中。':'修改后将重新通知仓库备料，原备料结果失效。'}</p></div>
+  return <FormDialog rootClassName="parts-requirement-modal" open title={accepting?'确认接单 · 登记所需配件':adding?'追加配件申请':saved?'修改本人配件需求':'向仓库申请领料'} okText={inherited?'确认接单并保留原领料记录':accepting?(mode==='none'?'接单并开始维修':'接单并提交配件需求'):adding?'提交补料':task.repairRound?'提交返工领料':'发送仓库'} onOk={()=>void confirm()} confirmLoading={c.busy} okButtonProps={{disabled:busy||stale}} cancelButtonProps={{disabled:busy}} closable={!busy} mask={{closable:false}} onCancel={()=>{if(!busy)onClose();}}>
+    <div className="parts-dialog-intro"><strong>{task.plate}</strong><span>{task.dispatchNo || task.orderId}</span><p>{accepting?'需要配件时进入待开工，仓管确认出库后自动开工；无需配件直接开工。':adding?'填写本次追加的配件，已出库清单保留在历史记录中。':saved?'修改后将重新通知仓库备料，原备料结果失效。':'填写本人的配件需求，提交后通知仓库备料。'}</p></div>
     <RepairContext task={adding?{...task,partsRequirement:{...task.partsRequirement!,batch:(task.partsRequirement?.batch||1)+1}}:task}/>
     {stale?<Alert type="warning" showIcon title="工单或配件需求已更新，请关闭后重新打开核对"/>:null}
     {inherited?<><Alert type="info" title="本次接单保留原配件及交接记录，需要新增配件时请另行申请。"/><PartsRequirementSummary value={task.partsRequirement}/></>:null}

@@ -1,3 +1,4 @@
+import {applyIndividualAction} from './individualRepair.mjs';
 import {resolveRepairResponsibilities,transferUnfinishedResponsibilities} from './repairResponsibilities.mjs';
 import {validateProjectReassignment,reassignProjects} from './projectReassignment.mjs';
 import {validateRepairItemEdits,editRepairItems} from './repairItemEditing.mjs';
@@ -13,7 +14,7 @@ export function assertDispatchAccess(task, actor) {
   if (!actor?.active || !DISPATCH_ROLES.includes(actor.role) || task.shopId !== actor.shopId) fail('无权访问该门店任务',403);
   if (scheduling.includes(actor.role)) return;
   if (['草稿','待客户签字','待处理纸质委托书'].includes(task.orderStatus)) fail('客户尚未签字，无权访问该维修任务',403);
-  if (actor.role === 'warehouse' && (task.partsRequirement || task.hasPartsHistory)) return;
+  if (actor.role === 'warehouse' && (task.partsRequirement || task.partsRequests?.length || task.hasPartsHistory)) return;
   if ((['technician','outsourcing'].includes(actor.role)||actor.outsourcingRoleMember) && technicianIds(task).includes(actor.id)) return;
   if (actor.role === 'inspector' && actor.inspectorRoleMember!==false && (task.inspectorId === actor.id || task.stage==='待检验' && canInspect(task,actor))) return;
   fail('任务已改派或不属于当前员工',403);
@@ -31,6 +32,7 @@ export function validateDispatchRequest(input) {
   if(input.workHours!==undefined && (typeof input.workHours!=='number' || !Number.isFinite(input.workHours) || input.workHours<=0 || input.workHours>10000 || Math.abs(input.workHours*100-Math.round(input.workHours*100))>0.000001)) fail('工时须大于 0 且不超过 10000 小时，最多两位小数',400);
   if(input.workHours!==undefined && !['inspect','record-hours'].includes(input.action)) fail('请在检验完成时填写工时',400);
   if(input.partsRequirement!==undefined) {if(!['accept','record-parts','edit-parts'].includes(input.action)) fail('配件需求请通过登记入口修改',400);validatePartsRequirement(input.partsRequirement);}
+  if(input.partsOwnerId!==undefined&&(typeof input.partsOwnerId!=='string'||!input.partsOwnerId||input.partsOwnerId.length>200||!['accept','record-parts','edit-parts','confirm-parts','issue-parts'].includes(input.action)))fail('领料申请人无效',400);
   validateExecution(input);
   if (input.urgent !== undefined && typeof input.urgent !== 'boolean') fail('加急参数无效',400);
   if (input.itemId !== undefined && !Number.isSafeInteger(input.itemId)) fail('维修项目编号无效',400);
@@ -43,6 +45,9 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   assertDispatchAccess(task,actor);
   if (['草稿','待客户签字','待处理纸质委托书'].includes(task.orderStatus) || ['草稿','待客户签字','待处理纸质委托书'].includes(task.stage)) fail('客户签字后才能执行派工操作');
   if (task.version !== input.expectedVersion) fail('任务已更新，请刷新后重试');
+  if(task.needsReview&&!['reconcile','remind','retry-notification','retry-scheduler-notifications'].includes(input.action))fail('历史任务需要管理员先核对归属和进度');
+  const individual=applyIndividualAction(task,input,actor,people,now,applyDispatchAction);
+  if(individual)return individual;
   let next = structuredClone(task);
   if(input.action==='reopen-repair') next=reopenRepairTask(task,input,actor,now);
   const action = input.action;
@@ -216,7 +221,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   } else if(action==='resume') {
     requireOwner(); stage('暂停'); next.stage=task.resumeStage || '维修中'; next.pausedAt=undefined; next.pauseReason=undefined; next.pauseNote=undefined;
   } else if(action==='submit') {
-    requireOwner(); stage('维修中');assertPartsIssued(task);resolveRepairResponsibilities(next,people,{required:true});
+    requireOwner(); if((task.technicianIds||[]).length>1)fail('请分别提交本人项目完工'); stage('维修中');assertPartsIssued(task);resolveRepairResponsibilities(next,people,{required:true});
     if(!next.items.length || next.items.some(i=>!['待检验','已完工'].includes(i.status))) fail('全部维修项目完成后才能提报');
     const inspector=person(input.inspectorId,['inspector','manager']);
     if(!canInspect(task,inspector) || technicianIds(task).includes(inspector.id) || (task.participantIds||[]).includes(inspector.id) || next.items.some(i=>i.startedBy===inspector.id || i.finishedBy===inspector.id)) fail('不能选择维修工本人检验',403);

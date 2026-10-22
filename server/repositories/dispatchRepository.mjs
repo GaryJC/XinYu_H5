@@ -37,7 +37,7 @@ export async function listDispatchTasks(actor, client=pool) {
     order by coalesce((dt.data->>'urgent')::boolean,false) desc,
       nullif(dt.data->>'dueAt','')::timestamptz asc nulls last, wo.arrival_date asc, wo.id asc`,
     restriction?[actor.shopId,actor.id]:[actor.shopId]);
-  return rows.map(mapTask).filter(t=>actor.role!=='warehouse' || actor.outsourcingRoleMember&&technicianIds(t).includes(actor.id) || (t.partsRequirement || t.hasPartsHistory) && !['草稿','待客户签字'].includes(t.orderStatus)).filter(t=>actor.role!=='inspector' || actor.outsourcingRoleMember&&technicianIds(t).includes(actor.id) || t.inspectorId===actor.id || canInspect(t,actor));
+  return rows.map(mapTask).filter(t=>actor.role!=='warehouse' || actor.outsourcingRoleMember&&technicianIds(t).includes(actor.id) || (t.partsRequirement || t.partsRequests?.length || t.hasPartsHistory) && !['草稿','待客户签字'].includes(t.orderStatus)).filter(t=>actor.role!=='inspector' || actor.outsourcingRoleMember&&technicianIds(t).includes(actor.id) || t.inspectorId===actor.id || canInspect(t,actor));
 }
 export async function dispatchPeople(actor, client=pool) {
   const {rows}=await client.query(`select id,name,role,active,shop_id,inspector_role_member, ${outsourcingMembership} from users where shop_id=$1 order by name,id`,[actor.shopId]);
@@ -85,7 +85,7 @@ export async function assertInspectionCompleted(client,orderId) {
   if(rows[0]?.stage!=='维修完成') throw new HttpError(409,'请先完成维修检验再完结工单');
 }
 
-export async function assertRepairPhotoRecorded(client,task) {
-  const {rows}=await client.query("select 1 from files where order_id=$1 and kind='repair_progress_photo' and coalesce(repair_round,0)=$2 limit 1",[task.orderId,task.repairRound||0]);
+export async function assertRepairPhotoRecorded(client,task,ownerId) {
+  const {rows}=await client.query("select 1 from files where order_id=$1 and kind='repair_progress_photo' and coalesce(repair_round,0)=$2 and ($3::text is null or uploaded_by=$3) limit 1",[task.orderId,task.repairRound||0,ownerId||null]);
   if(!rows.length) throw new HttpError(409,'请先上传至少一张本轮维修照片，再提交完工');
 }

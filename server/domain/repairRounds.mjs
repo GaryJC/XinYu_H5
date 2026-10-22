@@ -18,7 +18,7 @@ export function reopenRepairTask(task,input,actor,now) {
   const items=[...ids.map(id=>{const item=catalog.find(i=>i.id===id);return {id:item.id,name:item.name,status:'待派工'};}),...names.map(name=>({id:nextId--,name:name.trim(),status:'待派工'}))];
   const next={...structuredClone(task),items,repairRound:(task.repairRound||0)+1,roundReason:input.reason.trim(),roundOpenedAt:now,roundOpenedBy:actor.id,roundOpenedName:actor.name,rework:true,reworkReason:input.reason.trim(),reworkCount:0,stage:'待派工'};
   // Round progress is fresh. Historical participants remain excluded from self-inspection.
-  for(const key of ['acceptedAt','firstStartedAt','startHistoryUnknown','submittedAt','completedAt','completedBy','inspectorId','inspectorName','inspectionClaimedAt','submissionNote','feedback','pausedAt','pauseReason','pauseNote','resumeStage','rejectedItemIds','partsRequirement','workHours','workHoursRecordedBy','workHoursRecordedName','workHoursRecordedAt','departureAt','expectedReturnAt','returnedAt','handedOverAt','receivedAt','agreedFee']) delete next[key];
+  for(const key of ['acceptedAt','firstStartedAt','startHistoryUnknown','submittedAt','completedAt','completedBy','inspectorId','inspectorName','inspectionClaimedAt','submissionNote','feedback','pausedAt','pauseReason','pauseNote','resumeStage','rejectedItemIds','partsRequirement','partsRequests','workerSubmissions','workHours','workHoursRecordedBy','workHoursRecordedName','workHoursRecordedAt','departureAt','expectedReturnAt','returnedAt','handedOverAt','receivedAt','agreedFee']) delete next[key];
   next.participantIds=[...new Set([...(task.participantIds||[]),...task.items.flatMap(i=>[i.startedBy,i.finishedBy]).filter(Boolean)])];
   return next;
 }

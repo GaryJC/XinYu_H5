@@ -25,7 +25,7 @@ function PartsTable({value}:{value?:PartsRequirement}) {
 export function WarehousePartsDetail({detail,controller,onOpenOrder}:{detail:DispatchDetail;controller?:DispatchController;onOpenOrder?:()=>void}) {
   const [editing,setEditing]=useState(false);
   const {task}=detail, parts=task.partsRequirement;
-  const events=detail.events.filter(e=>['accept','record-parts','edit-parts','confirm-parts','issue-parts'].includes(e.action));
+  const events=detail.events.filter(e=>['accept','record-parts','edit-parts','confirm-parts','issue-parts'].includes(e.action)&&e.detail.partsRequirement?.ownerId===parts?.ownerId);
   const issuedEvents=events.filter(event=>event.action==='issue-parts'&&event.detail.partsRequirement?.issuedAt&&(event.detail.repairRound??0)===(task.repairRound??0)&&(event.detail.partsRequirement.batch??1)<(parts?.batch??1)).slice().reverse();
   const canEdit=Boolean(controller&&!controller.busy&&!task.needsReview&&task.acceptedAt&&['待开工','维修中','暂停'].includes(task.stage)&&!parts?.issuedAt);
   return <div className="warehouse-detail">
