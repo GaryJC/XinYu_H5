@@ -71,7 +71,8 @@ test('paper order creation, notification, import and signature-free completion t
       order=await resolvePaperOrder(order.id,{mode:'dingtalk'},advisor);
       assert.equal(order.status,'草稿');assert.equal(order.advisor,advisor.name);
       await assert.rejects(()=>resolvePaperOrder(order.id,{mode:'dingtalk'},advisor),/已处理/);
-      await assert.rejects(()=>createSignatureTokenForOrder(order.id,advisor.name),/无需电子签字/);
+      const supplemental=await createSignatureTokenForOrder(order.id,advisor.name);
+      assert.equal(supplemental.signaturePurpose,'supplement');assert.equal(supplemental.status,'草稿');
       await assert.rejects(()=>submitPaperDingTalkOrder(order.id,advisor),/必填/);
     });
     await t.test('DingTalk completion requires normal form data but no signature or vehicle photos, emits exactly one outgoing create',async()=>{

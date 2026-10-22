@@ -8,7 +8,7 @@ const filename = new URL("../client/src/features/signature/useArchiveSignature.t
 const compiled = ts.transpileModule(readFileSync(filename, "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText;
-const user = { role: "advisor", name: "张三", shopId: "shop-hq" };
+const user = { active: true, role: "advisor", name: "张三", shopId: "shop-hq" };
 const pending = { shop: { id: "shop-hq" }, id: "old-order", advisor: "张三", status: "待客户签字", signatureToken: "old-token", signatures: {}, customer: { name: "车主" } };
 
 function setup(api = {}, account = user) {
@@ -55,10 +55,10 @@ test("archive permits the owning advisor or manager and hides signing for signed
   const h = setup();
   assert.equal(h.actions.canSign(pending), true);
   assert.equal(h.actions.canSign({ ...pending, advisor: "李四" }), false);
-  assert.equal(h.actions.canSign({ ...pending, signatures: { customer: "已签字" } }), false);
-  assert.equal(h.actions.canSign({ ...pending, status: "已委托" }), false);
-  assert.equal(setup({}, { role: "manager", name: "经理", shopId: "shop-hq" }).actions.canSign(pending), true);
-  assert.equal(setup({}, { role: "technician", name: "张三" }).actions.canSign(pending), false);
+  assert.equal(h.actions.canSign({ ...pending, customerSignatureFileId:"signed-image", signatures: { customer: "已签字" } }), false);
+  assert.equal(h.actions.canSign({ ...pending, status: "已委托" }), true);
+  assert.equal(setup({}, { active:true, role: "manager", name: "经理", shopId: "shop-hq" }).actions.canSign(pending), true);
+  assert.equal(setup({}, { active:true, role: "technician", name: "张三" }).actions.canSign(pending), false);
 });
 
 test("stale sessions and server validation failures stay visible and do not open a signing dialog", async () => {
@@ -95,9 +95,9 @@ test("upload failures never submit a signature or refresh the order", async () =
   assert.equal(h.summaryRefreshes, 0);
 });
 
-test("paper orders and cross-shop records never offer electronic signing",()=>{
+test("paper orders allow missing signatures while cross-shop records remain blocked",()=>{
   const h=setup();
-  assert.equal(h.actions.canSign({...pending,paperOrder:{mode:"dingtalk",photoIds:["photo"]}}),false);
+  assert.equal(h.actions.canSign({...pending,paperOrder:{mode:"dingtalk",photoIds:["photo"]}}),true);
   assert.equal(h.actions.canSign({...pending,shop:{id:"other"}}),false);
 });
 
@@ -109,4 +109,12 @@ test("archive recovers a pending order without a saved token using the returned 
   await h.actions.start({ ...pending, signatureToken: undefined });
   assert.deepEqual(calls, [pending.id]);
   assert.equal(h.state[0].token, "renewed-token");
+});
+
+test("supplemental session opens without changing an in-progress order status", async()=>{
+  const order={...pending,status:'维修中',paperOrder:{mode:'runfeng'},signaturePurpose:'supplement'};
+  const h=setup({async createSignatureToken(){return order;}});
+  await h.actions.start(order);
+  assert.equal(h.state[0].order.status,'维修中');
+  assert.equal(h.actions.canSign({...order,customerSignatureFileId:'signed'}),false);
 });

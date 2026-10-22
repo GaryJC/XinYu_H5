@@ -167,38 +167,41 @@ export async function createSignatureTokenForOrder(id, actor, { renew = false } 
   return transaction(async (client) => {
     const order = await findWorkOrderById(client, id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
-    const resign = renew && order.status === "待客户签字" && order.customerSignatureReview?.state === "pending";
-    if (!["草稿", "待客户签字"].includes(order.status) || order.signatures.customer && !resign) throw new HttpError(409, `当前状态“${order.status}”不能发起签字`);
-    if (order.paperOrder) throw new HttpError(409, "纸质委托书无需电子签字，请提交纸质委托单");
+    const supplemental = Boolean(order.paperOrder || !["草稿", "待客户签字"].includes(order.status) || order.customerSignatureReview?.supplemental);
+    const purpose = supplemental ? "supplement" : "authorization";
+    const resign = renew && order.customerSignatureReview?.state === "pending";
+    if (order.customerSignatureFileId && !resign) throw new HttpError(409, "客户签名已上传，无需再次发起签字");
     const { rows: sessions } = await client.query(
-      "select token from signature_tokens where order_id=$1 and not used and (expires_at is null or expires_at>clock_timestamp()) order by created_at desc,token desc limit 1 for update", [id]
+      "select token,purpose from signature_tokens where order_id=$1 and not used and (expires_at is null or expires_at>clock_timestamp()) order by created_at desc,token desc limit 1 for update", [id]
     );
-    if (!renew && order.status === "待客户签字" && sessions[0] && isRemoteSignatureToken(sessions[0].token)) return { ...order, signatureToken: sessions[0].token, signatureTokenUsed: false };
-    assertOrderReadyForSignature(order);
-    assertPreRepairPhotosReady(order);
+    if (!renew && sessions[0]?.purpose === purpose && isRemoteSignatureToken(sessions[0].token)) return { ...order, signaturePurpose: purpose, signatureToken: sessions[0].token, signatureTokenUsed: false };
+    if (!supplemental) { assertOrderReadyForSignature(order); assertPreRepairPhotosReady(order); }
     await client.query("update signature_tokens set expires_at=clock_timestamp() where order_id=$1", [id]);
     const token = createSignatureToken();
     if (resign) {
       await client.query("update work_orders set customer_signature_review=null where id=$1", [id]);
       await client.query("update dispatch_notifications set status='failed',retryable=false,error='已要求客户重签',next_attempt_at=null where order_id=$1 and kind='需确认用户签字' and status='pending'", [id]);
     }
-    await upsertWorkOrder(client, { ...order, signatures: resign ? { ...order.signatures, customer: undefined } : order.signatures, status: "待客户签字", updatedAt: nowString() });
+    if (supplemental) {
+      if (resign) await client.query("delete from signatures where order_id=$1 and signer_type='customer'", [id]);
+      await client.query("update work_orders set updated_at=now() where id=$1", [id]);
+    } else await upsertWorkOrder(client, { ...order, signatures: resign ? { ...order.signatures, customer: undefined } : order.signatures, status: "待客户签字", updatedAt: nowString() });
     await client.query(
       `
-        insert into signature_tokens (token, order_id, used, expires_at)
-        values ($1, $2, false, null)
+        insert into signature_tokens (token, order_id, used, expires_at, purpose)
+        values ($1, $2, false, null, $3)
       `,
-      [token, id]
+      [token, id, purpose]
     );
-    await addAudit(client, id, actor, renew ? "重新发送客户签字链接，旧链接失效" : order.status === "草稿" ? "发起客户签字" : "恢复客户签字会话");
-    return { ...await findWorkOrderById(client, id), signatureToken: token, signatureTokenUsed: false };
+    await addAudit(client, id, actor, renew ? "重新发送客户签字链接，旧链接失效" : supplemental ? "生成补充客户签名链接" : order.status === "草稿" ? "发起客户签字" : "恢复客户签字会话");
+    return { ...await findWorkOrderById(client, id), signaturePurpose: purpose, signatureToken: token, signatureTokenUsed: false };
   });
 }
 
 export async function findWorkOrderByToken(token) {
   const { rows } = await pool.query(
     `
-      select wo.*, st.token as signature_token, st.used as signature_token_used, st.expires_at as signature_expires_at
+      select wo.*, st.token as signature_token, st.used as signature_token_used, st.expires_at as signature_expires_at, st.purpose as signature_purpose
       from signature_tokens st
       join work_orders wo on wo.id = st.order_id
       where st.token = $1
@@ -207,7 +210,7 @@ export async function findWorkOrderByToken(token) {
     [token]
   );
   const order = (await hydrateOrders(rows))[0];
-  return order ? { ...order, signatureExpiresAt: rows[0].signature_expires_at?.toISOString() } : undefined;
+  return order ? { ...order, signaturePurpose: rows[0].signature_purpose, signatureExpiresAt: rows[0].signature_expires_at?.toISOString() } : undefined;
 }
 
 export async function signWorkOrderByToken(token, signature, signatureFileId, createSignatureFile) {
@@ -232,8 +235,8 @@ export async function signWorkOrderByToken(token, signature, signatureFileId, cr
     if (!tokenRow) throw new HttpError(404, "签字链接不存在或已失效");
     if (tokenRow.used) throw new HttpError(409, "签字链接已使用");
 
-    if (order.status !== "待客户签字" || order.signatures.customer) throw new HttpError(409, "当前委托单已签字或不能签字");
-    if (order.paperOrder) throw new HttpError(409, "纸质委托书无需电子签字");
+    const supplemental = tokenRow.purpose === "supplement";
+    if (order.customerSignatureFileId || !supplemental && (order.status !== "待客户签字" || order.paperOrder)) throw new HttpError(409, "当前委托单已签字或不能签字");
     // A remote signature is stored only after locking and validating the session.
     // Its file metadata participates in the same transaction as the signature.
     if (createSignatureFile) {
@@ -250,21 +253,24 @@ export async function signWorkOrderByToken(token, signature, signatureFileId, cr
 
     const next = {
       ...order,
-      status: "待客户签字",
+      status: supplemental ? order.status : "待客户签字",
       updatedAt: nowString(),
       signatures: {
         ...order.signatures,
         customer: signature
       }
     };
-    await upsertWorkOrder(client, next);
+    if (supplemental) {
+      await client.query("insert into signatures(order_id,signer_type,signer_name) values($1,'customer',$2) on conflict(order_id,signer_type) do update set signer_name=excluded.signer_name,signed_at=now()", [order.id, signature]);
+      await client.query("update work_orders set updated_at=now() where id=$1", [order.id]);
+    } else await upsertWorkOrder(client, next);
     await client.query(
       "update signatures set file_id = $3 where order_id = $1 and signer_type = $2",
       [order.id, "customer", signatureFileId]
     );
     await client.query("update signature_tokens set used = true, used_at = now() where token = $1", [token]);
     await addAudit(client, order.id, order.customer.name || "车主", "客户完成电子签名");
-    await queueCustomerSignatureReview(client, next);
+    await queueCustomerSignatureReview(client, next, { supplemental });
     return findWorkOrderById(client, order.id);
   });
 }
@@ -277,9 +283,14 @@ export async function confirmCustomerSignature(id, actor) {
     if (!actor?.active || actor.shopId !== order.shop.id || !["advisor", "manager"].includes(actor.role)
       || actor.role === "advisor" && actor.name !== order.advisor) throw new HttpError(403, "仅负责此单的服务顾问或本店管理员可以确认签字");
     if (order.customerSignatureReview?.state === "confirmed") return order;
-    if (order.status !== "待客户签字" || order.customerSignatureReview?.state !== "pending"
+    if ((!order.customerSignatureReview?.supplemental && order.status !== "待客户签字") || order.customerSignatureReview?.state !== "pending"
       || !order.signatures.customer || !order.customerSignatureFileId) throw new HttpError(409, "当前委托单没有待确认的客户签字");
     const review = { ...order.customerSignatureReview, state: "confirmed", confirmedAt: new Date().toISOString(), confirmedBy: actor.name };
+    if (review.supplemental) {
+      await client.query("update work_orders set customer_signature_review=$2::jsonb,updated_at=now() where id=$1", [id, JSON.stringify(review)]);
+      await addAudit(client, id, actor.name, "确认补充客户签名");
+      return findWorkOrderById(client, id);
+    }
     await client.query("update work_orders set status='已委托', customer_signature_review=$2::jsonb, updated_at=now() where id=$1", [id, JSON.stringify(review)]);
     await addAudit(client, id, actor.name, "确认用户签字，提交后续流程");
     const next = await findWorkOrderById(client, id);

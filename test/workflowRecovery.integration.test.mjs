@@ -142,6 +142,34 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
         await new Promise(resolve=>server.close(resolve));await fs.rm(uploads,{recursive:true,force:true});
       }
     });
+    await t.test('supplemental paper and completed order signatures preserve workflow and do not sync twice',async()=>{
+      const {customerSignatureSession}=await import('../server/domain/customerSignaturePolicy.mjs');
+      for(const status of ['待处理纸质委托书','维修中','完成']) {
+        const id=`supplement-${status}`;
+        const file=await seed(id,status);
+        if(status!=='完成')await pool.query("update work_orders set paper_order=$2 where id=$1",[id,JSON.stringify({mode:status==='待处理纸质委托书'?'pending':'runfeng',photoIds:[file]})]);
+        // Imported records may have a textual signer but no signature image.
+        await pool.query("insert into signatures(order_id,signer_type,signer_name) values($1,'customer','纸质签字')",[id]);
+        const first=await db.createSignatureTokenForOrder(id,manager.name);
+        assert.equal(first.status,status);assert.equal(first.signaturePurpose,'supplement');
+        assert.equal((await db.createSignatureTokenForOrder(id,manager.name)).signatureToken,first.signatureToken);
+        assert.equal(customerSignatureSession(await db.findWorkOrderByToken(first.signatureToken)).state,'pending');
+        const signed=await db.signWorkOrderByToken(first.signatureToken,'补充签名',file);
+        assert.equal(signed.status,status);assert.equal(signed.customerSignatureReview.supplemental,true);
+        await assert.rejects(()=>db.signWorkOrderByToken(first.signatureToken,'重复',file),e=>e.status===409);
+        const retry=await db.createSignatureTokenForOrder(id,manager.name,{renew:true});
+        assert.equal(retry.status,status);assert.equal(retry.customerSignatureFileId,undefined);
+        assert.equal(await db.findWorkOrderByToken(first.signatureToken),undefined);
+        await db.signWorkOrderByToken(retry.signatureToken,'补充重签',file);
+        await Promise.all([db.confirmCustomerSignature(id,manager),db.confirmCustomerSignature(id,manager)]);
+        const confirmed=await db.findWorkOrderById(pool,id);
+        assert.equal(confirmed.status,status);assert.equal(confirmed.customerSignatureReview.state,'confirmed');
+        await assert.rejects(()=>db.createSignatureTokenForOrder(id,manager.name),e=>e.status===409);
+        assert.equal((await pool.query('select count(*) from legacy_sync_outbox where order_id=$1',[id])).rows[0].count,'0');
+        assert.equal((await pool.query('select count(*) from dispatch_tasks where order_id=$1',[id])).rows[0].count,'0');
+        assert.equal((await pool.query("select count(*) from dispatch_notifications where order_id=$1 and kind='需确认用户签字'",[id])).rows[0].count,'2');
+      }
+    });
     await t.test('handover persists historical owners and writes the final mixed-team snapshot',async()=>{
       await seed('handover','已委托');
       const service=await import('../server/services/dispatchService.mjs');

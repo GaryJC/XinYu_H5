@@ -1,3 +1,4 @@
+import { CustomerSignatureSection } from "../signature/CustomerSignatureSection";
 import { SignatureReview } from "../signature/SignatureReview";
 import { PaperOrderResolution } from "../work-orders/components/PaperOrderResolution";
 import { WorkOrderSignatureDialog } from "../signature/WorkOrderSignatureDialog";
@@ -18,7 +19,6 @@ import { Alert, Button, Card, Collapse, Descriptions, Empty, Grid, Input, Modal,
 import { ChevronRight, PencilLine, Trash2, RefreshCw } from "lucide-react";
 import { WorkOrder, UserProfile } from "../../../../shared/types";
 import { LegacySyncStatusChip, StatusChip } from "../../shared/ui/Status";
-import { AuthenticatedImage, AuthenticatedImagePreviewGroup } from "../../shared/ui/AuthenticatedImage";
 import { WorkbenchController } from "./useWorkbenchController";
 
 export function OrdersArchive({ controller }: { controller: WorkbenchController }) {
@@ -152,7 +152,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
         onCancel={() => setDetailOrderId(undefined)}
         footer={(
           <div className="archive-detail-actions">
-            {detailOrder && signature.canSign(detailOrder) && <Button type="primary" loading={signature.starting}
+            {detailOrder && !detailOrder.paperOrder && ["草稿","待客户签字"].includes(detailOrder.status) && signature.canSign(detailOrder) && <Button type="primary" loading={signature.starting}
               onClick={() => void signature.start(detailOrder)}>{detailOrder.status === "草稿" ? "发起签字" : "继续签字"}</Button>}
             {detailOrder && legacyRefresh.canRefresh(detailOrder) && <Button icon={<RefreshCw size={16}/>} loading={Boolean(legacyRefresh.progress)}
               disabled={Boolean(legacyRefresh.progress)} onClick={() => void legacyRefresh.refresh([detailOrder])}>从润丰更新</Button>}
@@ -210,9 +210,9 @@ function OrderDetail({ order, isMobile, user, onUpdated }: { order: WorkOrder; i
       {key:"created",label:"创建时间",children:order.createdAt}
     ]}/>
     <SubmittedOrderPhotos order={order} user={user} onUpdated={onUpdated} section="other"/>
+    <CustomerSignatureSection order={order} user={user} onUpdated={onUpdated}/>
   </>;
   const signatures = Object.entries(order.signatures).map(([type, name]) => `${type}: ${name}`).join("；") || "-";
-  const signatureFiles = (order.files ?? []).filter((file) => file.kind === "signature_image");
   const descriptions = [
     { key: "id", label: "委托单号", children: order.id },
     { key: "status", label: "状态", children: <StatusChip status={workOrderDisplayStatus(order)} /> },
@@ -249,7 +249,7 @@ function OrderDetail({ order, isMobile, user, onUpdated }: { order: WorkOrder; i
     <>
       <Descriptions className="archive-descriptions" bordered size="small" column={isMobile ? 1 : 3} items={descriptions} />
       <SubmittedOrderPhotos order={order} user={user} onUpdated={onUpdated}/>
-      <FileGallery title="客户签名" files={signatureFiles} mobile={isMobile} />
+      <CustomerSignatureSection order={order} user={user} onUpdated={onUpdated}/>
       {isMobile ? <MobileOrderRecords order={order} /> : <DesktopOrderRecords order={order} />}
     </>
   );
@@ -308,18 +308,6 @@ function DesktopOrderRecords({ order }: { order: WorkOrder }) {
       { title: "时间", dataIndex: "at" }, { title: "操作人", dataIndex: "actor" }, { title: "操作", dataIndex: "action" }
     ]} />
   </>;
-}
-
-function FileGallery({ title, files, mobile }: { title: string; files: NonNullable<WorkOrder["files"]>; mobile: boolean }) {
-  return <section className="archive-detail-section">
-    <h3>{title}</h3>
-    {files.length ? <AuthenticatedImagePreviewGroup fileIds={files.map(file => file.id)}><div className="archive-file-gallery">{files.map((file) => (
-      <div className="archive-file-card" key={file.id}>
-        <AuthenticatedImage fileId={file.id} width={mobile ? "100%" : 180} height={mobile ? 160 : 120} alt={file.kind === "signature_image" ? "客户签名" : file.kind === "vehicle_license" ? "行驶证照片" : "其他照片"} />
-        <span>{file.originalName || file.createdAt}</span>
-      </div>
-    ))}</div></AuthenticatedImagePreviewGroup> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无图片" />}
-  </section>;
 }
 
 function DetailTable<T extends object>({ title, rowKey, dataSource, columns }: {

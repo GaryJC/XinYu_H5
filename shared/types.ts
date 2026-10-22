@@ -364,8 +364,9 @@ export type WorkOrder = {
     reception?: string;
     technician?: string;
   };
-  customerSignatureReview?: { state: "pending" | "confirmed"; signedAt: string; confirmedAt?: string; confirmedBy?: string };
+  customerSignatureReview?: { supplemental?: boolean; state: "pending" | "confirmed"; signedAt: string; confirmedAt?: string; confirmedBy?: string };
   customerSignatureFileId?: string;
+  signaturePurpose?: "authorization" | "supplement";
   signatureToken?: string;
   signatureTokenUsed?: boolean;
   platformOrderNo?: string;

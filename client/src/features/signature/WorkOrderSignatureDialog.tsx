@@ -24,6 +24,7 @@ export function WorkOrderSignatureDialog({ session, completeSignature, onClose, 
   const [signatureResult, setSignatureResult] = useState("");
   const [signatureCompleted, setSignatureCompleted] = useState(false);
   const [landscapeSignature, setLandscapeSignature] = useState(false);
+  const supplemental = signatureSession.order.signaturePurpose === "supplement";
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
 
@@ -42,7 +43,7 @@ export function WorkOrderSignatureDialog({ session, completeSignature, onClose, 
     try {
       await completeSignature(signatureSession.order, signatureSession.token, signatureImage);
       setSignatureCompleted(true);
-      setSignatureResult("客户签字已保存，需确认用户签字。请关闭此弹窗，在委托单上核对并确认后进入后续流程。");
+      setSignatureResult(supplemental ? "补充签名已保存，请关闭弹窗后核对并确认。" : "客户签字已保存，需确认用户签字。请关闭此弹窗，在委托单上核对并确认后进入后续流程。");
     } catch (error) {
       setSignatureResult(error instanceof Error ? error.message : "签字保存失败");
     } finally {
@@ -79,7 +80,7 @@ export function WorkOrderSignatureDialog({ session, completeSignature, onClose, 
                 {signatureResult ? <Alert className="signature-message" type={signatureCompleted ? "success" : "error"} showIcon title={signatureResult} /> : <Alert className="signature-message" type="info" showIcon title="请客户核对委托信息并在下方手写签名。" />}
                 {!signatureCompleted && <SignatureShare session={signatureSession} onRenew={setSignatureSession} onUpdated={order => {
                   onOrderUpdated(order);
-                  if (order.signatures.customer) {
+                  if (order.customerSignatureFileId) {
                     setSignatureCompleted(true);
                     setSignatureResult("客户已完成签字，需确认用户签字。请关闭弹窗后核对并确认。");
                   }

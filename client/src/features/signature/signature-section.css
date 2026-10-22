@@ -1,0 +1,9 @@
+.customer-signature-section{margin-top:20px;border:1px solid #dfe7f2;border-radius:14px;padding:16px;background:#f7faff}
+.customer-signature-section-heading{display:flex;align-items:center;gap:8px;color:#405b80}
+.customer-signature-section-heading h3{font-size:16px;margin:0;color:#22324a}
+.customer-signature-section-heading span{margin-left:auto;font-size:12px;color:#7b8aa0}
+.customer-signature-section>p{font-size:13px;line-height:1.7;color:#6a7b92;margin:10px 0 14px}
+.customer-signature-section .ant-btn{height:40px;border-radius:8px;color:#2e5e9c;border-color:#cddcef;background:#fff}
+.customer-signature-image{margin-top:12px;background:#fff;border-radius:8px;overflow:hidden}
+.customer-signature-image img{object-fit:contain}
+.customer-signature-section>p.customer-signature-section-error{color:#cf1322}

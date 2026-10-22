@@ -21,7 +21,7 @@ export function messageBody(notification, recipient, env=process.env) {
   const escape=value=>String(value||'').replace(/[\\`*_{}\[\]<>#|]/g,' ');
   return {agent_id:Number(env.DINGTALK_AGENT_ID),userid_list:recipient,to_all_user:false,
     msg:{msgtype:'markdown',markdown:{title:`${notification.kind} · ${data.plate || data.orderId}`,
-      text:`### ${escape(notification.kind)} · ${escape(data.plate || data.orderId)}\n\n${escape(data.dispatchNo || data.orderId)}\n\n${escape(data.summary)}${data.actorName?`\n\n操作人：${escape(data.actorName)}`:''}${data.notice?`\n\n${escape(data.notice)}`:''}\n\n${data.customerSignature ? '需确认用户签字，确认后才进入后续流程' : data.paperOrder ? '创建人已上传纸质委托书照片' : `预计完工：${due}`}${data.reason?`\n\n${escape(data.reason)}`:''}\n\n[${data.customerSignature ? "查看委托单并确认签字" : data.paperOrder ? "查看纸质委托书" : "查看维修任务"}](${url.toString()})`}}};
+      text:`### ${escape(notification.kind)} · ${escape(data.plate || data.orderId)}\n\n${escape(data.dispatchNo || data.orderId)}\n\n${escape(data.summary)}${data.actorName?`\n\n操作人：${escape(data.actorName)}`:''}${data.notice?`\n\n${escape(data.notice)}`:''}\n\n${data.customerSignature ? (data.supplemental ? '请核对补充签名并确认' : '需确认用户签字，确认后才进入后续流程') : data.paperOrder ? '创建人已上传纸质委托书照片' : `预计完工：${due}`}${data.reason?`\n\n${escape(data.reason)}`:''}\n\n[${data.customerSignature ? "查看委托单并确认签字" : data.paperOrder ? "查看纸质委托书" : "查看维修任务"}](${url.toString()})`}}};
 }
 export async function sendWorkNotification(notification, recipient, {env=process.env,fetcher=fetch,token=getDingTalkAccessToken,buildMessage=messageBody}={}) {
   const mode=notificationConfiguration(env);

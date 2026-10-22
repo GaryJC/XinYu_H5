@@ -1,3 +1,4 @@
+import { CustomerSignatureSection } from "../../signature/CustomerSignatureSection";
 import { SignatureReview } from "../../signature/SignatureReview";
 import { PaperOrderPhotos } from "./PaperOrderPhotos";
 import { CustomerVehicleUpdateTag } from "../../customer-vehicle-update/CustomerVehicleUpdateTag";
@@ -396,6 +397,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
 
             </>}
             {selectedOrder && <SignatureReview order={selectedOrder} user={controller.currentUser} onUpdated={controller.acceptRefreshedOrder} />}
+            {selectedOrder && (draft.paperOrder || !["草稿","待客户签字"].includes(selectedOrder.status)) && <CustomerSignatureSection order={selectedOrder} user={controller.currentUser} onUpdated={controller.acceptRefreshedOrder}/> }
             {!draft.paperOrder && <div className="workflow-actions">
               <div>
                 <strong>完成开单流程</strong>

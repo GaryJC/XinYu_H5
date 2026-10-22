@@ -59,7 +59,7 @@ VITE_DINGTALK_CLIENT_ID=
 
 ## 客户签字、远程链接与人工确认
 
-开单页和归档补签均通过 `POST /api/work-orders/:id/signature-token` 获取可用会话。有效会话直接复用；未签字的“待客户签字”工单缺少会话或会话过期时，自动重新签发无时间限制的会话并使旧会话失效，记录操作人及时间。已确认签字或纸质委托单不允许重新签发；待确认的签字可以因不合格要求重签。创建会话与提交签名均先锁定父工单，再处理令牌，防止并发重复签发或重复提交。
+开单页和归档补签均通过 `POST /api/work-orders/:id/signature-token` 获取可用会话。有效会话直接复用；未签字的“待客户签字”工单缺少会话或会话过期时，自动重新签发无时间限制的会话并使旧会话失效，记录操作人及时间。已有客户签名图片且已确认的委托单不允许重新签发；待确认的签字可以因不合格要求重签。创建会话与提交签名均先锁定父工单，再处理令牌，防止并发重复签发或重复提交。
 
 服务顾问／管理员登录后，在签字弹窗复制客户签字链接，通过微信或短信手动转发。客户在 `/customer-signature#令牌` 打开手机页面，无需登录或加入钉钉企业。令牌使用 32 字节安全随机数；放在 URL fragment，客户接口通过 POST 请求体接收令牌，避免进入地址查询参数和访问路径日志。页面仅展示签字所需的委托信息，不开放员工工单或文件接口。
 
@@ -72,3 +72,5 @@ VITE_DINGTALK_CLIENT_ID=
 仅负责该单的服务顾问或本店管理员可以通过 `POST /api/work-orders/:id/confirm-customer-signature` 确认。确认事务记录操作人与时间，将状态改为“已委托”，激活预设派工并写入润丰初次同步队列；并发或重复确认不会重复入队。旧版本已签字工单不补加确认关卡。部署前依次执行新迁移 `202610210001_customer_signature_review.sql` 和 `202610210002_signature_resubmission.sql`。
 
 独立临时 PostgreSQL 回归：显式设置本机 `WORKFLOW_TEST_ADMIN_URL` 后运行 `node --test test/workflowRecovery.integration.test.mjs`。测试创建并删除自己的数据库，覆盖过期／缺失会话、并发签发与签署、旧会话拒绝、改派责任留痕和检验写回快照，不读取应用 `.env`。
+
+补充电子签名：没有客户签名图片的委托单（包括纸质单、维修中和已完成单）可在详情的“客户签名”区生成链接。`signature_tokens.purpose=supplement` 将补签会话与初次委托签字区分；提交后通知顾问审核，`customerSignatureReview.supplemental=true`，审核或要求重签均保持原工单状态，不重新派工、不重复入队润丰创建事件。原来只有签字人文字而没有签名图片的记录也可补签。需先执行迁移 `202610210003_supplemental_signatures.sql`。

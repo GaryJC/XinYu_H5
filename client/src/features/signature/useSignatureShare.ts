@@ -27,7 +27,7 @@ export function useSignatureShare(session: SignatureSession, onRenew: (session: 
   function refresh() { return run(async () => {
     const order = await workOrderApi.get(session.order.id);
     onUpdated(order);
-    setMessage(order.signatures.customer ? '客户已完成签字，需确认用户签字。' : '客户尚未签字。');
+    setMessage(order.customerSignatureFileId ? '客户已完成签字，需确认用户签字。' : '客户尚未签字。');
   }); }
   return { link: customerSignatureLink(session.token), message, busy, copy, renew, refresh };
 }

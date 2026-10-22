@@ -9,9 +9,9 @@ export function useArchiveSignature(user: UserProfile | undefined, onUpdated: (o
   const [starting, setStarting] = useState(false);
   const running = useRef(false);
   function canSign(order: WorkOrder) {
-    return Boolean(!order.paperOrder && user && user.shopId === order.shop.id && ["advisor", "manager"].includes(user.role)
+    return Boolean(user?.active && user.shopId === order.shop.id && ["advisor", "manager"].includes(user.role)
       && (user.role === "manager" || order.advisor === user.name)
-      && !order.signatures.customer && ["草稿", "待客户签字"].includes(order.status));
+      && !order.customerSignatureFileId);
   }
   async function start(order: WorkOrder) {
     if (running.current || !canSign(order)) return;
@@ -20,7 +20,7 @@ export function useArchiveSignature(user: UserProfile | undefined, onUpdated: (o
     setError("");
     try {
       const updated = await workOrderApi.createSignatureToken(order.id, user!.name);
-      if (!updated || updated.id !== order.id || updated.status !== "待客户签字" || !updated.signatureToken || updated.signatureTokenUsed) {
+      if (!updated || updated.id !== order.id || (updated.signaturePurpose !== "supplement" && updated.status !== "待客户签字") || !updated.signatureToken || updated.signatureTokenUsed) {
         throw new Error("签字会话不存在、已失效或已完成，请刷新委托单后重试。");
       }
       onUpdated(updated);
