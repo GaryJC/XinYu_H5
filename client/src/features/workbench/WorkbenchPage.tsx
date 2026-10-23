@@ -70,7 +70,7 @@ export function WorkbenchPage() {
   );
 
   return (
-    <Layout className="app-shell">
+    <Layout className={`app-shell${isMobile ? " has-mobile-bottom-nav" : ""}`}>
       {!isMobile ? <Layout.Sider className="sidebar" width={224}>{navigation}</Layout.Sider> : null}
       <Drawer className="mobile-drawer" placement="left" size={280} open={menuOpen} onClose={() => setMenuOpen(false)} styles={{ body: { padding: 16 } }}>
         {navigation}
@@ -158,7 +158,7 @@ export function WorkbenchPage() {
           </Suspense>
         ) : null}
       </Layout.Content>
-      <FloatButton.BackTop className="workbench-back-top" style={{ bottom: isMobile ? "calc(80px + env(safe-area-inset-bottom, 0px))" : 48, right: isMobile ? 16 : 24, zIndex: 101 }} aria-label="回到顶部" tooltip="回到顶部" icon={<ArrowUp size={20} />} visibilityHeight={300} duration={300} />
+      <FloatButton.BackTop className="workbench-back-top" style={{ bottom: isMobile ? `calc(var(--mobile-bottom-nav-height, 0px) + ${activeNav === "委托开单" ? 116 : 20}px)` : 48, right: isMobile ? 16 : 24, zIndex: 101 }} aria-label="回到顶部" tooltip="回到顶部" icon={<ArrowUp size={20} />} visibilityHeight={300} duration={300} />
       {isMobile && <nav className="mobile-bottom-nav" aria-label="底部主导航">
         {visibleNavItems.slice(0, 3).map(item => {
           const Icon = item.icon;
