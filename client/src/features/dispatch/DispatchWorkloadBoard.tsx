@@ -41,6 +41,7 @@ export function DispatchWorkloadBoard({ summaries, filters, onSelect }: {
       <span>工作负荷看板 <small>· {summaries.length} 人</small></span><span className="workload-board-toggle-hint">{expanded ? '收起' : '展开'}<DownOutlined aria-hidden="true" className={expanded ? 'is-expanded' : ''}/></span>
     </button></h3>
       {expanded ? <div id="workload-board-list" className="workload-list">
+        <p className="workload-completion-range">按检验时间和当时负责人统计，每个项目每退回一次计 1 次，同一项目重复退回累计计数。缺少负责人记录的项目不计入。</p>
         {!summaries.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无维修工" /> : summaries.map(person => {
           return <div key={person.id} className={`workload-person ${filters.technicianId === person.id ? 'is-selected-person' : ''}`}>
             <div className="workload-person-name"><strong>{personDisplayName(person, summaries)}</strong>{!person.active ? <span>停用</span> : null}</div>
@@ -48,8 +49,11 @@ export function DispatchWorkloadBoard({ summaries, filters, onSelect }: {
               {metrics.filter(([metric]) => !['overdue', 'rework'].includes(metric) || person[metric] > 0).map(([metric, label, tone]) =>
                 <div key={metric}>{metricButton(person, metric, label, tone)}</div>
               )}
+              <div className={`workload-return-summary ${person.returnedItemOccurrences === 0 ? 'is-zero' : ''}`} aria-label={`${personDisplayName(person, summaries)}，退回次数 ${person.returnedItemOccurrences} 次`}>
+                <span>退回次数</span><strong>{person.returnedItemOccurrences}</strong><span>次</span>
+              </div>
             </div>
-            <div className="workload-completion-range">完成量统计：{range}</div>
+            <div className="workload-completion-range">完成量 / 退回统计：{range}</div>
           </div>;
         })}
       </div> : null}

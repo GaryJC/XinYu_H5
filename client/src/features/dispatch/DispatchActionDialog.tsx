@@ -64,7 +64,7 @@ export function DispatchActionDialog({action,task,controller,onClose,inspectionR
     if(action==='inspect'){input.rejectedItemIds=rejectedItemIds;if(rejectedItemIds.length)input.reason=note.trim();}
     if(await controller.act(input)) onClose();
   }
-  return <FormDialog open title={actionLabels[action]} onCancel={()=>{if(!controller.busy) onClose();}} onOk={()=>void submit()} confirmLoading={controller.busy} okButtonProps={{disabled:action==='inspect'&&(inspectionStale||!inspection.complete)}} okText={action==='inspect'?'确认提交检验结果':'确认'} cancelText="取消" mask={{closable:false}} closable={!controller.busy} cancelButtonProps={{disabled:controller.busy}}>
+  return <FormDialog rootClassName="dispatch-action-modal" open title={actionLabels[action]} onCancel={()=>{if(!controller.busy) onClose();}} onOk={()=>void submit()} confirmLoading={controller.busy} okButtonProps={{danger:reopening,type:reopening?'default':'primary',disabled:action==='inspect'&&(inspectionStale||!inspection.complete)}} okText={action==='inspect'?'确认提交检验结果':'确认'} cancelText="取消" mask={{closable:false}} closable={!controller.busy} cancelButtonProps={{disabled:controller.busy}}>
     <Form layout="vertical" className="dispatch-form" requiredMark>
       {action==='reassign'?<Form.Item label="改派范围"><Radio.Group aria-label="改派范围" value={projectMode?'items':'order'} onChange={e=>setProjectMode(e.target.value==='items')} options={[{value:'items',label:'选项目改派',disabled:task.executionMode==='outsourced'},{value:'order',label:'整单改派 / 调整执行方式'}]}/></Form.Item>:null}
       {partialReassignment?<ProjectReassignmentFields task={task} people={controller.people.technicians} draft={reassignment} disabled={controller.busy}/>:null}

@@ -52,7 +52,7 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
   if(Object.values(downstream.recordset?.[0]||{}).some(n=>Number(n)>0))throw new Error('润丰已有派工明细、竣工、收款或退回记录，请人工核对后处理');
   // Validate every string before any delete, using the legacy database code page.
   for(const item of snapshot.items) {
-   const worker=`${item.employeeCode.trim()} ${item.employeeName.trim()}`;
+   const worker=item.pendingConfirmation?'':`${item.employeeCode.trim()} ${item.employeeName.trim()}`;
    await execute(`if DATALENGTH(CONVERT(varchar(8000),@name))>100 or CONVERT(nvarchar(200),CONVERT(varchar(8000),@name))<>@name
       or DATALENGTH(CONVERT(varchar(8000),@worker))>100 or CONVERT(nvarchar(200),CONVERT(varchar(8000),@worker))<>@worker
       raiserror(N'维修项目或负责人超出润丰字段长度或包含不支持字符',16,1)`,(req,sql)=>{req.input('name',sql.NVarChar(200),item.name);req.input('worker',sql.NVarChar(200),worker);});
@@ -66,7 +66,7 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
    await execute(`delete from dbo.qxwxmxb where wd=@wd and dh=@dh and lb=N'项目'`,target);
    for(const [index,item] of snapshot.items.entries())await execute(`insert into dbo.qxwxmxb(wd,dh,lb,hh,wxr,Xh)
     values(@wd,@dh,N'项目',CONVERT(varchar(100),@name),CONVERT(varchar(100),@worker),@xh)`,(req,sql)=>{
-     target(req,sql);req.input('name',sql.NVarChar(200),item.name);req.input('worker',sql.NVarChar(200),header.wd===''?`${item.employeeCode.trim()} ${item.employeeName.trim()}`:'');req.input('xh',sql.SmallInt,index+1);
+     target(req,sql);req.input('name',sql.NVarChar(200),item.name);req.input('worker',sql.NVarChar(200),header.wd===''&&!item.pendingConfirmation?`${item.employeeCode.trim()} ${item.employeeName.trim()}`:'');req.input('xh',sql.SmallInt,index+1);
     });
    await execute(`update dbo.qxwxb set xmfy=0,xmfy0=0,fyhj=isnull(fyhj,0)-@amount,cbhj=isnull(cbhj,0)-@cost where reid=@reid`,(req,sql)=>{
     req.input('amount',sql.Decimal(18,4),amount);req.input('cost',sql.Decimal(18,4),cost);req.input('reid',sql.Int,Number(header.reid));
@@ -82,7 +82,7 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
 // Read-only preflight uses the target database's real code page before inspection commits.
 export async function validateLegacyRepairStrings(snapshot,{execute=executeSqlServerQuery}={}) {
  validateWritebackSnapshot(snapshot);
- const values=snapshot.items.flatMap(item=>[item.name,`${item.employeeCode.trim()} ${item.employeeName.trim()}`]);
+ const values=snapshot.items.flatMap(item=>[item.name,item.pendingConfirmation?'':`${item.employeeCode.trim()} ${item.employeeName.trim()}`]);
  const query=values.map((_,i)=>`if DATALENGTH(CONVERT(varchar(8000),@v${i}))>100 or CONVERT(nvarchar(200),CONVERT(varchar(8000),@v${i}))<>@v${i} raiserror(N'维修项目或负责人超出润丰字段长度或包含不支持字符，请修改后重新检验',16,1)`).join('\n');
  await execute(query,(request,sql)=>values.forEach((value,i)=>request.input(`v${i}`,sql.NVarChar(200),value)));
 }

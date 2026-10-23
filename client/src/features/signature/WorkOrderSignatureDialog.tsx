@@ -47,7 +47,7 @@ export function WorkOrderSignatureDialog({ session, completeSignature, onClose, 
     try {
       await completeSignature(signatureSession.order, signatureSession.token, signatureImage);
       setSignatureCompleted(true);
-      setSignatureResult(supplemental ? "补充签名已保存，请关闭弹窗后核对并确认。" : "客户签字已保存，需确认用户签字。请关闭此弹窗，在委托单上核对并确认后进入后续流程。");
+      setSignatureResult(supplemental ? "现场补充签名已保存并确认。" : "现场签字已确认，已提交润丰同步及后续流程。");
     } catch (error) {
       setSignatureResult(error instanceof Error ? error.message : "签字保存失败");
     } finally {

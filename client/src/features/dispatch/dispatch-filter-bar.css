@@ -32,3 +32,17 @@
 @media(min-width:768px){.dispatch-filter-bar{padding:12px 16px}.ant-drawer-section.dispatch-filter-drawer{max-width:640px;margin-inline:auto}.dispatch-quick-filters{gap:12px}}
 @media(max-width:359px){.dispatch-quick-filters{gap:4px}.dispatch-quick-filters>.ant-btn{padding-inline:7px;gap:3px}.dispatch-quick-filters>.dispatch-filter-clear{padding-inline:0}.dispatch-filter-bar .dispatch-status-tabs .ant-tabs-tab{padding-inline:8px}}
 @media(max-width:359px){.dispatch-quick-filters{flex-wrap:nowrap}.dispatch-quick-filters>.ant-btn:not(:first-child):not(.dispatch-filter-clear) .ant-btn-icon{display:none}}
+
+.dispatch-status-scroll-hint{display:none}
+@media(max-width:767px){
+  .dispatch-filter-bar .dispatch-status-tabs .ant-tabs-nav-wrap::before,
+  .dispatch-filter-bar .dispatch-status-tabs .ant-tabs-nav-wrap::after{display:none}
+  .dispatch-status-tabs:has(.ant-tabs-nav-wrap-ping-right,.ant-tabs-nav-wrap-ping-left)+.dispatch-status-scroll-hint{
+    display:block;
+    margin:0;
+    text-align:right;
+    color:var(--ant-color-text-secondary,#657085);
+    font-size:12px;
+    line-height:18px;
+  }
+}

@@ -167,3 +167,29 @@
 .repair-photo-card.is-selected { border-color:#1677ff; background:#e6f4ff; }
 .repair-photo-thumbnail { position:relative; }
 .repair-photo-check { position:absolute; top:4px; left:4px; z-index:2; padding:8px; border-radius:4px; background:#fff; }
+
+.workload-return-summary{display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-height:44px;padding:8px 12px;border-radius:8px;background:#fff1f0;color:#c53030;font-size:13px}
+.workload-return-summary strong{font-size:20px;line-height:1.2;font-variant-numeric:tabular-nums}
+.workload-return-summary.is-zero{color:#7b8493;background:#f5f5f5}
+
+/* Flex items must shrink to the mobile dialog's available width, including
+   multi-selects and the native DingTalk/iOS date-time input. */
+.dispatch-action-modal .dispatch-form,
+.dispatch-action-modal .dispatch-form .ant-form-item,
+.dispatch-action-modal .dispatch-form .ant-form-item-control,
+.dispatch-action-modal .dispatch-form .ant-form-item-control-input,
+.dispatch-action-modal .dispatch-form .ant-form-item-control-input-content {
+  min-width:0;
+  max-width:100%;
+}
+.dispatch-action-modal .dispatch-form .ant-select,
+.dispatch-action-modal .dispatch-form .ant-input,
+.dispatch-action-modal .dispatch-form .ant-input-number {
+  min-width:0;
+  width:100%;
+  max-width:100%;
+}
+.dispatch-action-modal .reopen-project-options { min-width:0; max-width:100%; }
+.dispatch-action-modal .reopen-project-options .ant-checkbox-wrapper { min-width:0; max-width:100%; }
+.dispatch-action-modal .reopen-project-options .ant-checkbox-label { min-width:0; overflow-wrap:anywhere; }
+.dispatch-action-modal .reopen-extra-item > .ant-btn { flex-shrink:0; }

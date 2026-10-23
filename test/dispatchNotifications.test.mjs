@@ -145,3 +145,30 @@ test('inspection delivery rechecks manager rights, shop, participants and curren
  await processNotification({...deps,validateInspection:async()=>{throw new Error('db unavailable');}});
  assert.equal(sent,1);assert.equal(finished.retryable,true);
 });
+
+test('additional repair notices cancel after reassignment, shop transfer, completion or a later round',async()=>{
+ const {validateAddedRepairRecipient:validate}=await import('../server/repositories/dispatchNotificationRepository.mjs');
+ const user={id:'t',active:true,role:'technician',shopId:'s'};
+ const row={order_id:'o',recipient_id:'t',kind:'新增维修项目',previous_status:'pending',payload:{repairRound:1,itemIds:[1000000000]}};
+ const task={shop_id:'s',stage:'维修中',data:{repairRound:1,technicianIds:['t','other'],items:[{id:1000000000,name:'追加项目',status:'待开工',responsibleId:'t'}]}};
+ const database={query:async()=>({rows:[task]})};
+ assert.equal(await validate(row,user,database),true);
+ for(const patch of [{active:false},{shopId:'other'},{role:'advisor'},{id:'other'}])assert.equal(await validate(row,{...user,...patch},database),false);
+ for(const data of [{repairRound:2},{technicianIds:['other']},{items:[]},{items:[{id:1000000000,status:'已完工',responsibleId:'t'}]},{items:[{id:1000000000,status:'待开工',responsibleId:'other'}]}]) {
+  assert.equal(await validate(row,user,{query:async()=>({rows:[{...task,data:{...task.data,...data}}]})}),false);
+ }
+ assert.equal(await validate(row,user,{query:async()=>({rows:[{...task,stage:'维修完成'}]})}),false);
+ const contractor={...user,role:'outsourcing'};
+ const outsourced={...task,data:{...task.data,executionMode:'outsourced'}};
+ assert.equal(await validate(row,contractor,{query:async()=>({rows:[outsourced]})}),true);
+ assert.equal(await validate(row,user,{query:async()=>({rows:[outsourced]})}),false);
+ const legacyOutsourced={...task,data:{...task.data,executionMode:'outsourced',technicianIds:[],items:[{id:1000000000,status:'待开工'}]}};
+ assert.equal(await validate(row,{...user,role:'manager'},{query:async()=>({rows:[legacyOutsourced]})}),true);
+ for(const kind of ['新增维修项目','追加维修派工']) {
+  let sent=0,finished;
+  const deps={claim:async()=>({...row,kind}),recipient:async()=>user,send:async()=>{sent++;return {status:'sent'};},finish:async(_,r)=>{finished=r;}};
+  await processNotification({...deps,validateAddedRepair:async()=>false});assert.equal(sent,0);assert.equal(finished.retryable,false);
+  await processNotification({...deps,validateAddedRepair:async()=>{throw new Error('db unavailable');}});assert.equal(sent,0);assert.equal(finished.retryable,true);
+  await processNotification({...deps,validateAddedRepair:async()=>true});assert.equal(sent,1);
+ }
+});

@@ -84,6 +84,8 @@ export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecord
       contact: row.customer_contact,
       address: row.customer_address
     },
+    pendingRepairs: row.pending_repairs || [],
+    pendingRepairsVersion: row.pending_repairs_version || 0,
     inspection: normalizeInspection(row.inspection),
     faultDescription: row.fault_description,
     repairItems: repairItems.map((item) => ({

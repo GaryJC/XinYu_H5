@@ -1,3 +1,4 @@
+import { PendingRepairFollowups } from '../pending-repairs/PendingRepairFollowups';
 import { ArchiveFilterBar } from "./ArchiveFilterBar";
 import { archiveTimeLabel } from "./archiveFilters";
 import { CustomerSignatureSection } from "../signature/CustomerSignatureSection";
@@ -86,6 +87,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
           <p>点击任一委托单可查看完整归档内容。</p>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minWidth: 0, maxWidth: "100%" }}>
+        {["advisor","manager"].includes(role)&&<PendingRepairFollowups user={controller.currentUser||undefined}/>}
         <Button onClick={() => void controller.refreshWorkbench()}>刷新列表</Button>
         {["advisor", "manager"].includes(role) && <Button icon={<RefreshCw size={16}/>} loading={Boolean(legacyRefresh.progress)}
           disabled={!refreshTargets.length || Boolean(legacyRefresh.progress)} onClick={() => void legacyRefresh.refresh(refreshTargets)}>

@@ -6,6 +6,10 @@ import { dispatchPeople, executeDispatchActionInTransaction } from './dispatchSe
 export async function activateDispatchPlan(client,order) {
   const plan=await pendingDispatchPlan(client,order.id);
   if (!plan) return;
+  if (!order.repairItems.length) {
+    await markDispatchPlan(client,order.id,'暂无已确认维修项目，请待客户确认后在派工台安排维修');
+    return;
+  }
   const data=plan.execution_data||{};
   const ids=data.technicianIds??(plan.technician_id?[plan.technician_id]:[]);
   await client.query('select id from users where id=any($1::text[]) order by id for share',[[plan.assigned_by,...ids]]);

@@ -1,3 +1,4 @@
+import { hasAnyRole } from '../../shared/roles.mjs';
 import { outsourcingMembership } from './outsourcingMembership.mjs';
 import { randomUUID } from 'node:crypto';
 import { pool } from '../database/pool.mjs';
@@ -36,4 +37,22 @@ export async function finishNotification(row,result,database=pool) {
 }
 export async function notificationRecipient(id,database=pool) {
   const {rows}=await database.query(`select id,shop_id as "shopId",dingtalk_user_id,active,role,inspector_role_member, roles, ${outsourcingMembership} from users where id=$1`,[id]); return rows[0]?{...rows[0],inspectorRoleMember:rows[0].inspector_role_member,outsourcingRoleMember:rows[0].outsourcing_role_member}:undefined;
+}
+
+// New-project messages are actionable only while that recipient still owns the work.
+export async function validateAddedRepairRecipient(row,user,database=pool) {
+  if(!user?.active || user.id!==row.recipient_id || !Array.isArray(row.payload?.itemIds) || !row.payload.itemIds.length) return false;
+  const {rows}=await database.query(`select w.shop_id,d.stage,d.data from work_orders w
+    join dispatch_tasks d on d.order_id=w.id where w.id=$1`,[row.order_id]);
+  const task=rows[0];
+  if(!task || user.shopId!==task.shop_id || !['待接单','待开工','维修中','暂停','回审'].includes(task.stage)
+    || (task.data.repairRound||0)!==row.payload.repairRound) return false;
+  const data=task.data;
+  const ids=data.technicianIds??(data.technicianId?[data.technicianId]:[]);
+  const allowed=data.executionMode==='outsourced'
+    ? ids.length ? ids.includes(user.id)&&(hasAnyRole(user,['outsourcing'])||Boolean(user.outsourcingRoleMember))
+      : hasAnyRole(user,['manager','advisor'])
+    : ids.includes(user.id)&&hasAnyRole(user,['technician']);
+  return allowed && row.payload.itemIds.every(id=>data.items?.some(item=>item.id===id
+    && !['待检验','已完工'].includes(item.status) && (!item.responsibleId || item.responsibleId===user.id)));
 }

@@ -1,3 +1,4 @@
+import { saveDraftPendingRepairs } from './repositories/pendingRepairsRepository.mjs';
 import { userRoles, hasRole, hasAnyRole } from "../shared/roles.mjs";
 import { queueCustomerSignatureReview } from "./repositories/customerSignatureReviewRepository.mjs";
 import { isRemoteSignatureToken } from "./domain/customerSignaturePolicy.mjs";
@@ -86,6 +87,7 @@ export async function createWorkOrder(draft, actor, actorUser) {
       ...(draft.paperOrder ? { status: "待处理纸质委托书", vehicle: {}, customer: {}, department: { code: "", name: "" }, faultDescription: "", estimatedFee: 0, settlementAmount: 0, feeNote: "", estimatedDeliveryAt: "", repairItems: [], dispatchPlan: null, signatures: {}, inspection: { belongings: [], fuelLevel: "1/2", exteriorIssues: [] } } : {})
     };
     await upsertWorkOrder(client, order);
+    await saveDraftPendingRepairs(client, order, actorUser);
     if (order.paperOrder) {
       await attachPaperPhotos(client, order, actorUser?.id);
       await enqueuePaperNotifications(client, order);
@@ -121,6 +123,7 @@ export async function updateWorkOrder(order, actor, action, actorUser) {
       updatedAt: nowString()
     };
     await upsertWorkOrder(client, next);
+    await saveDraftPendingRepairs(client, next, actorUser, order.pendingRepairsVersion);
     // Editing a draft invalidates onsite sessions so an old preview cannot be signed.
     await client.query("update signature_tokens set expires_at=clock_timestamp() where order_id=$1 and not used", [next.id]);
     await attachPreRepairPhotos(client, next, actorUser?.id);
@@ -226,7 +229,7 @@ export async function findWorkOrderByToken(token) {
   return order ? { ...order, signaturePurpose: rows[0].signature_purpose, signatureExpiresAt: rows[0].signature_expires_at?.toISOString() } : undefined;
 }
 
-export async function signWorkOrderByToken(token, signature, signatureFileId, createSignatureFile) {
+export async function signWorkOrderByToken(token, signature, signatureFileId, createSignatureFile, onsiteActor) {
   return transaction(async (client) => {
     // Resolve the parent without a token lock, then use the same parent -> token
     // lock order as session creation. Recheck validity after acquiring the parent.
@@ -287,7 +290,21 @@ export async function signWorkOrderByToken(token, signature, signatureFileId, cr
     );
     await client.query("update signature_tokens set used = true, used_at = now() where token = $1", [token]);
     await addAudit(client, order.id, order.customer.name || "车主", "客户完成电子签名");
-    await queueCustomerSignatureReview(client, next, { supplemental });
+    // Only the authenticated staff endpoint may attest to an onsite signature.
+    // Public remote signatures continue through independent staff review.
+    const onsite = !createSignatureFile && onsiteActor && (supplemental || order.status === '草稿');
+    if (onsite) {
+      if (!onsiteActor.active || onsiteActor.shopId !== order.shop.id || !hasAnyRole(onsiteActor, ['advisor','manager'])
+        || !hasRole(onsiteActor,'manager') && onsiteActor.name !== order.advisor) throw new HttpError(403,'仅负责此单的服务顾问或本店管理员可以提交现场签字');
+      const at=new Date().toISOString();
+      const review={state:'confirmed',signedAt:at,confirmedAt:at,confirmedBy:onsiteActor.name,mode:'onsite',...(supplemental?{supplemental:true}:{})};
+      await client.query('update work_orders set status=$2,customer_signature_review=$3::jsonb,updated_at=now() where id=$1',[order.id,supplemental?order.status:'已委托',JSON.stringify(review)]);
+      await addAudit(client,order.id,onsiteActor.name,supplemental?'现场补充签字已确认':'现场客户签字确认，提交后续流程');
+      if (!supplemental) {
+        await activateDispatchPlan(client,await findWorkOrderById(client,order.id));
+        await enqueueLegacySyncEvent(client,await findWorkOrderById(client,order.id),'created');
+      }
+    } else await queueCustomerSignatureReview(client, next, { supplemental });
     return findWorkOrderById(client, order.id);
   });
 }

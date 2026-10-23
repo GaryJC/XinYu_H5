@@ -1,3 +1,6 @@
+import { readPendingRepairs } from '../repositories/pendingRepairsRepository.mjs';
+import { inspectionReturnStats } from '../domain/inspectionReturnStats.mjs';
+import { listInspectionReturns } from '../repositories/inspectionReturnRepository.mjs';
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import {actionParts,individualRepair} from '../domain/individualRepair.mjs';
 import {enqueueRepairWriteback} from '../repositories/repairWritebackRepository.mjs';
@@ -24,17 +27,18 @@ export async function queryDispatchTasks(actor, query={}) {
     if(query.stage==='进行中' && !['待开工','维修中','暂停'].includes(t.stage)) return false;
     if(query.stage==='完成') { if(t.orderStatus!=='完成' || hasActiveRepairRound(t)) return false; }
     else if(query.stage==='待结算') { if(t.orderStatus!=='待结算' || hasActiveRepairRound(t)) return false; }
+    else if(query.stage==='待客户确认') {if(!t.pendingRepairCount) return false;}
     else if(query.stage && query.stage!=='进行中' && t.stage!==query.stage) return false;
     if(query.urgent==='true' && !t.urgent) return false;
     if(query.overdue==='true' && !t.overdue) return false;
     if(query.search && ![t.orderId,t.dispatchNo,t.plate].some(v=>v.toLowerCase().includes(query.search.toLowerCase()))) return false;
     if(hasRole(actor, 'warehouse')) return true;
-    if(t.orderStatus==='完成' && !hasActiveRepairRound(t) && !['完成','维修完成'].includes(query.stage) && query.metric!=='completed') return false;
+    if(t.orderStatus==='完成' && !hasActiveRepairRound(t) && !['完成','维修完成','待客户确认'].includes(query.stage) && query.metric!=='completed') return false;
     if(query.metric) return dispatchMetric(t,query.metric,range.from,range.to);
     // Only an explicit historical view includes closed orders. Unsettled repairs
     // stay visible regardless of completion date, including undated legacy orders.
     if(['完成','维修完成'].includes(query.stage)) return !t.completedAt || dispatchMetric(t,'completed',range.from,range.to);
-    return t.orderStatus!=='完成' || hasActiveRepairRound(t);
+    return query.stage==='待客户确认' || t.orderStatus!=='完成' || hasActiveRepairRound(t);
   });
 }
 export async function myRepairCounts(actor) {
@@ -53,9 +57,10 @@ export async function technicianSummaries(actor,query={}) {
   if(!hasAnyRole(actor, ['manager','advisor','inspector'])) throw new HttpError(403,'无权查看维修工负荷');
   const range=completionRange(query.from,query.to);
   const tasks=await listDispatchTasks(actor); const people=await dispatchPeople(actor);
-  return people.filter(p=>hasRole(p, 'technician') || tasks.some(t=>technicianIds(t).includes(p.id))).map(p=> {
+  const returns = inspectionReturnStats(await listInspectionReturns(actor.shopId, range));
+  return people.filter(p=>hasRole(p, 'technician') || returns.has(p.id) || tasks.some(t=>technicianIds(t).includes(p.id))).map(p=> {
     const own=tasks.filter(t=>technicianIds(t).includes(p.id));
-    return {id:p.id,name:p.name,active:p.active,current:own.filter(t=>t.stage!=='维修完成').length,
+    return {id:p.id,name:p.name,active:p.active,...(returns.get(p.id) || {returnedItemCount:0,returnedItemOccurrences:0}),current:own.filter(t=>t.stage!=='维修完成').length,
       ...Object.fromEntries(metricKeys.map(k=>[k,own.filter(t=>dispatchMetric(t,k,range.from,range.to)).length]))};
   });
 }
@@ -65,7 +70,7 @@ export async function executeDispatchAction(actor,id,raw,runTransaction=transact
   wakeRepairWriteback();
   return dispatchDetail(actor,id);
 }
-export async function executeDispatchActionInTransaction(client,actor,id,raw) {
+export async function executeDispatchActionInTransaction(client,actor,id,raw,pendingRepair) {
     const input=validateDispatchRequest(raw);
     const task=await getDispatchTask(client,id,actor,true);
     const previous=await client.query('select request_body from dispatch_events where order_id=$1 and actor_id=$2 and request_id=$3',[id,actor.id,input.requestId]);
@@ -86,15 +91,29 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
     }
     if(input.action==='reopen-repair'||input.action==='edit-repair-items'||input.repairItems!==undefined) task.repairCatalog=await repairCatalog(client,task);
     const next=applyDispatchAction(task,input,currentActor,people);
+    if(input.repairItems) {
+      const pending=await readPendingRepairs(client,id);
+      if(pending.items.some(p=>p.scheduled&&task.items.some(i=>i.id===p.itemId)&&!next.items.some(i=>i.id===p.itemId)))throw new HttpError(409,'已安排的客户确认项目不能直接删除，请保留项目及确认记录');
+    }
+
+    if(pendingRepair) {
+      const added=next.items.find(i=>!task.items.some(old=>old.id===i.id));
+      if(!added)throw new HttpError(409,'追加项目生成失败');
+      added.id=pendingRepair.itemId;
+      if(pendingRepair.additional){next.roundKind='additional';next.rework=false;}
+      if(!pendingRepair.additional&&task.stage!=='待派工'&&task.executionMode!=='outsourced'&&!people.some(p=>p.id===added.responsibleId&&p.active&&hasRole(p,'technician')))throw new HttpError(400,'请选择本店有效维修工');
+      next.repairItemIdFloor=Math.min(next.repairItemIdFloor||0,added.id);
+    }
+
     if(['submit-review','submit-order','submit'].includes(input.action)) await assertRepairPhotoRecorded(client,task,individualRepair(task)?actor.id:undefined);
     const parts=actionParts(next,input,actor);
     const preparationGroups=input.preparationGroups?.map(group=>({...group,partsRequirement:actionParts(next,{partsOwnerId:group.partsOwnerId},actor)}));
     const preparedForRecipient=recipient=>preparationGroups?.map(group=>({...group,items:group.items.filter(item=>item.recipientId===recipient)})).filter(group=>group.items.length);
     if(['accept','record-parts','edit-parts'].includes(input.action))await assertPartsPhotos(client,task,parts,input.action==='edit-parts'?undefined:actor.id);
-    await saveRepairRound(client,task,next,currentActor,input.action);
-    await saveDispatchTask(client,next,{metadataOnly:input.action==='update-due'});
+    if(input.action!=='update-technicians') await saveRepairRound(client,task,next,currentActor,input.action);
+    await saveDispatchTask(client,next,{metadataOnly:input.action==='update-due',techniciansOnly:input.action==='update-technicians'});
     if(input.action==='assign') await markDispatchPlan(client,id);
-    const detail={preparationGroups,partsPreparation:input.partsPreparation,partsIssue:input.partsIssue,reassignItemIds:input.reassignItemIds,previousItems:input.repairItems||['send-review','reassign','inspect'].includes(input.action)?task.items:undefined,partsRequirement:parts,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
+    const detail={preparationGroups,partsPreparation:input.partsPreparation,partsIssue:input.partsIssue,reassignItemIds:input.reassignItemIds,previousItems:input.repairItems||['send-review','reassign','inspect'].includes(input.action)?task.items:undefined,partsRequirement:parts,roundKind:next.roundKind,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
       technicianName:next.technicianName,previousTechnicianName:task.technicianName,inspectorName:next.inspectorName,dueAt:next.dueAt,urgent:next.urgent,previousDueAt:task.dueAt};
     const {rows:[event]}=await client.query(`insert into dispatch_events(order_id,actor_id,actor_name,request_id,request_body,action,detail) values($1,$2,$3,$4,$5,$6,$7) returning id`,[id,actor.id,actor.name,input.requestId,JSON.stringify(input),input.action,JSON.stringify(detail)]);
     if(input.action==='inspect'&&next.stage==='维修完成')await enqueueRepairWriteback(client,next,event.id);
@@ -121,13 +140,22 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
     const removedFor=recipient=>removedProjects.filter(item=>item.responsibleId?item.responsibleId===recipient:technicianIds(task).includes(recipient));
     const removedRecipients=new Set(removedProjects.flatMap(item=>item.responsibleId?[item.responsibleId]:technicianIds(task)));
     removedRecipients.forEach(recipient=>add(recipient,'维修项目已删除'));
-    const changedProjectIds=input.reassignItemIds??(input.action==='edit-repair-items'?next.items.filter(item=>item.responsibleId&&item.responsibleId!==task.items.find(previous=>previous.id===item.id)?.responsibleId).map(item=>item.id):[]);
+    const addedProjects=input.action==='edit-repair-items'?next.items.filter(item=>!task.items.some(previous=>previous.id===item.id)):[];
+    const addedFor=recipient=>addedProjects.filter(item=>item.responsibleId?item.responsibleId===recipient:handlers(next).includes(recipient));
+    if(task.stage!=='待派工') {
+      const addedRecipients=new Set(addedProjects.flatMap(item=>item.responsibleId?[item.responsibleId]:handlers(next)));
+      addedRecipients.forEach(recipient=>add(recipient,'新增维修项目'));
+    }
+    const changedProjectIds=input.reassignItemIds??(input.action==='edit-repair-items'?next.items.filter(item=>{
+      const previous=task.items.find(previous=>previous.id===item.id);
+      return previous&&item.responsibleId&&item.responsibleId!==previous.responsibleId;
+    }).map(item=>item.id):[]);
     const projectReassignment=changedProjectIds.length>0;
     if(projectReassignment) {
       const affected=new Set([...task.items,...next.items].filter(i=>changedProjectIds.includes(i.id)).map(i=>i.responsibleId).filter(Boolean));
       affected.forEach(id=>add(id,'项目改派'));
     } else {
-      if(['assign','reassign','reoffer','reconcile','reopen-repair'].includes(input.action) && next.stage!=='维修完成') addHandlers(next,input.action==='reopen-repair'?'返工派工':'新派工');
+      if(['assign','reassign','reoffer','reconcile','reopen-repair'].includes(input.action) && next.stage!=='维修完成') addHandlers(next,input.action==='reopen-repair'?(next.roundKind==='additional'?'追加维修派工':'返工派工'):'新派工');
       if(['reassign','cancel'].includes(input.action)) addHandlers(task,input.action==='cancel'?'派工已撤销':'任务已改派');
     }
     const schedulerKind={decline:'无法接单',pause:'维修暂停','submit-review':'回审已提交','submit-order':'维修已提检',submit:'维修已提检'}[input.action];
@@ -160,5 +188,5 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw) {
       add(recipient,'人工催办');
       }
     }
-    for(const {recipient,kind} of recipients) await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),id,event.id,recipient,kind,JSON.stringify({shopId:next.shopId,repairRound:next.repairRound||0,orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,actorName:actor.name,summary:(kind==='配件可领取'&&preparationGroups?preparedForRecipient(recipient).flatMap(group=>group.items.map(row=>{const item=group.partsRequirement.items[row.index];return `${item.name} ${item.quantity}${item.unit}`;})):kind==='配件可领取'&&input.partsPreparation?input.partsPreparation.filter(row=>row.recipientId===recipient).map(row=>{const item=parts.items[row.index];return `${item.name} ${item.quantity}${item.unit}`;}):kind==='配件已出库'&&input.partsIssue?input.partsIssue.filter(row=>row.recipientId===recipient).map(row=>{const item=parts.items[row.index];return `${item.name} ${item.quantity}${item.unit}`;}):kind==='维修项目已删除'?removedFor(recipient).map(i=>i.name):projectReassignment?next.items.filter(i=>changedProjectIds.includes(i.id)).map(i=>`${i.name} → ${i.responsibleName}`):next.items.map(i=>i.name)).join('、').slice(0,200),dueAt:next.dueAt,preparationGroups:preparedForRecipient(recipient)?.map(group=>({partsOwnerId:group.partsOwnerId,partsRecordedAt:group.partsRequirement.recordedAt,partsRevision:group.partsRequirement.revision,items:group.items.map(row=>({index:row.index,preparedAt:group.partsRequirement.items[row.index].preparedAt}))})),partsPreparation:input.partsPreparation?.filter(row=>row.recipientId===recipient).map(row=>({index:row.index,preparedAt:parts.items[row.index].preparedAt})),partsOwnerId:parts?.ownerId,partsRecordedAt:parts?.recordedAt,partsRevision:parts?.revision,notice:input.action==='send-review'?'维修单已进入回审，请重新核对并编辑本人维修项目后提交回审。':kind==='维修项目已删除'?'所列维修项目已删除，无需继续施工；其他项目按原安排执行。':projectReassignment?'仅所列项目变更负责人，其他项目及工单进度保持不变。':input.action==='edit-parts'?'仓管已整理配件需求，请查看最新清单。':input.action==='confirm-parts'?'本次所列配件已备齐，请到仓库领取；其他未通知配件仍在备料。':input.action==='issue-parts'?(parts?.issuedAt?'本批配件已全部交接出库，请查看本人领料明细。':'本次所列配件已交接出库，其余配件继续待处理。'):'',reason:input.reason||(input.action==='send-review'?input.note:'')||''})]);
+    for(const {recipient,kind} of recipients) await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),id,event.id,recipient,kind,JSON.stringify({shopId:next.shopId,repairRound:next.repairRound||0,orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,actorName:actor.name,itemIds:kind==='新增维修项目'?addedFor(recipient).map(i=>i.id):kind==='追加维修派工'?next.items.filter(i=>!i.responsibleId||i.responsibleId===recipient).map(i=>i.id):undefined,summary:(kind==='配件可领取'&&preparationGroups?preparedForRecipient(recipient).flatMap(group=>group.items.map(row=>{const item=group.partsRequirement.items[row.index];return `${item.name} ${item.quantity}${item.unit}`;})):kind==='配件可领取'&&input.partsPreparation?input.partsPreparation.filter(row=>row.recipientId===recipient).map(row=>{const item=parts.items[row.index];return `${item.name} ${item.quantity}${item.unit}`;}):kind==='配件已出库'&&input.partsIssue?input.partsIssue.filter(row=>row.recipientId===recipient).map(row=>{const item=parts.items[row.index];return `${item.name} ${item.quantity}${item.unit}`;}):kind==='维修项目已删除'?removedFor(recipient).map(i=>i.name):kind==='新增维修项目'?addedFor(recipient).map(i=>i.name):kind==='项目改派'?next.items.filter(i=>changedProjectIds.includes(i.id)&&(i.responsibleId===recipient||task.items.some(old=>old.id===i.id&&old.responsibleId===recipient))).map(i=>`${i.name} → ${i.responsibleName}`):next.items.map(i=>i.name)).join('、').slice(0,200),dueAt:next.dueAt,preparationGroups:preparedForRecipient(recipient)?.map(group=>({partsOwnerId:group.partsOwnerId,partsRecordedAt:group.partsRequirement.recordedAt,partsRevision:group.partsRequirement.revision,items:group.items.map(row=>({index:row.index,preparedAt:group.partsRequirement.items[row.index].preparedAt}))})),partsPreparation:input.partsPreparation?.filter(row=>row.recipientId===recipient).map(row=>({index:row.index,preparedAt:parts.items[row.index].preparedAt})),partsOwnerId:parts?.ownerId,partsRecordedAt:parts?.recordedAt,partsRevision:parts?.revision,notice:input.action==='send-review'?'维修单已进入回审，请重新核对并编辑本人维修项目后提交回审。':kind==='维修项目已删除'?'所列维修项目已删除，无需继续施工；其他项目按原安排执行。':kind==='新增维修项目'?'所列项目已新增，请查看并安排施工。':kind==='追加维修派工'?'客户已确认追加维修，请接单处理。':kind==='项目改派'?'仅所列项目变更负责人，其他项目及工单进度保持不变。':input.action==='edit-parts'?'仓管已整理配件需求，请查看最新清单。':input.action==='confirm-parts'?'本次所列配件已备齐，请到仓库领取；其他未通知配件仍在备料。':input.action==='issue-parts'?(parts?.issuedAt?'本批配件已全部交接出库，请查看本人领料明细。':'本次所列配件已交接出库，其余配件继续待处理。'):'',reason:input.reason||(input.action==='send-review'?input.note:'')||''})]);
 }

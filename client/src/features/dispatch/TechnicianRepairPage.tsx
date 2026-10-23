@@ -21,7 +21,7 @@ export function TechnicianRepairPage({controller:c,user}:{controller:DispatchCon
     {!c.loading&&!c.tasks.length?<Empty description="暂无此类维修任务"/>:null}
     <div className="technician-task-list">{c.tasks.map(task=><Card key={task.orderId} className="technician-task-card">
       <div className="dispatch-heading"><h3>{task.plate||'未填写车牌'}</h3><RepairStatusTag status={taskStatusLabel(task)}/></div>
-      <div className="technician-flags">{task.urgent?<Tag color="red">加急</Tag>:null}{task.overdue?<Tag color="red">超期</Tag>:null}{task.repairRound?<Tag color="orange">返工第 {task.repairRound} 轮</Tag>:task.rework?<Tag color="orange">返工</Tag>:null}</div>
+      <div className="technician-flags">{task.urgent?<Tag color="red">加急</Tag>:null}{task.overdue?<Tag color="red">超期</Tag>:null}{task.repairRound?<Tag color="orange">{task.roundKind==='additional'?'追加维修第':'返工第'} {task.repairRound} 轮</Tag>:task.rework?<Tag color="orange">返工</Tag>:null}</div>
       {['待开工','维修中','暂停','回审'].includes(task.stage)?<p className="technician-parts-progress">配件：{personalTask(task,user.id).partsRequirement?partsStatus(personalTask(task,user.id).partsRequirement):'未登记需求'}</p>:null}
       <p>{personalTask(task,user.id).items.map(i=>i.name).join('、')||'暂无本人维修项目'}</p>{individualRepair(task)&&personalTask(task,user.id).items.length>0&&personalTask(task,user.id).items.every(i=>['待检验','已完工'].includes(i.status))&&task.stage==='维修中'?<Tag color="green">本人已提交 · 等待其他项目</Tag>:null}
       <p className="dispatch-muted">预计完工：{displayTaskTime(task.dueAt)}</p>

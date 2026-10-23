@@ -1,3 +1,5 @@
+import {TaskTechniciansEditor} from './TaskTechniciansEditor';
+import { PendingRepairsPanel } from '../pending-repairs/PendingRepairsPanel';
 import { TaskDueDateEditor } from './TaskDueDateEditor';
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import {RepairWritebackStatus} from './RepairWritebackStatus';
@@ -69,7 +71,8 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     catch(e){controller.setError(e instanceof Error?e.message:'附件加载失败');}
   }
   return <div className={`dispatch-detail task-detail-layout${actions.length?" has-task-actions":""}`} style={actions.length?{paddingBottom:Math.max(90,actionBarHeight+16)}:undefined}>
-    <TaskOverview task={task} dueEditor={<TaskDueDateEditor key={`${task.orderId}-${user.id}`} controller={controller} user={user} blocked={photoBlocked} />}><Space wrap><Tag>{executionLabels[task.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(task)}</Tag>{task.urgent?<Tag color="red">加急</Tag>:null}{task.overdue?<Tag color="red">超期</Tag>:null}{task.rework&&!task.repairRound?<Tag color="orange">返工第 {task.reworkCount} 次</Tag>:null}</Space></TaskOverview>
+    <TaskOverview task={task} techniciansEditor={<TaskTechniciansEditor controller={controller} user={user} blocked={photoBlocked}/>} dueEditor={<TaskDueDateEditor key={`${task.orderId}-${user.id}`} controller={controller} user={user} blocked={photoBlocked} />}><Space wrap><Tag>{executionLabels[task.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(task)}</Tag>{task.urgent?<Tag color="red">加急</Tag>:null}{task.overdue?<Tag color="red">超期</Tag>:null}{task.rework&&!task.repairRound?<Tag color="orange">返工第 {task.reworkCount} 次</Tag>:null}</Space></TaskOverview>
+    <PendingRepairsPanel orderId={task.orderId} user={user} onChanged={()=>{void controller.refreshDetail();void controller.refresh();}}/>
     {unsigned?<Alert type="info" showIcon title="确认客户签字后才能派工" description="请在委托开单中完成工单与客户签字，确认客户签字后即可从派工台安排维修。"/>:null}
     {task.needsReview?<Alert type="warning" title="历史任务待核对" description="历史记录未能完整确认人员或进度；管理员核对后才能继续，不补造历史时间。"/>:null}
     {task.feedback?<Alert type="warning" title="无法接单 · 待服务顾问处理" description={task.feedback}/>:null}
@@ -129,7 +132,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
       {controller.manager&&n.status==='failed'?<Button size="small" loading={controller.busy} disabled={controller.busy} onClick={()=>void controller.act({action:'retry-notification',notificationId:n.id})}>重试通知</Button>:null}
     </div>)}
     <h3>操作与交接记录</h3>
-    <Timeline items={events.map(event=>({children:<div><strong>{event.action==='due-reminder'?'即将到期提醒':dispatchEventLabel(event)} · {event.actorName}</strong><p>{displayTime(event.at)} · {event.detail.stage}{event.detail.repairRound?` · 返工第 ${event.detail.repairRound} 轮`:""}</p>
+    <Timeline items={events.map(event=>({children:<div><strong>{event.action==='due-reminder'?'即将到期提醒':dispatchEventLabel(event)} · {event.actorName}</strong><p>{displayTime(event.at)} · {event.detail.stage}{event.detail.repairRound?` · ${event.detail.roundKind==='additional'?'追加维修第':'返工第'} ${event.detail.repairRound} 轮`:""}</p>
       {event.detail.previousTechnicianName&&event.detail.previousTechnicianName!==event.detail.technicianName?<p>{event.detail.previousTechnicianName} → {event.detail.technicianName||'待派工'}</p>:null}
       {['accept','record-parts','edit-parts','confirm-parts','issue-parts'].includes(event.action)&&event.detail.partsRequirement?<PartsRequirementSummary value={event.detail.partsRequirement}/>:null}
       {['record-hours','inspect'].includes(event.action)&&event.detail.workHours!==undefined?<p>实际工时：{event.detail.previousWorkHours!==undefined?`${event.detail.previousWorkHours} → `:''}{event.detail.workHours} 小时</p>:null}
@@ -141,7 +144,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
       {event.detail.pauseReason?<p>{event.detail.pauseReason}</p>:null}
       {event.detail.reason?<p>{event.detail.reason}</p>:null}{event.detail.note?<p>{event.detail.note}</p>:null}</div>}))}/>
     </>}]} />
-    {actions.length?<div ref={setActionBar} className="task-detail-actions"><div ref={setProjectActionsTarget} className="project-actions-slot"/><Space wrap>{actions.map(action=><Button key={action} type={['reopen-repair','assign','accept','submit','inspect','claim-inspection'].includes(action)?'primary':'default'} loading={controller.busy} disabled={controller.busy||photoBlocked||action==='inspect'&&!inspectionDraft.complete} onClick={()=>{
+    {actions.length?<div ref={setActionBar} className="task-detail-actions"><div ref={setProjectActionsTarget} className="project-actions-slot"/><Space wrap>{actions.map(action=><Button key={action} danger={action==='reopen-repair'} type={['assign','accept','submit','inspect','claim-inspection'].includes(action)?'primary':'default'} loading={controller.busy} disabled={controller.busy||photoBlocked||action==='inspect'&&!inspectionDraft.complete} onClick={()=>{
       if(action==='inspect'){if(!inspectionDraft.complete){controller.setError('请先为每个待检项目选择通过或退回');return;}setInspectionReview({version:task.version,choices:{...inspectionDraft.choices}});setDialog(action);}
       else if(action==='accept')setPartsDialog(true);else if(['resume','reoffer','remind','claim-inspection','retry-inspection-notifications'].includes(action)) void controller.act({action});else setDialog(action);
     }}>{action==='inspect'?(inspectionDraft.complete?`提交检验结果（通过 ${inspectionDraft.pending.length-inspectionDraft.rejectedItemIds.length} · 退回 ${inspectionDraft.rejectedItemIds.length}）`:`还剩 ${inspectionDraft.pending.filter(item=>!inspectionDraft.choices[item.id]).length} 项未确认`):actionLabels[action]}</Button>)}</Space></div>:null}

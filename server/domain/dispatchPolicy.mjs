@@ -1,3 +1,4 @@
+import {canEditDispatchTechnicians,requiredDispatchTechnicians} from '../../shared/dispatchTechniciansPolicy.mjs';
 import { canEditDispatchDue } from '../../shared/dispatchDuePolicy.mjs';
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import {validatePartsIssue,issueParts,prepareParts} from './partsIssue.mjs';
@@ -27,7 +28,7 @@ export function validateDispatchRequest(input) {
   validateReopenItems(input||{});
   validateRepairItemEdits(input||{});
   validateProjectReassignment(input||{});
-  const actions = ['update-due','send-review','submit-review','edit-repair-items','edit-parts','issue-parts','confirm-parts','record-parts','reopen-repair','start-order','submit-order','claim-inspection','reassign-inspection','retry-inspection-notifications','retry-scheduler-notifications','record-hours','assign','reassign','reoffer','cancel','accept','decline','start','finish','pick','pause','resume','submit','inspect','update','remind','retry-notification','reconcile'];
+  const actions = ['update-technicians','update-due','send-review','submit-review','edit-repair-items','edit-parts','issue-parts','confirm-parts','record-parts','reopen-repair','start-order','submit-order','claim-inspection','reassign-inspection','retry-inspection-notifications','retry-scheduler-notifications','record-hours','assign','reassign','reoffer','cancel','accept','decline','start','finish','pick','pause','resume','submit','inspect','update','remind','retry-notification','reconcile'];
   if (!input || !actions.includes(input.action) || !Number.isInteger(input.expectedVersion) || input.expectedVersion < 0 || typeof input.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(input.requestId)) fail('操作参数无效：需要版本号及唯一请求编号',400);
   for (const key of ['note','reason','pauseReason','technicianId','inspectorId','notificationId','notificationJobId']) {
     if (input[key] !== undefined && (typeof input[key] !== 'string' || input[key].length > 2000)) fail('文本参数无效',400);
@@ -48,6 +49,10 @@ export function validateDispatchRequest(input) {
     const calendar = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/.exec(input.dueAt);
     if (!calendar || new Date(`${calendar[1]}T00:00:00Z`).toISOString().slice(0,10)!==calendar[1] || +calendar[2]>23 || +calendar[3]>59 || +(calendar[4] || 0)>59) fail('预计完工时间无效',400);
   }
+  if(input.action==='update-technicians') {
+    if(!input.technicianIds?.length) fail('请至少保留一名维修员工',400);
+    if(Object.keys(input).some(key=>!['action','expectedVersion','requestId','technicianIds'].includes(key))) fail('此操作仅可修改维修员工名单',400);
+  }
   return input;
 }
 export function applyDispatchAction(task, input, actor, people, now = new Date().toISOString(), recipientScope) {
@@ -56,6 +61,19 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   if (['草稿','待客户签字','待处理纸质委托书'].includes(task.orderStatus) || ['草稿','待客户签字','待处理纸质委托书'].includes(task.stage)) fail('客户签字后才能执行派工操作');
   if (task.version !== input.expectedVersion) fail('任务已更新，请刷新后重试');
   if(task.needsReview&&!['reconcile','remind','retry-notification','retry-scheduler-notifications'].includes(input.action))fail('历史任务需要管理员先核对归属和进度');
+  if(input.action==='update-technicians') {
+    if(!canEditDispatchTechnicians(task,actor)) fail('仅本店服务顾问、管理员或检验员可修改待结算工单的维修员工',403);
+    const required=requiredDispatchTechnicians(task);
+    const missing=required.filter(id=>!input.technicianIds.includes(id));
+    if(missing.length) fail('不能移除已分配维修项目或已有完工提检记录的员工');
+    const retained=new Set([...technicianIds(task),...required]);
+    for(const id of input.technicianIds) {
+      if(!retained.has(id)&&!people.some(person=>person.id===id&&person.active&&person.shopId===task.shopId&&hasRole(person,'technician'))) fail('新增员工须为本店有效维修工',400);
+    }
+    const names=input.technicianIds.map(id=>people.find(person=>person.id===id)?.name
+      || task.items.find(item=>item.responsibleId===id)?.responsibleName || id);
+    return {...structuredClone(task),technicianIds:[...input.technicianIds],technicianId:input.technicianIds[0],technicianName:names.join('、'),version:task.version+1};
+  }
   if(input.action==='send-review') return sendReview(task,actor,canInspect);
   if(input.action==='submit-review' || task.stage==='回审'&&input.action==='edit-repair-items') {
     if(task.stage!=='回审') fail('仅回审任务可提交回审');

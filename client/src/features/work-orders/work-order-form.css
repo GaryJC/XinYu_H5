@@ -74,3 +74,6 @@
   .form-panel .identifier-scanner > div:first-child { min-height: 78px; }
   .form-panel .vehicle-license-ocr .has-camera-artwork { max-width: none; }
 }
+
+.repair-pending-choice{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:8px;font-size:14px;color:#657085}
+.repair-pending-choice .ant-checkbox-wrapper{min-height:36px;align-items:center}

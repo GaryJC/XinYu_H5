@@ -1,3 +1,4 @@
+import { pendingLegacyItems } from '../domain/pendingRepairs.mjs';
 import { randomUUID } from "node:crypto";
 
 export const INSERT_LEGACY_SYNC_EVENT_QUERY = `
@@ -100,7 +101,7 @@ export function buildLegacySyncPayload({ eventId, revision, eventType, order }) 
         exteriorIssues: []
       },
       faultDescription: order.faultDescription || "",
-      repairItems: (order.repairItems || []).map((item, index) => ({
+      repairItems: [...(order.repairItems || []), ...pendingLegacyItems(order.pendingRepairs)].map((item, index) => ({
         id: Number(item.id || index + 1),
         itemNo: index + 1,
         name: item.name || "",

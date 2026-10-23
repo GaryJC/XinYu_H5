@@ -1,3 +1,4 @@
+import { useRepairConfirmationRows } from "../hooks/useRepairConfirmationRows";
 import { CustomerSignatureSection } from "../../signature/CustomerSignatureSection";
 import { SignatureReview } from "../../signature/SignatureReview";
 import { PaperOrderPhotos } from "./PaperOrderPhotos";
@@ -12,7 +13,7 @@ import { PreRepairPhotos } from "../../pre-repair-photos/PreRepairPhotos";
 import { DraftDispatchFields } from "../../dispatch/DraftDispatchFields";
 import { dispatchEnabled } from "../../dispatch/dispatchAvailability";
 import { LockKeyhole, Plus, Save, Send, Trash2 } from "lucide-react";
-import { Alert, Button, DatePicker, Form, Grid, Input, Radio, Select, Tooltip } from "antd";
+import { Alert, Button, Checkbox, DatePicker, Form, Grid, Input, Radio, Select, Tooltip } from "antd";
 import dayjs from "dayjs";
 import { useState } from "react";
 import { WorkOrder, WorkOrderDraft } from "../../../../../shared/types";
@@ -40,11 +41,12 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     selectedOrder, startNewOrder, canEditForm, saveDraft, role, sendSignature,
     formErrors, vehicleLicenseOcr, ocrState, scanVehicleLicense,
     confirmVehicleLicenseOcr, draft, updateDraft, updateVehicle, updateCustomer,
-    toggleArrayField, setDraft, updateRepairItem,
+    toggleArrayField, setDraft,
     actionLoading, completeSignature, identifierRecognition,
     vehicleHistory, vehicleHistoryLoading, vehicleHistoryError, scanVehicleIdentifier,
     lookupVehicleLicenseForDevelopment, selectVehicleReference, departments, departmentError
   } = controller;
+  const confirmationRows=useRepairConfirmationRows(draft,setDraft);
   const paperOnly = draft.paperOrder?.mode === "pending";
   const paperDingTalk = draft.paperOrder?.mode === "dingtalk";
   const showLegacySyncStatus = Boolean(selectedOrder && selectedOrder.status !== "草稿");
@@ -364,23 +366,13 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 <span>项目</span>
                 <span>操作</span>
               </div>
-              {draft.repairItems.map((item) => (
-                <div className="repair-row" role="row" key={item.id}>
-                  <div data-label="项目"><Input required aria-required="true" status={fieldError("维修项目") && !item.name.trim() ? "error" : undefined} disabled={!canEditForm} aria-label="项目名称" value={item.name} onChange={(event) => updateRepairItem(item.id, { name: event.target.value })} /></div>
-                  <div data-label="操作"><Button
-                    type="text"
-                    danger
-                    disabled={!canEditForm}
-                    aria-label="删除维修项目"
-                    onClick={() =>
-                      setDraft((current) => ({
-                        ...current,
-                        repairItems: current.repairItems.filter((row) => row.id !== item.id)
-                      }))
-                    }
-                  >
-                    <Trash2 size={15} />
-                  </Button></div>
+              {confirmationRows.rows.map((item,index) => (
+                <div className="repair-row" role="row" key={item.key}>
+                  <div data-label="项目">
+                    <Input required aria-required="true" status={fieldError("维修项目") && !item.name.trim() ? "error" : undefined} disabled={!canEditForm} aria-label="项目名称" value={item.name} onChange={event=>confirmationRows.changeName(item,event.target.value)} />
+                    <div className="repair-pending-choice"><Checkbox aria-label={`项目 ${index+1} 待定`} disabled={!canEditForm} checked={item.pending} onChange={event=>confirmationRows.toggle(item,event.target.checked)}>待定</Checkbox></div>
+                  </div>
+                  <div data-label="操作"><Button type="text" danger disabled={!canEditForm} aria-label="删除维修项目" onClick={()=>confirmationRows.remove(item)}><Trash2 size={15}/></Button></div>
                 </div>
               ))}
             </div>
@@ -409,7 +401,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                     title="签字已上传成功"
                     description={selectedOrder?.customerSignatureReview?.state === "pending" ? "需确认用户签字，确认前不会同步润丰或派工。" : signatureUploadDescription}
                   />
-                ) : <span>客户签字并经服务顾问或管理员确认后，委托单会进入润丰待拉取队列。</span>}
+                ) : <span>现场签字完成后，委托单会进入润丰待拉取队列；远程链接签字需经服务顾问或管理员确认。</span>}
                 {showSignatureValidation && formErrors.length ? (
                   <Alert
                     className="signature-validation-summary"

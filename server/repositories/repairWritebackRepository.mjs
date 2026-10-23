@@ -1,3 +1,5 @@
+import { mergePendingWriteback } from '../domain/pendingRepairs.mjs';
+import { readPendingRepairs } from './pendingRepairsRepository.mjs';
 import {validateLegacyRepairStrings} from './legacyRepairWritebackRepository.mjs';
 import {HttpError} from '../http/HttpError.mjs';
 import {makeWritebackSnapshot,writebackAllowed,writebackDispatchAllowlist,validateWritebackSnapshot} from '../domain/repairWriteback.mjs';
@@ -8,7 +10,8 @@ export async function enqueueRepairWriteback(client,task,eventId) {
  for(const round of await readRepairRounds(client,task.orderId))for(const item of round.task.items){const ids=round.task.technicianIds??(round.task.technicianId?[round.task.technicianId]:[]);all.set(item.id,{...item,responsibleId:item.responsibleId||(ids.length===1?ids[0]:undefined)});}
  for(const item of task.items)all.set(item.id,item);
  const {rows:users}=await client.query('select id,legacy_employee_code,legacy_employee_name from users where shop_id=$1',[task.shopId]);
- const snapshot=makeWritebackSnapshot(task,[...all.values()],users);
+ const pending=await readPendingRepairs(client,task.orderId);
+ const snapshot=makeWritebackSnapshot(task,mergePendingWriteback([...all.values()],pending.items),users);
  if(task.executionMode!=='outsourced')try{validateWritebackSnapshot(snapshot);
   const {rows:orders}=await client.query('select dispatch_no from work_orders where id=$1',[task.orderId]);
   if(writebackAllowed(orders[0]?.dispatch_no))await validateLegacyRepairStrings(snapshot);

@@ -1,3 +1,4 @@
+import { handlePendingRepairs } from './pendingRepairsRouter.mjs';
 import { handlePrintPdfDownload, handlePrintPdfUpload } from "./printPdfRouter.mjs";
 import { handleCustomerSignature } from "./customerSignatureRouter.mjs";
 import { resolvePaperOrder, submitPaperDingTalkOrder } from "../services/paperOrderService.mjs";
@@ -92,6 +93,7 @@ export async function handleApiRequest(req, res, url) {
   if (await handleProcurement(req,res,url,currentUser)) return true;
   assertEmployeeBound(currentUser);
   if (await handlePrintPdfUpload(req, res, url, currentUser)) return true;
+  if (await handlePendingRepairs(req,res,url,currentUser)) return true;
   if (await handleDispatchRequest(req, res, url, currentUser)) return true;
 
   if (req.method === "GET" && url.pathname === "/api/work-orders") {
@@ -395,7 +397,7 @@ export async function handleApiRequest(req, res, url) {
     if (!order) throw new HttpError(404, "签字会话不存在或已失效");
     await assertWorkOrderAccess(order.id, currentUser);
     const { signature, signatureFileId } = await readJson(req);
-    sendJson(res, 200, await signWorkOrderByToken(signMatch[1], signature, signatureFileId));
+    sendJson(res, 200, await signWorkOrderByToken(signMatch[1], signature, signatureFileId, undefined, currentUser));
     return true;
   }
 

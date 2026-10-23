@@ -71,9 +71,8 @@ test("legacy sync payload is versioned and preserves structured work-order data"
   });
 });
 
-test("customer signatures wait for staff confirmation before enqueuing initial legacy sync", async () => {
+test("drafts never enqueue legacy sync and remote signatures keep the review branch", async () => {
   const source = await readFile(new URL("../server/db.mjs", import.meta.url), "utf8");
-  const enqueueCalls = source.match(/await enqueueLegacySyncEvent\(/g) || [];
   const createSource = source.match(
     /export async function createWorkOrder[\s\S]*?(?=\nexport async function)/
   )?.[0] || "";
@@ -81,9 +80,9 @@ test("customer signatures wait for staff confirmation before enqueuing initial l
     /export async function signWorkOrderByToken[\s\S]*?(?=\nexport async function)/
   )?.[0] || "";
 
-  assert.equal(enqueueCalls.length, 1);
   assert.doesNotMatch(createSource, /enqueueLegacySyncEvent/);
-  assert.doesNotMatch(signSource, /enqueueLegacySyncEvent/);
+  assert.match(signSource, /const onsite = !createSignatureFile && onsiteActor/);
+  assert.match(signSource, /else await queueCustomerSignatureReview/);
   assert.match(signSource, /queueCustomerSignatureReview/);
   const confirmSource = source.match(/export async function confirmCustomerSignature[\s\S]*?(?=\nexport async function)/)?.[0] || "";
   assert.match(confirmSource, /await enqueueLegacySyncEvent/);

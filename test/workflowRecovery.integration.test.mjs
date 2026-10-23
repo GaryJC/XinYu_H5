@@ -31,6 +31,60 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       for(const [file,kind] of [[front,'repair_order_photo'],[rear,'repair_order_photo'],[signature,'signature_image']])await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by) values($1,$2,$3,'local','','fixture','image/png',8,'m')",[file,id,kind]);
       return signature;
     }
+    await t.test('authenticated onsite signing confirms and enqueues once; remote signing still awaits review',async()=>{
+      const file=await seed('onsite-auto');
+      const session=await db.createSignatureTokenForOrder('onsite-auto',manager.name,{signatureMode:'onsite'});
+      await assert.rejects(()=>db.signWorkOrderByToken(session.signatureToken,'现场客户',file,undefined,{...manager,shopId:'other'}),e=>e.status===403);
+      assert.equal((await db.findWorkOrderById(pool,'onsite-auto')).customerSignatureFileId,undefined);
+      const signed=await db.signWorkOrderByToken(session.signatureToken,'现场客户',file,undefined,manager);
+      assert.equal(signed.status,'已委托');assert.equal(signed.customerSignatureReview.state,'confirmed');
+      assert.equal(signed.customerSignatureReview.confirmedBy,manager.name);
+      const counts=async()=>({sync:(await pool.query("select count(*) from legacy_sync_outbox where order_id='onsite-auto'")).rows[0].count,review:(await pool.query("select count(*) from dispatch_notifications where order_id='onsite-auto' and kind='需确认用户签字'")).rows[0].count});
+      assert.deepEqual(await counts(),{sync:'1',review:'0'});
+      await assert.rejects(()=>db.signWorkOrderByToken(session.signatureToken,'重复签字',file,undefined,manager),e=>e.status===409);
+      await db.confirmCustomerSignature('onsite-auto',manager);assert.deepEqual(await counts(),{sync:'1',review:'0'});
+      const remoteFile=await seed('remote-still-review');
+      const remote=await db.createSignatureTokenForOrder('remote-still-review',manager.name,{signatureMode:'remote'});
+      const pending=await db.signWorkOrderByToken(remote.signatureToken,null,null,async()=>({id:remoteFile}));
+      assert.equal(pending.status,'待客户签字');assert.equal(pending.customerSignatureReview.state,'pending');
+      assert.equal((await pool.query("select count(*) from legacy_sync_outbox where order_id='remote-still-review'")).rows[0].count,'0');
+    });
+    await t.test('onsite signing with only pending projects syncs pending names without empty dispatch notifications',async()=>{
+      const file=await seed('pending-only-signature');
+      await pool.query("delete from repair_items where order_id='pending-only-signature'");
+      const {saveDraftPendingRepairs}=await import('../server/repositories/pendingRepairsRepository.mjs');
+      const {saveDispatchPlan}=await import('../server/repositories/dispatchPlanRepository.mjs');
+      await saveDraftPendingRepairs(pool,{id:'pending-only-signature',pendingRepairs:[{name:'额外检查',reason:'司机询问公司'}]},manager);
+      const draft=await db.findWorkOrderById(pool,'pending-only-signature');
+      await saveDispatchPlan(pool,draft,manager,{technicianIds:[tech.id],dueAt:new Date(Date.now()+86400000).toISOString()});
+      const session=await db.createSignatureTokenForOrder(draft.id,manager.name,{signatureMode:'onsite'});
+      const signed=await db.signWorkOrderByToken(session.signatureToken,'现场客户',file,undefined,manager);
+      assert.equal(signed.status,'已委托');
+      assert.equal((await pool.query("select count(*) from dispatch_notifications where order_id=$1",[draft.id])).rows[0].count,'0');
+      assert.equal((await pool.query("select count(*) from dispatch_events where order_id=$1 and action='assign'",[draft.id])).rows[0].count,'0');
+      assert.match(signed.dispatchPlan.activationError,/暂无已确认维修项目/);
+      assert.equal((await pool.query("select count(*) from legacy_sync_outbox where order_id=$1",[draft.id])).rows[0].count,'1');
+    });
+    await t.test('completed repair roster correction preserves projects, commercial records and sync queues',async()=>{
+      const id='roster-correction';await seed(id,'待结算');
+      const {saveDispatchTask}=await import('../server/repositories/dispatchRepository.mjs');
+      const svc=await import('../server/services/dispatchService.mjs');
+      await saveDispatchTask(pool,{orderId:id,shopId:'shop-hq',stage:'维修完成',orderStatus:'待结算',version:1,technicianIds:[tech.id,nextTech.id],technicianId:tech.id,technicianName:`${tech.name}、${nextTech.name}`,completedAt:'2026-10-22T03:00:00Z',completedBy:inspector.id,workHours:2,items:[{id:1,name:'已完成项目',status:'已完工',responsibleId:tech.id,responsibleName:tech.name,finishedBy:tech.id,inspectorName:inspector.name,inspectedAt:'2026-10-22T03:00:00Z'}],workerSubmissions:{[tech.id]:{at:'2026-10-22T02:00:00Z',note:'已维修'}}});
+      const snapshot=async()=>({order:(await pool.query("select to_jsonb(w)-'updated_at'-'technician' as body from work_orders w where id=$1",[id])).rows[0].body,items:(await pool.query('select * from repair_items where order_id=$1 order by item_no',[id])).rows});
+      const before=await snapshot();
+      const command={action:'update-technicians',technicianIds:[tech.id],expectedVersion:1,requestId:randomUUID()};
+      await assert.rejects(()=>svc.executeDispatchAction(inspector,id,{...command,technicianIds:[nextTech.id]}),/不能移除/);
+      const changed=await svc.executeDispatchAction(inspector,id,command);
+      assert.deepEqual(changed.task.technicianIds,[tech.id]);
+      assert.equal(changed.task.technicianName,tech.name);assert.equal(changed.task.stage,'维修完成');
+      assert.equal(changed.task.items[0].responsibleId,tech.id);assert.equal(changed.task.workHours,2);
+      await svc.executeDispatchAction(inspector,id,command);
+      assert.deepEqual(await snapshot(),before);
+      assert.equal((await pool.query('select technician from work_orders where id=$1',[id])).rows[0].technician,tech.name);
+      assert.equal((await pool.query('select count(*) from dispatch_events where order_id=$1',[id])).rows[0].count,'1');
+      for(const table of ['legacy_sync_outbox','repair_writebacks','dispatch_notifications'])assert.equal((await pool.query(`select count(*) from ${table} where order_id=$1`,[id])).rows[0].count,'0');
+      await assert.rejects(()=>svc.executeDispatchAction(inspector,id,{...command,requestId:randomUUID()}),/已更新/);
+    });
     await t.test('valid sessions are reused; concurrent recovery creates one session and revokes old tokens',async()=>{
       await seed('renew');const first=await db.createSignatureTokenForOrder('renew',manager.name);
       const reused=await db.createSignatureTokenForOrder('renew',manager.name);assert.equal(reused.signatureToken,first.signatureToken);

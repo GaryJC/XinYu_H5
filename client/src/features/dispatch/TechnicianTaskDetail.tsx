@@ -1,3 +1,4 @@
+import { OriginalRepairItems } from './OriginalRepairItems';
 import { TaskDueDateEditor } from './TaskDueDateEditor';
 import {partsHistoryEvents} from './partsHistory';
 import {individualRepair,personalTask,partsController} from './individualRepair';
@@ -64,6 +65,7 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
       <RepairItemsEditor technicians={(task.executionMode==='outsourced'?c.people.contractors:c.people.technicians).filter(p=>individual?p.id===user.id:(task.technicianIds??[task.technicianId]).includes(p.id))} items={task.items} rows={itemsEditor.editing&&dialog!=='submit-order'?itemsEditor.rows:task.items} onChange={itemsEditor.setRows} editing={itemsEditor.editing&&dialog!=='submit-order'} disabled={c.busy}/>
       {itemsEditor.editing&&dialog!=='submit-order'?<>{handoverField}<div className="repair-items-save"><Button disabled={c.busy} onClick={itemsEditor.cancel}>取消</Button><Button type="primary" loading={c.busy} disabled={!itemsEditor.valid||itemsEditor.stale||blocked} onClick={()=>void itemsEditor.save()}>保存项目</Button></div>{itemsEditor.stale?<Alert type="warning" title="工单已更新，请重新载入项目后编辑" action={<Button onClick={itemsEditor.begin}>重新载入</Button>}/>:null}</>:null}
     </section>
+    <OriginalRepairItems detail={c.detail!}/>
     {task.faultDescription?<section><h3>故障描述</h3><p>{task.faultDescription}</p></section>:null}
     {task.note?<section><h3>派工备注</h3><p>{task.note}</p></section>:null}
     <PartsRequirementSummary value={task.partsRequirement}/>

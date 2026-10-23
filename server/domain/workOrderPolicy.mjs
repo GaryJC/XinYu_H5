@@ -38,7 +38,8 @@ export function assertOrderReadyForSignature(order) {
   if (!order.customer?.name?.trim()) missing.push("车主名称/所属单位");
   if (!order.customer?.legacyCode?.trim()) missing.push("所属单位编码");
   if (!order.customer?.phone?.trim()) missing.push("联系电话");
-  if (!order.repairItems?.length || order.repairItems.some((item) => !item.name?.trim())) missing.push("维修项目");
+  const requestedItems=[...(order.repairItems||[]),...(order.pendingRepairs||[]).filter(p=>p.state!=='declined'&&!p.scheduled)];
+  if (!requestedItems.length || requestedItems.some(item=>!item.name?.trim())) missing.push("维修项目");
   if (missing.length) throw new HttpError(400, `请完善必填项：${missing.join("、")}`);
 }
 
