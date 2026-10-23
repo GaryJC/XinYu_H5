@@ -252,3 +252,18 @@ test('multi-person handover and rejected historical work require explicit curren
   const former={...technician,role:'manager'};
   assert.throws(()=>apply(task,'inspect',former),/不能自检/);
 });
+
+test('completion range keeps a single supplied bound open while no dates still default to this month',()=>{
+ const now=new Date('2026-10-23T01:00:00Z');
+ const history=completionRange(undefined,'2026-09-30',now);
+ assert.equal(history.to,'2026-09-30T16:00:00.000Z');
+ const done={stage:'维修完成',completedAt:'2025-01-01T00:00:00.000Z'};
+ assert.equal(dispatchMetric(done,'completed',history.from,history.to),true);
+ assert.equal(dispatchMetric({...done,completedAt:history.to},'completed',history.from,history.to),false);
+ const future=completionRange('2026-11-01',undefined,now);
+ assert.equal(future.from,'2026-10-31T16:00:00.000Z');
+ assert.equal(dispatchMetric({...done,completedAt:'2027-01-01T00:00:00.000Z'},'completed',future.from,future.to),true);
+ assert.deepEqual(completionRange(undefined,undefined,now),{from:'2026-09-30T16:00:00.000Z',to:'2026-10-31T16:00:00.000Z'});
+ assert.throws(()=>completionRange('2026-10-02','2026-10-01',now),e=>e.status===400);
+ assert.throws(()=>completionRange(undefined,'2026-02-30',now),e=>e.status===400);
+});

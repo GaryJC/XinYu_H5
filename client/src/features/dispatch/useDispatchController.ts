@@ -13,6 +13,7 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
   const [people,setPeople]=useState<DispatchPeople>({technicians:[],inspectors:[],contractors:[]});
   const [summaries,setSummaries]=useState<TechnicianSummary[]>([]);
   const [selectedId,setSelectedId]=useState<string|undefined>(()=>initialOrderId || new URLSearchParams(location.search).get('dispatchOrder') || undefined);
+  const selection=useRef(selectedId);
   const [detail,setDetail]=useState<DispatchDetail>();
   const [error,setError]=useState('');
   const [loading,setLoading]=useState(false);
@@ -33,11 +34,13 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
     else {setError('');setUpdatedAt(new Date().toLocaleTimeString('zh-CN',{timeZone:'Asia/Shanghai'}));}
     setLoading(false);
   },[filters,inspectionLead,view,user]);
+  const latestRefresh=useRef(refresh);
+  latestRefresh.current=refresh;
   const refreshDetail=useCallback(async()=> {
+    if(!selectedId || selection.current!==selectedId) return;
     const current=++detailGeneration.current;
-    if(!selectedId) return;
-    try {const next=await dispatchApi.detail(selectedId);if(current===detailGeneration.current) setDetail(next);}
-    catch(e) {if(current===detailGeneration.current){setDetail(undefined);setError(e instanceof Error?e.message:'任务加载失败');}}
+    try {const next=await dispatchApi.detail(selectedId);if(current===detailGeneration.current && selection.current===selectedId) setDetail(next);}
+    catch(e) {if(current===detailGeneration.current && selection.current===selectedId){setDetail(undefined);setError(e instanceof Error?e.message:'任务加载失败');}}
   },[selectedId]);
   useEffect(()=>{void refresh();return()=>{generation.current++;};},[refresh]);
   useEffect(()=>{if(selectedId) setDetail(undefined);void refreshDetail();return()=>{detailGeneration.current++;};},[refreshDetail]);
@@ -48,19 +51,21 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
     return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',update);window.removeEventListener('focus',update);};
   },[refresh,refreshDetail]);
   function select(id?:string) {
+    if(selection.current===id)return;
+    selection.current=id;detailGeneration.current++;setDetail(undefined);
     pending.current=undefined;setSelectedId(id);setError('');
     const url=new URL(location.href);if(id) url.searchParams.set('dispatchOrder',id);else url.searchParams.delete('dispatchOrder');
     history.replaceState(null,'',url);
   }
   async function act(input:ActionInput):Promise<boolean> {
-    if(!detail || actionBusy.current) return false;
+    if(!detail || detail.task.orderId!==selection.current || actionBusy.current) return false;
     actionBusy.current=true;setBusy(true);setError('');
     const id=detail.task.orderId,key=JSON.stringify({id,input});
     const body=pending.current?.key===key?pending.current.body:{...input,expectedVersion:detail.task.version,requestId:createRequestId()};
     pending.current={key,body};
-    try {await dispatchApi.action(id,body);pending.current=undefined;if(input.action==='reopen-repair')setFilters({});await Promise.all([refresh(),refreshDetail()]);return true;}
+    try {await dispatchApi.action(id,body);pending.current=undefined;if(input.action==='reopen-repair'&&selection.current===id)setFilters({});await Promise.all([latestRefresh.current(),refreshDetail()]);return true;}
     catch(e) {
-      setError(e instanceof Error?e.message:'操作失败');
+      if(selection.current===id)setError(e instanceof Error?e.message:'操作失败');
       // A definite HTTP failure may be corrected; an ambiguous network failure retains the idempotency key.
       if(e instanceof Error && 'status' in e) pending.current=undefined;
       await refreshDetail();return false;

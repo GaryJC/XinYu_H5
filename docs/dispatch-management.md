@@ -46,7 +46,7 @@
 
 共享契约在 `shared/types.ts`，前端业务集中于 `client/src/features/dispatch`。HTTP 路由、派工服务、领域规则、数据库仓储和钉钉集成分别独立。状态由领域规则计算，在同一事务中写入任务、原委托单/项目镜像、事件和通知。签字/润丰同步沿用既有流程，平台同步不会重置维修状态。
 
-- `GET /api/dispatch/tasks`：筛选任务。参数为 `executionMode`（internal / field / outsourced）、`search`、`technicianId`、`stage`、`metric`、`urgent`、`overdue`、`from`、`to`；日期格式 `YYYY-MM-DD`，结束日包含整天。
+- `GET /api/dispatch/tasks`：筛选任务。参数为 `executionMode`（internal / field / outsourced）、`search`、`technicianId`、`stage`、`metric`、`urgent`、`overdue`、`from`、`to`；日期格式 `YYYY-MM-DD`，结束日包含整天；两端都未填写时默认本月，只填写一端时另一端不设日期限制。
 - `GET /api/dispatch/technicians`：本店维修工汇总；`GET /api/dispatch/technicians/:id/tasks`：人员任务明细。
 - `GET /api/dispatch/people`：可指派维修工和可选检验人；`GET /api/dispatch/tasks/:orderId`：详情、事件、通知、维修附件。
 - `POST /api/dispatch/tasks/:orderId/actions`：接收共享的 `DispatchActionRequest`。每次操作必须携带 `expectedVersion` 和唯一 `requestId`；不确定是否提交成功时重用原请求编号及完整原请求。同编号不同内容返回 409。

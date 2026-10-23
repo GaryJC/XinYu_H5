@@ -55,7 +55,7 @@ export function validateDispatchRequest(input) {
   }
   return input;
 }
-export function applyDispatchAction(task, input, actor, people, now = new Date().toISOString(), recipientScope) {
+export function applyDispatchAction(task, input, actor, people, now = new Date().toISOString(), recipientScope, personalEditing=false) {
   validateDispatchRequest(input);
   assertDispatchAccess(task,actor);
   if (['草稿','待客户签字','待处理纸质委托书'].includes(task.orderStatus) || ['草稿','待客户签字','待处理纸质委托书'].includes(task.stage)) fail('客户签字后才能执行派工操作');
@@ -78,7 +78,8 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   if(input.action==='submit-review' || task.stage==='回审'&&input.action==='edit-repair-items') {
     if(task.stage!=='回审') fail('仅回审任务可提交回审');
     if(!technicianIds(task).includes(actor.id)||!hasAnyRole(actor,['technician','outsourcing'])&&!actor.outsourcingRoleMember) fail('仅当前维修工可编辑或提交回审',403);
-    const next=applyDispatchAction({...task,stage:'维修中'},{...input,action:input.action==='submit-review'?'submit-order':input.action},actor,people,now,recipientScope);
+    // Review edits stay scoped to the worker even when they also hold scheduling roles.
+    const next=applyDispatchAction({...task,stage:'维修中'},{...input,action:input.action==='submit-review'?'submit-order':input.action},actor,people,now,recipientScope,true);
     if(input.action!=='submit-review'||next.stage!=='待检验') next.stage='回审';
     if(input.action==='edit-repair-items') for(const item of next.items) {
       if(!task.items.some(previous=>previous.id===item.id)&&item.status==='待开工') Object.assign(item,{status:'维修中',startAt:now,startedBy:actor.id});
@@ -91,7 +92,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     for(const group of input.preparationGroups)prepared=applyDispatchAction(prepared,{...input,preparationGroups:undefined,partsOwnerId:group.partsOwnerId,partsPreparation:group.items,expectedVersion:prepared.version},actor,people,now);
     return {...prepared,version:task.version+1};
   }
-  const individual=applyIndividualAction(task,input,actor,people,now,applyDispatchAction);
+  const individual=applyIndividualAction(task,input,actor,people,now,(...args)=>applyDispatchAction(...args,personalEditing),{personalEditing});
   if(individual)return individual;
   let next = structuredClone(task);
   if(input.action==='reopen-repair') next=reopenRepairTask(task,input,actor,now);
@@ -218,7 +219,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     next.firstStartedAt ||= now; next.stage='维修中';
     next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])];
   } else if(action==='edit-repair-items') {
-    const scheduler=hasAnyRole(actor, scheduling);
+    const scheduler=!personalEditing&&hasAnyRole(actor, scheduling);
     if(scheduler) stage('待派工','待接单','待开工','维修中','暂停');
     else {requireOwner();stage('待开工','维修中','暂停');}
     if(scheduler&&task.stage==='待派工')transferUnfinishedResponsibilities(next);
@@ -350,7 +351,10 @@ export function completionRange(from, to, now = new Date()) {
   const first=`${local.getUTCFullYear()}-${String(local.getUTCMonth()+1).padStart(2,'0')}-01`;
   const last=new Date(Date.UTC(local.getUTCFullYear(),local.getUTCMonth()+1,0)).toISOString().slice(0,10);
   const parse = value => { if(!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(`${value}T00:00:00Z`).toISOString().slice(0,10)!==value) fail('日期无效',400); return Date.parse(`${value}T00:00:00+08:00`); };
-  const start=parse(from||first); const end=parse(to||last)+86400000;
+  // Only an entirely empty range defaults to this month; a single bound stays open.
+  const defaultMonth=!from&&!to;
+  const start=from?parse(from):defaultMonth?parse(first):Date.parse('0001-01-01T00:00:00.000Z');
+  const end=to?parse(to)+86400000:defaultMonth?parse(last)+86400000:Date.parse('9999-12-31T23:59:59.999Z');
   if(start>=end) fail('结束日期不能早于开始日期',400);
   return {from:new Date(start).toISOString(),to:new Date(end).toISOString()};
 }

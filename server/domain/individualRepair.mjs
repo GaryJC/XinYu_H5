@@ -8,12 +8,13 @@ export function actionParts(task,input,actor) {
   return owner?personalParts(task,owner):task.partsRequirement;
 }
 // Run an existing transition against one worker's items, then merge only that scope.
-export function applyIndividualAction(task,input,actor,people,now,apply) {
+export function applyIndividualAction(task,input,actor,people,now,apply,{personalEditing=false}={}) {
   const repairActions=['start-order','submit-order','start','finish','pick','edit-repair-items'];
   const warehouse=['edit-parts','confirm-parts','issue-parts'].includes(input.action);
   const personal=workers(task).includes(actor.id)&&(hasAnyRole(actor, ['technician','outsourcing'])||actor.outsourcingRoleMember);
   const scopedParts=warehouse&&input.partsOwnerId || personal&&['accept','record-parts'].includes(input.action)&&individualRepair(task);
-  const scopedRepair=personal&&repairActions.includes(input.action)&&individualRepair(task);
+  const schedulingEdit=input.action==='edit-repair-items'&&!personalEditing&&hasAnyRole(actor,['manager','advisor']);
+  const scopedRepair=personal&&!schedulingEdit&&repairActions.includes(input.action)&&individualRepair(task);
   if(!scopedParts&&!scopedRepair)return;
   if(scopedRepair&&input.action==='finish')throw new HttpError(409,'请通过提交本人完工入口操作');
   const ownerId=warehouse?input.partsOwnerId:actor.id;

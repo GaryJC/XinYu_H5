@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 import {
   VehicleHistoryLookupResult,
   VehicleLicenseOcrResult,
@@ -31,7 +31,21 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
   const [vehicleHistoryLoading, setVehicleHistoryLoading] = useState(false);
   const [vehicleHistoryError, setVehicleHistoryError] = useState("");
 
+  const generation = useRef(0);
+  useEffect(() => () => { generation.current += 1; }, []);
+
+  function beginRequest() {
+    const current = ++generation.current;
+    setVehicleHistoryLoading(false);
+    setIdentifierRecognition(previous => ({
+      plate: previous.plate.status === "识别中" ? initialRecognitionState.plate : previous.plate,
+      vin: previous.vin.status === "识别中" ? initialRecognitionState.vin : previous.vin
+    }));
+    return current;
+  }
+
   function resetVehicleIdentityRecognition() {
+    generation.current += 1;
     setIdentifierRecognition(initialRecognitionState);
     setVehicleHistory(undefined);
     setVehicleHistoryLoading(false);
@@ -39,6 +53,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
   }
 
   async function scanVehicleIdentifier(kind: IdentifierKind, file: File) {
+    const current = beginRequest();
     setIdentifierRecognition((current) => ({
       ...current,
       [kind]: { status: "识别中", value: "" }
@@ -49,10 +64,12 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
     let value: string;
     try {
       const { imageBase64 } = await prepareOcrImage(file);
+      if (current !== generation.current) return;
       const result = kind === "plate"
         ? await workOrderApi.recognizeLicensePlate(imageBase64)
         : await workOrderApi.recognizeVin(imageBase64);
-      value = result.value.trim().toUpperCase();
+      if (current !== generation.current) return;
+      value = normalizeIdentifier(result.value);
       setIdentifierRecognition((current) => ({
         ...current,
         [kind]: { status: "已识别", value }
@@ -62,6 +79,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
         vehicle: { ...current.vehicle, [kind]: value }
       }));
     } catch (error) {
+      if (current !== generation.current) return;
       setIdentifierRecognition((current) => ({
         ...current,
         [kind]: {
@@ -73,10 +91,11 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
       return;
     }
 
-    await lookupVehicleIdentifier(kind, value);
+    await runVehicleLookup({ [kind]: value }, current);
   }
 
   async function lookupVehicleIdentifier(kind: IdentifierKind, rawValue: string) {
+    const current = beginRequest();
     const value = normalizeIdentifier(rawValue);
     if (!value) {
       setVehicleHistory(undefined);
@@ -92,20 +111,22 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
       ...current,
       vehicle: { ...current.vehicle, [kind]: value }
     }));
-    await runVehicleLookup({ [kind]: value });
+    await runVehicleLookup({ [kind]: value }, current);
   }
 
   async function lookupVehicleLicense(result: VehicleLicenseOcrResult) {
+    const current = beginRequest();
     const plate = normalizeIdentifier(result.plate);
     const vin = normalizeIdentifier(result.vin);
     setIdentifierRecognition((current) => ({
       plate: plate ? { status: "已识别", value: plate } : current.plate,
       vin: vin ? { status: "已识别", value: vin } : current.vin
     }));
-    await runVehicleLookup({ plate, vin, model: result.model, owner: result.owner });
+    await runVehicleLookup({ plate, vin, model: result.model, owner: result.owner }, current);
   }
 
   async function lookupVehicleLicenseForDevelopment(input: VehicleLookupInput) {
+    const current = beginRequest();
     const plate = normalizeIdentifier(input.plate || "");
     const vin = normalizeIdentifier(input.vin || "");
     setIdentifierRecognition((current) => ({
@@ -130,7 +151,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
           }
         : current.customer
     }));
-    await runVehicleLookup({ plate, vin, model: input.model, owner: input.owner });
+    await runVehicleLookup({ plate, vin, model: input.model, owner: input.owner }, current);
   }
 
   function selectVehicleReference(kind: "model" | "organization", candidate: VehicleReferenceCandidate) {
@@ -151,18 +172,19 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
     });
   }
 
-  async function runVehicleLookup(input: VehicleLookupInput) {
+  async function runVehicleLookup(input: VehicleLookupInput, current: number) {
     setVehicleHistory(undefined);
     setVehicleHistoryError("");
     setVehicleHistoryLoading(true);
     try {
       const history = await workOrderApi.lookupVehicle(input);
+      if (current !== generation.current) return;
       setVehicleHistory(history);
       if (history.status !== "conflict") setDraft((current) => applyVehicleLookup(current, history));
     } catch (error) {
-      setVehicleHistoryError(error instanceof Error ? error.message : "公司系统车辆查询失败");
+      if (current === generation.current) setVehicleHistoryError(error instanceof Error ? error.message : "公司系统车辆查询失败");
     } finally {
-      setVehicleHistoryLoading(false);
+      if (current === generation.current) setVehicleHistoryLoading(false);
     }
   }
 

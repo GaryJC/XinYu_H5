@@ -64,3 +64,21 @@ test('legacy item-level completions can still be submitted without resubmitting 
  const task={...base(),items:base().items.map(i=>({...i,status:'待检验',finishedBy:i.responsibleId}))};
  const next=act(task,a,'submit-order');assert.equal(next.stage,'待检验');assert.equal(next.items[1].finishedBy,'b');
 });
+
+test('scheduler and technician memberships retain full task editing without widening personal submissions',()=>{
+ for(const role of ['manager','advisor']) {
+  const actor={...a,role,roles:[role,'technician']};
+  const task=base();
+  const rows=task.items.map(i=>({id:i.id,name:i.name+'修改',responsibleId:i.responsibleId}));
+  const edited=act(task,actor,'edit-repair-items',{repairItems:rows});
+  assert.deepEqual(edited.items.map(i=>i.name),rows.map(i=>i.name));
+  const removed=act(task,actor,'edit-repair-items',{repairItems:[rows[1]]});
+  assert.deepEqual(removed.items.map(i=>i.id),[2]);
+  const submitted=act(task,actor,'submit-order');
+  assert.equal(submitted.items[0].status,'待检验');assert.equal(submitted.items[1].status,'维修中');
+  const review={...task,stage:'回审'};
+  assert.throws(()=>act(review,actor,'edit-repair-items',{repairItems:rows}),e=>e.status===403);
+  const personal=act(review,actor,'edit-repair-items',{repairItems:[rows[0]]});
+  assert.equal(personal.stage,'回审');assert.deepEqual(personal.items[1],task.items[1]);
+ }
+});
