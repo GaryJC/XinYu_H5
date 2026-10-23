@@ -23,8 +23,9 @@ const commonPartsGroups: {label:string;parts:[string,string][]}[]=[
 type Upload={id:string;file:File;state:'uploading'|'failed';error?:string;body?:Awaited<ReturnType<typeof prepareOcrImage>>};
 export function PartsRequirementDialog({controller:c,accepting,onClose,onUploading}:{controller:DispatchController;accepting:boolean;onClose:()=>void;onUploading?:(value:boolean)=>void}) {
   const task=c.detail!.task,round=task.repairRound||0;
-  const [initialVersion]=useState(task.version);
-  const stale=initialVersion!==task.version;
+  const [initialScope]=useState(()=>JSON.stringify({parts:task.partsRequirement,round:task.repairRound||0,technicians:task.technicianIds??[task.technicianId]}));
+  const stale=initialScope!==JSON.stringify({parts:task.partsRequirement,round:task.repairRound||0,technicians:task.technicianIds??[task.technicianId]})||!['待接单','待开工','维修中','暂停','回审'].includes(task.stage);
+  const acceptingNow=accepting&&task.stage==='待接单';
   const inherited=Boolean(accepting&&task.partsRequirement);
   const adding=Boolean(!accepting&&(task.partsRequirement?.issuedAt||task.partsRequirement?.preparedAt));
   const saved=adding?undefined:task.partsRequirement;
@@ -46,13 +47,13 @@ export function PartsRequirementDialog({controller:c,accepting,onClose,onUploadi
   async function select(file:File) {const row:Upload={id:createRequestId(),file,state:'uploading'};setUploads(rows=>[...rows,row]);await upload(row);}
   async function confirm() {
     setError('');if(stale){setError('工单或配件需求已更新，请关闭后重新打开核对');return;}
-    if(inherited){if(await c.act({action:'accept',partsRequirement:task.partsRequirement}))onClose();return;}
+    if(inherited){if(await c.act({action:acceptingNow?'accept':'record-parts',partsRequirement:task.partsRequirement}))onClose();return;}
     if(!mode){setError('请选择所需配件的登记方式');return;}
     if(uploads.length||attachments.uploads.length){setError('请等待照片上传完成，失败照片可重试或移除');return;}
     if(mode==='list'&&(!items.length||items.some(i=>!i.name.trim()||!i.quantity||!i.unit.trim()))){setError('请填写配件名称、数量和单位');return;}
     if(mode==='photo'&&!photoIds.length){setError('请拍摄手写配件清单，或从相册选择');return;}
     const requirement:PartsRequirement={mode,items:mode==='list'?items:[],photoIds:mode==='photo'?photoIds:[],referencePhotoIds:mode==='none'?[]:referencePhotoIds};
-    if(await c.act({action:accepting?'accept':'record-parts',partsRequirement:requirement}))onClose();
+    if(await c.act({action:acceptingNow?'accept':'record-parts',partsRequirement:requirement}))onClose();
   }
   function add(name='',unit='个'){setMode('list');setItems(rows=>rows.some(i=>name&&i.name===name)?rows:rows.length<100?[...rows,{name,quantity:1,unit}]:rows);}
   return <FormDialog rootClassName="parts-requirement-modal" open title={accepting?'确认接单 · 登记所需配件':adding?'追加配件申请':saved?'修改本人配件需求':'向仓库申请领料'} okText={inherited?'确认接单并保留原领料记录':accepting?(mode==='none'?'接单并开始维修':'接单并提交配件需求'):adding?'提交补料':task.repairRound?'提交返工领料':'发送仓库'} onOk={()=>void confirm()} confirmLoading={c.busy} okButtonProps={{disabled:busy||stale}} cancelButtonProps={{disabled:busy}} closable={!busy} mask={{closable:false}} onCancel={()=>{if(!busy)onClose();}}>
