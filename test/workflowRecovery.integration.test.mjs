@@ -334,6 +334,38 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       await act(nextTech,'record-parts',{partsRequirement:{...requirement,referencePhotoIds:[other]}});
       saved=await read();assert.deepEqual(saved.task.partsRequests.find(p=>p.ownerId==='u').referencePhotoIds,[other]);assert.deepEqual(saved.task.partsRequests.find(p=>p.ownerId==='t').referencePhotoIds,[photoB]);
     });
+    await t.test('review material requests support photos, warehouse preparation and pickup notices before resubmission',async()=>{
+      const orderId='review-parts';await seed(orderId,'已委托');
+      const service=await import('../server/services/dispatchService.mjs');
+      const {uploadRepairPhoto}=await import('../server/services/repairPhotoService.mjs');
+      const {createFileRecord}=await import('../server/repositories/fileRepository.mjs');
+      const {validatePartsPickupNotification}=await import('../server/repositories/partsRequirementRepository.mjs');
+      const warehouse={id:'w',name:'仓管',role:'warehouse',active:true,shopId:'shop-hq'};
+      await pool.query("insert into users(id,name,role,shop_id,active) values('w','仓管','warehouse','shop-hq',true) on conflict(id) do nothing");
+      const detail=()=>service.dispatchDetail(manager,orderId);
+      const act=async(user,action,extra={})=>service.executeDispatchAction(user,orderId,{action,expectedVersion:(await detail()).task.version,requestId:randomUUID(),...extra});
+      const save=async input=>createFileRecord({...input,storageProvider:'local',bucket:'local',objectKey:'fixture',originalName:'photo.png',sizeBytes:68});
+      const image={mimeType:'image/png',imageBase64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aY9sAAAAASUVORK5CYII=',repairRound:0};
+      await act(manager,'assign',{technicianIds:['t'],dueAt:new Date(Date.now()+86400000).toISOString()});
+      await act(tech,'accept',{partsRequirement:{mode:'none',items:[],photoIds:[]}});
+      await uploadRepairPhoto(tech,orderId,{...image,requestId:randomUUID()},{save});
+      await act(tech,'submit-order');await act(inspector,'send-review');
+      const attachment=await uploadRepairPhoto(tech,orderId,{...image,purpose:'parts',requestId:randomUUID()},{save});
+      const parts={mode:'list',items:[{name:'回审用滤芯',quantity:1,unit:'个'},{name:'回审用耗材',quantity:2,unit:'个'}],photoIds:[],referencePhotoIds:[attachment.id]};
+      await act(tech,'record-parts',{partsRequirement:parts});assert.equal((await detail()).task.stage,'回审');
+      assert.deepEqual((await service.dispatchDetail(warehouse,orderId)).task.partsRequirement.referencePhotoIds,[attachment.id]);
+      await assert.rejects(()=>act(tech,'submit-review'),/配件备齐/);
+      await act(warehouse,'edit-parts',{partsRequirement:parts});
+      await act(warehouse,'confirm-parts',{preparationGroups:[{items:[{index:0,recipientId:'t'}]}]});
+      assert.equal((await detail()).task.stage,'回审');await assert.rejects(()=>act(tech,'submit-review'),/配件备齐/);
+      const notices=(await pool.query("select * from dispatch_notifications where order_id=$1 and kind='配件可领取'",[orderId])).rows;
+      assert.equal(notices.length,1);assert.equal(await validatePartsPickupNotification(notices[0],tech,pool),true);
+      await act(warehouse,'confirm-parts',{partsPreparation:[{index:1,recipientId:'t'}]});
+      assert.equal((await detail()).task.stage,'回审');
+      await uploadRepairPhoto(tech,orderId,{...image,requestId:randomUUID()},{save});
+      await act(tech,'submit-review');assert.equal((await detail()).task.stage,'待检验');
+      await assert.rejects(()=>act(tech,'record-parts',{partsRequirement:parts}),e=>e.status===409);
+    });
     if(process.env.WORKFLOW_UI_TEST==='true')await t.test('mobile signing recovery and supplier quote through real browser forms',async()=>{
       const {createServer}=await import('node:http');
       const path=await import('node:path');const os=await import('node:os');

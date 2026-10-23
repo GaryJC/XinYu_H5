@@ -33,7 +33,7 @@ function PartsContent({value}:{value?:PartsRequirement}) {
 function WarehousePartsApplication({detail,controller}:{detail:DispatchDetail;controller?:DispatchController}) {
   const [editing,setEditing]=useState(false);
   const {task}=detail,parts=task.partsRequirement;
-  const canEdit=Boolean(controller&&!controller.busy&&!task.needsReview&&task.acceptedAt&&['待开工','维修中','暂停'].includes(task.stage)&&!parts?.issuedAt&&!parts?.preparedAt&&!parts?.items.some(i=>i.issuedAt||i.preparedAt));
+  const canEdit=Boolean(controller&&!controller.busy&&!task.needsReview&&task.acceptedAt&&['待开工','维修中','暂停','回审'].includes(task.stage)&&!parts?.issuedAt&&!parts?.preparedAt&&!parts?.items.some(i=>i.issuedAt||i.preparedAt));
   return <>
     <Card className="warehouse-parts-card" size="small" title={parts?.ownerName||'配件申请'} extra={canEdit?<Button size="small" onClick={()=>setEditing(true)}>新增／编辑配件</Button>:null}>
       <p>申请人：{parts?.ownerName||parts?.applicantName||parts?.recordedName||"未记录"}{parts?.ownerId?` · 负责项目：${task.items.filter(i=>i.responsibleId===parts.ownerId).map(i=>i.name).join("、")||"暂无当前项目"}`:""}</p>

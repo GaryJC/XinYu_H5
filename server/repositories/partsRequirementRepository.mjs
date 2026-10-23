@@ -32,7 +32,7 @@ export async function validatePartsPickupNotification(row,user,database) {
   }
   if(row.kind==='配件已出库'){if(parts?.recipientIds&&!parts.recipientIds.includes(row.recipient_id))return false;}
   else if(parts?.ownerId&&parts.ownerId!==row.recipient_id)return false;
-  if(!task || !['待开工','维修中','暂停'].includes(task.stage) || (data.repairRound||0)!==(row.payload.repairRound||0) || !parts || parts.recordedAt!==row.payload.partsRecordedAt || parts.revision!==row.payload.partsRevision) return false;
+  if(!task || !['待开工','维修中','暂停','回审'].includes(task.stage) || (data.repairRound||0)!==(row.payload.repairRound||0) || !parts || parts.recordedAt!==row.payload.partsRecordedAt || parts.revision!==row.payload.partsRevision) return false;
   const handler=(hasAnyRole(user, ['technician','outsourcing'])||user.outsourcingRoleMember)&&(data.technicianIds??[task.technician_id]).includes(row.recipient_id)||data.executionMode==='outsourced'&&hasAnyRole(user, ['manager','advisor']);
   if(!handler) return false;
   if(row.kind==='配件需求已调整')return true;

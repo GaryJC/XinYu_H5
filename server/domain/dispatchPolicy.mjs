@@ -154,7 +154,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
       if(task.partsRequirement?.issuedAt||task.partsRequirement?.preparedAt)fail('已完成配件不可修改，请由维修工追加申请');
       if(input.partsRequirement?.mode==='photo')fail('请将配件整理为明细，或选择无需配件',400);
     } else requireOwner();
-    stage('待开工','维修中','暂停');
+    stage('待开工','维修中','暂停','回审');
     if(task.partsRequirement?.items?.some(i=>i.issuedAt||i.preparedAt)&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt)fail('本批已部分处理，不能修改申请，请先完成剩余备料');
     next.partsRequirement={...validatePartsRequirement(input.partsRequirement),applicantId:action==='edit-parts'?(task.partsRequirement?.applicantId||task.partsRequirement?.ownerId||task.partsRequirement?.recordedBy):actor.id,applicantName:action==='edit-parts'?(task.partsRequirement?.applicantName||task.partsRequirement?.ownerName||task.partsRequirement?.recordedName):actor.name,recordedBy:actor.id,recordedName:actor.name,recordedAt:now,revision:task.version+1};
     if(action==='edit-parts') {
@@ -171,7 +171,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     }
   } else if(action==='confirm-parts' || action==='issue-parts') {
     if(!hasRole(actor, 'warehouse')) fail('仅仓管可备料或确认出库',403);
-    stage('待开工','维修中','暂停');
+    stage('待开工','维修中','暂停','回审');
     if(!task.acceptedAt) fail('请等待维修工接单并确认配件需求');
     if(!task.partsRequirement || task.partsRequirement.mode==='none') fail('没有待处理的配件申请');
     if(task.partsRequirement.issuedAt) fail('该批配件已出库，请勿重复操作');
