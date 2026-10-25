@@ -148,3 +148,80 @@ test('passing a coworker inspection preserves another workers outstanding rework
  task=act(task,a,'start-order');task=act(task,a,'submit-order');task=inspect(task);
  assert.equal(task.stage,'维修完成');assert.equal(task.rework,false);
 });
+
+test('preparing a paused workers parts updates their resume stage without releasing either pause',()=>{
+ let task={...base(),stage:'待开工',items:base().items.map(i=>({...i,status:'待开工'}))};
+ task=act(task,a,'record-parts',{partsRequirement:parts('滤芯')});
+ task=act(task,a,'pause',{pauseReason:'待配件'});
+ task=act(task,b,'pause',{pauseReason:'技术问题'});
+ const otherPause=structuredClone(task.workerPauses.b);
+ task=act(task,w,'confirm-parts',{partsOwnerId:'a'});
+ assert.equal(task.workerPauses.a.resumeStage,'维修中');
+ assert.deepEqual(task.workerPauses.b,otherPause);
+ task=act(task,a,'resume');
+ assert.equal(task.items[0].status,'维修中');
+ assert.equal(task.workerPauses.a,undefined);
+ assert.deepEqual(task.workerPauses.b,otherPause);
+ assert.equal(act(task,a,'submit-order').items[0].status,'待检验');
+});
+test('pending legacy parts block work but do not block personal pause, resume or editing',()=>{
+ let task={...base(),partsRequirement:parts('共同配件')};
+ task=act(task,a,'pause',{pauseReason:'待配件'});
+ task=act(task,a,'edit-repair-items',{repairItems:[{id:1,name:'保养核对'}]});
+ task=act(task,a,'resume');
+ assert.equal(task.items[0].name,'保养核对');
+ assert.throws(()=>act(task,a,'submit-order'),/历史共同配件/);
+});
+test('last worker submission preserves an active inspection claim',()=>{
+ const inspector={...a,id:'i',role:'inspector',name:'检验员'};
+ let task=act(base(),a,'submit-order');
+ task=applyDispatchAction(task,{action:'claim-inspection',expectedVersion:task.version,requestId:'claim-team-test'},inspector,[...people,inspector],'claimed');
+ task=act(task,b,'submit-order');
+ assert.equal(task.stage,'待检验');assert.equal(task.inspectorId,'i');assert.equal(task.inspectionClaimedAt,'claimed');
+});
+test('a fresh partial submission clears a completed inspection claim',()=>{
+ const third={...a,id:'c'};
+ const task={...base(),technicianIds:['a','b','c'],inspectorId:'old',inspectorName:'旧检验员',inspectionClaimedAt:'old',items:[{...base().items[0],status:'已完工'},base().items[1],{id:3,name:'新增工作',responsibleId:'c',status:'维修中'}]};
+ const next=applyDispatchAction(task,{action:'submit-order',expectedVersion:1,requestId:'fresh-partial-claim'},b,[...people,third]);
+ assert.equal(next.stage,'维修中');assert.equal(next.inspectorId,undefined);assert.equal(next.inspectorName,undefined);assert.equal(next.inspectionClaimedAt,undefined);
+});
+test('partial inspection does not resume a globally paused team on pass or return',()=>{
+ const inspector={...a,id:'i',role:'manager'};
+ for(const rejectedItemIds of [[],[1]]) {
+  const task={...act(base(),a,'submit-order'),stage:'暂停',resumeStage:'维修中',pauseReason:'技术问题',pausedAt:'paused'};
+  const next=applyDispatchAction(task,{action:'inspect',expectedVersion:task.version,requestId:'inspect-paused-team',rejectedItemIds,reason:'补修'},inspector,[...people,inspector]);
+  assert.equal(next.stage,'暂停');assert.equal(next.pausedAt,'paused');assert.equal(next.resumeStage,'维修中');
+  assert.deepEqual(next.items[1],task.items[1]);
+ }
+});
+test('inspection of submitted work is independent of an unassigned unfinished project',()=>{
+ const inspector={...a,id:'i',role:'manager'};
+ const task=act(base(),a,'submit-order');delete task.items[1].responsibleId;delete task.items[1].responsibleName;
+ const next=applyDispatchAction(task,{action:'inspect',expectedVersion:task.version,requestId:'inspect-owned-only'},inspector,[...people,inspector]);
+ assert.equal(next.items[0].status,'已完工');assert.equal(next.items[1].status,'维修中');assert.equal(next.stage,'维修中');assert.equal(next.completedAt,undefined);
+});
+test('a legacy team-wide pause can be resumed without clearing individual pauses',()=>{
+ const task={...base(),stage:'暂停',resumeStage:'维修中',pauseReason:'待配件',pausedAt:'legacy',workerPauses:{b:{resumeStage:'维修中',pauseReason:'技术问题',pausedAt:'personal'}}};
+ const next=act(task,a,'resume');
+ assert.equal(next.stage,'维修中');assert.equal(next.pausedAt,undefined);assert.equal(next.pauseReason,undefined);
+ assert.deepEqual(next.workerPauses.b,task.workerPauses.b);
+ assert.throws(()=>act(next,b,'submit-order'),/暂停/);
+});
+
+for(const order of [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]]) {
+ test(`three workers submit and inspect in order ${order.join('-')} without overwriting peers`,()=>{
+  const c={...a,id:'c',name:'维修丙'},inspector={...a,id:'i',role:'inspector'},roster=[a,b,c,inspector];
+  let task={...base(),technicianIds:['a','b','c'],items:[...base().items,{id:3,name:'喷漆',responsibleId:'c',status:'维修中'}]};
+  const run=(actor,action)=>applyDispatchAction(task,{action,expectedVersion:task.version,requestId:'three-worker-matrix'},actor,roster);
+  for(const [index,workerIndex] of order.entries()) {
+   const actor=roster[workerIndex],before=structuredClone(task);
+   task=run(actor,'submit-order');
+   assert.deepEqual(task.items.filter(i=>i.responsibleId!==actor.id),before.items.filter(i=>i.responsibleId!==actor.id));
+   assert.equal(task.inspectorId,undefined);
+   task=run(inspector,'claim-inspection');task=run(inspector,'inspect');
+   assert.equal(task.items.filter(i=>i.status==='已完工').length,index+1);
+   assert.equal(task.stage,index===2?'维修完成':'维修中');
+   if(index<2)assert.equal(task.completedAt,undefined);
+  }
+ });
+}

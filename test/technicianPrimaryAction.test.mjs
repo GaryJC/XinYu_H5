@@ -19,3 +19,14 @@ test('waiting parts cannot be bypassed and initial unstarted tasks still require
  assert.equal(primary({...task,stage:'待开工',rework:false}),'start-order');
  assert.equal(primary({...task,stage:'待检验'}),undefined);
 });
+
+test('legacy shared parts do not hide resume, but still disable starting and submitting',()=>{
+ assert.equal(primary({...task,stage:'暂停'},true),'resume');
+ assert.equal(primary(task,true),undefined);
+ assert.equal(primary({...task,items:task.items.map(i=>({...i,status:'维修中'}))},true),undefined);
+});
+
+test('review with returned pending work requires starting before resubmission',()=>{
+ assert.equal(primary({...task,stage:'回审'}),'start-order');
+ assert.equal(primary({...task,stage:'回审',items:task.items.map(i=>({...i,status:'维修中'}))}),'submit-order');
+});

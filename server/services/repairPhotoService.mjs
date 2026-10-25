@@ -1,3 +1,4 @@
+import {hasSubmittedPersonalWork} from '../domain/individualRepair.mjs';
 import { hasAnyRole } from "../../shared/roles.mjs";
 import { removeRepairPhoto, removeRepairPhotos } from '../repositories/repairPhotoRepository.mjs';
 import { transaction } from '../database/pool.mjs';
@@ -30,6 +31,7 @@ export async function uploadRepairPhoto(actor,id,body,{runTransaction=transactio
     if(rows[0]) {if(rows[0].kind!==kind)throw new HttpError(409,'该上传编号已用于其他照片');if((rows[0].repair_round||0)!==(task.repairRound||0)) throw new HttpError(409,'照片属于之前的维修轮次，请重新选择照片');return rows[0];}
     if((body.repairRound||0)!==(task.repairRound||0)) throw new HttpError(409,'维修轮次已变化，请刷新后重新上传');
     if(!(body.purpose==='parts'?['待接单','待开工','维修中','暂停','回审']:["待开工","维修中","暂停","回审"]).includes(task.stage)||task.stage==='待接单'&&task.feedback) throw new HttpError(409,'当前状态不能上传维修照片');
+    if(hasSubmittedPersonalWork(task,actor.id))throw new HttpError(409,'本人项目已提交，不能上传维修照片');
     const file=await save({orderId:id,kind,fileName:body.fileName,mimeType:body.mimeType,imageBase64:body.imageBase64,uploadedBy:actor.id,uploadRequestId:body.requestId,database:client});
     await client.query('update files set repair_round=$2 where id=$1',[file.id,task.repairRound||0]);
     return {...file,repairRound:task.repairRound||0};

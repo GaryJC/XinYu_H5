@@ -76,7 +76,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     return {...structuredClone(task),technicianIds:[...input.technicianIds],technicianId:input.technicianIds[0],technicianName:names.join('、'),version:task.version+1};
   }
   if(input.action==='send-review') return sendReview(task,actor,canInspect);
-  if(input.action==='submit-review' || task.stage==='回审'&&input.action==='edit-repair-items') {
+  if(input.action==='submit-review' || task.stage==='回审'&&['edit-repair-items','start-order'].includes(input.action)) {
     if(task.stage!=='回审') fail('仅回审任务可提交回审');
     if(!technicianIds(task).includes(actor.id)||!hasAnyRole(actor,['technician','outsourcing'])&&!actor.outsourcingRoleMember) fail('仅当前维修工可编辑或提交回审',403);
     // Review edits stay scoped to the worker even when they also hold scheduling roles.
@@ -134,7 +134,11 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
       next.participantIds=[...new Set([...(task.participantIds||[]),...task.items.flatMap(i=>[i.startedBy,i.finishedBy,...(['待检验','已完工'].includes(i.status)?[i.responsibleId]:[])]).filter(Boolean)])];
     }
     Object.assign(next,execution,{technicianIds:ids});
-    if(action==='reassign')transferUnfinishedResponsibilities(next);
+    if(action==='reassign') {
+      transferUnfinishedResponsibilities(next);
+      // A new offer resets pauses from the previous team's acceptance.
+      delete next.workerPauses;
+    }
     if(action==='reconcile' && task.stage==='维修完成') {
       Object.assign(next,{technicianId:worker.id,technicianName:worker.name,needsReview:false,version:task.version+1});
       resolveRepairResponsibilities(next,people);
@@ -282,9 +286,10 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     next.inspectorId=inspector.id; next.inspectorName=inspector.name; next.stage='待检验'; next.submittedAt=now; next.submissionNote=input.note || '';
   } else if(action==='inspect') {
     if(!hasPendingInspection(task))fail('当前没有待检验项目');
-    if(!canInspect(task,actor) || !hasAnyRole(actor, ['manager','inspector']) || (!hasRole(actor, 'manager')&&!task.inspectorId) || (actor.id===task.technicianId || technicianIds(task).includes(actor.id) || (task.participantIds||[]).includes(actor.id)) || next.items.some(i=>i.responsibleId===actor.id || i.startedBy===actor.id || i.finishedBy===actor.id)) fail('不能自检，或没有当前任务检验权限',403);
+    if(!canInspect(task,actor) || !hasAnyRole(actor, ['manager','inspector']) || (!hasRole(actor, 'manager')&&task.inspectorId!==actor.id) || (actor.id===task.technicianId || technicianIds(task).includes(actor.id) || (task.participantIds||[]).includes(actor.id)) || next.items.some(i=>i.responsibleId===actor.id || i.startedBy===actor.id || i.finishedBy===actor.id)) fail('不能自检，或没有当前任务检验权限',403);
     const rejected=input.rejectedItemIds || [];
-    if(!rejected.length)resolveRepairResponsibilities(next,people,{required:true});
+    // Only submitted items belong to this inspection; unfinished work may still await assignment.
+    resolveRepairResponsibilities({...next,items:next.items.filter(i=>i.status==='待检验'&&!rejected.includes(i.id))},people,{required:true});
     if(rejected.length) reason();
     if(rejected.length && input.workHours!==undefined) fail('退回维修时无需填写工时，请在全部检验通过时填写',400);
     if(rejected.some(id=>!next.items.some(i=>i.id===id && i.status==='待检验'))) fail('退回项目不在本次待检验项目中',400);
@@ -299,12 +304,12 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
       }
       else { delete current.rejectionReason; current.status='已完工'; current.inspectedBy=actor.id; current.inspectorName=actor.name; current.inspectedAt=now; }
     }
-    if(rejected.length) { next.reworkReason=input.reason; next.rejectedItemIds=rejected; next.stage='维修中'; next.rework=true; next.reworkCount=(task.reworkCount||0)+1; }
+    if(rejected.length) { next.reworkReason=input.reason; next.rejectedItemIds=rejected; next.stage=['暂停','回审'].includes(task.stage)?task.stage:'维修中'; next.rework=true; next.reworkCount=(task.reworkCount||0)+1; }
     else {
       const completed=next.items.every(i=>i.status==='已完工')&&allWorkersHaveItems(next);
       if(input.workHours!==undefined&&!completed) fail('全部项目检验通过后才能填写整单工时',400);
       if(input.workHours!==undefined) Object.assign(next,{workHours:input.workHours,workHoursRecordedBy:actor.id,workHoursRecordedName:actor.name,workHoursRecordedAt:now});
-      next.stage=completed?'维修完成':task.stage==='回审'?'回审':'维修中';
+      next.stage=completed?'维修完成':['回审','暂停'].includes(task.stage)?task.stage:'维修中';
       if(completed) Object.assign(next,{completedAt:now,completedBy:task.technicianId,rework:false});
       next.inspectorId=actor.id; next.inspectorName=actor.name;
     }

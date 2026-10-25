@@ -37,9 +37,10 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
   const canPhoto=editable&&!ownDone&&['待开工','维修中','暂停','回审'].includes(task.stage);
   const waitingForParts=Boolean(task.partsRequirement&&task.partsRequirement.mode!=='none'&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt);
   const legacyWaiting=individual&&wholeTask.partsRequirement&&wholeTask.partsRequirement.mode!=='none'&&!wholeTask.partsRequirement.issuedAt&&!wholeTask.partsRequirement.preparedAt;
-  const primary=legacyWaiting?undefined:individual&&!ownDone&&task.stage==='维修中'&&task.items.some(i=>i.status==='待检验')&&!waitingForParts?technicianPrimaryAction(task)||'submit-order':technicianPrimaryAction(task);
+  const primaryAction=technicianPrimaryAction(task,Boolean(legacyWaiting));
+  const primary=individual&&!ownDone&&task.stage==='维修中'&&task.items.some(i=>i.status==='待检验')&&!waitingForParts&&!legacyWaiting?primaryAction||'submit-order':primaryAction;
   const partsNotice=waitingForParts&&['待开工','维修中','暂停','回审'].includes(task.stage)?<Alert type="info" showIcon title={task.partsRequirement?.preparedAt?'配件已备齐，请到仓库领取':'等待仓库备料'} description={task.stage==='回审'?'仓管确认本轮配件全部备齐后可提交回审。':'仓管确认本轮配件全部备齐后可提交完工。'}/>:null;
-  const label=task.stage==='回审'?'提交回审':primary==='accept'?'确认接单':primary==='resume'?'继续维修':primary==='start-order'?(task.rework&&task.rejectedItemIds?.length?'开始返工':'开始维修'):individual?'提交本人完工':'提交完工';
+  const label=primary==='accept'?'确认接单':primary==='resume'?'继续维修':primary==='start-order'?(task.rework&&task.rejectedItemIds?.length?'开始返工':'开始维修'):task.stage==='回审'?'提交回审':individual?'提交本人完工':'提交完工';
   const handoverField=itemsEditor.handover?<label className="repair-completion-note"><span>原因 / 交接说明（必填）</span><Input.TextArea aria-label="原因或交接说明" value={itemsEditor.handoverReason} maxLength={2000} rows={3} disabled={c.busy} onChange={e=>itemsEditor.setHandoverReason(e.target.value)}/></label>:null;
   async function confirm() {
     if(dialog==='submit-order') {if(!hasRepairPhoto||blocked)return;if(await itemsEditor.save(true,note))setDialog(undefined);}

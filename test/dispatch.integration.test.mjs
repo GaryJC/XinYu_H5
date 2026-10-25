@@ -50,6 +50,11 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
     await pool.query("insert into users(id,name,role,shop_id,active) values('external','测试外包单位','outsourcing','shop-hq',true)");
     dispatcher.role='advisor';
     const service=await import('../server/services/dispatchService.mjs');
+    async function drainInspectionNotifications(options) {
+      const {processInspectionNotifications}=await import('../server/workers/inspectionNotifications.mjs');
+      for(let count=0;count<200;count++)if(!await processInspectionNotifications(options))return;
+      assert.fail('Inspection notification queue did not drain');
+    }
     async function progressPhoto(id,round=0,kind='repair_progress_photo'){const file=randomUUID();await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by,repair_round) values($1,$2,$3,'local','','fixture','image/png',8,$4,$5)",[file,id,kind,tech.id,round]);return file;}
     const repo=await import('../server/repositories/dispatchRepository.mjs');
     const notifications=await import('../server/repositories/dispatchNotificationRepository.mjs');
@@ -70,7 +75,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
     const db=await import('../server/db.mjs');
     await t.test('draft preselection activates only after signature approval, retains actor and is atomic with Runfeng submission',async()=>{
       const plan={technicianId:tech.id,dueAt,urgent:true,note:'开单预选'};
-      const draft={shop:{id:'shop-hq'},advisor:advisor.name,dispatchPlan:plan,repairItems:[{id:1,name:'保养',status:'待派工'}]};
+      const draft={shop:{id:'shop-hq'},department:{code:'D1',name:'维修部'},vehicle:{plate:'鲁B12345',vin:'LSVAA4182C2187611',mileage:'12000',model:'测试车型',modelLegacyCode:'M1'},customer:{name:'测试车主',legacyCode:'C1',phone:'13800000000'},advisor:advisor.name,dispatchPlan:plan,repairItems:[{id:1,name:'保养',status:'待派工'}]};
       let order=await db.createWorkOrder(draft,advisor.name,advisor);
       assert.equal(order.dispatchPlan.technicianId,tech.id);
       assert.equal((await pool.query('select 1 from dispatch_tasks where order_id=$1',[order.id])).rowCount,0);
@@ -80,6 +85,8 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await assert.rejects(()=>db.updateWorkOrder({...order,dispatchPlan:{...plan,technicianId:outside.id}},advisor.name,'跨店',advisor),e=>e.status===400);
       order=await db.updateWorkOrder({...order,dispatchPlan:plan},advisor.name,'预选',advisor);
       async function prepareSignature(order) {
+        const front45=await progressPhoto(order.id,0,'repair_order_photo'),rear45=await progressPhoto(order.id,0,'repair_order_photo');
+        await pool.query('update work_orders set inspection=$2 where id=$1',[order.id,{preRepairPhotos:{front45,rear45}}]);
         await pool.query("update work_orders set status='待客户签字' where id=$1",[order.id]);
         const token=randomUUID(),file=randomUUID();
         await pool.query('insert into signature_tokens(token,order_id) values($1,$2)',[token,order.id]);
@@ -148,29 +155,30 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal((await pool.query("select 1 from dispatch_events where order_id='warehouse-order' and action='issue-parts'")).rowCount,1);
       assert.equal((await pool.query("select 1 from dispatch_notifications where order_id='warehouse-order' and kind='配件已出库'")).rowCount,1);
       const added=await run(tech,'record-parts',issued[0].task.version,{partsRequirement:requirement});
-      assert.equal(added.task.stage,'维修中');assert.equal(added.task.partsRequirement.batch,2);assert.equal(added.task.partsRequirement.issuedAt,undefined);
+      assert.equal(added.task.stage,'维修中');assert.equal(added.task.partsRequirement.batch,3);assert.equal(added.task.partsRequirement.issuedAt,undefined);
       assert.ok(added.events.some(e=>e.action==='issue-parts'&&e.detail.partsRequirement.items[0].name==='滤芯'));
       assert.equal((await pool.query("select 1 from outbound_orders where order_id='warehouse-order'")).rowCount,0);
     });
-    await t.test('warehouse edits persist audited changes and reset preparation atomically',async()=>{
+    await t.test('warehouse edits are idempotent before preparation and reject completed batches',async()=>{
       const warehouse={id:'warehouse',name:'仓管',role:'warehouse',shopId:'shop-hq',active:true};
       await seed('warehouse-edit');
       const run=(user,action,version,extra={})=>service.executeDispatchAction(user,'warehouse-edit',{action,expectedVersion:version,requestId:randomUUID(),...extra});
       await run(manager,'assign',0,{technicianId:tech.id,dueAt});
       const accepted=await run(tech,'accept',1,{partsRequirement:{mode:'list',items:[{name:'机油',quantity:4,unit:'升'}]}});
-      const ready=await run(warehouse,'confirm-parts',accepted.task.version);
-      const command={action:'edit-parts',expectedVersion:ready.task.version,requestId:randomUUID(),partsRequirement:{mode:'list',items:[{name:'机油 SN5W30',quantity:4,unit:'升'},{name:'机油滤清器',quantity:1,unit:'只'}]}};
+      const command={action:'edit-parts',expectedVersion:accepted.task.version,requestId:randomUUID(),partsRequirement:{mode:'list',items:[{name:'机油 SN5W30',quantity:4,unit:'升'},{name:'机油滤清器',quantity:1,unit:'只'}]}};
       const [updated]=await Promise.all([service.executeDispatchAction(warehouse,'warehouse-edit',command),service.executeDispatchAction(warehouse,'warehouse-edit',command)]);
       await service.executeDispatchAction(warehouse,'warehouse-edit',{...command,partsRequirement:{items:command.partsRequirement.items.map(i=>({unit:i.unit,quantity:i.quantity,name:i.name})),mode:'list'}});
       await assert.rejects(()=>service.executeDispatchAction(warehouse,'warehouse-edit',{...command,partsRequirement:{...command.partsRequirement,items:[{name:'different',quantity:1,unit:'个'}]}}),e=>e.status===409);
       assert.equal(updated.task.partsRequirement.items.length,2);assert.equal(updated.task.partsRequirement.preparedAt,undefined);assert.equal(updated.task.stage,'待开工');
       assert.equal((await pool.query("select 1 from dispatch_events where order_id='warehouse-edit' and action='edit-parts'")).rowCount,1);
       assert.equal((await pool.query("select 1 from dispatch_notifications where order_id='warehouse-edit' and kind='配件需求已调整' and recipient_id='tech'")).rowCount,1);
-      assert.ok(updated.events.some(e=>e.action==='confirm-parts'&&e.detail.partsRequirement.preparedAt));
       await assert.rejects(()=>run(warehouse,'issue-parts',updated.task.version),e=>e.status===409);
-      await assert.rejects(()=>run(warehouse,'edit-parts',ready.task.version,{partsRequirement:{mode:'none'}}),e=>e.status===409);
+      await assert.rejects(()=>run(warehouse,'edit-parts',accepted.task.version,{partsRequirement:{mode:'none'}}),e=>e.status===409);
       const none=await run(warehouse,'edit-parts',updated.task.version,{partsRequirement:{mode:'none'}});
       assert.equal(none.task.stage,'维修中');assert.ok(none.task.items.every(i=>i.startedBy===tech.id));assert.ok(!none.task.participantIds.includes('warehouse'));
+      const requested=await run(tech,'record-parts',none.task.version,{partsRequirement:command.partsRequirement});
+      const prepared=await run(warehouse,'confirm-parts',requested.task.version);
+      await assert.rejects(()=>run(warehouse,'edit-parts',prepared.task.version,{partsRequirement:{mode:'none'}}),/已完成配件不可修改/);
     });
     await seed('new');
     await t.test('only one of two concurrent initial assignments commits; retry is idempotent',async()=>{
@@ -316,13 +324,23 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       const file=randomUUID();
       await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,original_name,mime_type,size_bytes,uploaded_by) values($1,'team','repair_order_photo','local','','test','repair.png','image/png',1,$2)",[file,advisor.id]);
       await assertFileReadAccess(file,tech2);
+      await execute(advisor,'edit-repair-items',{repairItems:team.items.map((i,n)=>({id:i.id,name:i.name,responsibleId:n?tech.id:tech2.id}))});
       await execute(tech2,'accept');
-      await execute(tech2,'edit-repair-items',{reason:'团队确认分工',repairItems:team.items.map((i,n)=>({id:i.id,name:i.name,responsibleId:n?tech.id:tech2.id}))});
-      await execute(tech2,'finish',{itemId:1});
-      await execute(tech,'finish',{itemId:2});
-      await assert.rejects(()=>execute(tech2,'submit',{inspectorId:inspector.id}),/本轮维修照片/);
+      await execute(tech,'record-parts',{partsRequirement:{mode:'none'}});
+      await assert.rejects(()=>execute(tech2,'finish',{itemId:1}),/提交本人完工/);
+      await assert.rejects(()=>execute(tech2,'submit-order'),/本轮维修照片/);
       await progressPhoto('team');
-      await execute(tech2,'submit',{inspectorId:inspector.id});await execute(inspector,'inspect');
+      // A coworker's photo cannot satisfy this worker's submission requirement.
+      await assert.rejects(()=>execute(tech2,'submit-order'),/本轮维修照片/);
+      const ownPhoto=await progressPhoto('team');
+      await pool.query('update files set uploaded_by=$1 where id=$2',[tech2.id,ownPhoto]);
+      await execute(tech2,'submit-order');
+      assert.equal(team.stage,'维修中');
+      await execute(inspector,'claim-inspection');
+      const claim=team.inspectionClaimedAt;
+      await execute(tech,'submit-order');
+      assert.equal(team.inspectorId,inspector.id);assert.equal(team.inspectionClaimedAt,claim);
+      await execute(inspector,'inspect');
       assert.equal((await service.queryDispatchTasks(advisor,{stage:'维修完成'})).filter(t=>t.orderId==='team').length,1);
       for(const person of [tech,tech2]) assert.ok((await service.queryDispatchTasks(advisor,{technicianId:person.id,stage:'维修完成'})).some(t=>t.orderId==='team'));
       await seed('team-reassign');
@@ -333,6 +351,41 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.ok(!(await listWorkOrders('technician',tech)).some(t=>t.id==='team-reassign'));
       await service.dispatchDetail(tech2,'team-reassign');
     });
+    await t.test('team pause, preparation, concurrent submissions and idempotent retry persist independently',async()=>{
+      const id='team-interleave',warehouse={id:'warehouse',name:'仓管',role:'warehouse',shopId:'shop-hq',active:true};
+      await seed(id);
+      let current=(await service.dispatchDetail(advisor,id)).task;
+      const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+      await run(advisor,'assign',{technicianIds:[tech.id,tech2.id],dueAt,repairItems:current.items.map((item,index)=>({...item,responsibleId:index?tech2.id:tech.id}))});
+      await run(tech,'accept',{partsRequirement:{mode:'list',items:[{name:'滤芯',quantity:1,unit:'个'}]}});
+      await run(tech,'pause',{pauseReason:'待配件'});
+      await run(tech2,'record-parts',{partsRequirement:{mode:'none'}});
+      const coworker=structuredClone(current.items[1]);
+      await run(warehouse,'confirm-parts',{partsOwnerId:tech.id});
+      assert.equal(current.workerPauses[tech.id].resumeStage,'维修中');
+      assert.deepEqual(current.items[1],coworker);
+      await run(tech,'resume');assert.equal(current.workerPauses[tech.id],undefined);
+      await progressPhoto(id);
+      const photo=await progressPhoto(id);await pool.query('update files set uploaded_by=$1 where id=$2',[tech2.id,photo]);
+      const version=current.version;
+      const commands=[tech,tech2].map(actor=>({actor,input:{action:'submit-order',expectedVersion:version,requestId:randomUUID()}}));
+      const results=await Promise.allSettled(commands.map(({actor,input})=>service.executeDispatchAction(actor,id,input)));
+      assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+      assert.equal(results.find(r=>r.status==='rejected').reason.status,409);
+      current=(await service.dispatchDetail(advisor,id)).task;
+      assert.equal(current.items.filter(i=>i.status==='待检验').length,1);
+      assert.equal((await pool.query('select 1 from repair_writebacks where order_id=$1',[id])).rowCount,0);
+      const winner=results.findIndex(r=>r.status==='fulfilled'),loser=1-winner;
+      await service.executeDispatchAction(commands[winner].actor,id,commands[winner].input);
+      assert.equal((await service.dispatchDetail(advisor,id)).task.version,current.version);
+      await run(inspector,'claim-inspection');
+      await run(commands[loser].actor,'submit-order');
+      assert.equal(current.inspectorId,inspector.id);
+      assert.equal(Object.keys(current.workerSubmissions).length,2);
+      await run(inspector,'inspect',{workHours:2});
+      assert.equal(current.stage,'维修完成');
+      assert.equal((await pool.query('select 1 from repair_writebacks where order_id=$1',[id])).rowCount,1);
+    });
     await t.test('draft team and outsourced plans round-trip and activate without a fictional technician',async()=>{
       const {saveDispatchPlan,readDispatchPlans}=await import('../server/repositories/dispatchPlanRepository.mjs');
       const {activateDispatchPlan}=await import('../server/services/dispatchPlanService.mjs');
@@ -342,7 +395,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
           await saveDispatchPlan(client,{id,shop:{id:'shop-hq'}},advisor,{...fields,dueAt});
           const plan=(await readDispatchPlans(client,[id])).get(id);
           assert.equal(plan.executionMode,fields.executionMode);
-          await activateDispatchPlan(client,{id,shop:{id:'shop-hq'}});
+          await activateDispatchPlan(client,{id,shop:{id:'shop-hq'},repairItems:[{id:1,name:'项目1'},{id:2,name:'项目2'}]});
         });
         const task=(await service.dispatchDetail(advisor,id)).task;
         assert.equal(task.executionMode,fields.executionMode);assert.equal(task.stage,'待接单');
@@ -494,10 +547,9 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await assert.rejects(()=>deleteRepairPhoto(tech,'whole',photo.id),e=>e.status===409);
       await assertFileReadAccess(photo.id,inspector);
       await assert.rejects(()=>uploadRepairPhoto(tech,'whole',{...photoBody,requestId:randomUUID()},{save}),e=>e.status===409);
-      const {processInspectionNotifications}=await import('../server/workers/inspectionNotifications.mjs');
-      await processInspectionNotifications();
+      await drainInspectionNotifications();
       assert.equal((await pool.query("select count(*) from dispatch_notifications where order_id='whole' and kind='待检验'")).rows[0].count,'3');
-      await processInspectionNotifications();
+      await drainInspectionNotifications();
       assert.equal((await pool.query("select count(*) from dispatch_notifications where order_id='whole' and kind='待检验'")).rows[0].count,'3');
       const command={action:'claim-inspection',expectedVersion:whole.version,requestId:randomUUID()};
       const results=await Promise.allSettled([service.executeDispatchAction(inspector,'whole',command),service.executeDispatchAction(otherInspector,'whole',{...command,requestId:randomUUID()})]);
@@ -561,15 +613,14 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       let local=(await service.executeDispatchAction(advisor,'no-roster',{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianId:tech.id,dueAt})).task;
       const run=async(actor,action,extra={})=>{local=(await service.executeDispatchAction(actor,'no-roster',{action,expectedVersion:local.version,requestId:randomUUID(),...(action==='inspect'&&!extra.rejectedItemIds?.length?{workHours:2.5}:{}),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{})})).task;};
       await run(tech,'accept');await progressPhoto('no-roster');await run(tech,'submit-order');
-      const {processInspectionNotifications}=await import('../server/workers/inspectionNotifications.mjs');
       const env={APP_ENV:'production',DISPATCH_NOTIFICATION_MODE:'dingtalk',DINGTALK_AGENT_ID:'1',DINGTALK_APP_KEY:'test',DINGTALK_APP_SECRET:'test',DISPATCH_APP_URL:'https://example.com'};
-      await processInspectionNotifications({env,sync:async()=>{throw new Error('通讯录同步失败');}});
+      await drainInspectionNotifications({env,sync:async()=>{throw new Error('通讯录同步失败');}});
       assert.equal((await service.dispatchDetail(manager,'no-roster')).task.stage,'待检验');
       assert.match((await service.dispatchDetail(manager,'no-roster')).inspectionNotification.error,/同步失败/);
       await run(advisor,'retry-inspection-notifications');
       // Earlier errored jobs become obsolete before the newest submission resolves.
       await pool.query("update dispatch_inspection_notifications set next_attempt_at=now() where order_id='no-roster'");
-      await processInspectionNotifications({env,sync:async()=>[]});await processInspectionNotifications({env,sync:async()=>[]});
+      await drainInspectionNotifications({env,sync:async()=>[]});await drainInspectionNotifications({env,sync:async()=>[]});
       assert.match((await service.dispatchDetail(manager,'no-roster')).inspectionNotification.error,/暂无本店/);
       await pool.query("update users set inspector_role_member=false where id='inspector'");
       await assert.rejects(()=>service.executeDispatchAction(inspector,'no-roster',{action:'claim-inspection',expectedVersion:local.version,requestId:randomUUID()}),e=>e.status===403);
@@ -763,7 +814,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await selectStatus('草稿');
         const draftRow=managerPage.locator('.dispatch-page .ant-table').last().locator('tr').filter({hasText:'board-draft'});
         await draftRow.getByRole('button',{name:/^详\s*情$/}).click();
-        await managerPage.getByText('客户签字后才能派工',{exact:true}).waitFor();
+        await managerPage.getByText('确认客户签字后才能派工',{exact:true}).waitFor();
         assert.equal(await managerPage.locator('.dispatch-detail').getByRole('button',{name:'指派维修工',exact:true}).count(),0);
         await managerPage.locator('.ant-drawer-close').click();
         await managerPage.locator('.ant-drawer-section').waitFor({state:'hidden'});
@@ -786,7 +837,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await dialog.locator('.inline-dispatch-form').waitFor({state:'hidden'});
         let ui=(await service.dispatchDetail(manager,'ui-order')).task;
         assert.equal(ui.stage,'待接单');assert.equal(ui.executionMode,'field');assert.equal(ui.technicianIds.length,2);
-        const uiTech=people.find(p=>p.id===ui.technicianIds[1]);
+        const uiTech=people.find(p=>p.id===ui.items[0].responsibleId);
         const workerPage=await pageFor(uiTech,true);
         const drawer=workerPage.locator('.technician-detail');
         await drawer.getByRole('button',{name:'确认接单',exact:true}).click();
@@ -798,16 +849,30 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         const photo=await sharp({create:{width:100,height:100,channels:3,background:'#447799'}}).png().toBuffer();
         await drawer.getByLabel('维修记录从相册选择').setInputFiles({name:'维修记录.png',mimeType:'image/png',buffer:photo});
         await drawer.getByText(/已保存/).first().waitFor();
-        await drawer.getByRole('button',{name:'提交完工',exact:true}).click();
+        await drawer.getByRole('button',{name:/^提交(?:本人)?完工$/}).click();
         const workerDialog=workerPage.getByRole('dialog',{name:'确认维修完成？',exact:true});
-        for(const itemId of [1,2]) {
-          await workerDialog.getByRole('combobox',{name:`维修项目 ${itemId} 负责人`,exact:true}).click();
-          await workerDialog.getByRole('combobox',{name:`维修项目 ${itemId} 负责人`,exact:true}).press('ArrowDown');
-          await workerDialog.getByRole('combobox',{name:`维修项目 ${itemId} 负责人`,exact:true}).press('Enter');
-        }
-        if(await workerDialog.getByLabel('原因或交接说明',{exact:true}).count())await workerDialog.getByLabel('原因或交接说明',{exact:true}).fill('完工责任确认');
+        assert.equal(await workerDialog.getByRole('combobox',{name:'维修项目 2 负责人',exact:true}).count(),0);
         await workerDialog.getByRole('button',{name:'确认提交',exact:true}).click();
         await workerDialog.waitFor({state:'hidden'});
+        ui=(await service.dispatchDetail(manager,'ui-order')).task;assert.equal(ui.stage,'维修中');
+        assert.equal(ui.items[1].status,'待开工');
+        await managerPage.goto(`${base}/?dispatchOrder=ui-order`);
+        await managerDrawer.getByRole('heading',{name:'待检项目 · 1 项',exact:true}).waitFor();
+        await managerDrawer.getByLabel('维修项目 2 名称',{exact:true}).waitFor();
+        assert.equal(await managerDrawer.getByLabel('维修项目 1 名称',{exact:true}).count(),0);
+        await managerPage.screenshot({path:'output/playwright/dispatch-qa/multi-partial-inspection.png',fullPage:true,animations:'disabled'});
+        const secondWorker=await pageFor(tech2,true);
+        const secondDetail=secondWorker.locator('.technician-detail');
+        await secondDetail.getByRole('button',{name:'向仓库申请领料',exact:true}).click();
+        const secondParts=secondWorker.getByRole('dialog',{name:'向仓库申请领料',exact:true});
+        await secondParts.getByText('无需配件',{exact:true}).click();
+        await secondParts.getByRole('button',{name:'发送仓库',exact:true}).click();
+        await secondParts.waitFor({state:'hidden'});
+        await secondDetail.getByLabel('维修记录从相册选择').setInputFiles({name:'乙维修记录.png',mimeType:'image/png',buffer:photo});
+        await secondDetail.getByText(/已保存/).first().waitFor();
+        await secondDetail.getByRole('button',{name:/^提交(?:本人)?完工$/}).click();
+        const secondSubmit=secondWorker.getByRole('dialog',{name:'确认维修完成？',exact:true});
+        await secondSubmit.getByRole('button',{name:'确认提交',exact:true}).click();await secondSubmit.waitFor({state:'hidden'});
         ui=(await service.dispatchDetail(manager,'ui-order')).task;assert.equal(ui.stage,'待检验');
         const inspectorPage=await pageFor(inspector,true);
         const inspection=inspectorPage.locator('.dispatch-detail');
@@ -860,6 +925,10 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
           for(const name of ['项目1','项目2','外包增项']) {
             const finish=form.getByRole('button',{name:`项目完成：${name}`,exact:true});
             await finish.click();await finish.waitFor({state:'hidden'});
+            if(name==='项目1') {
+              await form.getByRole('heading',{name:'待检项目 · 1 项',exact:true}).waitFor();
+              await form.getByRole('button',{name:'项目完成：项目2',exact:true}).waitFor();
+            }
           }
           await form.getByLabel('维修记录从相册选择').setInputFiles({name:'外包维修记录.png',mimeType:'image/png',buffer:photo});
           await form.getByText(/已保存/).first().waitFor();
@@ -877,6 +946,9 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await managerPage.locator('.dispatch-detail').getByRole('button',{name:'发起返工',exact:true}).click();
         const rework=managerPage.getByRole('dialog',{name:'发起返工',exact:true});
         await rework.getByText('项目1',{exact:true}).click();
+        await rework.getByRole('combobox',{name:'维修工',exact:true}).click();
+        await managerPage.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText(/^同名技师（账号 tech2） · 当前/).click();
+        await rework.getByRole('combobox',{name:'维修工',exact:true}).press('Escape');
         await rework.getByLabel('预计完工时间',{exact:true}).fill('2026-12-31T18:00');
         await rework.getByLabel('原因或交接说明',{exact:true}).fill('浏览器返工验收');
         await rework.getByRole('button',{name:/^确\s*认$/}).click();await rework.waitFor({state:'hidden'});
@@ -886,7 +958,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await again.getByText('无需配件',{exact:true}).click();await again.getByRole('button',{name:'接单并开始维修',exact:true}).click();await again.waitFor({state:'hidden'});
         await drawer.getByLabel('维修记录从相册选择').setInputFiles({name:'返工记录.png',mimeType:'image/png',buffer:photo});
         async function submitRework() {
-          await drawer.getByRole('button',{name:'提交完工',exact:true}).click();
+          await drawer.getByRole('button',{name:/^提交(?:本人)?完工$/}).click();
           const form=workerPage.getByRole('dialog',{name:'确认维修完成？',exact:true});
           const owner=form.getByRole('combobox',{name:'维修项目 1 负责人',exact:true});
           await owner.click();await owner.press('ArrowDown');await owner.press('Enter');
@@ -922,14 +994,15 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await partsForm.getByRole('button',{name:'接单并提交配件需求',exact:true}).click();await partsForm.waitFor({state:'hidden'});
         assert.equal((await service.dispatchDetail(manager,'ui-parts')).task.stage,'待开工');
         const warehousePage=await pageFor({id:'warehouse',role:'warehouse',shopId:'shop-hq',active:true},true,'ui-parts');
-        await Promise.all([warehousePage.waitForResponse(response=>response.url().endsWith('/actions')&&response.request().method()==='POST'),warehousePage.getByRole('button',{name:'备料完成并通知领取',exact:true}).click()]);
-        await warehousePage.reload();
-        await warehousePage.getByRole('button',{name:'确认出库',exact:true}).click();
-        assert.equal((await service.dispatchDetail(manager,'ui-parts')).task.stage,'待开工');
-        const issue=warehousePage.getByRole('dialog',{name:'确认配件交接出库',exact:true});
-        await issue.getByRole('button',{name:'确认出库',exact:true}).click();await issue.waitFor({state:'hidden'});
-        const issued=(await service.dispatchDetail(manager,'ui-parts')).task;assert.equal(issued.stage,'维修中');assert.ok(issued.partsRequirement.issuedAt);
-        await warehousePage.screenshot({path:'output/playwright/dispatch-qa/mobile-warehouse-issued.png',fullPage:true});
+        await warehousePage.getByRole('button',{name:'确认备料',exact:true}).click();
+        const preparation=warehousePage.getByRole('dialog',{name:'确认备料',exact:true});
+        await preparation.getByRole('checkbox',{name:'全选待备料配件（1 项）',exact:true}).check();
+        await preparation.getByRole('button',{name:'备料完成并通知（1 项）',exact:true}).click();
+        await preparation.waitFor({state:'hidden'});
+        const prepared=(await service.dispatchDetail(manager,'ui-parts')).task;
+        assert.equal(prepared.stage,'维修中');assert.ok(prepared.partsRequirement.preparedAt);
+        assert.equal(prepared.partsRequirement.items[0].recipientId,tech.id);
+        await warehousePage.screenshot({path:'output/playwright/dispatch-qa/mobile-warehouse-prepared.png',fullPage:true,animations:'disabled'});
         assert.equal(await warehousePage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
         for(const mobile of [false,true]) {
           const id=`ui-inline-${mobile?'mobile':'desktop'}`;await seed(id);

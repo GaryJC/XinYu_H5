@@ -1,5 +1,5 @@
 import { hasAnyRole } from "../../shared/roles.mjs";
-import {individualRepair} from '../domain/individualRepair.mjs';
+import {individualRepair,hasSubmittedPersonalWork} from '../domain/individualRepair.mjs';
 import { getDispatchTask } from './dispatchRepository.mjs';
 import { technicianIds } from '../domain/dispatchPolicy.mjs';
 import { HttpError } from '../http/HttpError.mjs';
@@ -20,7 +20,7 @@ export async function removeRepairPhotos(client, actor, orderId, fileIds) {
   if (!users[0]?.active || users[0].role !== actor.role || users[0].shop_id !== task.shopId || !owner || task.needsReview)
     throw new HttpError(403, '仅当前维修工可删除维修照片');
   if (!['待开工','维修中','暂停','回审'].includes(task.stage)) throw new HttpError(409, '当前状态不能删除维修照片');
-  if(individualRepair(task)&&task.items.filter(i=>i.responsibleId===actor.id).every(i=>['待检验','已完工'].includes(i.status)))throw new HttpError(409,'本人项目已提交，不能删除维修照片');
+  if(hasSubmittedPersonalWork(task,actor.id))throw new HttpError(409,'本人项目已提交，不能删除维修照片');
   const params = [fileIds, orderId, task.repairRound || 0, individualRepair(task) ? actor.id : null];
   const condition = "id=any($1::text[]) and order_id=$2 and kind='repair_progress_photo' and coalesce(repair_round,0)=$3 and ($4::text is null or uploaded_by=$4)";
   const { rows: selected } = await client.query(`select id from files where ${condition} for update`, params);

@@ -42,7 +42,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
   const unsigned=['草稿','待客户签字'].includes(task.orderStatus);
   const workers=task.technicianIds??(task.technicianId?[task.technicianId]:[]);
   const owner=workers.includes(user.id) && (hasAnyRole(user, ['technician','outsourcing'])||user.outsourcingRoleMember) || task.executionMode==='outsourced'&&controller.manager;
-  const inspect=hasPendingInspection(task) && hasAnyRole(user, ['manager','inspector']) && !workers.includes(user.id) && !task.participantIds?.includes(user.id) && !task.items.some(i=>i.responsibleId===user.id||i.startedBy===user.id||i.finishedBy===user.id);
+  const inspect=hasPendingInspection(task) && (hasRole(user,'manager')||task.inspectorId===user.id) && hasAnyRole(user, ['manager','inspector']) && !workers.includes(user.id) && !task.participantIds?.includes(user.id) && !task.items.some(i=>i.responsibleId===user.id||i.startedBy===user.id||i.finishedBy===user.id);
   const waitingForParts=Boolean(task.partsRequirement&&task.partsRequirement.mode!=='none'&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt);
   const actions:DispatchActionName[]=[];
   if(controller.manager&&!unsigned) {
@@ -84,7 +84,8 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
       <h3>待检项目 · {inspectionDraft.pending.length} 项</h3>
       <InspectionItems items={task.items} choices={inspectionDraft.choices} onChange={inspectionDraft.change} disabled={!inspect||!task.inspectorId||unsigned||task.needsReview||controller.busy}/>
       <p className="inspection-progress">{inspect&&task.inspectorId?`已选择 ${inspectionDraft.pending.filter(item=>inspectionDraft.choices[item.id]).length} / ${inspectionDraft.pending.length} 项，请逐项确认通过或退回。`:'领取检验任务后，可逐项选择通过或退回。'}</p>
-    </section>:<section className="task-projects">
+    </section>:null}
+    {!hasPendingInspection(task)||task.items.some(item=>!['待检验','已完工'].includes(item.status))?<section className="task-projects">
     <h3>维修项目 · {task.items.filter(i=>['待检验','已完工'].includes(i.status)).length}/{task.items.length} 已提报或通过</h3>
     {controller.manager&&!unsigned&&!task.needsReview&&['待派工','待接单','待开工','维修中','暂停'].includes(task.stage)?<DispatchProjectsEditor key={task.orderId} task={task} controller={controller} actionsTarget={projectActionsTarget}/>:task.items.map(item=><Card key={item.id} size="small" title={item.name} extra={<Tag>{item.status}</Tag>}>
       <p>负责人：{item.responsibleName||'待指定'}</p>
@@ -92,7 +93,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
       <DispatchItemProgressActions task={task} item={item} controller={controller} enabled={owner&&!unsigned}/>
     </Card>)}
     <p className="dispatch-muted">需要配件的任务由仓管确认出库后自动开工；无需配件直接开工。</p>
-    </section>}
+    </section>:null}
     {hasPendingInspection(task)?<PassedInspectionItems items={task.items}/>:null}
     <RepairWritebackStatus controller={controller} admin={hasRole(user, 'manager')}/>
     <PartsRequirementSummary value={task.partsRequirement}/>
