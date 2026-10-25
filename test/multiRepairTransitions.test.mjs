@@ -38,3 +38,44 @@ test('whole-team reassignment resets personal pauses so retained workers can acc
  task=act(task,a,'accept',{partsRequirement:{mode:'none'}});
  assert.equal(task.acceptedAt,'2026-10-26T01:00:00Z');
 });
+
+for(const stage of ['维修中','回审'])test(`bounded interleaving exploration preserves ownership and lifecycle from ${stage}`,t=>{
+ const initial={...base(),stage};
+ const queue=[{task:initial,depth:0}],seen=new Set();
+ let attempts=0,accepted=0;
+ for(let cursor=0;cursor<queue.length;cursor++) {
+  const {task,depth}=queue[cursor];if(depth===6)continue;
+  const actions=[...[a,b].flatMap(actor=>[
+   {actor,action:'pause',extra:{pauseReason:'技术问题'}},{actor,action:'resume'},
+   {actor,action:'start-order'},{actor,action:task.stage==='回审'?'submit-review':'submit-order'}
+  ]),{actor:inspector,action:'claim-inspection'},{actor:inspector,action:'inspect'},
+   ...task.items.filter(i=>i.status==='待检验').map(item=>({actor:inspector,action:'inspect',extra:{rejectedItemIds:[item.id],reason:'复查'}}))];
+  for(const {actor,action,extra} of actions) {
+   attempts++;const before=structuredClone(task);let next;
+   try {next=act(task,actor,action,extra);} catch(error) {
+    assert.ok([400,403,409].includes(error.status),`${action}: unexpected ${error.stack}`);
+    assert.deepEqual(task,before);continue;
+   }
+   accepted++;assert.deepEqual(task,before);assert.equal(next.version,task.version+1);
+   assert.equal(new Set(next.items.map(item=>item.id)).size,next.items.length);
+   if(actor.role==='technician') {
+    assert.deepEqual(next.items.filter(i=>i.responsibleId!==actor.id),task.items.filter(i=>i.responsibleId!==actor.id));
+    const other=actor.id==='a'?'b':'a';assert.deepEqual(next.workerPauses?.[other],task.workerPauses?.[other]);
+   }
+   if(next.stage==='维修完成')assert.ok(next.items.every(i=>i.status==='已完工'));
+   if(task.stage==='回审'&&next.stage!=='待检验'&&next.stage!=='维修完成')assert.equal(next.stage,'回审');
+   const {version,...state}=next,key=JSON.stringify(state);
+   if(!seen.has(key)){seen.add(key);queue.push({task:next,depth:depth+1});}
+  }
+ }
+ assert.ok(attempts>100);assert.ok(accepted>30);
+ t.diagnostic(`${attempts} attempted transitions, ${accepted} accepted, ${seen.size} unique resulting states (depth 6)`);
+});
+
+test('selective project reassignment preserves an unrelated workers personal pause',()=>{
+ const task=act(base(),a,'pause',{pauseReason:'技术问题'});
+ const next=act(task,manager,'reassign',{reassignItemIds:[2],repairItems:[{id:2,name:'乙项目',responsibleId:'c'}],reason:'项目交接'});
+ assert.deepEqual(next.workerPauses.a,task.workerPauses.a);
+ assert.deepEqual(next.items[0],task.items[0]);
+ assert.throws(()=>act(next,a,'submit-order'),/暂停/);
+});

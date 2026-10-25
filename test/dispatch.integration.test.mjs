@@ -766,6 +766,51 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal(jobs.length,2);assert.equal(jobs[1].snapshot.items.length,3);assert.ok(jobs[1].snapshot.items.some(i=>i.id===2));
       await pool.query("update repair_writebacks set next_attempt_at=now()+interval '1 day' where order_id=$1 and status='pending'",[id]);
     });
+    await t.test('team inspection ownership, review returns and personal photo locks survive database reload',async()=>{
+      const id='team-deep-review';await seed(id);
+      let current=(await service.dispatchDetail(advisor,id)).task;
+      const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+      await run(advisor,'assign',{technicianIds:[tech.id,tech2.id],dueAt,repairItems:current.items.map((item,index)=>({...item,responsibleId:index?tech2.id:tech.id}))});
+      await run(tech,'accept',{partsRequirement:{mode:'none'}});
+      await run(tech2,'record-parts',{partsRequirement:{mode:'none'}});
+      await progressPhoto(id);const secondPhoto=await progressPhoto(id);
+      await pool.query('update files set uploaded_by=$1 where id=$2',[tech2.id,secondPhoto]);
+      await run(tech,'submit-order');
+      const {uploadRepairPhoto}=await import('../server/services/repairPhotoService.mjs');
+      const upload={requestId:randomUUID(),mimeType:'image/png',imageBase64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aY9sAAAAASUVORK5CYII='};
+      const photoCount=(await pool.query('select count(*) from files where order_id=$1',[id])).rows[0].count;
+      for(const purpose of ['progress','parts'])await assert.rejects(()=>uploadRepairPhoto(tech,id,{...upload,purpose},{save:async()=>assert.fail('submitted photos must not be saved')}),e=>e.status===409);
+      assert.equal((await pool.query('select count(*) from files where order_id=$1',[id])).rows[0].count,photoCount);
+      await run(inspector,'claim-inspection');
+      const version=current.version,eventCount=(await pool.query('select count(*) from dispatch_events where order_id=$1',[id])).rows[0].count;
+      await assert.rejects(()=>run({...inspector,id:'inspector2'},'inspect'),e=>e.status===403);
+      assert.equal((await service.dispatchDetail(advisor,id)).task.version,version);
+      assert.equal((await pool.query('select count(*) from dispatch_events where order_id=$1',[id])).rows[0].count,eventCount);
+      await run(tech2,'submit-order');await run(inspector,'inspect');
+      await run(inspector,'send-review');await run(tech,'submit-review');await run(inspector,'claim-inspection');
+      await run(inspector,'inspect',{rejectedItemIds:[1],reason:'回审补修'});
+      assert.equal(current.stage,'回审');assert.equal(current.items[1].status,'维修中');
+      await run(tech2,'submit-review');await run(tech,'start-order');
+      assert.equal(current.stage,'回审');await run(tech,'submit-review');await run(inspector,'claim-inspection');await run(inspector,'inspect');
+      assert.equal(current.stage,'维修完成');
+    });
+    await t.test('unassigned worker photo removal and reassignment of a paused retained worker persist',async()=>{
+      const id='team-deep-reassign';await seed(id);
+      let current=(await service.dispatchDetail(advisor,id)).task;
+      const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+      await run(advisor,'assign',{technicianIds:[tech.id,tech2.id],dueAt});
+      await run(tech,'accept',{partsRequirement:{mode:'none'}});
+      const photo=await progressPhoto(id);
+      const {deleteRepairPhotos}=await import('../server/services/repairPhotoService.mjs');
+      await deleteRepairPhotos(tech,id,{fileIds:[photo]});
+      assert.equal((await pool.query('select 1 from files where id=$1',[photo])).rowCount,0);
+      await run(advisor,'edit-repair-items',{repairItems:current.items.map((item,index)=>({...item,responsibleId:index?tech2.id:tech.id}))});
+      await run(tech,'pause',{pauseReason:'技术问题'});
+      await run(advisor,'reassign',{technicianIds:[tech.id,unique.id],reason:'调整班组',dueAt,repairItems:current.items.map((item,index)=>({...item,responsibleId:index?unique.id:tech.id}))});
+      assert.equal(current.workerPauses?.[tech.id],undefined);
+      await run(tech,'accept',{partsRequirement:{mode:'none'}});
+      assert.ok(current.acceptedAt);assert.equal(current.stage,'维修中');
+    });
     if(process.env.DISPATCH_UI_TEST==='true') await t.test('desktop and mobile UI complete assignment, acceptance, repair and inspection',async()=>{
       uiUploadRoot=await fs.mkdtemp(path.join(os.tmpdir(),'repair-dispatch-ui-'));
       process.env.LOCAL_UPLOAD_ROOT=uiUploadRoot;
@@ -877,6 +922,10 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         const inspectorPage=await pageFor(inspector,true);
         const inspection=inspectorPage.locator('.dispatch-detail');
         await inspection.getByRole('button',{name:'开始检验',exact:true}).click();
+        const secondInspectorPage=await pageFor({...inspector,id:'inspector2'},true);
+        await secondInspectorPage.locator('.dispatch-detail').getByRole('heading',{name:'待检项目 · 2 项',exact:true}).waitFor();
+        assert.equal(await secondInspectorPage.getByRole('button',{name:/提交检验结果/}).count(),0);
+        assert.equal(await secondInspectorPage.getByLabel('检验结果：项目1',{exact:true}).getByRole('radio',{name:'通过',exact:true}).isDisabled(),true);
         for(const itemId of [1,2])await inspection.getByLabel(`检验结果：项目${itemId}`,{exact:true}).getByText('通过',{exact:true}).click();
         await inspection.getByRole('button',{name:/提交检验结果/}).click();
         const inspectionDialog=inspectorPage.getByRole('dialog',{name:'提交检验结果',exact:true});
@@ -889,6 +938,30 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await managerPage.locator('.ant-drawer-section').waitFor({state:'hidden'});
         await managerPage.screenshot({path:'output/playwright/dispatch-qa/desktop.png',fullPage:true});
         assert.equal(await workerPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'mobile page has no horizontal overflow');
+        // A partial return must remain in review, with a usable start/re-submit action.
+        let reviewTask=(await service.dispatchDetail(manager,'ui-order')).task;
+        await service.executeDispatchAction(inspector,'ui-order',{action:'send-review',expectedVersion:reviewTask.version,requestId:randomUUID()});
+        async function submitReview(page) {
+          await page.locator('.technician-detail').getByRole('button',{name:'提交回审',exact:true}).click();
+          const dialog=page.getByRole('dialog',{name:'确认提交回审？',exact:true});
+          await dialog.getByRole('button',{name:'提交回审',exact:true}).click();await dialog.waitFor({state:'hidden'});
+        }
+        await workerPage.reload();await submitReview(workerPage);
+        await inspectorPage.reload();await inspection.getByRole('button',{name:'开始检验',exact:true}).click();
+        await inspection.getByLabel('检验结果：项目1',{exact:true}).getByText('退回',{exact:true}).click();
+        await inspection.getByRole('button',{name:/提交检验结果/}).click();
+        const reviewInspection=inspectorPage.getByRole('dialog',{name:'提交检验结果',exact:true});
+        await reviewInspection.getByRole('textbox',{name:'备注',exact:true}).fill('回审部分项目补修');
+        await reviewInspection.getByRole('button',{name:'确认提交检验结果',exact:true}).click();await reviewInspection.waitFor({state:'hidden'});
+        assert.equal((await service.dispatchDetail(manager,'ui-order')).task.stage,'回审');
+        await workerPage.reload();await drawer.getByRole('button',{name:'开始返工',exact:true}).click();
+        await submitReview(workerPage);
+        await secondWorker.reload();await submitReview(secondWorker);
+        await inspectorPage.reload();await inspection.getByRole('button',{name:'开始检验',exact:true}).click();
+        for(const itemId of [1,2])await inspection.getByLabel(`检验结果：项目${itemId}`,{exact:true}).getByText('通过',{exact:true}).click();
+        await inspection.getByRole('button',{name:/提交检验结果/}).click();
+        await inspectionDialog.getByRole('button',{name:'确认提交检验结果',exact:true}).click();await inspectionDialog.waitFor({state:'hidden'});
+        assert.equal((await service.dispatchDetail(manager,'ui-order')).task.stage,'维修完成');
         for(const outsourcingMode of ['onsite','offsite']) {
           const id=`ui-outsourced-${outsourcingMode}`;await seed(id);
           const page=await pageFor(advisor,true,id);
