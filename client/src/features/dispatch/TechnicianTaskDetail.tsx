@@ -50,6 +50,7 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
     <RepairWritebackStatus controller={c}/>
     <TaskOverview task={task} dueEditor={<TaskDueDateEditor key={`${task.orderId}-${user.id}`} controller={c} user={user} blocked={blocked} />}><RepairStatusTag status={taskStatusLabel(task)}/></TaskOverview>
     {c.error?<Alert type="error" showIcon title={c.error}/>:null}
+    {individual&&editable&&!task.items.length?<Alert type="info" showIcon title="尚未登记本人维修项目" description="可先申请本人配件，点击编辑项目补录本人负责的作业后，再提交本人完工。"/>:null}
     {task.needsReview?<Alert type="warning" title="请联系服务顾问核对任务后再维修"/>:null}
     {task.feedback?<Alert type="warning" title="已反馈无法接单，等待服务顾问处理" description={task.feedback}/>:null}
     {task.stage==='暂停'?<Alert type="warning" title={`暂停：${task.pauseReason}`} description={task.pauseNote}/>:null}
@@ -59,7 +60,7 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
     {task.stage==='待检验'?<Alert type="info" title={task.inspectorName?`${task.inspectorName}已接手${task.rejectedItemIds?.length?'复检':'检验'}`:task.rejectedItemIds?.length?'返工已提交，等待检验员领取复检':'已提交，等待检验员领取'}/>:null}
     {partsNotice}
     {legacyWaiting?<Alert type="info" title="历史共同配件尚未备齐，请等待仓库确认"/>:null}
-    {individual&&!task.items.length?<Alert type="info" title="尚未分配本人项目，请联系服务顾问"/>:null}
+
     {individual&&task.items.length>0&&task.items.every(i=>['待检验','已完工'].includes(i.status))&&wholeTask.stage!=='待检验'?<Alert type="success" title="本人项目已提交，等待其他维修工完成"/>:null}
     <section><div className="repair-items-heading"><h3>{individual?'本人负责项目':'主要作业与增修项目'}</h3>{canEditItems&&!itemsEditor.editing?<Button disabled={c.busy||blocked} onClick={itemsEditor.begin}>编辑项目</Button>:null}</div>
       <RepairItemsEditor technicians={(task.executionMode==='outsourced'?c.people.contractors:c.people.technicians).filter(p=>individual?p.id===user.id:(task.technicianIds??[task.technicianId]).includes(p.id))} items={task.items} rows={itemsEditor.editing&&dialog!=='submit-order'?itemsEditor.rows:task.items} onChange={itemsEditor.setRows} editing={itemsEditor.editing&&dialog!=='submit-order'} disabled={c.busy}/>
@@ -71,7 +72,7 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
     <PartsRequirementSummary value={task.partsRequirement}/>
     <Collapse items={[{key:'parts-history',label:'配件申请与备料记录',children:partsHistoryEvents(c.detail!.events).filter(e=>['accept','record-parts','edit-parts','confirm-parts','issue-parts'].includes(e.action)&&e.detail.partsRequirement).map(e=><section key={e.id}><p>{displayTime(e.at)} · {e.actorName} · {dispatchEventLabel(e)}</p><PartsRequirementSummary value={e.detail.partsRequirement}/></section>)}]}/>
 
-    {editable&&!ownDone&&task.items.length>0&&!(task.partsRequirement?.items.some(i=>i.issuedAt||i.preparedAt)&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt)&&['待开工','维修中','暂停','回审'].includes(task.stage)?<Button block disabled={c.busy||blocked} onClick={()=>setPartsDialog(true)}>{(task.partsRequirement?.issuedAt||task.partsRequirement?.preparedAt)?"追加配件申请":"向仓库申请领料"}</Button>:null}
+    {editable&&!ownDone&&!(task.partsRequirement?.items.some(i=>i.issuedAt||i.preparedAt)&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt)&&['待开工','维修中','暂停','回审'].includes(task.stage)?<Button block disabled={c.busy||blocked} onClick={()=>setPartsDialog(true)}>{(task.partsRequirement?.issuedAt||task.partsRequirement?.preparedAt)?"追加配件申请":"向仓库申请领料"}</Button>:null}
     {individual?<Collapse items={[{key:'team',label:'全单项目进度',children:wholeTask.items.map(item=><p key={item.id}>{item.name} · {item.responsibleName||'未分配'} · {item.status}</p>)}]}/>:null}
     <RepairPhotoPanel controller={c} ownerId={individual?user.id:undefined} editable={canPhoto} onBlocked={photoBlocked}/>
     <Collapse items={[{key:"sheet",label:"完整派工单与接车照片",children:<DispatchSheetSummary task={task} files={c.detail!.files}/>}]} />

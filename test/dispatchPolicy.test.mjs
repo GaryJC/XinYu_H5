@@ -119,22 +119,14 @@ test('removed dispatcher role cannot retain scheduling access',()=>{
   assert.throws(()=>act(initial(),'assign',{...advisor,role:'dispatcher'},{technicianId:'t',dueAt:due}),e=>e.status===403);
 });
 
-test('collaborators complete their assigned work and reassignment removes access',()=>{
-  let task=act(initial(),'assign',advisor,{technicianIds:['t','t2'],dueAt:due,repairItems:initial().items.map(i=>({id:i.id,name:i.name,responsibleId:'t2'}))});
-  assert.deepEqual(task.technicianIds,['t','t2']);
-  assert.doesNotThrow(()=>assertDispatchAccess(task,second));
-  task=act(task,'accept',second);
-  task=act(task,'edit-repair-items',second,{repairItems:task.items.map(i=>({id:i.id,name:i.name,responsibleId:'t2'}))});
-  task=act(task,'submit-order',second);
-  assert.equal(task.stage,'待检验');
-  task=act(task,'claim-inspection',inspector);
-  task=act(task,'inspect',inspector,{rejectedItemIds:[2],reason:'返修'});
-  assert.equal(task.items[0].startedBy,'t2');assert.equal(task.items[0].finishedBy,'t2');
-  task=act(task,'reassign',advisor,{technicianIds:['t2'],dueAt:due,reason:'人员调整'});
-  assert.throws(()=>assertDispatchAccess(task,technician),e=>e.status===403);
-  assert.doesNotThrow(()=>assertDispatchAccess(task,second));
-  assert.deepEqual(task.participantIds,['t2']);
-  assert.equal(act(task,'accept',second).stage,'维修中');
+test('editing names preserves unassigned collaborators and prevents premature whole-order submission',()=>{
+ let task=act(initial(),'assign',advisor,{technicianIds:['t','t2'],dueAt:due,repairItems:initial().items.map(i=>({id:i.id,name:i.name,responsibleId:'t2'}))});
+ task=act(task,'accept',second);
+ task=act(task,'edit-repair-items',advisor,{repairItems:task.items.map(i=>({id:i.id,name:i.name+'更名',responsibleId:'t2'}))});
+ assert.deepEqual(task.technicianIds,['t','t2']);
+ task=act(task,'submit-order',second);
+ assert.equal(task.stage,'维修中');
+ assert.doesNotThrow(()=>assertDispatchAccess(task,technician));
 });
 
 test('invalid collaborator lists cannot bypass employee validation',()=>{
@@ -235,7 +227,7 @@ test('multi-person handover and rejected historical work require explicit curren
   let task=act(assigned(),'accept');task=act(task,'finish',technician,{itemId:1});
   task=apply(task,'reassign',advisor,{technicianIds:['t2','t3'],dueAt:due,reason:'多人交接'});
   assert.equal(task.items[0].responsibleId,'t');assert.equal(task.items[1].responsibleId,undefined);
-  assert.throws(()=>apply(task,'accept',second),/尚未分配/);
+  assert.throws(()=>apply(task,'accept',second),/请登记所需配件/);
   task=apply(task,'edit-repair-items',advisor,{repairItems:task.items.map(i=>({id:i.id,name:i.name,responsibleId:i.id===1?'t':'t3'}))});
   task=apply(task,'accept',third,{partsRequirement:{mode:'none'}});
   task=apply(task,'submit-order',third);

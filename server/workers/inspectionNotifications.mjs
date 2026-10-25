@@ -1,3 +1,4 @@
+import {hasPendingInspection} from '../../shared/repairProgress.mjs';
 import { randomUUID } from 'node:crypto';
 import { pool,transaction } from '../database/pool.mjs';
 import { mapTask, dispatchPeople } from '../repositories/dispatchRepository.mjs';
@@ -23,7 +24,7 @@ export async function processInspectionNotifications({database=pool,runTransacti
       if(current[0]?.lease_id!==lease) return;
       const task=mapTask({...parents[0],...tasks[0],order_id:job.order_id,order_status:parents[0]?.status,repair_items:[]});
       const {rows:events}=await client.query("select max(id) as id from dispatch_events where order_id=$1 and action in ('submit-order','submit-review','retry-inspection-notifications')",[job.order_id]);
-      if(task.stage!=='待检验' || task.inspectorId || String(events[0]?.id)!==String(job.event_id)) {
+      if(!hasPendingInspection(task) || task.inspectorId || String(events[0]?.id)!==String(job.event_id)) {
         await client.query("update dispatch_inspection_notifications set status='obsolete',locked_until=null,lease_id=null where event_id=$1",[job.event_id]);return;
       }
       const people=await dispatchPeople({shopId},client);

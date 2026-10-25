@@ -35,12 +35,12 @@ test('sending review queues a notification for each worker with task link data a
  }
  assert.equal(queued(db,'dispatch_inspection_notifications').length,0);
 });
-test('partial review submission stays quiet; final submission queues inspector and scheduler notifications',async()=>{
+test('each personal review submission queues inspector and scheduler notifications',async()=>{
  const task=initial();task.stage='回审';task.items.forEach(i=>i.status='维修中');
  let db=database(task);
  await executeDispatchActionInTransaction(db,tech,'o',input(task,'submit-review'));
- assert.equal(queued(db,'dispatch_inspection_notifications').length,0);
- assert.equal(queued(db,'dispatch_scheduler_notifications').length,0);
+ assert.equal(queued(db,'dispatch_inspection_notifications').length,1);
+ assert.equal(queued(db,'dispatch_scheduler_notifications').length,1);
  task.items[0].status='待检验';task.workerSubmissions={t:{at:'now',note:''}};
  db=database(task);
  await executeDispatchActionInTransaction(db,tech2,'o',input(task,'submit-review'));

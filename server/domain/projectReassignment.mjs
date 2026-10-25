@@ -14,6 +14,8 @@ export function validateProjectReassignment(input) {
 
 export function reassignProjects(next,input,people) {
   if(next.executionMode==='outsourced')throw new HttpError(409,'外包任务请使用整单改派调整承包方');
+  const originalOwners=new Set(next.items.map(item=>item.responsibleId));
+  const originalWorkers=next.technicianIds??(next.technicianId?[next.technicianId]:[]);
   const previousParticipants=new Set(next.participantIds||[]);
   for(const row of input.repairItems) {
     const item=next.items.find(item=>item.id===row.id);
@@ -27,7 +29,7 @@ export function reassignProjects(next,input,people) {
     Object.assign(item,{responsibleId:person.id,responsibleName:person.name});
   }
   // Preserve the team for legacy projects whose owner has not yet been confirmed.
-  const fallback=next.items.some(i=>!i.responsibleId)?next.technicianIds??(next.technicianId?[next.technicianId]:[]):[];
+  const fallback=originalWorkers.filter(id=>!originalOwners.has(id)||next.items.some(item=>item.responsibleId===id));
   const ids=[...new Set([...fallback,...next.items.map(i=>i.responsibleId).filter(Boolean)])];
   next.technicianIds=ids;next.technicianId=ids[0];
   next.technicianName=ids.map(id=>people.find(p=>p.id===id)?.name||next.items.find(i=>i.responsibleId===id)?.responsibleName||id).join('、');

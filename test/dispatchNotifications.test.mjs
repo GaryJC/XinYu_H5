@@ -131,7 +131,7 @@ test('inspection delivery rechecks manager rights, shop, participants and curren
  for(const data of [{participantIds:['m']},{technicianIds:['m']},{items:[{id:1,responsibleId:'m'}]},{items:[{id:1,startedBy:'m'}]},{items:[{id:1,finishedBy:'m'}]},{needsReview:true}]) {
   assert.equal(await validate(row,user,{query:async()=>({rows:[{...task,data:{...task.data,...data}}]})}),false);
  }
- for(const patch of [{stage:'维修完成'},{stage:'回审'},{inspector_id:'other'},{order_status:'待客户签字'}]) {
+ for(const patch of [{stage:'维修完成'},{inspector_id:'other'},{order_status:'待客户签字'}]) {
   assert.equal(await validate(row,user,{query:async()=>({rows:[{...task,...patch}]})}),false);
  }
  assert.equal(await validate(row,user,{query:async()=>({rows:[]})}),false);

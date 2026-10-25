@@ -82,3 +82,69 @@ test('scheduler and technician memberships retain full task editing without wide
   assert.equal(personal.stage,'回审');assert.deepEqual(personal.items[1],task.items[1]);
  }
 });
+
+test('assigned coworker without items can request parts and add work; first worker cannot submit the whole team',()=>{
+ const task=base();task.items=task.items.slice(0,1);
+ const first=act(task,a,'submit-order');assert.equal(first.stage,'维修中');
+ const requested=act(first,b,'record-parts',{partsRequirement:parts('卡扣')});
+ assert.equal(requested.partsRequests[0].ownerId,'b');
+ const edited=act(requested,b,'edit-repair-items',{repairItems:[{name:'喷漆',responsibleId:'b'}]});
+ assert.equal(edited.items[0].status,'待检验');
+ assert.ok(edited.items.some(i=>i.responsibleId==='b'));
+ const ready=act(edited,w,'confirm-parts',{partsOwnerId:'b'});
+ assert.equal(act(ready,b,'submit-order').stage,'待检验');
+});
+test('review also allows the missing coworker to add personal work and keeps other submissions independent',()=>{
+ const task={...base(),stage:'回审'};task.items=task.items.slice(0,1);
+ const first=act(task,a,'submit-review');assert.equal(first.stage,'回审');
+ const requested=act(first,b,'record-parts',{partsRequirement:{mode:'none'}});
+ const edited=act(requested,b,'edit-repair-items',{repairItems:[{name:'喷漆',responsibleId:'b'}]});
+ assert.equal(edited.stage,'回审');assert.equal(edited.items[0].status,'待检验');
+ assert.equal(act(edited,b,'submit-review').stage,'待检验');
+});
+test('personal pause blocks only its owner and cannot be cleared by a coworker',()=>{
+ const paused=act(base(),a,'pause',{pauseReason:'待配件'});
+ assert.equal(paused.stage,'维修中');assert.ok(paused.workerPauses.a);
+ assert.throws(()=>act(paused,a,'submit-order'),/暂停/);
+ const submitted=act(paused,b,'submit-order');assert.equal(submitted.items[1].status,'待检验');
+ assert.ok(submitted.workerPauses.a);assert.throws(()=>act(submitted,b,'resume'),/当前/);
+ const resumed=act(submitted,a,'resume');assert.equal(resumed.workerPauses.a,undefined);
+ assert.equal(act(resumed,a,'submit-order').stage,'待检验');
+});
+test('unassigned worker can accept first, request parts and add personal projects',()=>{
+ const task=base();task.stage='待接单';delete task.acceptedAt;task.items=task.items.slice(0,1).map(i=>({...i,status:'待开工'}));
+ const accepted=act(task,b,'accept',{partsRequirement:{mode:'none'}});
+ assert.ok(accepted.partsRequests.find(p=>p.ownerId==='b'));
+ const edited=act(accepted,b,'edit-repair-items',{repairItems:[{name:'喷漆',responsibleId:'b'}]});
+ assert.ok(edited.items.some(i=>i.responsibleId==='b'));
+});
+test('inspection passes only submitted projects while coworker continues, then finishes the full team',()=>{
+ const inspector={...a,id:'i',role:'inspector',name:'检验员'};
+ const inspectAct=(task,action,extra={})=>applyDispatchAction(task,{action,expectedVersion:task.version,requestId:'independent-inspection',...extra},inspector,[...people,inspector]);
+ let task=act(base(),a,'submit-order');task=inspectAct(task,'claim-inspection');
+ assert.throws(()=>inspectAct(task,'inspect',{workHours:2}),/全部项目检验通过/);
+ task=inspectAct(task,'inspect');assert.equal(task.stage,'维修中');assert.equal(task.completedAt,undefined);assert.equal(task.completedBy,undefined);
+ assert.equal(task.items[0].status,'已完工');assert.equal(task.items[1].status,'维修中');
+ task=act(task,b,'record-parts',{partsRequirement:{mode:'none'}});
+ task=act(task,b,'submit-order');task=inspectAct(task,'claim-inspection');task=inspectAct(task,'inspect');
+ assert.equal(task.stage,'维修完成');
+});
+test('partial inspection return preserves other worker progress and permits personal resubmission',()=>{
+ const inspector={...a,id:'i',role:'manager'};
+ const original=base();let task=act(original,a,'submit-order');
+ task=applyDispatchAction(task,{action:'inspect',expectedVersion:task.version,requestId:'partial-return-test',rejectedItemIds:[1],reason:'补修'},inspector,[...people,inspector]);
+ assert.deepEqual(task.items[1],original.items[1]);
+ task=act(task,a,'start-order');task=act(task,a,'submit-order');assert.equal(task.stage,'维修中');
+});
+test('passing a coworker inspection preserves another workers outstanding rework',()=>{
+ const inspector={...a,id:'i',role:'manager'};
+ const inspect=(task,extra={})=>applyDispatchAction(task,{action:'inspect',expectedVersion:task.version,requestId:'parallel-rework',...extra},inspector,[...people,inspector]);
+ let task=act(base(),a,'submit-order');
+ task=inspect(task,{rejectedItemIds:[1],reason:'补修'});
+ task=act(task,b,'submit-order');task=inspect(task);
+ assert.equal(task.stage,'维修中');assert.equal(task.rework,true);
+ assert.equal(task.items[0].status,'待开工');assert.equal(task.items[1].status,'已完工');
+ assert.equal(task.completedAt,undefined);assert.equal(task.completedBy,undefined);
+ task=act(task,a,'start-order');task=act(task,a,'submit-order');task=inspect(task);
+ assert.equal(task.stage,'维修完成');assert.equal(task.rework,false);
+});

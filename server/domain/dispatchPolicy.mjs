@@ -1,3 +1,4 @@
+import {hasPendingInspection,allWorkersHaveItems} from '../../shared/repairProgress.mjs';
 import {canEditDispatchTechnicians,requiredDispatchTechnicians} from '../../shared/dispatchTechniciansPolicy.mjs';
 import { canEditDispatchDue } from '../../shared/dispatchDuePolicy.mjs';
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
@@ -231,8 +232,8 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
         if(item.startAt&&edited?.responsibleId!==item.responsibleId)
           next.participantIds=[...new Set([...(next.participantIds||[]),item.responsibleId,item.startedBy,item.finishedBy].filter(Boolean))];
       }
-      const fallback=next.items.some(i=>!i.responsibleId)?technicianIds(task):[];
-      next.technicianIds=[...new Set([...fallback,...next.items.map(i=>i.responsibleId).filter(Boolean)])];
+      const fallback=technicianIds(task).filter(id=>!task.items.some(i=>i.responsibleId===id)||next.items.some(i=>i.responsibleId===id));
+      next.technicianIds=[...new Set([...fallback,...next.items.filter(i=>!['待检验','已完工'].includes(i.status)).map(i=>i.responsibleId).filter(Boolean)])];
       next.technicianId=next.technicianIds[0];
       next.technicianName=next.technicianIds.map(id=>people.find(p=>p.id===id)?.name||next.items.find(i=>i.responsibleId===id)?.responsibleName||id).join('、');
     }
@@ -250,7 +251,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])];
     Object.assign(next,{stage:'待检验',inspectorId:undefined,inspectorName:undefined,submittedAt:now,submissionNote:input.note||''});
   } else if(action==='claim-inspection' || action==='reassign-inspection') {
-    stage('待检验');
+    if(!hasPendingInspection(task))fail('当前没有待检验项目');
     let inspector=actor;
     if(action==='reassign-inspection') {if(!hasAnyRole(actor, ['manager','inspector'])) fail('仅检验员或管理员可重新分配检验',403);reason();inspector=person(input.inspectorId,['inspector','manager']);}
     else if(task.inspectorId) fail('任务已被领取，请刷新');
@@ -260,7 +261,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     requireSchedule();
   } else if(action==='retry-inspection-notifications') {
     if(!hasAnyRole(actor, [...scheduling,'inspector'])) fail('仅检验员、服务顾问或管理员可重试检验通知',403);
-    stage('待检验');
+    if(!hasPendingInspection(task))fail('当前没有待检验项目');
   } else if(['start','finish','pick'].includes(action)) {
     requireOwner(); stage('待开工','维修中'); assertPartsIssued(task);const current=item();
     if(action==='start') { if(!['待开工','待派工','待领料'].includes(current.status)) fail('该项目不能开工'); current.status='维修中'; current.startAt ||= now; current.startedBy=actor.id; next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])]; next.firstStartedAt ||= now; next.stage='维修中'; }
@@ -280,7 +281,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     if(!canInspect(task,inspector) || technicianIds(task).includes(inspector.id) || (task.participantIds||[]).includes(inspector.id) || next.items.some(i=>i.startedBy===inspector.id || i.finishedBy===inspector.id)) fail('不能选择维修工本人检验',403);
     next.inspectorId=inspector.id; next.inspectorName=inspector.name; next.stage='待检验'; next.submittedAt=now; next.submissionNote=input.note || '';
   } else if(action==='inspect') {
-    stage('待检验');
+    if(!hasPendingInspection(task))fail('当前没有待检验项目');
     if(!canInspect(task,actor) || !hasAnyRole(actor, ['manager','inspector']) || (!hasRole(actor, 'manager')&&!task.inspectorId) || (actor.id===task.technicianId || technicianIds(task).includes(actor.id) || (task.participantIds||[]).includes(actor.id)) || next.items.some(i=>i.responsibleId===actor.id || i.startedBy===actor.id || i.finishedBy===actor.id)) fail('不能自检，或没有当前任务检验权限',403);
     const rejected=input.rejectedItemIds || [];
     if(!rejected.length)resolveRepairResponsibilities(next,people,{required:true});
@@ -299,7 +300,14 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
       else { delete current.rejectionReason; current.status='已完工'; current.inspectedBy=actor.id; current.inspectorName=actor.name; current.inspectedAt=now; }
     }
     if(rejected.length) { next.reworkReason=input.reason; next.rejectedItemIds=rejected; next.stage='维修中'; next.rework=true; next.reworkCount=(task.reworkCount||0)+1; }
-    else { if(input.workHours!==undefined) Object.assign(next,{workHours:input.workHours,workHoursRecordedBy:actor.id,workHoursRecordedName:actor.name,workHoursRecordedAt:now}); next.stage='维修完成'; next.completedAt=now; next.completedBy=task.technicianId; next.inspectorId=actor.id; next.inspectorName=actor.name; next.rework=false; }
+    else {
+      const completed=next.items.every(i=>i.status==='已完工')&&allWorkersHaveItems(next);
+      if(input.workHours!==undefined&&!completed) fail('全部项目检验通过后才能填写整单工时',400);
+      if(input.workHours!==undefined) Object.assign(next,{workHours:input.workHours,workHoursRecordedBy:actor.id,workHoursRecordedName:actor.name,workHoursRecordedAt:now});
+      next.stage=completed?'维修完成':task.stage==='回审'?'回审':'维修中';
+      if(completed) Object.assign(next,{completedAt:now,completedBy:task.technicianId,rework:false});
+      next.inspectorId=actor.id; next.inspectorName=actor.name;
+    }
   } else if(action==='record-hours') {
     if(!canInspect(task,actor) || task.inspectorId!==actor.id) fail('仅本单检验人可补录工时',403);
     stage('维修完成');
@@ -339,7 +347,7 @@ export function dispatchMetric(task, metric, from, to, now = new Date()) {
     case 'unstarted': return Boolean((technicianIds(task).length || task.executionMode==='outsourced') && task.stage!=='维修完成' && !task.firstStartedAt && !task.startHistoryUnknown && !task.items.some(i=>i.startAt || ['维修中','待检验','已完工'].includes(i.status)));
     case 'working': return task.stage==='维修中';
     case 'paused': return task.stage==='暂停';
-    case 'inspection': return task.stage==='待检验';
+    case 'inspection': return hasPendingInspection(task);
     case 'completed': return Boolean(task.stage==='维修完成' && task.completedAt && task.completedAt>=from && task.completedAt<to);
     case 'overdue': return task.stage!=='维修完成' && Boolean(task.dueAt && Date.parse(task.dueAt)<now.getTime());
     case 'rework': return task.stage!=='维修完成' && Boolean(task.rework);

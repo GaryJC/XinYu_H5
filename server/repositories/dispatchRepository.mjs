@@ -1,3 +1,4 @@
+import {hasPendingInspection} from '../../shared/repairProgress.mjs';
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import { outsourcingMembership } from './outsourcingMembership.mjs';
 import {readRepairWriteback} from './repairWritebackRepository.mjs';
@@ -38,7 +39,7 @@ export async function validateInspectionRecipient(notification, user, client=poo
   const {rows}=await client.query(`${projection} where wo.id=$1`,[notification.order_id]);
   if(!rows[0]) return false;
   const task=mapTask(rows[0]);
-  return task.stage==='待检验' && !task.needsReview && (!task.inspectorId || task.inspectorId===user.id) && Boolean(canInspect(task,user));
+  return hasPendingInspection(task) && !task.needsReview && (!task.inspectorId || task.inspectorId===user.id) && Boolean(canInspect(task,user));
 }
 export async function listDispatchTasks(actor, client=pool) {
   if(!actor?.active || !hasAnyRole(actor, ['manager','advisor','technician','inspector','warehouse','outsourcing'])) throw new HttpError(403,'无权访问派工模块');

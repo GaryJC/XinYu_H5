@@ -8,7 +8,7 @@ export function sendReview(task,actor,canInspect) {
   const next=structuredClone(task);
   next.stage='回审';
   next.version+=1;
-  for(const key of ['completedAt','completedBy','inspectorId','inspectorName','inspectionClaimedAt','submittedAt','submissionNote','workerSubmissions','rejectedItemIds']) delete next[key];
+  for(const key of ['completedAt','completedBy','inspectorId','inspectorName','inspectionClaimedAt','submittedAt','submissionNote','workerPauses','workerSubmissions','rejectedItemIds']) delete next[key];
   for(const item of next.items) {
     item.status='维修中';
     for(const key of ['finishAt','finishedBy','inspectedBy','inspectorName','inspectedAt','rejectionReason']) delete item[key];

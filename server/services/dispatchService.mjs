@@ -1,3 +1,4 @@
+import {hasPendingInspection} from '../../shared/repairProgress.mjs';
 import { readPendingRepairs } from '../repositories/pendingRepairsRepository.mjs';
 import { inspectionReturnStats } from '../domain/inspectionReturnStats.mjs';
 import { listInspectionReturns } from '../repositories/inspectionReturnRepository.mjs';
@@ -28,6 +29,7 @@ export async function queryDispatchTasks(actor, query={}) {
     if(query.stage==='完成') { if(t.orderStatus!=='完成' || hasActiveRepairRound(t)) return false; }
     else if(query.stage==='待结算') { if(t.orderStatus!=='待结算' || hasActiveRepairRound(t)) return false; }
     else if(query.stage==='待客户确认') {if(!t.pendingRepairCount) return false;}
+    else if(query.stage==='待检验') {if(!hasPendingInspection(t))return false;}
     else if(query.stage && query.stage!=='进行中' && t.stage!==query.stage) return false;
     if(query.urgent==='true' && !t.urgent) return false;
     if(query.overdue==='true' && !t.overdue) return false;
@@ -48,7 +50,7 @@ export async function myRepairCounts(actor) {
   return {
     pendingAccept:tasks.filter(t=>t.stage==='待接单').length,
     inProgress:tasks.filter(t=>['待开工','维修中','暂停'].includes(t.stage)).length,
-    inspection:tasks.filter(t=>t.stage==='待检验').length,
+    inspection:tasks.filter(t=>hasPendingInspection(t)).length,
     review:tasks.filter(t=>t.stage==='回审').length,
     completed:tasks.filter(t=>t.stage==='维修完成' && (!t.completedAt || dispatchMetric(t,'completed',range.from,range.to))).length
   };
@@ -159,11 +161,11 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
       if(['reassign','cancel'].includes(input.action)) addHandlers(task,input.action==='cancel'?'派工已撤销':'任务已改派');
     }
     const schedulerKind={decline:'无法接单',pause:'维修暂停','submit-review':'回审已提交','submit-order':'维修已提检',submit:'维修已提检'}[input.action];
-    if(schedulerKind && (!['submit-order','submit-review'].includes(input.action)||next.stage==='待检验')) {
+    if(schedulerKind && (!['submit-order','submit-review'].includes(input.action)||hasPendingInspection(next))) {
       const payload={orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,actorName:actor.name,reason:input.action==='pause'?[input.pauseReason,input.note].filter(Boolean).join('：'):input.reason||input.note||''};
       await client.query('insert into dispatch_scheduler_notifications(event_id,order_id,kind,payload) values($1,$2,$3,$4)',[event.id,id,schedulerKind,JSON.stringify(payload)]);
     }
-    if(['submit-review','submit-order','retry-inspection-notifications'].includes(input.action)&&next.stage==='待检验') {
+    if(['submit-review','submit-order','retry-inspection-notifications'].includes(input.action)&&hasPendingInspection(next)) {
       await client.query(`insert into dispatch_inspection_notifications(event_id,order_id) values($1,$2) on conflict do nothing`,[event.id,id]);
     }
     if(['accept','record-parts'].includes(input.action) && parts?.mode!=='none'&&!parts?.preparedAt&&!parts?.issuedAt) people.filter(p=>p.active && hasRole(p, 'warehouse')).forEach(p=>add(p.id,'配件申请'));
@@ -177,9 +179,13 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
     }
     if(input.action==='submit' || input.action==='reassign-inspection') add(next.inspectorId,'待检验');
     if(input.action==='send-review') addHandlers(next,'维修单回审');
-    if(input.action==='inspect' && next.stage==='维修中') addHandlers(next,'退回返工');
+    if(input.action==='inspect' && input.rejectedItemIds?.length) {
+      const owners=new Set(next.items.filter(item=>input.rejectedItemIds.includes(item.id)).map(item=>item.responsibleId).filter(Boolean));
+      owners.forEach(owner=>add(owner,'退回返工'));
+    }
+    if(['submit-order','submit-review'].includes(input.action)&&hasPendingInspection(next)&&next.inspectorId)add(next.inspectorId,'待检验');
     if(input.action==='remind') {
-      const targets=task.stage==='待检验'?[task.inspectorId]:task.feedback?[task.assignedBy]:handlers(task);
+      const targets=hasPendingInspection(task)?[task.inspectorId]:task.feedback?[task.assignedBy]:handlers(task);
       if(!targets.length) throw new HttpError(409,'没有可催办的处理人');
       for(const recipient of targets) {
       if(!people.some(p=>p.id===recipient && p.active)) throw new HttpError(409,'当前处理人已停用或不存在，请先调整责任人');
