@@ -65,12 +65,13 @@ export async function saveDispatchTask(client, task, { metadataOnly = false, tec
     await client.query('update work_orders set technician=$2,updated_at=now() where id=$1',[orderId,task.technicianName]);
     return;
   }
+  if(task.settlementAssignment&&orderStatus!=='完成'&&!metadataOnly) await client.query('update work_orders set status=$2 where id=$1',[orderId,stage==='维修完成'?'待结算':'维修中']);
   if(metadataOnly || task.repairRound) {
     await client.query('update work_orders set updated_at=now() where id=$1',[orderId]);
     return; // Date-only edits and subsequent rounds must not rewrite order status or original repair_items.
   }
   const started=task.firstStartedAt || task.startHistoryUnknown || task.items.some(i=>i.startAt || ['维修中','待检验','已完工'].includes(i.status));
-  const status=stage==='维修完成'?(orderStatus==='完成'?'完成':'待结算'):started?'维修中':'待派工';
+  const status=task.settlementAssignment&&orderStatus!=='完成'?(stage==='维修完成'?'待结算':'维修中'):stage==='维修完成'?(orderStatus==='完成'?'完成':'待结算'):started?'维修中':'待派工';
   await client.query(`update work_orders set status=$2,technician=$3,inspector=$4,updated_at=now() where id=$1`,[orderId,status,task.technicianName||'待派工',task.inspectorName||'待检验']);
   await client.query('delete from repair_items where order_id=$1 and not (client_item_id=any($2::bigint[]))',[orderId,task.items.map(item=>item.id)]);
   for(const [index,item] of task.items.entries()) await client.query(`insert into repair_items(order_id,client_item_id,item_no,name) values($1,$2,$3,$4)

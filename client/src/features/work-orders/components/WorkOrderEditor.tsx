@@ -369,7 +369,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               {confirmationRows.rows.map((item,index) => (
                 <div className="repair-row" role="row" key={item.key}>
                   <div data-label="项目">
-                    <Input required aria-required="true" status={fieldError("维修项目") && !item.name.trim() ? "error" : undefined} disabled={!canEditForm} aria-label="项目名称" value={item.name} onChange={event=>confirmationRows.changeName(item,event.target.value)} />
+                    <Input required aria-required="true" maxLength={200} showCount status={fieldError("维修项目") && (!item.name.trim() || item.name.length > 200) ? "error" : undefined} disabled={!canEditForm} aria-label="项目名称" value={item.name} onChange={event=>confirmationRows.changeName(item,event.target.value)} />
                     <div className="repair-pending-choice"><Checkbox aria-label={`项目 ${index+1} 待定`} disabled={!canEditForm} checked={item.pending} onChange={event=>confirmationRows.toggle(item,event.target.checked)}>待定</Checkbox></div>
                   </div>
                   <div data-label="操作"><Button type="text" danger disabled={!canEditForm} aria-label="删除维修项目" onClick={()=>confirmationRows.remove(item)}><Trash2 size={15}/></Button></div>

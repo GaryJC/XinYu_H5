@@ -794,6 +794,43 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal(current.stage,'回审');await run(tech,'submit-review');await run(inspector,'claim-inspection');await run(inspector,'inspect');
       assert.equal(current.stage,'维修完成');
     });
+    await t.test('single-worker submissions preserve claims and reject legacy inspector replacement',async()=>{
+      const other={...inspector,id:'inspector2',name:'第二检验员'};
+      for(const action of ['submit-order','submit']) {
+        const id=`single-claimed-${action}`;await seed(id);
+        let current=(await service.dispatchDetail(advisor,id)).task;
+        const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+        await run(advisor,'assign',{technicianIds:[tech.id],dueAt});await run(tech,'accept',{partsRequirement:{mode:'none'}});await progressPhoto(id);
+        await run(tech,'finish',{itemId:1});await run(inspector,'claim-inspection');
+        const claim=current.inspectionClaimedAt;
+        if(action==='submit') {
+          await run(tech,'finish',{itemId:2});
+          const version=current.version;
+          const events=(await pool.query('select count(*) from dispatch_events where order_id=$1',[id])).rows[0].count;
+          await assert.rejects(()=>run(tech,'submit',{inspectorId:other.id}),e=>e.status===409);
+          assert.equal((await service.dispatchDetail(advisor,id)).task.version,version);
+          assert.equal((await pool.query('select count(*) from dispatch_events where order_id=$1',[id])).rows[0].count,events);
+        }
+        await run(tech,action,action==='submit'?{inspectorId:inspector.id}:{});
+        assert.equal(current.inspectorId,inspector.id);assert.equal(current.inspectionClaimedAt,claim);
+        await assert.rejects(()=>run(other,'inspect'),e=>e.status===403);
+        await run(inspector,'inspect');assert.equal(current.stage,'维修完成');
+      }
+    });
+    await t.test('new single-worker inspection batches clear all previous claim fields',async()=>{
+      const other={...inspector,id:'inspector2',name:'第二检验员'};
+      for(const action of ['finish','submit-order']) {
+        const id=`single-fresh-${action}`;await seed(id);
+        let current=(await service.dispatchDetail(advisor,id)).task;
+        const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+        await run(advisor,'assign',{technicianIds:[tech.id],dueAt});await run(tech,'accept',{partsRequirement:{mode:'none'}});await progressPhoto(id);
+        await run(tech,'finish',{itemId:1});await run(inspector,'claim-inspection');await run(inspector,'inspect');
+        await run(tech,action,action==='finish'?{itemId:2}:{});
+        const saved=(await service.dispatchDetail(advisor,id)).task;
+        for(const key of ['inspectorId','inspectorName','inspectionClaimedAt'])assert.equal(saved[key],undefined,key);
+        await run(other,'claim-inspection');await run(other,'inspect');assert.equal(current.stage,'维修完成');
+      }
+    });
     await t.test('unassigned worker photo removal and reassignment of a paused retained worker persist',async()=>{
       const id='team-deep-reassign';await seed(id);
       let current=(await service.dispatchDetail(advisor,id)).task;
@@ -916,6 +953,36 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       const replacement=await progressPhoto(id);await run(tech,'submit-order');
       await assert.rejects(()=>deleteRepairPhotos(tech,id,{fileIds:[replacement]}),e=>e.status===409);
       assert.equal((await pool.query('select 1 from files where id=$1',[replacement])).rowCount,1);
+    });
+    await t.test('settlement assignments reopen work and preserve completed items across original and later rounds',async()=>{
+      for(const round of [0,1]) {
+        const id=`settlement-assignment-${round}`;await seed(id);
+        let current=(await service.dispatchDetail(advisor,id)).task;
+        const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+        await run(advisor,'assign',{technicianIds:[tech.id],dueAt});await run(tech,'accept',{partsRequirement:{mode:'none'}});await progressPhoto(id);
+        await run(tech,'submit-order');await run(inspector,'claim-inspection');await run(inspector,'inspect');
+        if(round) {
+          await run(advisor,'reopen-repair',{technicianIds:[tech.id],dueAt,reason:'返工测试',reworkItemIds:[1,2]});
+          await run(tech,'accept',{partsRequirement:{mode:'none'}});await progressPhoto(id,round);
+          await run(tech,'submit-order');await run(inspector,'claim-inspection');await run(inspector,'inspect');
+        }
+        await run(advisor,'update-technicians',{technicianIds:[tech.id,tech2.id]});
+        const unchanged=structuredClone(current.items[1]);
+        await run(advisor,'edit-repair-items',{repairItems:current.items.map(item=>({id:item.id,name:item.name,responsibleId:item.id===1?unique.id:item.responsibleId})),reason:'待结算重新分配'});
+        assert.equal(current.stage,'维修中');assert.equal(current.orderStatus,'维修中');assert.equal(current.items[0].status,'待开工');assert.deepEqual(current.items[1],unchanged);
+        assert.equal((await pool.query('select status from work_orders where id=$1',[id])).rows[0].status,'维修中');
+        if(round)assert.equal((await pool.query('select closed from dispatch_repair_rounds where order_id=$1 and round_no=1',[id])).rows[0].closed,false);
+        const notices=(await pool.query("select recipient_id from dispatch_notifications where order_id=$1 and kind='项目改派'",[id])).rows.map(r=>r.recipient_id);
+        assert.deepEqual(new Set(notices),new Set([tech.id,unique.id]));
+        await run(unique,'start-order');
+        await assert.rejects(()=>run(unique,'submit-order'),e=>e.status===409);
+        const photo=await progressPhoto(id,round);await pool.query('update files set uploaded_by=$1 where id=$2',[unique.id,photo]);
+        await run(unique,'submit-order');await run(inspector,'claim-inspection');await run(inspector,'inspect');
+        assert.equal(current.stage,'维修完成');assert.equal(current.orderStatus,'待结算');
+        await run(inspector,'send-review');
+        await run(advisor,'edit-repair-items',{repairItems:current.items.map(item=>({id:item.id,name:item.name,responsibleId:item.id===1?tech2.id:item.responsibleId})),reason:'回审分工'});
+        assert.equal(current.stage,'回审');assert.equal(current.items[0].responsibleId,tech2.id);
+      }
     });
     if(process.env.DISPATCH_UI_TEST==='true') await t.test('desktop and mobile UI complete assignment, acceptance, repair and inspection',async()=>{
       uiUploadRoot=await fs.mkdtemp(path.join(os.tmpdir(),'repair-dispatch-ui-'));
@@ -1068,6 +1135,37 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await inspection.getByRole('button',{name:/提交检验结果/}).click();
         await inspectionDialog.getByRole('button',{name:'确认提交检验结果',exact:true}).click();await inspectionDialog.waitFor({state:'hidden'});
         assert.equal((await service.dispatchDetail(manager,'ui-order')).task.stage,'维修完成');
+        // Desktop settlement reassignment and mobile review scheduling use the same project editor.
+        {
+          const id='ui-settlement-reassign';await seed(id);
+          let current=(await service.dispatchDetail(advisor,id)).task;
+          const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+          await run(advisor,'assign',{technicianIds:[tech.id],dueAt});await run(tech,'accept',{partsRequirement:{mode:'none'}});await progressPhoto(id);
+          await run(tech,'submit-order');await run(inspector,'claim-inspection');await run(inspector,'inspect');
+          const untouched=structuredClone(current.items[1]);
+          const page=await pageFor(advisor,false,id),detail=page.locator('.dispatch-detail');
+          await detail.getByRole('checkbox',{name:'选取维修项目 1',exact:true}).check();
+          await detail.getByRole('combobox',{name:'维修项目 1 负责人',exact:true}).click();
+          await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText('唯一技师',{exact:true}).click();
+          await detail.getByLabel('原因或交接说明',{exact:true}).fill('待结算重新分工');
+          await detail.getByRole('button',{name:'重新分配并退回维修',exact:true}).click();
+          await detail.getByText('重新分配后退回正在维修',{exact:true}).waitFor({state:'hidden'});
+          current=(await service.dispatchDetail(advisor,id)).task;
+          assert.equal(current.orderStatus,'维修中');assert.equal(current.stage,'维修中');assert.deepEqual(current.items[1],untouched);
+          await run(unique,'start-order');const imageId=await progressPhoto(id);await pool.query('update files set uploaded_by=$1 where id=$2',[unique.id,imageId]);
+          await run(unique,'submit-order');await run(inspector,'claim-inspection');await run(inspector,'inspect');await run(inspector,'send-review');
+          const mobile=await pageFor(advisor,true,id),review=mobile.locator('.dispatch-detail');
+          await review.getByRole('combobox',{name:'维修项目 1 负责人',exact:true}).click();
+          await mobile.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText('同名技师（账号 tech2）',{exact:true}).click();
+          await review.getByLabel('原因或交接说明',{exact:true}).fill('回审重新分工');
+          const savedResponse=mobile.waitForResponse(response=>response.url().endsWith(`/api/dispatch/tasks/${id}/actions`)&&response.request().method()==='POST');
+          await review.getByRole('button',{name:'保存维修项目',exact:true}).click();
+          assert.equal((await savedResponse).status(),200);
+          await review.getByRole('button',{name:'保存维修项目',exact:true}).waitFor({state:'hidden'});
+          current=(await service.dispatchDetail(advisor,id)).task;
+          assert.equal(current.stage,'回审');assert.equal(current.items[0].responsibleId,tech2.id);
+          assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+        }
         // A legacy team reduced to one worker must still show and enforce that worker's pause.
         {
           const id='ui-single-personal-pause';await seed(id);

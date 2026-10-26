@@ -435,6 +435,7 @@ export type RepairPhotoDeleteResponse = { ids: string[] };
 export type RepairPhotoUploadRequest = {requestId:string;fileName:string;mimeType:string;imageBase64:string;repairRound?:number;purpose?:"progress"|"parts"};
 export type PartsRequirement = { referencePhotoIds?:string[]; preparationOnly?:boolean; applicantId?:string; applicantName?:string; ownerId?:string; ownerName?:string; sourcePhotoIds?:string[]; revision?:number; batch?:number; preparedBy?:string; preparedName?:string; preparedAt?:string; issuedBy?:string; issuedName?:string; issuedAt?:string; recipientIds?:string[]; recipientName?:string; confirmedBy?:string; confirmedName?:string; confirmedAt?:string; mode:"none"|"list"|"photo"; items:Array<{name:string;quantity:number;unit:string;recipientId?:string;recipientName?:string;issuedAt?:string;issuedBy?:string;issuedName?:string;preparedAt?:string;preparedBy?:string;preparedName?:string}>; photoIds:string[]; recordedBy?:string; recordedName?:string; recordedAt?:string };
 export type DispatchTask = DispatchExecution & {
+  settlementAssignment?: boolean;
   hasPartsHistory?:boolean;
   pendingRepairCount?:number;
   partsRequirement?:PartsRequirement;

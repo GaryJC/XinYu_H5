@@ -1,3 +1,4 @@
+import {prepareSettlementAssignment} from './settlementAssignment.mjs';
 import {hasPendingInspection,allWorkersHaveItems} from '../../shared/repairProgress.mjs';
 import {canEditDispatchTechnicians,requiredDispatchTechnicians} from '../../shared/dispatchTechniciansPolicy.mjs';
 import { canEditDispatchDue } from '../../shared/dispatchDuePolicy.mjs';
@@ -76,7 +77,8 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     return {...structuredClone(task),technicianIds:[...input.technicianIds],technicianId:input.technicianIds[0],technicianName:names.join('、'),version:task.version+1};
   }
   if(input.action==='send-review') return sendReview(task,actor,canInspect,people);
-  if(input.action==='submit-review' || task.stage==='回审'&&['edit-repair-items','start-order'].includes(input.action)) {
+  const personalReviewEdit=input.action==='edit-repair-items'&&technicianIds(task).includes(actor.id)&&input.repairItems?.every(row=>task.items.some(item=>item.id===row.id&&item.responsibleId===actor.id)||row.id===undefined&&(!row.responsibleId||row.responsibleId===actor.id));
+  if(input.action==='submit-review' || task.stage==='回审'&&['edit-repair-items','start-order'].includes(input.action)&&!(input.action==='edit-repair-items'&&!personalReviewEdit&&!personalEditing&&hasAnyRole(actor,scheduling))) {
     if(task.stage!=='回审') fail('仅回审任务可提交回审');
     const legacyContractorHandler=task.executionMode==='outsourced'&&!task.contractorId&&hasAnyRole(actor,scheduling);
     if(!legacyContractorHandler&&(!technicianIds(task).includes(actor.id)||!hasAnyRole(actor,['technician','outsourcing'])&&!actor.outsourcingRoleMember)) fail('仅当前维修工可编辑或提交回审',403);
@@ -226,7 +228,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])];
   } else if(action==='edit-repair-items') {
     const scheduler=!personalEditing&&hasAnyRole(actor, scheduling);
-    if(scheduler) stage('待派工','待接单','待开工','维修中','暂停');
+    if(scheduler) {stage('待派工','待接单','待开工','维修中','暂停','回审','维修完成');prepareSettlementAssignment(next,input);}
     else {requireOwner();stage('待开工','维修中','暂停');}
     if(scheduler&&task.stage==='待派工')transferUnfinishedResponsibilities(next);
     editRepairItems(next,input.repairItems,actor,now,{startNewItems:!scheduler,allowRemoval:scheduler});
@@ -237,7 +239,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
         if(item.startAt&&edited?.responsibleId!==item.responsibleId)
           next.participantIds=[...new Set([...(next.participantIds||[]),item.responsibleId,item.startedBy,item.finishedBy].filter(Boolean))];
       }
-      const fallback=technicianIds(task).filter(id=>!task.items.some(i=>i.responsibleId===id)||next.items.some(i=>i.responsibleId===id));
+      const fallback=task.stage==='维修完成'?next.items.map(item=>item.responsibleId).filter(Boolean):technicianIds(task).filter(id=>!task.items.some(i=>i.responsibleId===id)||next.items.some(i=>i.responsibleId===id));
       next.technicianIds=[...new Set([...fallback,...next.items.filter(i=>!['待检验','已完工'].includes(i.status)).map(i=>i.responsibleId).filter(Boolean)])];
       next.technicianId=next.technicianIds[0];
       next.technicianName=next.technicianIds.map(id=>people.find(p=>p.id===id)?.name||next.items.find(i=>i.responsibleId===id)?.responsibleName||id).join('、');
@@ -254,7 +256,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     if(next.items.some(i=>!['维修中','待检验','已完工'].includes(i.status))) fail('维修项目状态异常');
     next.items.filter(i=>i.status==='维修中').forEach(i=>{i.status='待检验';i.finishAt=now;i.finishedBy=actor.id;});
     next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])];
-    Object.assign(next,{stage:'待检验',inspectorId:undefined,inspectorName:undefined,submittedAt:now,submissionNote:input.note||''});
+    Object.assign(next,{stage:'待检验',submittedAt:now,submissionNote:input.note||''});
   } else if(action==='claim-inspection' || action==='reassign-inspection') {
     if(!hasPendingInspection(task))fail('当前没有待检验项目');
     let inspector=actor;
@@ -282,6 +284,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   } else if(action==='submit') {
     requireOwner(); if((task.technicianIds||[]).length>1)fail('请分别提交本人项目完工'); stage('维修中');assertPartsIssued(task);resolveRepairResponsibilities(next,people,{required:true});
     if(!next.items.length || next.items.some(i=>!['待检验','已完工'].includes(i.status))) fail('全部维修项目完成后才能提报');
+    if(hasPendingInspection(task)&&task.inspectorId&&input.inspectorId!==task.inspectorId) fail('检验任务已被领取，请由检验员交接后再提交');
     const inspector=person(input.inspectorId,['inspector','manager']);
     if(!canInspect(task,inspector) || technicianIds(task).includes(inspector.id) || (task.participantIds||[]).includes(inspector.id) || next.items.some(i=>i.startedBy===inspector.id || i.finishedBy===inspector.id)) fail('不能选择维修工本人检验',403);
     next.inspectorId=inspector.id; next.inspectorName=inspector.name; next.stage='待检验'; next.submittedAt=now; next.submissionNote=input.note || '';
@@ -346,6 +349,10 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   if(['reassign','edit-repair-items'].includes(action)&&next.workerPauses) {
     const retained=new Set(technicianIds(next));
     next.workerPauses=Object.fromEntries(Object.entries(next.workerPauses).filter(([id])=>retained.has(id)));
+  }
+  if(['finish','submit-order'].includes(action)&&!hasPendingInspection(task)&&hasPendingInspection(next)) {
+    // A new batch needs a new claim; adding work to an active batch preserves its inspector.
+    delete next.inspectorId;delete next.inspectorName;delete next.inspectionClaimedAt;
   }
   next.version += 1;
   return next;

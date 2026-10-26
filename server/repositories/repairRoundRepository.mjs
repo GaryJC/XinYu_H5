@@ -18,7 +18,7 @@ export async function saveRepairRound(client,previous,next,actor,action) {
       values($1,0,$2,true,$3) on conflict do nothing`,[previous.orderId,snapshot(previous),previous.completedAt||null]);
     await client.query(`insert into dispatch_repair_rounds(order_id,round_no,snapshot,opened_by,opened_name,reason,opened_at)
       values($1,$2,$3,$4,$5,$6,$7)`,[next.orderId,next.repairRound,snapshot(next),actor.id,actor.name,next.roundReason,next.roundOpenedAt]);
-  } else if(action==='send-review'&&next.repairRound) {
+  } else if((action==='send-review'||action==='edit-repair-items'&&previous.stage==='维修完成'&&next.stage==='维修中')&&next.repairRound) {
     await client.query('update dispatch_repair_rounds set snapshot=$3,closed=false,completed_at=null where order_id=$1 and round_no=$2',[next.orderId,next.repairRound,snapshot(next)]);
   } else if(action==='confirm-parts') {
     await client.query('update dispatch_repair_rounds set snapshot=$3 where order_id=$1 and round_no=$2',[next.orderId,next.repairRound||0,snapshot(next)]);

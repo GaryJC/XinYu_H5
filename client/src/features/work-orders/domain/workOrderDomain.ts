@@ -99,6 +99,7 @@ export function validateWorkOrderDraft(draft: WorkOrderDraft) {
   if (!draft.customer.phone.trim()) errors.push("联系电话必填");
   const repairItems = [...filterEmptyRepairItems(draft.repairItems), ...(draft.pendingRepairs||[]).filter(p=>p.state!=='declined'&&!p.scheduled)];
   if (!repairItems.length || repairItems.some((item) => !item.name.trim())) errors.push("维修项目不能为空");
+  if (repairItems.some((item) => item.name.length > 200)) errors.push("维修项目每项不能超过 200 个字符");
   return errors;
 }
 

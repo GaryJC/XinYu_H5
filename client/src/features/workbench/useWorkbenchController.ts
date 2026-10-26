@@ -174,7 +174,9 @@ export function useWorkbenchController() {
   async function loadDepartments(generation = sessionGeneration.current) {
     try {
       setDepartmentError("");
-      const next = await workOrderApi.departments();
+      const next = (await workOrderApi.departments()).filter(
+        (item) => !["市南", "即墨", "寂寞", "机电二"].some((name) => item.name.trim().startsWith(name))
+      );
       if (generation !== sessionGeneration.current) return;
       setDepartments(next);
       const defaultDepartment = next.find((item) => item.isDefault) || next[0];

@@ -77,7 +77,9 @@ test('scheduler and technician memberships retain full task editing without wide
   const submitted=act(task,actor,'submit-order');
   assert.equal(submitted.items[0].status,'待检验');assert.equal(submitted.items[1].status,'维修中');
   const review={...task,stage:'回审'};
-  assert.throws(()=>act(review,actor,'edit-repair-items',{repairItems:rows}),e=>e.status===403);
+  assert.throws(()=>act(review,actor,'submit-review',{repairItems:rows}),e=>e.status===403);
+  const scheduled=act(review,actor,'edit-repair-items',{repairItems:rows});
+  assert.equal(scheduled.stage,'回审');assert.deepEqual(scheduled.items.map(i=>i.name),rows.map(i=>i.name));
   const personal=act(review,actor,'edit-repair-items',{repairItems:[rows[0]]});
   assert.equal(personal.stage,'回审');assert.deepEqual(personal.items[1],task.items[1]);
  }
