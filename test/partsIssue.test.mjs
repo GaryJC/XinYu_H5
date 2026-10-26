@@ -34,3 +34,23 @@ test('rejects duplicate, already issued, invalid, unauthorized and stale selecti
  const personal={...first,partsRequirement:undefined,partsRequests:[{...first.partsRequirement,ownerId:'a',ownerName:a.name}]};
  assert.throws(()=>act(personal,{action:'record-parts',partsRequirement:{mode:'none'}},a),/部分处理/);
 });
+test('implicit personal batch issue preserves the recipients selected during preparation',()=>{
+ const original=task();delete original.partsRequirement;
+ original.partsRequests=[{...parts(),ownerId:'a',ownerName:a.name}];
+ const prepared=act(original,{action:'confirm-parts',partsOwnerId:'a',partsPreparation:[{index:0,recipientId:'b'},{index:1,recipientId:'a'}]});
+ const issued=act(prepared,{partsOwnerId:'a'});
+ assert.deepEqual(issued.partsRequests[0].items.map(item=>item.recipientId),['b','a']);
+ assert.deepEqual(issued.partsRequests[0].recipientIds,['b','a']);
+ const partial=act(prepared,{partsOwnerId:'a',partsIssue:[{index:1,recipientId:'a'}]});
+ const completed=act(partial,{partsOwnerId:'a'});
+ assert.equal(completed.partsRequests[0].items[0].recipientId,'b');
+ assert.deepEqual(completed.partsRequests[0].items[1],partial.partsRequests[0].items[1]);
+});
+test('implicit issue rejects a prepared recipient removed from the team instead of silently changing the recipient',()=>{
+ const original=task();delete original.partsRequirement;
+ original.partsRequests=[{...parts(),ownerId:'a',ownerName:a.name,preparedAt:'ready',items:parts().items.map(item=>({...item,preparedAt:'ready',recipientId:'b'}))}];
+ original.technicianIds=['a'];
+ const before=structuredClone(original);
+ assert.throws(()=>act(original,{partsOwnerId:'a'}),e=>e.status===400);
+ assert.deepEqual(original,before);
+});

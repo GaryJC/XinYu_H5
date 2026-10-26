@@ -32,7 +32,7 @@ export function issueParts(task,input,actor,people,now,recipientScope) {
   if(parts.mode==='photo')return {...parts,issuedBy:actor.id,issuedName:actor.name,issuedAt:now,recipientIds:parts.ownerId?[parts.ownerId]:ids,recipientName:parts.ownerName||task.technicianName||parts.recordedName};
  }
  if(parts.mode!=='list')throw new HttpError(409,'请先将手写清单整理为配件明细，再逐项出库');
- const selected=input.partsIssue??parts.items.flatMap((item,index)=>item.issuedAt?[]:[{index,recipientId:parts.ownerId||ids[0]}]);
+ const selected=input.partsIssue??parts.items.flatMap((item,index)=>item.issuedAt?[]:[{index,recipientId:item.recipientId||parts.ownerId||ids[0]}]);
  if(!selected.length)throw new HttpError(409,'没有待出库配件');
  const items=parts.items.map(item=>({...item}));
  for(const row of selected) {

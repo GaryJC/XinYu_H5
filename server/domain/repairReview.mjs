@@ -20,7 +20,9 @@ export function sendReview(task,actor,canInspect,people) {
   }
   const next=structuredClone(task);
   if(!legacyContractor) {
-    next.technicianIds=[...new Set([...current,...owners])];
+    // Roster-only additions have no review work and must not block final submission.
+    next.technicianIds=[...new Set(owners)];
+    next.participantIds=[...new Set([...(task.participantIds||[]),...current])];
     next.technicianId=next.technicianIds[0];
     next.technicianName=next.technicianIds.map(id=>people.find(person=>person.id===id)?.name||id).join('、');
   }

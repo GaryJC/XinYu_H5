@@ -823,6 +823,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       const photo=await progressPhoto(id);await pool.query('update files set uploaded_by=$1 where id=$2',[unique.id,photo]);
       await run(unique,'submit-order');await run(inspector,'claim-inspection');await run(inspector,'inspect');
       assert.deepEqual(current.technicianIds,[unique.id]);
+      await run(advisor,'update-technicians',{technicianIds:[unique.id,tech.id,tech2.id]});
       const version=current.version;
       await pool.query('update users set active=false where id=$1',[tech.id]);
       try {
@@ -835,6 +836,8 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await service.dispatchDetail(tech,id);
       const recipients=(await pool.query("select recipient_id from dispatch_notifications where order_id=$1 and kind='维修单回审'",[id])).rows.map(row=>row.recipient_id);
       assert.deepEqual(new Set(recipients),new Set([tech.id,unique.id]));
+      assert.ok(current.participantIds.includes(tech2.id));
+      await assert.rejects(()=>service.dispatchDetail(tech2,id),e=>e.status===403||e.status===404);
       await run(tech,'submit-review');await run(unique,'submit-review');
       assert.equal(current.stage,'待检验');
       await run(inspector,'claim-inspection');await run(inspector,'inspect');assert.equal(current.stage,'维修完成');
@@ -863,6 +866,20 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await run(inspector,'claim-inspection');await run(inspector,'inspect');
         assert.equal(await validate(notice,tech,pool),false);
       }
+    });
+    await t.test('implicit personal issue keeps the prepared recipient in persisted items and notifications',async()=>{
+      const id='prepared-recipient-handover';await seed(id);
+      const warehouse={id:'warehouse',role:'warehouse',name:'仓管',active:true,shopId:'shop-hq'};
+      let current=(await service.dispatchDetail(advisor,id)).task;
+      const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+      await run(advisor,'assign',{technicianIds:[tech.id,tech2.id],dueAt,repairItems:current.items.map((item,index)=>({...item,responsibleId:index?tech2.id:tech.id}))});
+      await run(tech,'accept',{partsRequirement:{mode:'list',items:[{name:'滤芯',quantity:1,unit:'个'}]}});
+      await run(warehouse,'confirm-parts',{partsOwnerId:tech.id,partsPreparation:[{index:0,recipientId:tech2.id}]});
+      await run(warehouse,'issue-parts',{partsOwnerId:tech.id});
+      const saved=(await service.dispatchDetail(advisor,id)).task.partsRequests.find(p=>p.ownerId===tech.id);
+      assert.equal(saved.items[0].recipientId,tech2.id);assert.deepEqual(saved.recipientIds,[tech2.id]);assert.ok(saved.issuedAt);
+      const recipients=(await pool.query("select recipient_id from dispatch_notifications where order_id=$1 and kind='配件已出库'",[id])).rows.map(row=>row.recipient_id);
+      assert.deepEqual(recipients,[tech2.id]);
     });
     await t.test('legacy item completion photos remain editable until personal submission is recorded',async()=>{
       const id='legacy-personal-photo-edit';await seed(id);

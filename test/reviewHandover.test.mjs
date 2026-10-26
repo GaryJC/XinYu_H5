@@ -37,3 +37,15 @@ test('scheduler review exception cannot submit internal or account-bound contrac
   assert.throws(()=>act(original,advisor,'submit-review',[...people,advisor]),e=>e.status===403);
  }
 });
+test('review excludes roster-only workers so every reviewed project can reach inspection',()=>{
+ const original={...task(),items:task().items.filter(item=>item.responsibleId!=='c')};
+ const before=structuredClone(original);
+ let next=act(original,i,'send-review');
+ assert.deepEqual(new Set(next.technicianIds),new Set(['a','b']));
+ for(const actor of [a,b])next=act(next,actor,'submit-review');
+ assert.equal(next.stage,'待检验');
+ next=act(next,i,'claim-inspection');next=act(next,i,'inspect');
+ assert.equal(next.stage,'维修完成');assert.deepEqual(original,before);
+ assert.ok(next.participantIds.includes('c'));
+ assert.throws(()=>act(next, {...c,role:'inspector'}, 'send-review'),e=>e.status===403);
+});
