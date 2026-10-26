@@ -2,14 +2,14 @@ import {pendingRepairScheduleBlock} from '../../shared/pendingRepairScheduling.m
 import { pool,transaction } from '../database/pool.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 import { hasAnyRole } from '../../shared/roles.mjs';
-import { readPendingRepairs,newPendingRepair,writePendingRepairs,listPendingFollowups,readPendingRequest,recordPendingRequest } from '../repositories/pendingRepairsRepository.mjs';
+import { readPendingRepairs,readPendingRepairProgress,newPendingRepair,writePendingRepairs,listPendingFollowups,readPendingRequest,recordPendingRequest } from '../repositories/pendingRepairsRepository.mjs';
 import { getDispatchTask } from '../repositories/dispatchRepository.mjs';
 import { executeDispatchActionInTransaction } from './dispatchService.mjs';
 import { wakeRepairWriteback } from '../workers/repairWritebackWorker.mjs';
 function access(actor,row,write=false) {
  if(!actor?.active||actor.shopId!==row.shop_id||!hasAnyRole(actor,write?['manager','advisor']:['manager','advisor','technician','inspector','warehouse','outsourcing']))throw new HttpError(403,'无权处理待确认项目');
 }
-export async function pendingRepairList(actor,id) {const row=await readPendingRepairs(pool,id);access(actor,row);if(!hasAnyRole(actor,['manager','advisor','inspector']))await getDispatchTask(pool,id,actor);return {items:row.items,version:row.version};}
+export async function pendingRepairList(actor,id) {const row=await readPendingRepairs(pool,id);access(actor,row);if(!hasAnyRole(actor,['manager','advisor','inspector']))await getDispatchTask(pool,id,actor);return {items:await readPendingRepairProgress(pool,id,row.items),version:row.version};}
 export async function pendingRepairFollowups(actor) {
  if(!actor?.active||!hasAnyRole(actor,['manager','advisor']))throw new HttpError(403,'无权查看待确认跟进');
  return listPendingFollowups(pool,actor.shopId);

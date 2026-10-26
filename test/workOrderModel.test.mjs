@@ -29,7 +29,7 @@ test("repair actions have stable audit labels", () => {
 
 test("PostgreSQL work-order values preserve the legacy model code", () => {
   const values = workOrderValues({ vehicle: { modelLegacyCode: "DZXPST" } });
-  assert.equal(values.length, 36);
+  assert.equal(values.length, 37);
   assert.equal(values[17], "DZXPST");
 });
 
@@ -60,10 +60,10 @@ test("new work orders ignore client-controlled workflow fields", () => {
 
 
 test("military vehicle flag is persisted as a boolean and defaults false for older orders", () => {
-  assert.equal(workOrderValues({ vehicle: { isMilitary: true } }).at(-1), true);
-  assert.equal(workOrderValues({ vehicle: { isMilitary: false } }).at(-1), false);
-  assert.equal(workOrderValues({}).at(-1), false);
-  assert.equal(workOrderValues({ vehicle: { isMilitary: "false" } }).at(-1), false);
+  assert.equal(workOrderValues({ vehicle: { isMilitary: true } })[35], true);
+  assert.equal(workOrderValues({ vehicle: { isMilitary: false } })[35], false);
+  assert.equal(workOrderValues({})[35], false);
+  assert.equal(workOrderValues({ vehicle: { isMilitary: "false" } })[35], false);
 });
 
 
@@ -72,4 +72,11 @@ test("reloaded orders retain military selection while historical orders default 
   assert.equal(reload(true).vehicle.isMilitary, true);
   assert.equal(reload(false).vehicle.isMilitary, false);
   assert.equal(reload(undefined).vehicle.isMilitary, false);
+});
+
+test('Baiyuan marker maps and persists strictly without changing order form',()=>{
+  assert.equal(workOrderValues({isBaiyuanOrder:true})[36],true);
+  assert.equal(workOrderValues({isBaiyuanOrder:'false'})[36],false);
+  assert.equal(rowToWorkOrder({is_baiyuan_order:true},[],[],[],[],[],[],[]).isBaiyuanOrder,true);
+  assert.equal(rowToWorkOrder({},[],[],[],[],[],[],[]).isBaiyuanOrder,false);
 });

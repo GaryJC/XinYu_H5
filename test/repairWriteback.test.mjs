@@ -29,16 +29,17 @@ test('snapshot uses bound employee names and remains immutable after personnel e
 });
 import {replaceLegacyRepairItems,assertLegacyRepairHeaders} from '../server/repositories/legacyRepairWritebackRepository.mjs';
 const snapshot={orderId:'o',eventId:'42',plate:'鲁B12345',dispatchNo:'A123',departmentCode:'01',legacyReid:10,documentNo:20,items:[{id:1,name:'更换机油',responsibleId:'t',employeeCode:'027',employeeName:'李富强'}]};
-const headers=()=>[{reid:10,dh:20,wd:'',plate:'鲁B12345',department:'01',xmfy:100,xmfy0:100},{reid:11,dh:20,wd:'1',plate:'鲁B12345',department:'01',xmfy:100,xmfy0:100}];
-function sqlHarness({failInsert=false,existingHash,downstream=0}={}) {
+const headers=()=>[{reid:10,dh:20,wd:'',plate:'鲁B12345',department:'01',xmfy:0,xmfy0:0},{reid:11,dh:20,wd:'1',plate:'鲁B12345',department:'01',xmfy:0,xmfy0:0}];
+function sqlHarness({failInsert=false,existingHash,downstream=0,headerRows=headers(),protectedCounts={}}={}) {
  let statements=[],committed=false,rolledBack=false;
  const executeTransaction=async work=>{
   try {const result=await work(async(query,configure)=>{
    const params={};const sql=new Proxy({},{get:(_,name)=>(...args)=>({name,args})});configure?.({input:(name,_type,value)=>{params[name]=value;}},sql);statements.push({query,params});
-   if(query.startsWith('select reid'))return {recordset:headers()};
+   if(query.startsWith('select reid'))return {recordset:headerRows};
    if(query.startsWith('select payload_hash'))return {recordset:existingHash?[{payload_hash:existingHash}]:[]};
    if(query.includes('as assignments'))return {recordset:[{assignments:downstream,completions:0,payments:0,returns:0}]};
-   if(query.startsWith('select isnull(sum'))return {recordset:[{amount:100,cost:10}]};
+   if(query.includes('as protected_count'))return {recordset:[{protected_count:protectedCounts[params.wd]??0}]};
+   if(query.startsWith('select isnull(sum'))return {recordset:[{amount:0,cost:0}]};
    if(failInsert&&query.startsWith('insert into dbo.qxwxmxb'))throw new Error('injected SQL failure');
    return {recordset:[],rowsAffected:[1]};
   });committed=true;return result;}catch(error){rolledBack=true;throw error;}
@@ -119,5 +120,37 @@ test('canonical and legacy external receipts survive ACK correction but reject c
   assert.ok(!mock.state().statements.some(s=>/^(delete|insert|update)/.test(s.query)));
   const changed=sqlHarness({existingHash:hash});
   await assert.rejects(()=>replaceLegacyRepairItems({...snapshot,items:[{...snapshot.items[0],name:'不同项目'}]},{executeTransaction:changed.executeTransaction,source:'test'}),/幂等键/);
+ }
+});
+
+
+test('either document with entered project values blocks all mutations before deletion',async()=>{
+ for(const wd of ['', '1']) {
+  const mock=sqlHarness({protectedCounts:{[wd]:1}});
+  await assert.rejects(()=>replaceLegacyRepairItems(snapshot,{executeTransaction:mock.executeTransaction,source:'test'}),/非零单价、金额、成本、工时/);
+  assert.ok(mock.state().rolledBack);
+  assert.ok(!mock.state().statements.some(s=>/^(delete|insert|update)/.test(s.query)));
+ }
+ for(const field of ['xmfy','xmfy0'])for(const value of [1,-1]) {
+  const rows=headers();rows[1][field]=value;
+  const mock=sqlHarness({headerRows:rows});
+  await assert.rejects(()=>replaceLegacyRepairItems(snapshot,{executeTransaction:mock.executeTransaction,source:'test'}),/非零项目费用/);
+  assert.ok(!mock.state().statements.some(s=>/^(delete|insert|update)/.test(s.query)));
+ }
+});
+test('protected projects query uses per-row nonzero checks and fails closed on unreadable result',async()=>{
+ const {LEGACY_PROTECTED_PROJECTS}=await import('../server/repositories/legacyRepairWritebackRepository.mjs');
+ for(const field of ['dj','je','cb','gs','ywyje','uddec1','uddec2'])assert.ok(LEGACY_PROTECTED_PROJECTS.includes(`isnull(${field},0)<>0`));
+ assert.match(LEGACY_PROTECTED_PROJECTS,/updlock,holdlock/);assert.doesNotMatch(LEGACY_PROTECTED_PROJECTS,/sum\(/i);
+ const mock=sqlHarness({protectedCounts:{'1':'invalid'}});
+ await assert.rejects(()=>replaceLegacyRepairItems(snapshot,{executeTransaction:mock.executeTransaction,source:'test'}),/无法核实/);
+ assert.ok(!mock.state().statements.some(s=>/^(delete|insert|update)/.test(s.query)));
+});
+test('audited or settled external document blocks the whole writeback',async()=>{
+ for(const change of [{approved:'1'},{settled:'2026-10-26'},{deleted:'1'}]) {
+  const rows=headers();Object.assign(rows[1],change);
+  const mock=sqlHarness({headerRows:rows});
+  await assert.rejects(()=>replaceLegacyRepairItems(snapshot,{executeTransaction:mock.executeTransaction,source:'test'}),/删除、结算或审核/);
+  assert.ok(!mock.state().statements.some(s=>/^(delete|insert|update)/.test(s.query)));
  }
 });

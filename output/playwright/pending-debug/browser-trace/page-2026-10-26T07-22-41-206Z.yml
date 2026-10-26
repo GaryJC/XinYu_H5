@@ -1,0 +1,76 @@
+- generic [ref=f4e3]:
+  - main [ref=f4e4]:
+    - generic [ref=f4e5]:
+      - generic [ref=f4e7]:
+        - heading "修理委托工作台" [level=1] [ref=f4e8]
+        - paragraph [ref=f4e9]: 0 张委托单 · 抚顺路店 · 新建草稿
+      - generic [ref=f4e10]: 未登录
+    - generic [ref=f4e17]: 全部待办
+    - region "全部待办统计" [ref=f4e18]:
+      - generic [ref=f4e21]:
+        - generic [ref=f4e22]: 待客户签字
+        - generic [ref=f4e24]:
+          - generic [ref=f4e25]: "0"
+          - generic [ref=f4e26]: 较昨日 +0
+      - generic [ref=f4e30]:
+        - generic [ref=f4e31]: 待派工
+        - generic [ref=f4e33]:
+          - generic [ref=f4e34]: "0"
+          - generic [ref=f4e35]: 较昨日 +0
+      - generic [ref=f4e39]:
+        - generic [ref=f4e40]: 维修中
+        - generic [ref=f4e42]:
+          - generic [ref=f4e43]: "0"
+          - generic [ref=f4e44]: 较昨日 +0
+      - generic [ref=f4e48]:
+        - generic [ref=f4e49]: 待检验
+        - generic [ref=f4e51]:
+          - generic [ref=f4e52]: "0"
+          - generic [ref=f4e53]: 较昨日 +0
+    - generic [ref=f4e56]:
+      - strong [ref=f4e57]: 服务顾问工作区
+      - generic [ref=f4e58]: 查看本店委托单、维修任务和维修工负荷
+    - generic [ref=f4e60]:
+      - generic [ref=f4e61]:
+        - generic [ref=f4e62]:
+          - heading "归档查询" [level=2] [ref=f4e63]
+          - paragraph [ref=f4e64]: 点击任一委托单可查看完整归档内容。
+        - generic [ref=f4e65]:
+          - button "待客户确认跟进" [ref=f4e66] [cursor=pointer]
+          - button "loading 刷新列表" [ref=f4e68]:
+            - img "loading" [ref=f4e70]
+            - generic [ref=f4e73]: 刷新列表
+          - button "全部从润丰更新（0）" [disabled] [ref=f4e74]
+          - generic [ref=f4e75]:
+            - searchbox "搜索车牌 / VIN / 工单号 / 派工号" [ref=f4e77]
+            - button [ref=f4e79] [cursor=pointer]:
+              - img "search" [ref=f4e81]
+      - paragraph [ref=f4e84]: 更新全部已同步且有权限的委托单，不受搜索和分页影响；保留签名、照片和维修进度。更新期间请保持页面打开。
+      - region "委托单筛选" [ref=f4e85]:
+        - generic [ref=f4e86]:
+          - generic [ref=f4e87]: 创建日期
+          - generic [ref=f4e88]:
+            - button "全 部" [ref=f4e89] [cursor=pointer]
+            - button "今 天" [ref=f4e91] [cursor=pointer]
+            - button "昨 天" [ref=f4e93] [cursor=pointer]
+            - button "近7天" [ref=f4e95] [cursor=pointer]
+            - button "自定义" [ref=f4e97] [cursor=pointer]
+          - generic [ref=f4e99]:
+            - generic [ref=f4e100] [cursor=pointer]:
+              - generic "更新时间最新" [ref=f4e101]:
+                - text: 更新时间最新
+                - combobox "委托单排序" [ref=f4e102]
+              - img "down" [ref=f4e104]
+            - generic [ref=f4e107] [cursor=pointer]:
+              - checkbox "百援门店单" [ref=f4e109]
+              - generic [ref=f4e110]: 百援门店单
+            - button "更多筛选" [ref=f4e111] [cursor=pointer]
+            - button "重置" [ref=f4e113] [cursor=pointer]
+        - generic [ref=f4e115]: 共 0 张
+      - generic [ref=f4e117]: 正在加载委托单…
+  - navigation "底部主导航" [ref=f4e126]:
+    - button "工作台" [ref=f4e127]
+    - button "委托开单" [ref=f4e134]
+    - button "派工台" [ref=f4e139]
+    - button "打开菜单" [ref=f4e144]:
+      - generic [ref=f4e146]: 更多

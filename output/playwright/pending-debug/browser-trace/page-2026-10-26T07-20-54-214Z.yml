@@ -1,0 +1,216 @@
+- generic [ref=f2e1]:
+  - generic [ref=f2e3]:
+    - complementary [ref=f2e4]:
+      - generic [ref=f2e6]:
+        - generic [ref=f2e13]:
+          - strong [ref=f2e14]: 修理委托
+          - generic [ref=f2e15]: 钉钉自建 H5
+        - navigation "主导航" [ref=f2e16]:
+          - button "工作台" [ref=f2e17] [cursor=pointer]
+          - button "委托开单" [ref=f2e24] [cursor=pointer]
+          - button "派工台" [ref=f2e29] [cursor=pointer]
+          - button "配件竞价" [ref=f2e34] [cursor=pointer]
+          - button "检验任务" [ref=f2e39] [cursor=pointer]
+          - button "数据看板" [ref=f2e44] [cursor=pointer]
+          - button "权限设置" [ref=f2e48] [cursor=pointer]
+        - paragraph [ref=f2e58]: 按门店与岗位权限使用委托开单、签字与归档功能。
+    - main [ref=f2e59]:
+      - generic [ref=f2e60]:
+        - generic [ref=f2e62]:
+          - heading "机动车修理委托书数字化工作台" [level=1] [ref=f2e63]
+          - paragraph [ref=f2e64]: 抚顺路店 · 派工台
+        - generic [ref=f2e65]:
+          - generic [ref=f2e66]: 已登录：测试顾问
+          - generic [ref=f2e73]: 门店管理员
+      - region "派工台" [ref=f2e80]:
+        - generic [ref=f2e81]:
+          - generic [ref=f2e82]:
+            - heading "派工台" [level=2] [ref=f2e83]
+            - paragraph [ref=f2e84]: 默认显示本店未派工工单，可切换状态查看其他工单。 更新于 15:20:33
+          - button "刷 新" [ref=f2e85] [cursor=pointer]
+        - search "工单搜索筛选" [ref=f2e87]:
+          - generic [ref=f2e88]:
+            - searchbox "搜索派工任务" [ref=f2e90]
+            - button [ref=f2e92] [cursor=pointer]:
+              - img "search" [ref=f2e94]
+          - generic "工单状态筛选" [ref=f2e97]:
+            - tablist [ref=f2e98]:
+              - generic [ref=f2e100]:
+                - tab "未派工" [selected] [ref=f2e102] [cursor=pointer]
+                - tab "全部未完结" [ref=f2e104] [cursor=pointer]
+                - tab "待客户确认" [ref=f2e106] [cursor=pointer]
+                - tab "未接单" [ref=f2e108] [cursor=pointer]
+                - tab "待开工" [ref=f2e110] [cursor=pointer]
+                - tab "正在维修" [ref=f2e112] [cursor=pointer]
+                - tab "暂停" [ref=f2e114] [cursor=pointer]
+                - tab "待检验" [ref=f2e116] [cursor=pointer]
+                - tab "回审" [ref=f2e118] [cursor=pointer]
+                - tab "待结算" [ref=f2e120] [cursor=pointer]
+                - tab "草稿" [ref=f2e122] [cursor=pointer]
+                - tab "待客户签字" [ref=f2e124] [cursor=pointer]
+                - tab "已完结" [ref=f2e126] [cursor=pointer]
+            - generic:
+              - generic:
+                - tabpanel "未派工"
+          - generic [ref=f2e127]:
+            - button "筛选" [ref=f2e128] [cursor=pointer]:
+              - img "filter" [ref=f2e130]
+            - button "加急" [ref=f2e134] [cursor=pointer]:
+              - img "thunderbolt" [ref=f2e136]
+            - button "超期" [ref=f2e140] [cursor=pointer]:
+              - img "clock-circle" [ref=f2e142]
+            - button "重置筛选" [ref=f2e147] [cursor=pointer]:
+              - generic [ref=f2e148]: 1 项 · 清空
+        - region "工作负荷看板" [ref=f2e149]:
+          - heading [level=3] [ref=f2e150]:
+            - button "工作负荷看板 · 1 人 展开" [ref=f2e151] [cursor=pointer]:
+              - generic [ref=f2e152]:
+                - text: 工作负荷看板
+                - generic [ref=f2e153]: · 1 人
+              - generic [ref=f2e154]: 展开
+        - heading "未派工（0）" [level=3] [ref=f2e159]
+        - generic [ref=f2e411]:
+          - img "暂无数据" [ref=f2e413]
+          - generic [ref=f2e424]: 没有符合条件的维修任务
+  - dialog "测BDEBUG · 维修任务" [ref=f2e175]:
+    - generic [ref=f2e177]:
+      - button "关闭" [ref=f2e178] [cursor=pointer]:
+        - img "close" [ref=f2e179]
+      - generic [ref=f2e182]: 测BDEBUG · 维修任务
+    - generic [ref=f2e184]:
+      - region "任务概览" [ref=f2e185]:
+        - generic [ref=f2e186]:
+          - generic [ref=f2e187]:
+            - generic [ref=f2e188]: 店内维修
+            - generic [ref=f2e190]: 待检验
+          - generic "维修与领料批次" [ref=f2e192]: 本轮第 1 批
+        - generic [ref=f2e194]: 派工号 WT-20261026-FE4A8BD798D4
+        - generic [ref=f2e195]:
+          - generic [ref=f2e196]:
+            - term [ref=f2e197]: 托修单位
+            - definition [ref=f2e198]: 流程测试
+          - generic [ref=f2e199]:
+            - term [ref=f2e200]: 车型 / 里程
+            - definition [ref=f2e201]: 测试车型 · 100 km
+          - generic [ref=f2e202]:
+            - term [ref=f2e203]: 维修员工
+            - definition [ref=f2e204]:
+              - generic [ref=f2e205]: 测试维修工
+          - generic [ref=f2e207]:
+            - term [ref=f2e208]: 预计完工
+            - definition [ref=f2e209]:
+              - generic [ref=f2e210]:
+                - generic [ref=f2e211]: 2026/10/27 15:19:33
+                - button "编辑预计完工时间" [ref=f2e212] [cursor=pointer]:
+                  - generic [ref=f2e217]: 编辑
+      - region "待客户确认项目" [ref=f2e218]:
+        - generic [ref=f2e219]:
+          - generic [ref=f2e220]:
+            - heading "待客户确认项目" [level=3] [ref=f2e221]
+            - generic [ref=f2e222]: 1 项待回复
+          - button "登记待确认项目" [ref=f2e223] [cursor=pointer]:
+            - img "plus" [ref=f2e225]
+            - generic [ref=f2e229]: 登记项目
+        - alert [ref=f2e373]:
+          - img "info-circle" [ref=f2e375]
+          - generic [ref=f2e378]: 请先完成当前检验，再安排追加维修
+        - article [ref=f2e380]:
+          - generic [ref=f2e381]:
+            - generic [ref=f2e382]:
+              - generic [ref=f2e383]: "01"
+              - strong [ref=f2e384]: 待定追加项目
+            - generic [ref=f2e385]: 待客户确认
+          - generic [ref=f2e386]:
+            - text: 待确认原因
+            - paragraph [ref=f2e387]: 客户待确认
+          - generic [ref=f2e388]:
+            - button "安排维修" [disabled] [ref=f2e389]
+            - button "本次暂不维修" [ref=f2e390] [cursor=pointer]
+          - button "collapsed 处理记录" [ref=f2e394] [cursor=pointer]:
+            - img "collapsed" [ref=f2e396]
+            - generic [ref=f2e399]: 处理记录
+        - group [ref=f2e400]:
+          - generic [ref=f2e401] [cursor=pointer]:
+            - img "info-circle" [ref=f2e402]
+            - text: 润丰同步说明
+      - alert [ref=f2e264]:
+        - generic [ref=f2e265]: 已由 测试顾问 接手检验
+      - generic [ref=f2e267]:
+        - heading "待检项目 · 1 项" [level=3] [ref=f2e268]
+        - list [ref=f2e269]:
+          - listitem [ref=f2e270]:
+            - generic [ref=f2e271]:
+              - generic [ref=f2e272]: "01"
+              - generic [ref=f2e273]:
+                - strong [ref=f2e274]: 原维修项目
+                - generic [ref=f2e275]: 负责人：测试维修工
+            - radiogroup "检验结果：原维修项目" [ref=f2e276]:
+              - generic [ref=f2e277] [cursor=pointer]:
+                - generic [ref=f2e278]:
+                  - radio "通过" [checked]
+                - generic [ref=f2e279]: 通过
+              - generic [ref=f2e280] [cursor=pointer]:
+                - generic [ref=f2e281]:
+                  - radio "退回"
+                - generic [ref=f2e282]: 退回
+        - paragraph [ref=f2e283]: 已选择 1 / 1 项，请逐项确认通过或退回。
+      - region "所需配件" [ref=f2e284]:
+        - heading "所需配件" [level=3] [ref=f2e285]
+        - paragraph [ref=f2e286]: 无需配件
+        - paragraph [ref=f2e287]: 测试维修工 · 2026/10/26 15:19:33
+      - heading "维修附件" [level=3] [ref=f2e288]
+      - generic [ref=f2e289]:
+        - generic [ref=f2e291]:
+          - generic [ref=f2e292]:
+            - status [ref=f2e293]: Loading
+            - img "Image placeholder" [ref=f2e297]
+          - 'alert "ENOENT: no such file or directory, open ''/Users/gary/repair-h5-dingtalk/server/data/uploads/fixture''" [ref=f2e299]': 图片加载失败
+        - generic [ref=f2e301]:
+          - generic [ref=f2e302]:
+            - status [ref=f2e303]: Loading
+            - img "Image placeholder" [ref=f2e307]
+          - 'alert "ENOENT: no such file or directory, open ''/Users/gary/repair-h5-dingtalk/server/data/uploads/fixture''" [ref=f2e309]': 图片加载失败
+        - generic [ref=f2e311]:
+          - generic [ref=f2e312]:
+            - status [ref=f2e313]: Loading
+            - img "Image placeholder" [ref=f2e317]
+          - 'alert "ENOENT: no such file or directory, open ''/Users/gary/repair-h5-dingtalk/server/data/uploads/fixture''" [ref=f2e319]': 图片加载失败
+      - button "collapsed 任务信息与关键时间" [ref=f2e326] [cursor=pointer]:
+        - img "collapsed" [ref=f2e328]
+        - generic [ref=f2e331]: 任务信息与关键时间
+      - button "collapsed 完整派工单与接车照片" [ref=f2e334] [cursor=pointer]:
+        - img "collapsed" [ref=f2e336]
+        - generic [ref=f2e339]: 完整派工单与接车照片
+      - button "collapsed 通知与操作记录" [ref=f2e342] [cursor=pointer]:
+        - img "collapsed" [ref=f2e344]
+        - generic [ref=f2e347]: 通知与操作记录
+      - generic [ref=f2e349]:
+        - button "催 办" [ref=f2e351] [cursor=pointer]
+        - button "发送回审" [ref=f2e354] [cursor=pointer]
+        - button "重新分配检验" [ref=f2e407] [cursor=pointer]
+        - button "提交检验结果（通过 1 · 退回 0）" [ref=f2e425] [cursor=pointer]
+  - generic [ref=f2e427]:
+    - dialog "提交检验结果":
+      - generic [ref=f2e428]:
+        - button "Close" [active] [ref=f2e429] [cursor=pointer]:
+          - generic "关闭" [ref=f2e430]:
+            - img "close" [ref=f2e431]
+        - generic [ref=f2e434]: 提交检验结果
+        - generic [ref=f2e437]:
+          - generic [ref=f2e438]:
+            - heading "检验结果复核" [level=3] [ref=f2e439]
+            - list [ref=f2e440]:
+              - listitem [ref=f2e441]:
+                - generic [ref=f2e442]:
+                  - generic [ref=f2e443]: "01"
+                  - generic [ref=f2e444]:
+                    - strong [ref=f2e445]: 原维修项目
+                    - generic [ref=f2e446]: 负责人：测试维修工
+                - generic [ref=f2e447]: 通过
+          - region "备注" [ref=f2e448]:
+            - generic [ref=f2e450]:
+              - generic "备注（选填）" [ref=f2e452]
+              - textbox "备注" [ref=f2e456]
+        - generic [ref=f2e457]:
+          - button "取 消" [ref=f2e458] [cursor=pointer]
+          - button "确认提交检验结果" [ref=f2e460] [cursor=pointer]

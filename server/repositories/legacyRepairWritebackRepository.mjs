@@ -8,6 +8,11 @@ export const LEGACY_REPAIR_DOWNSTREAM = `select
  (select count(*) from dbo.cljgb with (holdlock) where RTRIM(pgd)=@dispatch_no) as completions,
  (select count(*) from dbo.skxcb with (holdlock) where RTRIM(pgd)=@dispatch_no) as payments,
  (select count(*) from dbo.qxthb with (holdlock) where RTRIM(pgd)=@dispatch_no) as returns`;
+// Check each row, not sums: positive and negative entries must not cancel out.
+export const LEGACY_PROTECTED_PROJECTS = `select count(*) as protected_count
+ from dbo.qxwxmxb with (updlock,holdlock) where wd=@wd and dh=@dh and lb=N'项目'
+ and (isnull(dj,0)<>0 or isnull(je,0)<>0 or isnull(cb,0)<>0 or isnull(gs,0)<>0
+ or isnull(ywyje,0)<>0 or isnull(uddec1,0)<>0 or isnull(uddec2,0)<>0)`;
 export function assertLegacyRepairHeaders(rows,snapshot,{checkMutable=true}={}) {
  if(!snapshot.departmentCode?.trim())throw new Error('缺少润丰部门编码，请管理员核对');
  if(rows.length<1||rows.length>2||rows.filter(r=>r.wd==='').length!==1||rows.filter(r=>r.wd==='1').length>1||rows.some(r=>!['','1'].includes(r.wd)))throw new Error('派工号内单缺失或内外单重复，禁止替换维修项目');
@@ -50,6 +55,15 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
   assertLegacyRepairHeaders(headers||[],snapshot);
   const downstream=await execute(LEGACY_REPAIR_DOWNSTREAM,dispatch);
   if(Object.values(downstream.recordset?.[0]||{}).some(n=>Number(n)>0))throw new Error('润丰已有派工明细、竣工、收款或退回记录，请人工核对后处理');
+  // Validate both documents before mutating either, including an already receipted
+  // internal document when a newly created external document needs synchronization.
+  for(const header of headers) {
+   if([header.xmfy,header.xmfy0].some(value=>Number(value??0)!==0))throw new Error('润丰已录入非零项目费用，禁止覆盖维修项目，请在润丰人工处理');
+   const protectedRows=await execute(LEGACY_PROTECTED_PROJECTS,(req,sql)=>{req.input('wd',sql.Char(1),header.wd);req.input('dh',sql.Int,Number(header.dh));});
+   const count=Number(protectedRows.recordset?.[0]?.protected_count);
+   if(protectedRows.recordset?.[0]?.protected_count==null||!Number.isSafeInteger(count)||count<0)throw new Error('无法核实润丰项目金额及工时，禁止覆盖维修项目');
+   if(count>0)throw new Error('润丰维修项目已录入非零单价、金额、成本、工时或其他计价数据，禁止覆盖，请在润丰人工处理');
+  }
   // Validate every string before any delete, using the legacy database code page.
   for(const item of snapshot.items) {
    const worker=item.pendingConfirmation?'':`${item.employeeCode.trim()} ${item.employeeName.trim()}`;

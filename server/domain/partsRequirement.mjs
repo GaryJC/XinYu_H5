@@ -23,3 +23,19 @@ export function assertPartsIssued(task) {
   if(task.partsRequirement && task.partsRequirement.mode!=='none' && !task.partsRequirement.issuedAt && !task.partsRequirement.preparedAt)
     throw new HttpError(409,'请等待仓管确认配件备齐后再开工或提交完工');
 }
+
+// Match each handled line once; audit fields always come from the saved request.
+export function preserveHandledParts(previous, requirement) {
+  const handled=previous?.items?.filter(item=>item.preparedAt||item.issuedAt)||[];
+  if(!handled.length||previous.preparedAt||previous.issuedAt)return requirement;
+  const available=new Set(requirement.items.map((_,index)=>index));
+  for(const item of handled) {
+    const index=[...available].find(index=>{
+      const row=requirement.items[index];
+      return row.name===item.name&&row.quantity===item.quantity&&row.unit===item.unit;
+    });
+    if(requirement.mode!=='list'||index===undefined)throw new HttpError(409,'已备齐或已出库的配件不可修改或删除，请仅编辑待备料配件');
+    requirement.items[index]={...item};available.delete(index);
+  }
+  return requirement;
+}

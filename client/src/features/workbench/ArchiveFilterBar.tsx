@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 import { useState } from 'react';
-import { Alert, Button, Drawer, DatePicker, Select, Tag } from 'antd';
+import { Alert, Button, Checkbox, Drawer, DatePicker, Select, Tag } from 'antd';
 import { archiveDateError, defaultArchiveFilters, type ArchiveFilters } from './archiveFilters';
 import type { ArchiveFilterController } from './useArchiveFilters';
 
@@ -41,6 +41,7 @@ export function ArchiveFilterBar({ archive, isMobile }: { archive: ArchiveFilter
       }}>{range.label}</Button>)}</div>
       <div className="archive-list-controls">
       <Select size="small" className="archive-sort" aria-label="委托单排序" value={filters.sort} options={sorts} onChange={sort => update({ sort })} />
+      <Checkbox checked={filters.baiyuanOnly} onChange={event=>update({baiyuanOnly:event.target.checked})}>百援门店单</Checkbox>
       {isMobile && <Button size="small" onClick={() => { setDraft(filters); setOpen(true); }}>更多筛选{count ? `（${count}）` : ''}</Button>}
       <Button size="small" type="link" onClick={() => { reset(); setCustomOpen(false); }}>重置</Button>
       </div>
@@ -54,6 +55,7 @@ export function ArchiveFilterBar({ archive, isMobile }: { archive: ArchiveFilter
     <div className="archive-filter-summary" aria-live="polite">
       <span>共 {archive.filteredOrders.length} 张</span>
       {filters.range !== 'all' && <Tag closable onClose={() => update({ range: 'all', from: '', to: '' })}>创建日期：{filters.range === 'custom' ? `${filters.from} 至 ${filters.to}` : ranges.find(range => range.value === filters.range)?.label}</Tag>}
+      {filters.baiyuanOnly && <Tag closable onClose={()=>update({baiyuanOnly:false})}>百援门店单</Tag>}
       {filters.search && <Tag closable onClose={() => update({ search: '' })}>搜索：{filters.search}</Tag>}
       {(['statuses', 'advisors', 'technicians'] as const).flatMap((key, index) => filters[key].map(value => <Tag key={`${key}-${value}`} closable onClose={() => update({ [key]: filters[key].filter(item => item !== value) })}>{['状态', '顾问', '技师'][index]}：{value}</Tag>))}
     </div>

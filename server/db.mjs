@@ -560,7 +560,7 @@ export async function upsertWorkOrder(client, order) {
         customer_name, customer_legacy_code, customer_phone, customer_contact, customer_address,
         inspection, fault_description, estimated_fee, old_parts_handling,
         estimated_delivery_at, settlement_amount, fee_note, platform_order_no,
-        created_at, updated_at, paper_order, vehicle_is_military
+        created_at, updated_at, paper_order, vehicle_is_military, is_baiyuan_order
       ) values (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10, $11, $12, $13,
@@ -568,7 +568,7 @@ export async function upsertWorkOrder(client, order) {
         $20, $21, $22, $23, $24,
         $25::jsonb, $26, $27, $28,
         $29, $30, $31, $32,
-        $33, $34, $35::jsonb, $36
+        $33, $34, $35::jsonb, $36, $37
       )
       on conflict (id) do update set
         status = excluded.status,
@@ -584,6 +584,7 @@ export async function upsertWorkOrder(client, order) {
         shop_address = excluded.shop_address,
         shop_phone = excluded.shop_phone,
         vehicle_is_military = excluded.vehicle_is_military,
+        is_baiyuan_order = excluded.is_baiyuan_order,
         paper_order = excluded.paper_order,
         vehicle_plate = excluded.vehicle_plate,
         vehicle_vin = excluded.vehicle_vin,

@@ -63,3 +63,10 @@ test('individual technicians match orders with multiple assigned names', () => {
   assert.deepEqual(results(orders,{technicians:['李富强']}),['team']);
   assert.deepEqual(results(orders,{technicians:['未分配']}),[]);
 });
+
+test('Baiyuan filter excludes unmarked legacy orders and combines with existing filters',()=>{
+  const orders=[order('a','2026-10-22T00:00:00Z',{isBaiyuanOrder:true}),order('b','2026-10-22T00:00:00Z'),order('c','2026-10-22T00:00:00Z',{isBaiyuanOrder:true,advisor:'李四'})];
+  assert.deepEqual(results(orders,{baiyuanOnly:true}),['a','c']);
+  assert.deepEqual(results(orders,{baiyuanOnly:true,advisors:['张三']}),['a']);
+  assert.deepEqual(results(orders,{}),['a','b','c']);
+});

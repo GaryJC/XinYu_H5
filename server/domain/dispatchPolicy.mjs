@@ -9,7 +9,7 @@ import {applyIndividualAction} from './individualRepair.mjs';
 import {resolveRepairResponsibilities,transferUnfinishedResponsibilities} from './repairResponsibilities.mjs';
 import {validateProjectReassignment,reassignProjects} from './projectReassignment.mjs';
 import {validateRepairItemEdits,editRepairItems} from './repairItemEditing.mjs';
-import { validatePartsRequirement,beginPendingItems,assertPartsIssued } from './partsRequirement.mjs';
+import { validatePartsRequirement,preserveHandledParts,beginPendingItems,assertPartsIssued } from './partsRequirement.mjs';
 import { reopenRepairTask,validateReopenItems } from './repairRounds.mjs';
 import { sendReview } from './repairReview.mjs';
 import { HttpError } from '../http/HttpError.mjs';
@@ -185,18 +185,28 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
       if(input.partsRequirement?.mode==='photo')fail('请将配件整理为明细，或选择无需配件',400);
     } else requireOwner();
     stage('待开工','维修中','暂停','回审');
-    if(task.partsRequirement?.items?.some(i=>i.issuedAt||i.preparedAt)&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt)fail('本批已部分处理，不能修改申请，请先完成剩余备料');
+    if(action==='edit-parts'&&task.partsRequirement?.items?.some(i=>i.issuedAt||i.preparedAt)&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt)fail('本批已部分处理，不能修改申请，请先完成剩余备料');
     next.partsRequirement={...validatePartsRequirement(input.partsRequirement),applicantId:action==='edit-parts'?(task.partsRequirement?.applicantId||task.partsRequirement?.ownerId||task.partsRequirement?.recordedBy):actor.id,applicantName:action==='edit-parts'?(task.partsRequirement?.applicantName||task.partsRequirement?.ownerName||task.partsRequirement?.recordedName):actor.name,recordedBy:actor.id,recordedName:actor.name,recordedAt:now,revision:task.version+1};
     if(action==='edit-parts') {
       if(input.partsRequirement.referencePhotoIds===undefined&&next.partsRequirement.mode!=='none'&&task.partsRequirement?.referencePhotoIds?.length)next.partsRequirement.referencePhotoIds=[...task.partsRequirement.referencePhotoIds];
       const sourcePhotoIds=task.partsRequirement?.mode==='photo'?task.partsRequirement.photoIds:task.partsRequirement?.sourcePhotoIds;
       if(sourcePhotoIds?.length)next.partsRequirement.sourcePhotoIds=[...sourcePhotoIds];
     }
+    if(action==='record-parts'&&!task.partsRequirement?.preparedAt&&!task.partsRequirement?.issuedAt&&task.partsRequirement?.items?.some(item=>item.preparedAt||item.issuedAt)) {
+      preserveHandledParts(task.partsRequirement,next.partsRequirement);
+      const latestHandled=next.partsRequirement.items.filter(item=>item.preparedAt||item.issuedAt).reduce((a,b)=>(a.preparedAt||a.issuedAt)>(b.preparedAt||b.issuedAt)?a:b);
+      next.partsRequirement=prepareParts(next,{partsPreparation:[]},{id:latestHandled.preparedBy||latestHandled.issuedBy,name:latestHandled.preparedName||latestHandled.issuedName},people,latestHandled.preparedAt||latestHandled.issuedAt,recipientScope);
+      // Removing the remaining pending lines must not leave the repair waiting forever.
+      if(next.partsRequirement.items.every(item=>item.issuedAt)) {
+        const latest=next.partsRequirement.items.reduce((a,b)=>a.issuedAt>b.issuedAt?a:b);
+        Object.assign(next.partsRequirement,{issuedAt:latest.issuedAt,issuedBy:latest.issuedBy,issuedName:latest.issuedName});
+      }
+    }
     const partsActor=action==='edit-parts'?{id:task.technicianId||technicianIds(task)[0]||task.assignedBy}:actor;
     // After issue, this is a new batch. Previous issued quantities remain in audit events.
     next.partsRequirement.batch=(task.partsRequirement?.batch||1)+(task.partsRequirement?.issuedAt||task.partsRequirement?.preparedAt?1:0);
-    if(task.stage==='待开工' && next.partsRequirement.mode==='none') beginPendingItems(next,partsActor,now);
-    if(task.stage==='暂停' && task.resumeStage==='待开工' && next.partsRequirement.mode==='none') {
+    if(task.stage==='待开工' && (next.partsRequirement.mode==='none'||next.partsRequirement.preparedAt)) beginPendingItems(next,partsActor,now);
+    if(task.stage==='暂停' && task.resumeStage==='待开工' && (next.partsRequirement.mode==='none'||next.partsRequirement.preparedAt)) {
       beginPendingItems(next,partsActor,now);next.stage='暂停';next.resumeStage='维修中';
     }
   } else if(action==='confirm-parts' || action==='issue-parts') {

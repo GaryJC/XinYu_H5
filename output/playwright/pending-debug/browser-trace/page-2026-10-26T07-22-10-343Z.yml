@@ -1,0 +1,24 @@
+- generic [ref=f3e3]:
+  - complementary [ref=f3e4]:
+    - generic [ref=f3e6]:
+      - generic [ref=f3e13]:
+        - strong [ref=f3e14]: 修理委托
+        - generic [ref=f3e15]: 钉钉自建 H5
+      - navigation "主导航" [ref=f3e16]:
+        - button "工作台" [ref=f3e17] [cursor=pointer]
+        - button "委托开单" [ref=f3e24] [cursor=pointer]
+        - button "派工台" [ref=f3e29] [cursor=pointer]
+        - button "配件竞价" [ref=f3e34] [cursor=pointer]
+        - button "检验任务" [ref=f3e39] [cursor=pointer]
+        - button "数据看板" [ref=f3e44] [cursor=pointer]
+        - button "权限设置" [ref=f3e48] [cursor=pointer]
+      - paragraph [ref=f3e58]: 按门店与岗位权限使用委托开单、签字与归档功能。
+  - main [ref=f3e59]:
+    - generic [ref=f3e60]:
+      - generic [ref=f3e62]:
+        - heading "机动车修理委托书数字化工作台" [level=1] [ref=f3e63]
+        - paragraph [ref=f3e64]: 抚顺路店 · 派工台
+      - generic [ref=f3e65]:
+        - generic [ref=f3e66]: 已登录：测试顾问
+        - generic [ref=f3e73]: 门店管理员
+    - status [ref=f3e79]: 正在加载派工模块…

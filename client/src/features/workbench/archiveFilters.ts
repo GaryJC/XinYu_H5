@@ -2,6 +2,7 @@ import type { WorkOrder } from '../../../../shared/types';
 
 export type ArchiveFilters = {
   search: string;
+  baiyuanOnly: boolean;
   range: 'all' | 'today' | 'yesterday' | 'week' | 'custom';
   from: string;
   to: string;
@@ -10,7 +11,7 @@ export type ArchiveFilters = {
   technicians: string[];
   sort: 'updated-desc' | 'updated-asc' | 'created-desc' | 'created-asc';
 };
-export const defaultArchiveFilters = (): ArchiveFilters => ({ search: '', range: 'all', from: '', to: '', statuses: [], advisors: [], technicians: [], sort: 'updated-desc' });
+export const defaultArchiveFilters = (): ArchiveFilters => ({ search: '', baiyuanOnly: false, range: 'all', from: '', to: '', statuses: [], advisors: [], technicians: [], sort: 'updated-desc' });
 const DAY = 86400000;
 const OFFSET = 8 * 3600000;
 export const beijingDay = (time = Date.now()) => new Date(time + OFFSET).toISOString().slice(0, 10);
@@ -56,6 +57,7 @@ export function filterArchiveOrders(orders: WorkOrder[], filters: ArchiveFilters
     const created = orderTimestamp(order, 'created');
     return (!bounds || (created >= bounds[0] && created < bounds[1]))
       && (!term || [order.id, order.dispatchNo, order.vehicle.plate, order.vehicle.vin, order.vehicle.model, order.customer.name].some(value => value?.toLowerCase().includes(term)))
+      && (!filters.baiyuanOnly || order.isBaiyuanOrder === true)
       && matches(filters.statuses, displayStatus(order))
       && matches(filters.advisors, archivePerson(order.advisor))
       && (!filters.technicians.length || archiveTechnicians(order.technician).some(name => filters.technicians.includes(name))); 

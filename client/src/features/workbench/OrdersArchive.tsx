@@ -116,7 +116,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
                   <span className="archive-order-statuses">
                     <StatusChip status={workOrderDisplayStatus(order)} />
                     <OrderLegacySyncStatus order={order} />
-                    {order.paperOrder && <Tag color="orange">纸质委托书</Tag>}
+                    {order.isBaiyuanOrder && <Tag color="blue">百援</Tag>}{order.paperOrder && <Tag color="orange">纸质委托书</Tag>}
                   </span>
                 </div>
                 <span className="archive-order-owner">{order.customer.name || "未登记车主"}</span>
@@ -150,7 +150,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
             { title: "车主", render: (_, order) => order.customer.name || "-" },
             { title: "服务顾问", dataIndex: "advisor" },
             { title: "维修技师", dataIndex: "technician" },
-            { title: "业务状态", render: (_, order) => <><StatusChip status={workOrderDisplayStatus(order)} />{order.paperOrder && <Tag color="orange">纸质委托书</Tag>}</> },
+            { title: "业务状态", render: (_, order) => <><StatusChip status={workOrderDisplayStatus(order)} />{order.isBaiyuanOrder && <Tag color="blue">百援</Tag>}{order.paperOrder && <Tag color="orange">纸质委托书</Tag>}</> },
             { title: "润丰同步", render: (_, order) => <OrderLegacySyncStatus order={order} /> },
             { title: "金额", render: (_, order) => order.settlementAmount || order.estimatedFee ? `¥${order.settlementAmount || order.estimatedFee}` : "-" },
             { title: "创建时间", render: (_, order) => archiveTimeLabel(order, "created"), width: 145 },

@@ -226,3 +226,34 @@ for(const order of [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]]) {
   }
  });
 }
+
+
+test('technician edits submitted pending parts while preserving handled lines and other workers',()=>{
+ const original=act(base(),a,'record-parts',{partsRequirement:{mode:'list',items:[{name:'滤芯',quantity:1,unit:'个'},{name:'耗材',quantity:2,unit:'片'}]}});
+ const shared=act(original,b,'record-parts',{partsRequirement:parts('雨刮')});
+ const prepared=act(shared,w,'confirm-parts',{partsOwnerId:'a',partsPreparation:[{index:0,recipientId:'a'}]});
+ const before=structuredClone(prepared),saved=prepared.partsRequests.find(p=>p.ownerId==='a');
+ const edited=act(prepared,a,'record-parts',{partsRequirement:{mode:'list',items:[{name:'新配件',quantity:3,unit:'个'}, {...saved.items[0],preparedBy:'forged',recipientId:'b'}]}});
+ const result=edited.partsRequests.find(p=>p.ownerId==='a');
+ assert.deepEqual(prepared,before);
+ assert.deepEqual(result.items[1],saved.items[0]);assert.equal(result.items[0].preparedAt,undefined);
+ assert.equal(result.preparedAt,undefined);assert.equal(result.batch,saved.batch);
+ assert.deepEqual(edited.partsRequests.find(p=>p.ownerId==='b'),prepared.partsRequests.find(p=>p.ownerId==='b'));
+ assert.deepEqual(edited.items,prepared.items);
+ for(const items of [[],[{...saved.items[0],quantity:9}], [{...saved.items[0],name:'替换滤芯'}]]) {
+   assert.throws(()=>act(prepared,a,'record-parts',{partsRequirement:{mode:items.length?'list':'none',items}}),/已备齐或已出库/);
+ }
+ assert.throws(()=>act(prepared,b,'record-parts',{partsOwnerId:'a',partsRequirement:parts('覆盖')}),e=>e.status===403);
+ assert.throws(()=>applyDispatchAction(edited,{action:'record-parts',expectedVersion:prepared.version,requestId:'stale-edit',partsRequirement:parts('旧编辑')},a,people),e=>e.status===409);
+});
+
+test('removing remaining pending parts completes preparation without forging warehouse audit',()=>{
+ const initial={...base(),stage:'待开工',items:base().items.map(i=>({...i,status:'待开工'}))};
+ const requested=act(initial,a,'record-parts',{partsRequirement:{mode:'list',items:[{name:'滤芯',quantity:1,unit:'个'},{name:'耗材',quantity:2,unit:'片'}]}});
+ const prepared=act(requested,w,'confirm-parts',{partsOwnerId:'a',partsPreparation:[{index:0,recipientId:'a'}]});
+ const saved=prepared.partsRequests.find(p=>p.ownerId==='a');
+ const edited=act(prepared,a,'record-parts',{partsRequirement:{mode:'list',items:[saved.items[0]]}});
+ const result=edited.partsRequests.find(p=>p.ownerId==='a');
+ assert.equal(result.preparedBy,w.id);assert.equal(result.preparedAt,saved.items[0].preparedAt);
+ assert.equal(result.issuedAt,undefined);assert.equal(edited.items[0].status,'维修中');assert.equal(edited.items[1].status,'待开工');
+});

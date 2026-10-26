@@ -39,13 +39,15 @@ export function workOrderValues(order) {
     parseDate(order.createdAt),
     parseDate(order.updatedAt),
     order.paperOrder ? JSON.stringify(order.paperOrder) : null,
-    order.vehicle?.isMilitary === true
+    order.vehicle?.isMilitary === true,
+    order.isBaiyuanOrder === true
   ];
 }
 
 export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecords, syncRecords, outboundOrders, settlements, files = []) {
   return {
     customerSignatureReview: row.customer_signature_review || undefined,
+    isBaiyuanOrder: row.is_baiyuan_order === true,
     paperOrder: row.paper_order || undefined,
     id: row.id,
     dispatchNo: row.dispatch_no || "",

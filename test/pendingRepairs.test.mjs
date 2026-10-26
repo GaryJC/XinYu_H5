@@ -23,3 +23,25 @@ test('unassigned pending rows are valid for Runfeng but finished work still requ
  assert.throws(()=>validatePendingText('','项目名称'),/不能为空/);
  assert.throws(()=>validateWritebackSnapshot({...snapshot,items:[{...snapshot.items[0],name:'字'.repeat(101)}]}),/字段长度/);
 });
+
+test('progress follows actual items across rounds without persisting customer state changes',async()=>{
+ const {pendingRepairProgress}=await import('../server/domain/pendingRepairs.mjs');
+ const items=[pending(-1,'approved',true),pending(-2,'approved',true),pending(-3,'approved',true),pending(-4)];
+ const rounds=[{round:0,task:{items:[{id:-1,status:'已完工'},{id:-2,status:'已完工'}]}}];
+ const current={repairRound:1,stage:'待接单',items:[{id:-2,status:'待开工'}]};
+ const result=pendingRepairProgress(items,current,rounds);
+ assert.equal(result[0].progress,'检验通过');assert.equal(result[0].repairRound,0);
+ assert.equal(result[1].progress,'待接单');assert.equal(result[1].repairRound,1);
+ assert.equal(result[2].progress,'进度待核对');assert.equal(result[3].progress,undefined);
+ assert.ok(items.every(item=>item.progress===undefined));
+ for(const [status,stage,expected] of [['维修中','维修中','维修中'],['待检验','维修中','待检验'],['已完工','暂停','检验通过'],['维修中','暂停','暂停']]) {
+  assert.equal(pendingRepairProgress(items,{...current,stage,items:[{id:-2,status}]},rounds)[1].progress,expected);
+ }
+});
+test('same-name pending projects remain distinct while approved completed IDs replace placeholders',()=>{
+ const p=[{...pending(-1,'approved',true),name:'同名项目'},{...pending(-2),name:'同名项目'}];
+ const result=mergePendingWriteback([{id:1,name:'原项目',status:'已完工'},{id:-1,name:'同名项目',status:'已完工'}],p);
+ assert.equal(result.length,3);assert.equal(new Set(result.map(i=>i.id)).size,3);
+ assert.equal(result.find(i=>i.id===-1).pendingConfirmation,undefined);
+ assert.equal(result.find(i=>i.id===-2).name,'【待定】同名项目');
+});

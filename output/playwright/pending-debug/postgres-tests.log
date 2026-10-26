@@ -1,0 +1,201 @@
+TAP version 13
+# Subtest: dispatch PostgreSQL migrations, concurrency, HTTP permissions and notification leases
+    # Subtest: migration preserves ambiguous identities and never invents historical completion times
+    ok 1 - migration preserves ambiguous identities and never invents historical completion times
+      ---
+      duration_ms: 15.179208
+      ...
+    # Subtest: draft preselection activates only after signature approval, retains actor and is atomic with Runfeng submission
+    ok 2 - draft preselection activates only after signature approval, retains actor and is atomic with Runfeng submission
+      ---
+      duration_ms: 357.596708
+      ...
+    # Subtest: unsigned edits roll back atomically and serialize against customer signing
+    ok 3 - unsigned edits roll back atomically and serialize against customer signing
+      ---
+      duration_ms: 189.972792
+      ...
+    # Subtest: warehouse applications persist confirmation, concurrency, notifications and revision history
+    ok 4 - warehouse applications persist confirmation, concurrency, notifications and revision history
+      ---
+      duration_ms: 119.775
+      ...
+    # Subtest: warehouse edits are idempotent before preparation and reject completed batches
+    ok 5 - warehouse edits are idempotent before preparation and reject completed batches
+      ---
+      duration_ms: 82.344542
+      ...
+    # Subtest: only one of two concurrent initial assignments commits; retry is idempotent
+    ok 6 - only one of two concurrent initial assignments commits; retry is idempotent
+      ---
+      duration_ms: 22.574416
+      ...
+    # Subtest: start is blocked until acceptance; pause and reassignment preserve item history
+    ok 7 - start is blocked until acceptance; pause and reassignment preserve item history
+      ---
+      duration_ms: 63.014084
+      ...
+    # Subtest: inspection partial rejection, completion totals and settlement remain distinct
+    ok 8 - inspection partial rejection, completion totals and settlement remain distinct
+      ---
+      duration_ms: 98.144458
+      ...
+    # Subtest: notification claims do not overlap and stale workers cannot acknowledge a new lease
+    ok 9 - notification claims do not overlap and stale workers cannot acknowledge a new lease
+      ---
+      duration_ms: 49.63
+      ...
+    # Subtest: cross-store access and attachment ownership are enforced after reassignment
+    ok 10 - cross-store access and attachment ownership are enforced after reassignment
+      ---
+      duration_ms: 4.391041
+      ...
+    # Subtest: old HTTP transitions cannot bypass inspection and role/list routes reject outsiders
+    ok 11 - old HTTP transitions cannot bypass inspection and role/list routes reject outsiders
+      ---
+      duration_ms: 432.884958
+      ...
+    # Subtest: platform sync does not reset a dispatched repair item
+    ok 12 - platform sync does not reset a dispatched repair item
+      ---
+      duration_ms: 49.213083
+      ...
+    # Subtest: multiple employees share visibility, notifications and one completed order
+    ok 13 - multiple employees share visibility, notifications and one completed order
+      ---
+      duration_ms: 156.9355
+      ...
+    # Subtest: team pause, preparation, concurrent submissions and idempotent retry persist independently
+    ok 14 - team pause, preparation, concurrent submissions and idempotent retry persist independently
+      ---
+      duration_ms: 142.5975
+      ...
+    # Subtest: draft team and outsourced plans round-trip and activate without a fictional technician
+    ok 15 - draft team and outsourced plans round-trip and activate without a fictional technician
+      ---
+      duration_ms: 32.190542
+      ...
+    # Subtest: scheduler project edits and selective reassignment persist owners, audit and affected notifications atomically
+    ok 16 - scheduler project edits and selective reassignment persist owners, audit and affected notifications atomically
+      ---
+      duration_ms: 63.781375
+      ...
+    # Subtest: project deletion commits rows, audit and owner notifications together, with idempotency and rollback
+    ok 17 - project deletion commits rows, audit and owner notifications together, with idempotency and rollback
+      ---
+      duration_ms: 51.321625
+      ...
+    # Subtest: repair project edits retain prices and IDs and roll back together with rejected completion
+    ok 18 - repair project edits retain prices and IDs and roll back together with rejected completion
+      ---
+      duration_ms: 65.995
+      ...
+    # Subtest: dispatch board includes every open order and filters workflow stages
+    ok 19 - dispatch board includes every open order and filters workflow stages
+      ---
+      duration_ms: 79.7935
+      ...
+    # Subtest: whole repair photo deduplication, queue fanout and concurrent inspection claim
+    ok 20 - whole repair photo deduplication, queue fanout and concurrent inspection claim
+      ---
+      duration_ms: 119.928209
+      ...
+    # Subtest: acceptance requires parts, starts repair atomically and validates handwritten photo scope
+    ok 21 - acceptance requires parts, starts repair atomically and validates handwritten photo scope
+      ---
+      duration_ms: 105.254333
+      ...
+    # Subtest: roster failures retain submitted tasks and empty audiences are explicit
+    ok 22 - roster failures retain submitted tasks and empty audiences are explicit
+      ---
+      duration_ms: 73.911917
+      ...
+    # Subtest: my repair category counts match each list and exclude other technicians
+    ok 23 - my repair category counts match each list and exclude other technicians
+      ---
+      duration_ms: 9.73775
+      ...
+    # Subtest: refusal, pause and submission notify all same-store dispatchers and managers exactly once
+    ok 24 - refusal, pause and submission notify all same-store dispatchers and managers exactly once
+      ---
+      duration_ms: 274.264291
+      ...
+    # Subtest: three deadline batches deduplicate across concurrent workers, recipients and rescheduling
+    ok 25 - three deadline batches deduplicate across concurrent workers, recipients and rescheduling
+      ---
+      duration_ms: 103.543125
+      ...
+    # Subtest: inspection writebacks are atomic, immutable, idempotent and recover after failure
+    ok 26 - inspection writebacks are atomic, immutable, idempotent and recover after failure
+      ---
+      duration_ms: 246.135083
+      ...
+    # Subtest: team inspection ownership, review returns and personal photo locks survive database reload
+    ok 27 - team inspection ownership, review returns and personal photo locks survive database reload
+      ---
+      duration_ms: 196.554792
+      ...
+    # Subtest: single-worker submissions preserve claims and reject legacy inspector replacement
+    ok 28 - single-worker submissions preserve claims and reject legacy inspector replacement
+      ---
+      duration_ms: 157.083209
+      ...
+    # Subtest: new single-worker inspection batches clear all previous claim fields
+    ok 29 - new single-worker inspection batches clear all previous claim fields
+      ---
+      duration_ms: 167.806166
+      ...
+    # Subtest: unassigned worker photo removal and reassignment of a paused retained worker persist
+    ok 30 - unassigned worker photo removal and reassignment of a paused retained worker persist
+      ---
+      duration_ms: 79.323541
+      ...
+    # Subtest: project handovers discard departed pauses and preserve the retained worker pause
+    ok 31 - project handovers discard departed pauses and preserve the retained worker pause
+      ---
+      duration_ms: 192.940125
+      ...
+    # Subtest: review after whole-task handover restores historical owners and their notifications
+    ok 32 - review after whole-task handover restores historical owners and their notifications
+      ---
+      duration_ms: 188.291708
+      ...
+    # Subtest: delayed grouped and individual pickup notices expire after issuance or inspection
+    ok 33 - delayed grouped and individual pickup notices expire after issuance or inspection
+      ---
+      duration_ms: 224.19775
+      ...
+    # Subtest: implicit personal issue keeps the prepared recipient in persisted items and notifications
+    ok 34 - implicit personal issue keeps the prepared recipient in persisted items and notifications
+      ---
+      duration_ms: 57.910583
+      ...
+    # Subtest: legacy item completion photos remain editable until personal submission is recorded
+    ok 35 - legacy item completion photos remain editable until personal submission is recorded
+      ---
+      duration_ms: 60.982125
+      ...
+    # Subtest: settlement assignments reopen work and preserve completed items across original and later rounds
+    ok 36 - settlement assignments reopen work and preserve completed items across original and later rounds
+      ---
+      duration_ms: 798.911
+      ...
+    1..36
+ok 1 - dispatch PostgreSQL migrations, concurrency, HTTP permissions and notification leases
+  ---
+  duration_ms: 5674.653541
+  ...
+# Subtest: pending repairs persist, enforce ownership, schedule once, and preserve closed-order followups
+ok 2 - pending repairs persist, enforce ownership, schedule once, and preserve closed-order followups
+  ---
+  duration_ms: 1091.601
+  ...
+1..2
+# tests 38
+# suites 0
+# pass 38
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5745.923166

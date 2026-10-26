@@ -71,9 +71,9 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
     {task.faultDescription?<section><h3>故障描述</h3><p>{task.faultDescription}</p></section>:null}
     {task.note?<section><h3>派工备注</h3><p>{task.note}</p></section>:null}
     <PartsRequirementSummary value={task.partsRequirement}/>
+    {editable&&!ownDone&&['待开工','维修中','暂停','回审'].includes(task.stage)?<Button block disabled={c.busy||blocked} onClick={()=>setPartsDialog(true)}>{(task.partsRequirement?.issuedAt||task.partsRequirement?.preparedAt)?'追加配件申请':task.partsRequirement?'编辑所需配件':'向仓库申请领料'}</Button>:null}
     <Collapse items={[{key:'parts-history',label:'配件申请与备料记录',children:partsHistoryEvents(c.detail!.events).filter(e=>['accept','record-parts','edit-parts','confirm-parts','issue-parts'].includes(e.action)&&e.detail.partsRequirement).map(e=><section key={e.id}><p>{displayTime(e.at)} · {e.actorName} · {dispatchEventLabel(e)}</p><PartsRequirementSummary value={e.detail.partsRequirement}/></section>)}]}/>
 
-    {editable&&!ownDone&&!(task.partsRequirement?.items.some(i=>i.issuedAt||i.preparedAt)&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt)&&['待开工','维修中','暂停','回审'].includes(task.stage)?<Button block disabled={c.busy||blocked} onClick={()=>setPartsDialog(true)}>{(task.partsRequirement?.issuedAt||task.partsRequirement?.preparedAt)?"追加配件申请":"向仓库申请领料"}</Button>:null}
     {individual?<Collapse items={[{key:'team',label:'全单项目进度',children:wholeTask.items.map(item=><p key={item.id}>{item.name} · {item.responsibleName||'未分配'} · {item.status}</p>)}]}/>:null}
     <RepairPhotoPanel controller={c} ownerId={individual?user.id:undefined} editable={canPhoto} onBlocked={photoBlocked}/>
     <Collapse items={[{key:"sheet",label:"完整派工单与接车照片",children:<DispatchSheetSummary task={task} files={c.detail!.files}/>}]} />

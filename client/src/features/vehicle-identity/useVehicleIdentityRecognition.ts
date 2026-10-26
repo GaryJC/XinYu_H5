@@ -204,17 +204,18 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
 
 export function applyVehicleLookup(draft: WorkOrderDraft, history: VehicleHistoryLookupResult) {
   if (history.found && history.vehicle) {
-    const organizationName = history.vehicle.organization?.name || "";
+    const organizationName = history.vehicle.organization?.name?.trim() || "";
+    const model = history.vehicle.model?.trim() || "";
     return {
       ...draft,
       vehicle: {
         ...draft.vehicle,
         plate: history.vehicle.plate || draft.vehicle.plate,
         vin: history.vehicle.vin || draft.vehicle.vin,
-        model: draft.vehicle.modelLegacyCode ? draft.vehicle.model : history.vehicle.model || draft.vehicle.model,
-        modelLegacyCode: draft.vehicle.modelLegacyCode || history.vehicle.modelLegacyCode || ""
+        model: model || draft.vehicle.model,
+        modelLegacyCode: model ? history.vehicle.modelLegacyCode || "" : draft.vehicle.modelLegacyCode || ""
       },
-      customer: organizationName && !draft.customer.legacyCode
+      customer: organizationName
         ? {
             ...draft.customer,
             name: organizationName,

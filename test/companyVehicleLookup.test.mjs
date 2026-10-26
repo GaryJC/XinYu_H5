@@ -28,6 +28,15 @@ test("company vehicle lookup matches a saved vehicle by VIN", async () => {
   assert.equal(result.vehicle.plate, "沪AG12345");
 });
 
+test("plate match returns saved Runfeng references despite differing license OCR values", async () => {
+  const result = await lookupVehicleInCompanySystem({ plate: "辽A12345", model: "行驶证车型", owner: "行驶证所有人" });
+  assert.equal(result.found, true);
+  assert.equal(result.vehicle.model, "大众 帕萨特 2023款");
+  assert.equal(result.vehicle.modelLegacyCode, "DZPST");
+  assert.deepEqual(result.vehicle.organization, { code: "GR", name: "个人" });
+  assert.equal(result.references, undefined);
+});
+
 test("company vehicle lookup returns a clean miss for a new vehicle", async () => {
   const result = await lookupVehicleInCompanySystem({ plate: "辽B00001" });
   assert.deepEqual(result, {

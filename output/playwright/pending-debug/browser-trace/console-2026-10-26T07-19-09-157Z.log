@@ -1,0 +1,5 @@
+[     412ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:60938/api/files/6da809ab-979e-4cf4-8c48-add5eb3a398d/content?size=thumbnail:0
+[     412ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:60938/api/files/c528e5f9-f06e-47d8-939e-add7b2240811/content?size=thumbnail:0
+[   24673ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:60938/api/files/c528e5f9-f06e-47d8-939e-add7b2240811/content?size=thumbnail:0
+[   24673ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:60938/api/files/02709408-f163-4cc4-af9a-2a0a9be5c590/content?size=thumbnail:0
+[   24673ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:60938/api/files/6da809ab-979e-4cf4-8c48-add5eb3a398d/content?size=thumbnail:0

@@ -1,0 +1,4 @@
+Round 0: written 2 projects to both temporary documents
+Round 1: written 2 projects to both temporary documents
+Round 1: written 2 projects to both temporary documents
+PASS: browser -> PostgreSQL queue -> SQL Server temporary documents -> success status; retry idempotent

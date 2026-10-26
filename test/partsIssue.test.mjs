@@ -32,7 +32,7 @@ test('rejects duplicate, already issued, invalid, unauthorized and stale selecti
  assert.throws(()=>act(first,{action:'edit-parts',partsRequirement:{mode:'none'}}),/部分处理/);
  const separate=act(first,{action:'record-parts',partsRequirement:{mode:'none'}},a);assert.deepEqual(separate.partsRequirement,first.partsRequirement);
  const personal={...first,partsRequirement:undefined,partsRequests:[{...first.partsRequirement,ownerId:'a',ownerName:a.name}]};
- assert.throws(()=>act(personal,{action:'record-parts',partsRequirement:{mode:'none'}},a),/部分处理/);
+ assert.throws(()=>act(personal,{action:'record-parts',partsRequirement:{mode:'none'}},a),/已备齐或已出库/);
 });
 test('implicit personal batch issue preserves the recipients selected during preparation',()=>{
  const original=task();delete original.partsRequirement;
@@ -53,4 +53,17 @@ test('implicit issue rejects a prepared recipient removed from the team instead 
  const before=structuredClone(original);
  assert.throws(()=>act(original,{partsOwnerId:'a'}),e=>e.status===400);
  assert.deepEqual(original,before);
+});
+
+
+test('editing pending lines preserves partial issue and can remove the last unneeded line',()=>{
+ const original=task();original.partsRequests=[{...parts(),ownerId:'a',ownerName:a.name}];delete original.partsRequirement;
+ const issued=act(original,{partsOwnerId:'a',partsIssue:[{index:0,recipientId:'a'}]});
+ const saved=issued.partsRequests[0];
+ const edited=act(issued,{action:'record-parts',partsRequirement:{mode:'list',items:[saved.items[0],{name:'新耗材',quantity:4,unit:'片',issuedAt:'forged'}]}},a);
+ assert.deepEqual(edited.partsRequests[0].items[0],saved.items[0]);assert.equal(edited.partsRequests[0].items[1].issuedAt,undefined);
+ assert.equal(edited.partsRequests[0].issuedAt,undefined);
+ const completed=act(edited,{action:'record-parts',partsRequirement:{mode:'list',items:[saved.items[0]]}},a);
+ assert.equal(completed.partsRequests[0].issuedAt,saved.items[0].issuedAt);assert.equal(completed.partsRequests[0].issuedBy,w.id);
+ assert.equal(completed.items[0].status,'维修中');assert.equal(completed.items[1].status,'待开工');
 });

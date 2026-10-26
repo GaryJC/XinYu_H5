@@ -1,0 +1,135 @@
+TAP version 13
+# Subtest: first pull includes pending items, omits declined items, and never mutates original names
+ok 1 - first pull includes pending items, omits declined items, and never mutates original names
+  ---
+  duration_ms: 1.846834
+  ...
+# Subtest: writeback removes prefix only for approved and inspected items, preserves all other pending rows
+ok 2 - writeback removes prefix only for approved and inspected items, preserves all other pending rows
+  ---
+  duration_ms: 0.177042
+  ...
+# Subtest: unassigned pending rows are valid for Runfeng but finished work still requires a bound worker
+ok 3 - unassigned pending rows are valid for Runfeng but finished work still requires a bound worker
+  ---
+  duration_ms: 0.342833
+  ...
+# Subtest: progress follows actual items across rounds without persisting customer state changes
+ok 4 - progress follows actual items across rounds without persisting customer state changes
+  ---
+  duration_ms: 0.262
+  ...
+# Subtest: same-name pending projects remain distinct while approved completed IDs replace placeholders
+ok 5 - same-name pending projects remain distinct while approved completed IDs replace placeholders
+  ---
+  duration_ms: 0.082833
+  ...
+# Subtest: multi technician completion requires each owner and rejects unassigned people
+ok 6 - multi technician completion requires each owner and rejects unassigned people
+  ---
+  duration_ms: 3.093917
+  ...
+# Subtest: single technician defaults ownership and inspector locks cannot change the owner
+ok 7 - single technician defaults ownership and inspector locks cannot change the owner
+  ---
+  duration_ms: 0.173333
+  ...
+# Subtest: snapshot uses bound employee names and remains immutable after personnel edits
+ok 8 - snapshot uses bound employee names and remains immutable after personnel edits
+  ---
+  duration_ms: 0.38875
+  ...
+# Subtest: direct replacement only deletes project rows and writes employee solely to internal document
+ok 9 - direct replacement only deletes project rows and writes employee solely to internal document
+  ---
+  duration_ms: 0.730625
+  ...
+# Subtest: receipt replay returns without deleting rows; mismatched replay is rejected
+ok 10 - receipt replay returns without deleting rows; mismatched replay is rejected
+  ---
+  duration_ms: 0.329916
+  ...
+# Subtest: SQL insertion failure rolls back the transaction and no success receipt is recorded
+ok 11 - SQL insertion failure rolls back the transaction and no success receipt is recorded
+  ---
+  duration_ms: 0.303459
+  ...
+# Subtest: wrong vehicle, department, identifiers, missing document or settled headers block replacement
+ok 12 - wrong vehicle, department, identifiers, missing document or settled headers block replacement
+  ---
+  duration_ms: 0.245916
+  ...
+# Subtest: downstream business records prevent any delete
+ok 13 - downstream business records prevent any delete
+  ---
+  duration_ms: 0.180834
+  ...
+# Subtest: single technician reassignment transfers unfinished ownership before acceptance
+ok 14 - single technician reassignment transfers unfinished ownership before acceptance
+  ---
+  duration_ms: 0.577833
+  ...
+# Subtest: dispatch allowlist permits only the explicitly selected test order
+ok 15 - dispatch allowlist permits only the explicitly selected test order
+  ---
+  duration_ms: 0.360958
+  ...
+# Subtest: guaranteed legacy field overflow is rejected before an immutable snapshot is accepted
+ok 16 - guaranteed legacy field overflow is rejected before an immutable snapshot is accepted
+  ---
+  duration_ms: 0.139792
+  ...
+# Subtest: code page preflight only issues parameterized validation SQL and propagates rejections
+ok 17 - code page preflight only issues parameterized validation SQL and propagates rejections
+  ---
+  duration_ms: 0.282958
+  ...
+# Subtest: dispatch identity ignores misfilled or missing ACK reid and writes canonical receipt hashes
+ok 18 - dispatch identity ignores misfilled or missing ACK reid and writes canonical receipt hashes
+  ---
+  duration_ms: 0.890959
+  ...
+# Subtest: canonical and legacy external receipts survive ACK correction but reject changed content
+ok 19 - canonical and legacy external receipts survive ACK correction but reject changed content
+  ---
+  duration_ms: 0.442458
+  ...
+# Subtest: either document with entered project values blocks all mutations before deletion
+ok 20 - either document with entered project values blocks all mutations before deletion
+  ---
+  duration_ms: 0.465667
+  ...
+# Subtest: protected projects query uses per-row nonzero checks and fails closed on unreadable result
+ok 21 - protected projects query uses per-row nonzero checks and fails closed on unreadable result
+  ---
+  duration_ms: 0.282292
+  ...
+# Subtest: audited or settled external document blocks the whole writeback
+ok 22 - audited or settled external document blocks the whole writeback
+  ---
+  duration_ms: 0.261958
+  ...
+# Subtest: only administrators may acknowledge a failed writeback as manually registered
+ok 23 - only administrators may acknowledge a failed writeback as manually registered
+  ---
+  duration_ms: 0.9875
+  ...
+# Subtest: manual recovery locks the exact failed job, preserves its snapshot and writes an audit
+ok 24 - manual recovery locks the exact failed job, preserves its snapshot and writes an audit
+  ---
+  duration_ms: 0.488459
+  ...
+# Subtest: recovery rejects incomplete input and any job that is no longer failed
+ok 25 - recovery rejects incomplete input and any job that is no longer failed
+  ---
+  duration_ms: 0.1695
+  ...
+1..25
+# tests 25
+# suites 0
+# pass 25
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 157.488375

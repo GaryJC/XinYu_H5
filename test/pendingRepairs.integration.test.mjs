@@ -107,5 +107,67 @@ test('pending repairs persist, enforce ownership, schedule once, and preserve cl
   assert.equal(await validateAddedRepairRecipient(outsourcedNotices[0],manager,pool),true);
 
 
+  {
+  // Full workflow: original completion, customer approval, partial inspection,
+  // second additional round, stable IDs and immutable writeback snapshots.
+  process.env.RUNFENG_REPAIR_WRITEBACK_ENABLED='false';
+  const orderId='p-lifecycle';
+  await pool.query("insert into work_orders(id,status,advisor,technician,inspector,shop_id,old_parts_handling,vehicle_plate,arrival_date) values($1,'已委托','顾问','待派工','待检验','shop-hq','客户带走','测B99999','2026-10-26')",[orderId]);
+  for(const itemId of [1,2])await pool.query("insert into repair_items(order_id,client_item_id,item_no,name,status) values($1,$2::bigint,$2::integer,$3,'待派工')",[orderId,itemId,`原项目${itemId}`]);
+  const {executeDispatchAction}=await import('../server/services/dispatchService.mjs');
+  const {getDispatchTask}=await import('../server/repositories/dispatchRepository.mjs');
+  const list=()=>s.pendingRepairList(manager,orderId);
+  const pendingCommand=async input=>s.pendingRepairCommand(manager,orderId,{expectedVersion:(await list()).version,requestId:randomUUID(),...input});
+  const run=async(actor,action,extra={})=>{
+   const task=await getDispatchTask(pool,orderId,manager);
+   const input={action,expectedVersion:task.version,requestId:randomUUID(),...extra};
+   await executeDispatchAction(actor,orderId,input);return input;
+  };
+  const photo=async round=>pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by,repair_round) values($1,$2,'repair_progress_photo','local','','fixture','image/png',8,$3,$4)",[randomUUID(),orderId,tech.id,round]);
+  const jobs=async()=> (await pool.query('select snapshot from repair_writebacks where order_id=$1 order by id',[orderId])).rows.map(r=>r.snapshot);
+  let pendingList=await pendingCommand({action:'add',name:'同名追加项目',reason:'首次开单待确认'});
+  const first=pendingList.items.at(-1);
+  const {buildLegacySyncPayload}=await import('../server/repositories/legacySyncOutboxRepository.mjs');
+  const initialPayload=buildLegacySyncPayload({eventId:'fixture',revision:1,eventType:'created',order:{id:orderId,pendingRepairs:pendingList.items}});
+  assert.equal(initialPayload.order.repairItems[0].name,'【待定】同名追加项目');
+  pendingList=await pendingCommand({action:'add',name:'同名追加项目',reason:'开单后新增'});const second=pendingList.items.at(-1);
+  pendingList=await pendingCommand({action:'add',name:'另一轮追加',reason:'后续再确认'});const third=pendingList.items.at(-1);
+  pendingList=await pendingCommand({action:'add',name:'本次不修',reason:'未确认'});const declined=pendingList.items.at(-1);
+  await pendingCommand({action:'decline',id:declined.id});
+  assert.equal((await jobs()).length,0);
+  const dueAt=new Date(Date.now()+86400000).toISOString();
+  await run(manager,'assign',{technicianIds:[tech.id],dueAt});
+  await run(tech,'accept',{partsRequirement:{mode:'none'}});await photo(0);
+  await run(tech,'submit-order');await run(manager,'claim-inspection');await run(manager,'inspect');
+  assert.equal((await pool.query('select status from work_orders where id=$1',[orderId])).rows[0].status,'待结算');
+  const initialJobs=await jobs();assert.equal(initialJobs.length,1);
+  assert.equal(initialJobs[0].items.length,5);assert.ok(!initialJobs[0].items.some(i=>i.id===declined.itemId));
+  await pendingCommand({action:'approve-and-schedule',id:first.id,technicianId:tech.id,dueAt});
+  assert.equal((await list()).items.find(i=>i.id===first.id).progress,'待接单');
+  await pendingCommand({action:'approve-and-schedule',id:second.id,technicianId:tech.id});
+  await run(tech,'accept',{partsRequirement:{mode:'none'}});await photo(1);
+  assert.equal((await list()).items.find(i=>i.id===first.id).progress,'维修中');
+  await run(tech,'submit-order');await run(manager,'claim-inspection');
+  await run(manager,'inspect',{rejectedItemIds:[second.itemId],reason:'需要补修'});
+  assert.equal((await jobs()).length,1,'Partial inspection must not enqueue a replacement');
+  assert.equal((await list()).items.find(i=>i.id===first.id).progress,'检验通过');
+  const current=await getDispatchTask(pool,orderId,manager);
+  await assert.rejects(()=>run(manager,'edit-repair-items',{repairItems:current.items.map(i=>({id:i.id,name:i.id===first.itemId?'篡改已通过项目':i.name,responsibleId:i.responsibleId}))}),/不可修改/);
+  await run(tech,'start-order');await run(tech,'submit-order');await run(manager,'claim-inspection');
+  const passed=await run(manager,'inspect');await executeDispatchAction(manager,orderId,passed);
+  const after=await jobs();assert.equal(after.length,2);assert.deepEqual(after[0],initialJobs[0]);
+  assert.equal(after[1].items.length,5);assert.equal(new Set(after[1].items.map(i=>i.id)).size,5);
+  for(const p of [first,second])assert.equal(after[1].items.find(i=>i.id===p.itemId).name,'同名追加项目');
+  assert.equal(after[1].items.find(i=>i.id===third.itemId).name,'【待定】另一轮追加');
+  await pendingCommand({action:'approve-and-schedule',id:third.id,technicianId:tech.id,dueAt});
+  assert.equal((await list()).items.find(i=>i.id===first.id).progress,'检验通过','Earlier round progress survives the next additional round');
+  await run(tech,'accept',{partsRequirement:{mode:'none'}});await photo(2);
+  await run(tech,'submit-order');await run(manager,'claim-inspection');await run(manager,'inspect');
+  const finalJobs=await jobs();assert.equal(finalJobs.length,3);
+  assert.equal(finalJobs[2].items.length,5);assert.ok(finalJobs[2].items.every(i=>!i.pendingConfirmation));
+  assert.equal((await list()).items.find(i=>i.id===third.id).progress,'检验通过');
+  }
+
+
  }finally{if(pool)await pool.end();await admin.query(`drop database if exists "${name}" with (force)`);await admin.end();}
 });

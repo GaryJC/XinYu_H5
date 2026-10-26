@@ -1,0 +1,129 @@
+- generic [ref=f1e3]:
+  - complementary [ref=f1e4]:
+    - generic [ref=f1e6]:
+      - generic [ref=f1e13]:
+        - strong [ref=f1e14]: 修理委托
+        - generic [ref=f1e15]: 钉钉自建 H5
+      - navigation "主导航" [ref=f1e16]:
+        - button "工作台" [ref=f1e17] [cursor=pointer]
+        - button "委托开单" [ref=f1e24] [cursor=pointer]
+        - button "派工台" [ref=f1e29] [cursor=pointer]
+      - paragraph [ref=f1e39]: 按门店与岗位权限使用委托开单、签字与归档功能。
+  - main [ref=f1e40]:
+    - generic [ref=f1e41]:
+      - generic [ref=f1e43]:
+        - heading "机动车修理委托书数字化工作台" [level=1] [ref=f1e44]
+        - paragraph [ref=f1e45]: 0 张委托单 · 抚顺路店 · 新建草稿
+      - generic [ref=f1e46]:
+        - generic [ref=f1e47]: 钉钉组织已同步
+        - generic [ref=f1e54]: 未登录
+    - generic [ref=f1e60]: 全部待办
+    - region "全部待办统计" [ref=f1e61]:
+      - generic [ref=f1e64]:
+        - generic [ref=f1e65]: 待客户签字
+        - generic [ref=f1e67]:
+          - generic [ref=f1e68]: "0"
+          - generic [ref=f1e69]: 较昨日 +0
+      - generic [ref=f1e73]:
+        - generic [ref=f1e74]: 待派工
+        - generic [ref=f1e76]:
+          - generic [ref=f1e77]: "0"
+          - generic [ref=f1e78]: 较昨日 +0
+      - generic [ref=f1e82]:
+        - generic [ref=f1e83]: 维修中
+        - generic [ref=f1e85]:
+          - generic [ref=f1e86]: "0"
+          - generic [ref=f1e87]: 较昨日 +0
+      - generic [ref=f1e91]:
+        - generic [ref=f1e92]: 待检验
+        - generic [ref=f1e94]:
+          - generic [ref=f1e95]: "0"
+          - generic [ref=f1e96]: 较昨日 +0
+    - generic [ref=f1e98]:
+      - generic [ref=f1e99]:
+        - strong [ref=f1e100]: 服务顾问工作区
+        - generic [ref=f1e101]: 查看本店委托单、维修任务和维修工负荷
+      - paragraph [ref=f1e102]: 开单、客户签字、提交润丰同步、指派和改派维修工
+      - generic [ref=f1e103]:
+        - generic [ref=f1e104]: 不能配置门店权限
+        - generic [ref=f1e105]: 不能检验通过
+    - generic [ref=f1e107]:
+      - generic [ref=f1e108]:
+        - generic [ref=f1e109]:
+          - heading "归档查询" [level=2] [ref=f1e110]
+          - paragraph [ref=f1e111]: 点击任一委托单可查看完整归档内容。
+        - generic [ref=f1e112]:
+          - button "待客户确认跟进" [ref=f1e113] [cursor=pointer]
+          - button "loading 刷新列表" [ref=f1e115]:
+            - img "loading" [ref=f1e117]
+            - generic [ref=f1e120]: 刷新列表
+          - button "全部从润丰更新（0）" [disabled] [ref=f1e121]
+          - generic [ref=f1e122]:
+            - searchbox "搜索车牌 / VIN / 工单号 / 派工号" [ref=f1e124]
+            - button [ref=f1e126] [cursor=pointer]:
+              - img "search" [ref=f1e128]
+      - paragraph [ref=f1e131]: 更新全部已同步且有权限的委托单，不受搜索和分页影响；保留签名、照片和维修进度。更新期间请保持页面打开。
+      - region "委托单筛选" [ref=f1e132]:
+        - generic [ref=f1e133]:
+          - generic [ref=f1e134]: 创建日期
+          - generic [ref=f1e135]:
+            - button "全 部" [ref=f1e136] [cursor=pointer]
+            - button "今 天" [ref=f1e138] [cursor=pointer]
+            - button "昨 天" [ref=f1e140] [cursor=pointer]
+            - button "近7天" [ref=f1e142] [cursor=pointer]
+            - button "自定义" [ref=f1e144] [cursor=pointer]
+          - generic [ref=f1e146]:
+            - generic [ref=f1e147] [cursor=pointer]:
+              - generic "更新时间最新" [ref=f1e148]:
+                - text: 更新时间最新
+                - combobox "委托单排序" [ref=f1e149]
+              - img "down" [ref=f1e151]
+            - generic [ref=f1e154] [cursor=pointer]:
+              - checkbox "百援门店单" [ref=f1e156]
+              - generic [ref=f1e157]: 百援门店单
+            - button "重置" [ref=f1e158] [cursor=pointer]
+        - generic [ref=f1e160]:
+          - generic [ref=f1e161]:
+            - generic [ref=f1e162]: 业务状态
+            - generic [ref=f1e163]:
+              - generic [ref=f1e164]:
+                - generic: 全部
+                - combobox "业务状态" [ref=f1e166]
+              - img "down" [ref=f1e168]
+          - generic [ref=f1e171]:
+            - generic [ref=f1e172]: 服务顾问
+            - generic [ref=f1e173]:
+              - generic [ref=f1e174]:
+                - generic: 全部
+                - combobox "服务顾问" [ref=f1e176]
+              - img "down" [ref=f1e178]
+          - generic [ref=f1e181]:
+            - generic [ref=f1e182]: 维修技师
+            - generic [ref=f1e183]:
+              - generic [ref=f1e184]:
+                - generic: 全部
+                - combobox "维修技师" [ref=f1e186]
+              - img "down" [ref=f1e188]
+        - generic [ref=f1e191]: 共 0 张
+      - generic [ref=f1e194]:
+        - generic [ref=f1e195]: 正在加载委托单…
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - table:
+                  - rowgroup:
+                    - row "派工号 车牌 车主 服务顾问 维修技师 业务状态 润丰同步 金额 创建时间 更新时间":
+                      - columnheader "派工号"
+                      - columnheader "车牌"
+                      - columnheader "车主"
+                      - columnheader "服务顾问"
+                      - columnheader "维修技师"
+                      - columnheader "业务状态"
+                      - columnheader "润丰同步"
+                      - columnheader "金额"
+                      - columnheader "创建时间"
+                      - columnheader "更新时间"
+                  - rowgroup:
+                    - row:
+                      - cell

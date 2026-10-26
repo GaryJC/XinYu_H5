@@ -1,0 +1,57 @@
+{
+  "orderId": "WT-20261026-FE4A8BD798D4",
+  "temporarySqlTables": true,
+  "before": [
+    {
+      "reid": 1,
+      "wd": " ",
+      "hh": "原维修项目",
+      "wxr": null
+    },
+    {
+      "reid": 2,
+      "wd": " ",
+      "hh": "【待定】待定追加项目",
+      "wxr": null
+    },
+    {
+      "reid": 3,
+      "wd": "1",
+      "hh": "原维修项目",
+      "wxr": null
+    },
+    {
+      "reid": 4,
+      "wd": "1",
+      "hh": "【待定】待定追加项目",
+      "wxr": null
+    }
+  ],
+  "after": [
+    {
+      "reid": 9,
+      "wd": " ",
+      "hh": "原维修项目",
+      "wxr": "001 测试维修工"
+    },
+    {
+      "reid": 10,
+      "wd": " ",
+      "hh": "待定追加项目",
+      "wxr": "001 测试维修工"
+    },
+    {
+      "reid": 11,
+      "wd": "1",
+      "hh": "原维修项目",
+      "wxr": ""
+    },
+    {
+      "reid": 12,
+      "wd": "1",
+      "hh": "待定追加项目",
+      "wxr": ""
+    }
+  ],
+  "retryPreservedRowIds": true
+}

@@ -53,7 +53,7 @@ export async function lookupVehicleInCompanySystem({ plate, vin, model, owner } 
       found: true,
       status: "found",
       vehicle: publicVehicle(vehicleResolution.vehicle),
-      message: "已匹配到现有车辆，请确认车型和所属单位；同步以钉钉确认的信息为准"
+      message: "已匹配到润丰车辆档案，已有车型和所属单位已优先回填；缺失信息请核对补全"
     };
   }
 

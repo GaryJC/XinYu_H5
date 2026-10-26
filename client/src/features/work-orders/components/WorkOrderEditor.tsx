@@ -100,6 +100,10 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               </Radio.Group>
             </Form.Item>
 
+            <Form.Item>
+              <Checkbox checked={draft.isBaiyuanOrder === true} disabled={!canEditForm || Boolean(actionLoading)} onChange={event=>updateDraft({isBaiyuanOrder:event.target.checked})}>百援门店单</Checkbox>
+            </Form.Item>
+
             <dl className="order-form-summary" aria-label="委托单摘要">
               <div><dt>委托单号</dt><dd>{selectedOrder?.id || "新建草稿"}</dd></div>
               <div><dt>服务顾问</dt><dd>{draft.advisor || "根据钉钉账号自动填写"}</dd></div>

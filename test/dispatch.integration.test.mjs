@@ -1108,8 +1108,10 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         assert.equal(await editPage.getByLabel('车牌号码',{exact:true}).inputValue(),'鲁B862P7','上传照片不丢失未保存车辆修改');
         assert.equal((await db.findWorkOrderById(pool,editableOrder.id)).vehicle.plate,'鲁BEDIT01','点击保存前不提前覆盖订单');
 
+        await editPage.getByRole('checkbox',{name:'百援门店单',exact:true}).check();
         await Promise.all([editPage.waitForResponse(response=>response.request().method()==='PUT'&&response.url().includes('/api/work-orders/')&&response.ok()),editPage.getByRole('button',{name:'保存修改',exact:true}).click()]);
         assert.equal((await db.findWorkOrderById(pool,editableOrder.id)).vehicle.plate,'鲁B862P7');
+        assert.equal((await db.findWorkOrderById(pool,editableOrder.id)).isBaiyuanOrder,true,'百援标签随保存持久化');
         assert.equal((await pool.query('select 1 from legacy_sync_outbox where order_id=$1',[editableOrder.id])).rowCount,0);
         await editPage.getByRole('button',{name:'保存修改',exact:true}).and(editPage.locator('button:not(.ant-btn-loading)')).waitFor();
         const originalVin=await editPage.getByLabel('VIN/底盘号',{exact:true}).inputValue();

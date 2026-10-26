@@ -19,8 +19,8 @@ export async function processNotification({claim=claimNotification,finish=finish
     else if(row.kind==='待检验' && !await validateInspection(row,user)) result={status:'failed',error:'任务状态、检验人或本店独立检验权限已变化，旧检验通知已取消',retryable:false};
     else if(row.kind==='即将到期' && !await validateDue(row,user)) result={status:'failed',error:'工单状态、截止时间或责任人已变化，旧临期提醒已取消',retryable:false};
     else if(['无法接单','维修暂停','维修已提检','回审已提交'].includes(row.kind) && !await validateScheduler(row,user)) result={status:'failed',error:'收件人已无本店调度权限',retryable:false};
-    else if(row.kind==='配件申请' && (!hasRole(user, 'warehouse') || user.shopId!==row.payload.shopId)) result={status:'failed',error:'收件人已无本店仓管权限',retryable:false};
-    else if(['配件需求已调整','配件可领取','配件已出库'].includes(row.kind) && !await validateParts(row,user)) result={status:'failed',error:'配件申请、进度或领取人已变化，旧配件通知已取消',retryable:false};
+    else if(['配件申请','配件申请已更新'].includes(row.kind) && (!user?.active || !hasRole(user, 'warehouse') || user.shopId!==row.payload.shopId)) result={status:'failed',error:'收件人已无本店仓管权限',retryable:false};
+    else if(['配件申请','配件申请已更新','配件需求已调整','配件可领取','配件已出库'].includes(row.kind) && !await validateParts(row,user)) result={status:'failed',error:'配件申请、进度或领取人已变化，旧配件通知已取消',retryable:false};
     else if(!user?.active) result={status:'failed',error:'收件人已停用',retryable:false};
     else {sendStarted=true;result=await send(row,user.dingtalk_user_id);}
   } catch { result=!sendStarted&&row.previous_status==='pending'?{status:'failed',error:'发送前校验失败，将重试',retryable:true}:{status:'unknown',error:'通知处理异常，需查询或核对平台结果'}; }

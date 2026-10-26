@@ -1,4 +1,4 @@
-import { hasAnyRole } from "../../shared/roles.mjs";
+import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import { HttpError } from '../http/HttpError.mjs';
 export async function assertPartsPhotos(client,task,requirement,referenceOwnerId) {
   if(requirement?.referencePhotoIds?.length){
@@ -17,6 +17,12 @@ export async function validatePartsPickupNotification(row,user,database) {
   const {rows}=await database.query('select stage,data,technician_id from dispatch_tasks where order_id=$1',[row.order_id]);
   const task=rows[0],data=task?.data,parts=row.payload.partsOwnerId?data?.partsRequests?.find(p=>p.ownerId===row.payload.partsOwnerId):data?.partsRequirement;
   if(!task||!data||!['待开工','维修中','暂停','回审'].includes(task.stage))return false;
+  if(['配件申请','配件申请已更新'].includes(row.kind)) {
+    if(user.id!==row.recipient_id||!hasRole(user,'warehouse')||!parts
+      ||(data.repairRound||0)!==(row.payload.repairRound||0)
+      ||parts.recordedAt!==row.payload.partsRecordedAt||parts.revision!==row.payload.partsRevision)return false;
+    return row.kind==='配件申请已更新'||parts.mode!=='none'&&!parts.preparedAt&&!parts.issuedAt;
+  }
   if(row.kind==='配件可领取'&&row.payload.preparationGroups){
     if(!task||user.id!==row.recipient_id||!(hasAnyRole(user, ['technician','outsourcing'])||user.outsourcingRoleMember)||!(data.technicianIds??[task.technician_id]).includes(row.recipient_id)||(data.repairRound||0)!==(row.payload.repairRound||0))return false;
     return row.payload.preparationGroups.length>0&&row.payload.preparationGroups.every(group=>{

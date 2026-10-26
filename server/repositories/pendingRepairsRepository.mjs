@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { validatePendingText } from '../domain/pendingRepairs.mjs';
+import { validatePendingText,pendingRepairProgress } from '../domain/pendingRepairs.mjs';
 import { HttpError } from '../http/HttpError.mjs';
+import { readRepairRounds } from './repairRoundRepository.mjs';
+export async function readPendingRepairProgress(client,id,items) {
+ const {rows}=await client.query('select stage,data from dispatch_tasks where order_id=$1',[id]);
+ const task=rows[0]?{...rows[0].data,stage:rows[0].stage}:undefined;
+ return pendingRepairProgress(items,task,await readRepairRounds(client,id));
+}
 export async function readPendingRepairs(client,id,lock=false) {
  const {rows}=await client.query(`select pending_repairs as items,pending_repairs_version as version,shop_id,status,vehicle_plate as plate,dispatch_no as "dispatchNo" from work_orders where id=$1${lock?' for update':''}`,[id]);
  if(!rows[0])throw new HttpError(404,'委托单不存在');

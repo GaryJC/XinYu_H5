@@ -28,6 +28,26 @@ test('SQL Server 2000 temporary fixtures replace atomically and recover idempote
    await query(`insert into ${tables.qxwxmxb}(wd,dh,lb,hh,wxr,je,cb,gs) values('${wd}',90123,N'管理费',N'【测试】管理费',N'',5,0,0)`);
   }
   snapshot.legacyReid=Number((await query(`select min(reid) as id from ${tables.qxwxb}`)).recordset[0].id);
+  const protectedBefore=await state();
+  await assert.rejects(()=>replaceLegacyRepairItems(snapshot,{source:'temporary-fixture',allowedDispatchNos:null,executeTransaction}),/非零项目费用/);
+  assert.deepEqual(await state(),protectedBefore);
+  await query(`update ${tables.qxwxb} set xmfy=0,xmfy0=0,fyhj=25,cbhj=0`);
+  await query(`update ${tables.qxwxmxb} set je=0,cb=0,gs=0 where lb=N'项目'`);
+  // A value in either account must prevent even the first account from being changed.
+  for(const field of ['dj','je','cb','gs','ywyje','uddec1','uddec2'])for(const value of [1,-1]) {
+   await query(`update ${tables.qxwxmxb} set ${field}=${value} where wd='1' and lb=N'项目'`);
+   const protectedState=await state();
+   await assert.rejects(()=>replaceLegacyRepairItems(snapshot,{source:'temporary-fixture',allowedDispatchNos:null,executeTransaction}),/非零单价、金额、成本、工时/);
+   assert.deepEqual(await state(),protectedState);
+   await query(`update ${tables.qxwxmxb} set ${field}=0 where wd='1' and lb=N'项目'`);
+  }
+  // Opposite charges with a zero total are still protected.
+  await query(`update ${tables.qxwxmxb} set je=10 where wd='1' and lb=N'项目'`);
+  await query(`insert into ${tables.qxwxmxb}(wd,dh,lb,hh,je) values('1',90123,N'项目',N'【测试】冲销',-10)`);
+  const offsetState=await state();
+  await assert.rejects(()=>replaceLegacyRepairItems(snapshot,{source:'temporary-fixture',allowedDispatchNos:null,executeTransaction}),/非零单价、金额、成本、工时/);
+  assert.deepEqual(await state(),offsetState);
+  await query(`update ${tables.qxwxmxb} set je=0 where lb=N'项目'`);
   const before=await state();let inserted=0;
   await assert.rejects(()=>replaceLegacyRepairItems(snapshot,{source:'temporary-fixture',allowedDispatchNos:null,executeTransaction:work=>executeSqlServerTransaction(execute=>work(async(text,configure)=>{
    const safe=rewrite(text);if(text.startsWith('insert into dbo.qxwxmxb')&&++inserted===2)throw new Error('injected second document failure');return execute(safe,configure);

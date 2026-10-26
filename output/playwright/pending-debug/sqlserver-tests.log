@@ -1,0 +1,15 @@
+TAP version 13
+# Subtest: SQL Server 2000 temporary fixtures replace atomically and recover idempotently
+ok 1 - SQL Server 2000 temporary fixtures replace atomically and recover idempotently
+  ---
+  duration_ms: 322040.37175
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 322174.694541

@@ -112,6 +112,9 @@ export type VehicleHistoryLookupResult = {
 export type PendingRepair = {
  id: string; itemId: number; draftItemId?: number; name: string; reason: string;
  state: 'pending' | 'approved' | 'declined'; scheduled: boolean;
+ /** Read-only projection of current/latest repair round; never a customer decision. */
+ progress?: '待派工' | '待接单' | '待开工' | '维修中' | '暂停' | '待检验' | '检验通过' | '进度待核对';
+ repairRound?: number;
  history: Array<{action: string; actor: string; at: string; note: string; respondent?: string}>;
 };
 export type PendingRepairList = { items: PendingRepair[]; version: number };
@@ -318,6 +321,7 @@ export type VehicleLicenseException = {
   notificationStatus:'pending'|'queued'|'failed'|'sent'|'unknown'; notificationError:string;
 };
 export type WorkOrder = {
+  isBaiyuanOrder?: boolean;
   paperOrder?: PaperOrder;
   customerVehicleEditEnabled?: boolean;
   customerVehicleLinkComplete?: boolean;
