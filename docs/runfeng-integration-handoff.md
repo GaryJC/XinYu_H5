@@ -178,7 +178,7 @@ from claim_legacy_sync_events('runfeng-production', 20);
     "settlementAmount": 0,
     "feeNote": "",
     "signatures": {
-      "customer": "客户姓名"
+      "customer": "联系人姓名"
     },
     "platformOrderNo": null,
     "createdAt": "2026-08-17T08:00:00.000Z",

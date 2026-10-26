@@ -118,7 +118,9 @@ export function buildLegacySyncPayload({ eventId, revision, eventType, order }) 
       settlementAmount: Number(order.settlementAmount || 0),
       feeNote: order.feeNote || "",
       ...(order.paperOrder ? { paperOrder: order.paperOrder, signatureExemption: "纸质委托书" } : {}),
-      signatures: order.signatures || {},
+      // Runfeng requires customer text even for paper orders; this is a contact
+      // label for transport, not the authoritative electronic signature record.
+      signatures: { ...order.signatures, customer: order.customer?.contact?.trim() || "联系人" },
       platformOrderNo: order.platformOrderNo || null,
       createdAt: order.createdAt || "",
       updatedAt: order.updatedAt || ""

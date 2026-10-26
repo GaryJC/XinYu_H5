@@ -497,7 +497,7 @@ export type DispatchEvent = {
   detail: { roundKind?: 'additional' | 'rework'; preparationGroups?:Array<PartsPreparationGroup & {partsRequirement:PartsRequirement}>; partsIssue?:Array<{index:number;recipientId:string}>; partsPreparation?:Array<{index:number;recipientId:string}>; reassignItemIds?:number[]; previousItems?:DispatchItem[]; partsRequirement?:PartsRequirement; repairRound?:number; items?:DispatchItem[]; reworkItemIds?:number[]; additionalItems?:string[]; workHours?: number; previousWorkHours?: number; note?: string; reason?: string; technicianName?: string; previousTechnicianName?: string; dueAt?: string; previousDueAt?: string; urgent?: boolean; stage: DispatchStage; itemId?: number; rejectedItemIds?: number[]; pauseReason?: string };
 };
 export type RepairRound = { round:number; task:DispatchTask; reason:string; openedBy?:string; openedName:string; openedAt?:string; completedAt?:string; closed:boolean };
-export type RepairWriteback = {id:string;repairRound?:number;status:"pending"|"synced"|"failed"|"manual";error:string;attempts:number;createdAt:string;syncedAt?:string;enabled:boolean};
+export type RepairWriteback = {simulated?:boolean;id:string;repairRound?:number;status:"pending"|"synced"|"failed"|"manual";error:string;attempts:number;createdAt:string;syncedAt?:string;enabled:boolean};
 export type DispatchDetail = {
   repairWriteback?: RepairWriteback;
   repairRounds?: RepairRound[];

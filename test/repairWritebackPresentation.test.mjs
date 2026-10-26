@@ -29,3 +29,12 @@ test('manually recovered internal jobs are not mislabeled as outsourced',()=>{
  const result=present({stage:'维修完成'},{...job,status:'manual',error:'管理员 Gary 确认人工登记：已核对'});
  assert.match(result.title,/已确认人工登记/);assert.ok(!result.title.includes('外包'));assert.equal(result.canRetry,false);
 });
+
+test('simulated results always identify the test mode and never claim a real write',()=>{
+ const result=present({stage:'维修完成'},{...job,simulated:true});
+ assert.equal(result.title,'本轮维修项目模拟写回成功');assert.match(result.description,/未写入正式润丰/);
+ for(const status of ['pending','failed']) {
+  const historical=present({stage:'维修完成',repairRound:1},{...job,status,simulated:true});
+  assert.match(historical.title,/测试模拟/);assert.match(historical.description,/未写入正式润丰/);
+ }
+});

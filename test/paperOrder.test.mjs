@@ -26,6 +26,7 @@ test('pending paper orders never enqueue, imported paper orders never create aga
   for (const mode of ['pending','runfeng']) await enqueueLegacySyncEvent(client,{paperOrder:{mode,photoIds:['photo']}},'created');
   const payload=buildLegacySyncPayload({order:{paperOrder:{mode:'dingtalk',photoIds:['photo']}}});
   assert.equal(payload.order.signatureExemption,'纸质委托书');
+  assert.equal(payload.order.signatures.customer,'联系人');
   assert.deepEqual(payload.order.paperOrder.photoIds,['photo']);
 });
 test('creation notifies every active advisor and manager across all shops, with per-recipient deduplication',async()=>{

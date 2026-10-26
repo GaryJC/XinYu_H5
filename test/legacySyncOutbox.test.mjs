@@ -71,6 +71,22 @@ test("legacy sync payload is versioned and preserves structured work-order data"
   });
 });
 
+test("Runfeng uses contact text for electronic and paper events without changing stored signatures", () => {
+  for (const eventType of ["created", "updated", "cancelled"]) {
+    for (const paperOrder of [undefined, { mode: "dingtalk", photoIds: ["paper"] }]) {
+      const input = { ...order, paperOrder, customer: { ...order.customer, contact: "  联系人李四  " },
+        signatures: { customer: "真实签字人", advisor: "顾问" } };
+      const before = structuredClone(input);
+      const payload = buildLegacySyncPayload({ eventType, order: input });
+      assert.deepEqual(payload.order.signatures, { customer: "联系人李四", advisor: "顾问" });
+      assert.deepEqual(input, before);
+    }
+  }
+  for (const customer of [undefined, {}, { contact: " \t\n", name: "客户单位" }]) {
+    assert.equal(buildLegacySyncPayload({ order: { ...order, customer } }).order.signatures.customer, "联系人");
+  }
+});
+
 test("drafts never enqueue legacy sync and remote signatures keep the review branch", async () => {
   const source = await readFile(new URL("../server/db.mjs", import.meta.url), "utf8");
   const createSource = source.match(

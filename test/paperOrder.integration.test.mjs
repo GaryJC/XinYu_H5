@@ -86,6 +86,7 @@ test('paper order creation, notification, import and signature-free completion t
       assert.equal(order.status,'已委托');assert.deepEqual(order.signatures,{});assert.equal(order.legacySyncStatus,'pending');
       const outbox=(await pool.query('select payload from legacy_sync_outbox where order_id=$1',[order.id])).rows;
       assert.equal(outbox.length,1);assert.equal(outbox[0].payload.order.signatureExemption,'纸质委托书');
+      assert.equal(outbox[0].payload.order.signatures.customer,'联系人');
       await assert.rejects(()=>submitPaperDingTalkOrder(order.id,advisor),/只能提交/);
       assert.equal((await pool.query('select count(*) from legacy_sync_outbox where order_id=$1',[order.id])).rows[0].count,'1');
     });

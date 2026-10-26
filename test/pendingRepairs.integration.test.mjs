@@ -166,6 +166,30 @@ test('pending repairs persist, enforce ownership, schedule once, and preserve cl
   const finalJobs=await jobs();assert.equal(finalJobs.length,3);
   assert.equal(finalJobs[2].items.length,5);assert.ok(finalJobs[2].items.every(i=>!i.pendingConfirmation));
   assert.equal((await list()).items.find(i=>i.id===third.id).progress,'检验通过');
+  // Simulated receipts are independent from the immutable real queue.
+  const {transaction}=await import('../server/database/pool.mjs');
+  const {drainRepairWritebacks}=await import('../server/workers/repairWritebackWorker.mjs');
+  const {readRepairWriteback,retryFailedRepairWriteback}=await import('../server/repositories/repairWritebackRepository.mjs');
+  process.env.RUNFENG_REPAIR_WRITEBACK_MODE='mock';process.env.RUNFENG_REPAIR_WRITEBACK_MOCK_RESULT='failure';
+  let realCalls=0;
+  await drainRepairWritebacks({write:async()=>{realCalls++;throw new Error('Must never call SQL Server in simulation');}});
+  let mockJob=await readRepairWriteback(pool,orderId);
+  assert.equal(mockJob.status,'failed');assert.equal(mockJob.simulated,true);assert.equal(mockJob.repairRound,0);
+  assert.equal((await pool.query('select count(*) from repair_writeback_simulations')).rows[0].count,'1','Older failure blocks later rounds');
+  process.env.RUNFENG_REPAIR_WRITEBACK_MOCK_RESULT='success';
+  await transaction(c=>retryFailedRepairWriteback(c,orderId,manager.name));
+  await drainRepairWritebacks({write:async()=>{realCalls++;}});
+  mockJob=await readRepairWriteback(pool,orderId);assert.equal(mockJob.status,'synced');assert.equal(mockJob.repairRound,2);
+  const receipts=(await pool.query('select * from repair_writeback_simulations order by job_id')).rows;
+  assert.equal(receipts.length,3);assert.ok(receipts.every(j=>j.status==='synced'));
+  await drainRepairWritebacks({write:async()=>{realCalls++;}});
+  assert.deepEqual((await pool.query('select * from repair_writeback_simulations order by job_id')).rows,receipts);
+  assert.equal(realCalls,0);
+  assert.ok((await pool.query('select status,attempts from repair_writebacks where order_id=$1',[orderId])).rows.every(j=>j.status==='pending'&&j.attempts===0));
+  assert.deepEqual(await jobs(),finalJobs,'Real snapshots are untouched');
+  process.env.RUNFENG_REPAIR_WRITEBACK_MODE='real';
+  const realJob=await readRepairWriteback(pool,orderId);assert.equal(realJob.status,'pending');assert.equal(realJob.simulated,undefined);
+
   }
 
 

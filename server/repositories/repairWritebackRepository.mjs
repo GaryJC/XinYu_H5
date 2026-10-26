@@ -4,6 +4,8 @@ import {validateLegacyRepairStrings} from './legacyRepairWritebackRepository.mjs
 import {HttpError} from '../http/HttpError.mjs';
 import {makeWritebackSnapshot,writebackAllowed,writebackDispatchAllowlist,validateWritebackSnapshot} from '../domain/repairWriteback.mjs';
 import {readRepairRounds} from './repairRoundRepository.mjs';
+import {repairWritebackSimulationEnabled} from '../domain/repairWritebackSimulation.mjs';
+import {readRepairWritebackSimulation,retryRepairWritebackSimulation} from './repairWritebackSimulationRepository.mjs';
 export async function enqueueRepairWriteback(client,task,eventId) {
  // Replacement must include prior completed rounds, not just the current rework subset.
  const all=new Map();
@@ -19,6 +21,7 @@ export async function enqueueRepairWriteback(client,task,eventId) {
  await client.query('insert into repair_writebacks(event_id,order_id,snapshot,status,error) values($1,$2,$3,$4,$5) on conflict(event_id) do nothing',[eventId,task.orderId,JSON.stringify(snapshot),task.executionMode==='outsourced'?'manual':'pending',task.executionMode==='outsourced'?'外包任务需人工在润丰登记维修项目及维修人':'']);
 }
 export async function readRepairWriteback(client,id) {
+ if(repairWritebackSimulationEnabled()){const simulated=await readRepairWritebackSimulation(client,id);if(simulated)return simulated;}
  const {rows}=await client.query(`select j.id::text,j.status,coalesce((j.snapshot->>'repairRound')::integer,0) as "repairRound",j.error,j.attempts,j.created_at as "createdAt",j.synced_at as "syncedAt",w.dispatch_no from repair_writebacks j join work_orders w on w.id=j.order_id where j.order_id=$1 order by (j.status in ('pending','failed')) desc,case when j.status in ('pending','failed') then j.id end asc,j.id desc limit 1`,[id]);
  if(!rows[0])return undefined;
  const {dispatch_no,...job}=rows[0];return {...job,enabled:writebackAllowed(dispatch_no)};
@@ -51,6 +54,7 @@ export async function processRepairWritebacks(runTransaction,write,shouldContinu
 }
 
 export async function retryFailedRepairWriteback(client,id,actorName) {
+ if(repairWritebackSimulationEnabled())return retryRepairWritebackSimulation(client,id,actorName);
  const {rows}=await client.query("select id,status from repair_writebacks where order_id=$1 and status<>'manual' order by (status<>'synced') desc,case when status<>'synced' then id end asc,id desc limit 1 for update",[id]);
  if(!rows[0]||!['failed','synced'].includes(rows[0].status))throw new HttpError(409,'仅失败或已完成的同步任务可以重试');
  await client.query("update repair_writebacks set status='pending',error='',attempts=0,next_attempt_at=now() where id=$1",[rows[0].id]);
@@ -58,6 +62,7 @@ export async function retryFailedRepairWriteback(client,id,actorName) {
 }
 
 export async function resolveFailedRepairWriteback(client,orderId,actor,input) {
+ if(repairWritebackSimulationEnabled())throw new HttpError(409,'模拟任务不能确认为润丰人工登记，请使用模拟重试');
  if(!input||typeof input.jobId!=='string'||!/^\d{1,19}$/.test(input.jobId)||BigInt(input.jobId)>9223372036854775807n||typeof input.reason!=='string'||!input.reason.trim()||input.reason.length>2000)throw new HttpError(400,'请选择失败任务并填写人工登记说明');
  const {rows}=await client.query('select id,status from repair_writebacks where order_id=$1 and id=$2 for update',[orderId,input.jobId]);
  if(rows[0]?.status!=='failed')throw new HttpError(409,'该写回任务已变化，仅失败任务可确认人工登记');

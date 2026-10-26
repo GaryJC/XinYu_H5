@@ -70,3 +70,11 @@ SQL Server 2000 只使用兼容语法。原子性覆盖内外单及幂等日志�
 
 
 改派只交接尚未提检的项目：单人团队自动指定新负责人，多人团队须逐项确认。待检验、已通过项目保留服务端保存的原维修负责人，允许新团队提交整单检验，润丰快照按各项目原／新负责人分别记录。检验退回的项目交给当前团队，单人自动指定，多人重新确认；已通过项目不变。改派和检验事件保存变更前后的项目，原负责人及历史维修参与人员继续不能自检。
+
+## 本地测试模拟写回
+
+设置 `RUNFENG_REPAIR_WRITEBACK_MODE=mock`、`RUNFENG_REPAIR_WRITEBACK_ENABLED=false`，重启本地开发服务。只允许 APP_ENV 为 development/test、NODE_ENV 非 production，且 DATABASE_URL 指向 localhost/127.0.0.1/::1；不满足时启动报错，不回退到真实写入。
+
+模拟器读取真实检验产生的不可变快照，校验后在独立的 repair_writeback_simulations 表记录模拟结果。它不连接 SQL Server，不修改 repair_writebacks 的真实状态、错误、次数、快照，也不伪造首次开单派工号或润丰回执。没有润丰派工号的测试单也可以模拟；首次开单队列仍显示实际状态。切回真实模式后不会把模拟成功当成真实成功。
+
+`RUNFENG_REPAIR_WRITEBACK_MOCK_RESULT=success` 为默认成功；设为 failure 并重启可注入失败。失败阻塞同单后续模拟轮次；切回 success 后由管理员点击“重新模拟”恢复。页面所有模拟结果均标注“测试模拟，未写入正式润丰”，模拟任务不提供“确认人工登记”。切回真实模式前仍需按正式流程核对真实历史队列。

@@ -1,6 +1,6 @@
 import type {DispatchTask,RepairWriteback} from '../../../../shared/types';
 type Presentation={type:'success'|'error'|'warning'|'info';title:string;description?:string;canRetry:boolean};
-export function repairWritebackPresentation(task:Pick<DispatchTask,'repairRound'|'stage'|'rejectedItemIds'>,job?:RepairWriteback):Presentation|undefined {
+function basePresentation(task:Pick<DispatchTask,'repairRound'|'stage'|'rejectedItemIds'>,job?:RepairWriteback):Presentation|undefined {
  const currentRound=task.repairRound||0,jobRound=job?.repairRound||0;
  const historical=Boolean(job&&jobRound!==currentRound);
  // Failed historical work can block later writebacks, so keep it visible with its actual round.
@@ -15,4 +15,11 @@ export function repairWritebackPresentation(task:Pick<DispatchTask,'repairRound'
  if(!job||historical||job.status==='synced'&&task.stage!=='维修完成')return;
  const title=job.status==='manual'?(job.error?.startsWith('管理员 ')?'润丰写回已确认人工登记':'外包任务 · 润丰需人工登记'):job.status==='synced'?'本轮维修项目已写入润丰':job.status==='failed'?'本轮润丰写回失败':job.enabled?'本轮维修项目待写入润丰':'本轮维修项目待写入润丰 · 直写尚未启用';
  return {type:job.status==='synced'?'success':job.status==='failed'?'error':'info',title,description:job.error||undefined,canRetry:['failed','synced'].includes(job.status)};
+}
+
+export function repairWritebackPresentation(task:Pick<DispatchTask,'repairRound'|'stage'|'rejectedItemIds'>,job?:RepairWriteback):Presentation|undefined {
+ const result=basePresentation(task,job);
+ if(!result||!job?.simulated)return result;
+ return {...result,title:job.status==='synced'&&result.type==='success'?'本轮维修项目模拟写回成功':`测试模拟 · ${result.title}`,
+  description:['测试模拟，未写入正式润丰。',result.description].filter(Boolean).join(' ')};
 }
