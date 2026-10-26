@@ -811,6 +811,26 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await run(tech,'accept',{partsRequirement:{mode:'none'}});
       assert.ok(current.acceptedAt);assert.equal(current.stage,'维修中');
     });
+    await t.test('project handovers discard departed pauses and preserve the retained worker pause',async()=>{
+      for(const route of ['reassign','edit-repair-items']) {
+        const id=`pause-handover-${route}`;await seed(id);
+        let current=(await service.dispatchDetail(advisor,id)).task;
+        const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+        await run(advisor,'assign',{technicianIds:[tech.id,tech2.id],dueAt,repairItems:current.items.map((item,index)=>({...item,responsibleId:index?tech2.id:tech.id}))});
+        await run(tech,'accept',{partsRequirement:{mode:'none'}});
+        await run(tech2,'record-parts',{partsRequirement:{mode:'none'}});
+        await run(tech,'pause',{pauseReason:'技术问题'});await run(tech2,'pause',{pauseReason:'待配件'});
+        const otherPause=structuredClone(current.workerPauses[tech2.id]);
+        const move=async owner=>run(advisor,route,{reason:'项目交接',...(route==='reassign'?{reassignItemIds:[1]}:{}),repairItems:(route==='reassign'?current.items.filter(item=>item.id===1):current.items).map(item=>({id:item.id,name:item.name,responsibleId:item.id===1?owner:item.responsibleId}))});
+        await move(unique.id);
+        assert.equal(current.workerPauses[tech.id],undefined);assert.deepEqual(current.workerPauses[tech2.id],otherPause);
+        await move(tech.id);
+        await progressPhoto(id);await run(tech,'submit-order');
+        const saved=(await service.dispatchDetail(advisor,id)).task;
+        assert.equal(saved.items[0].status,'待检验');assert.deepEqual(saved.workerPauses[tech2.id],otherPause);
+        await assert.rejects(()=>run(tech2,'submit-order'),e=>e.status===409);
+      }
+    });
     await t.test('review after whole-task handover restores historical owners and their notifications',async()=>{
       const id='review-historical-owner';await seed(id);
       let current=(await service.dispatchDetail(advisor,id)).task;
@@ -1048,6 +1068,29 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await inspection.getByRole('button',{name:/提交检验结果/}).click();
         await inspectionDialog.getByRole('button',{name:'确认提交检验结果',exact:true}).click();await inspectionDialog.waitFor({state:'hidden'});
         assert.equal((await service.dispatchDetail(manager,'ui-order')).task.stage,'维修完成');
+        // A legacy team reduced to one worker must still show and enforce that worker's pause.
+        {
+          const id='ui-single-personal-pause';await seed(id);
+          let current=(await service.dispatchDetail(advisor,id)).task;
+          const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+          await run(advisor,'assign',{technicianIds:[tech.id,tech2.id],dueAt,repairItems:current.items.map((item,index)=>({...item,responsibleId:index?tech2.id:tech.id}))});
+          await run(tech,'accept',{partsRequirement:{mode:'none'}});
+          await run(tech2,'record-parts',{partsRequirement:{mode:'none'}});
+          await run(tech2,'pause',{pauseReason:'技术问题'});
+          // Older shared-material tasks do not have personal material requests.
+          delete current.partsRequests;current.partsRequirement={mode:'none',items:[],photoIds:[]};
+          await repo.saveDispatchTask(pool,current);
+          await run(advisor,'reassign',{reason:'合并项目',reassignItemIds:[1],repairItems:[{id:1,name:current.items[0].name,responsibleId:tech2.id}]});
+          const photo=await progressPhoto(id);await pool.query('update files set uploaded_by=$1 where id=$2',[tech2.id,photo]);
+          await assert.rejects(()=>run(tech2,'submit-order'),e=>e.status===409);
+          const page=await pageFor(tech2,true,id);
+          const resume=page.getByRole('button',{name:'继续维修',exact:true});
+          await resume.click();await resume.waitFor({state:'hidden'});
+          await page.getByRole('button',{name:'提交完工',exact:true}).waitFor();
+          current=(await service.dispatchDetail(advisor,id)).task;
+          assert.equal(current.workerPauses?.[tech2.id],undefined);
+          await run(tech2,'submit-order');assert.equal(current.stage,'待检验');
+        }
         // Historical external contractors have no employee login; the advisor must be able to resubmit review.
         {
           const id='ui-legacy-contractor-review';await seed(id);

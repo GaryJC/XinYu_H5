@@ -1,8 +1,8 @@
-import {hasPendingInspection} from '../../shared/repairProgress.mjs';
+import {hasPendingInspection,isIndividualRepair} from '../../shared/repairProgress.mjs';
 import { hasAnyRole } from "../../shared/roles.mjs";
 import {HttpError} from '../http/HttpError.mjs';
 const workers=task=>task.technicianIds??(task.technicianId?[task.technicianId]:[]);
-export const individualRepair=task=>workers(task).length>1||Boolean(task.partsRequests?.length);
+export const individualRepair=isIndividualRepair;
 export function hasSubmittedPersonalWork(task,ownerId) {
   const own=task.items.filter(item=>item.responsibleId===ownerId);
   return individualRepair(task)&&own.length>0&&own.every(item=>['待检验','已完工'].includes(item.status))
@@ -37,7 +37,7 @@ export function applyIndividualAction(task,input,actor,people,now,apply,{persona
   if(input.repairItems?.some(row=>row.id!==undefined&&!own.some(i=>i.id===row.id)||row.responsibleId&&row.responsibleId!==ownerId))throw new HttpError(403,'只能编辑和提交本人负责的项目');
   if(input.itemId!==undefined&&!own.some(i=>i.id===input.itemId))throw new HttpError(403,'只能操作本人负责的项目');
   const owner=people.find(p=>p.id===ownerId);
-  const scoped={...task,items:own,repairCatalog:task.repairCatalog||task.items,technicianIds:[ownerId],technicianId:ownerId,technicianName:owner?.name||own[0]?.responsibleName||ownerId,partsRequirement:requirement,partsRequests:undefined};
+  const scoped={...task,items:own,repairCatalog:task.repairCatalog||task.items,technicianIds:[ownerId],technicianId:ownerId,technicianName:owner?.name||own[0]?.responsibleName||ownerId,partsRequirement:requirement,partsRequests:undefined,workerPauses:undefined};
   if(task.workerPauses?.[ownerId])Object.assign(scoped,{stage:'暂停',...task.workerPauses[ownerId]});
   if(scopedParts&&!task.workerPauses?.[ownerId]&&task.stage==='维修中'&&own.length&&own.every(i=>['待开工','待派工','待领料'].includes(i.status)))scoped.stage='待开工';
   if(scopedParts&&input.action==='accept'&&task.stage!=='待接单')throw new HttpError(409,'任务已接单，请登记本人配件');

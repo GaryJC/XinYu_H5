@@ -79,3 +79,25 @@ test('selective project reassignment preserves an unrelated workers personal pau
  assert.deepEqual(next.items[0],task.items[0]);
  assert.throws(()=>act(next,a,'submit-order'),/暂停/);
 });
+for(const route of ['reassign','edit-repair-items'])test(`${route} removes a departed worker pause without resurrecting it on later reassignment`,()=>{
+ let task=act(base(),a,'pause',{pauseReason:'技术问题'});
+ task=act(task,b,'pause',{pauseReason:'待配件'});
+ const otherPause=structuredClone(task.workerPauses.b);
+ const move=(current,owner)=>act(current,manager,route,{reason:'项目交接',...(route==='reassign'?{reassignItemIds:[1]}:{}),repairItems:(route==='reassign'?current.items.filter(item=>item.id===1):current.items).map(item=>({id:item.id,name:item.name,responsibleId:item.id===1?owner:item.responsibleId}))});
+ task=move(task,'c');
+ assert.equal(task.technicianIds.includes('a'),false);
+ assert.equal(task.workerPauses?.a,undefined);
+ assert.deepEqual(task.workerPauses.b,otherPause);
+ task=move(task,'a');
+ task=act(task,a,'submit-order');
+ assert.equal(task.items[0].status,'待检验');assert.deepEqual(task.workerPauses.b,otherPause);
+});
+test('a paused worker remains blocked when reassignment reduces the team to one person',()=>{
+ let task=act(base(),b,'pause',{pauseReason:'技术问题'});
+ task=act(task,manager,'reassign',{reason:'合并项目',reassignItemIds:[1],repairItems:[{id:1,name:'甲项目',responsibleId:'b'}]});
+ assert.deepEqual(task.technicianIds,['b']);
+ assert.throws(()=>act(task,b,'submit-order'),e=>e.status===409);
+ task=act(task,b,'resume');
+ task=act(task,b,'submit-order');
+ assert.equal(task.stage,'待检验');
+});

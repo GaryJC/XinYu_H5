@@ -343,6 +343,10 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     const handover=task.items.some(item=>item.responsibleId&&next.items.some(edited=>edited.id===item.id&&edited.responsibleId!==item.responsibleId));
     if(handover)reason();
   }
+  if(['reassign','edit-repair-items'].includes(action)&&next.workerPauses) {
+    const retained=new Set(technicianIds(next));
+    next.workerPauses=Object.fromEntries(Object.entries(next.workerPauses).filter(([id])=>retained.has(id)));
+  }
   next.version += 1;
   return next;
 }
