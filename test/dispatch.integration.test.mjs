@@ -94,7 +94,17 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         return {token,file};
       }
       const signature=await prepareSignature(order);
+      const unsigned=await db.findWorkOrderById(pool,order.id);
+      const edited=await db.updateWorkOrder({...unsigned,vehicle:{...unsigned.vehicle,plate:'鲁B862P7',vin:'LZWADAGA8NB072733'}},advisor.name,'签字前修正车辆',advisor);
+      assert.equal(edited.status,'待客户签字');assert.equal(edited.vehicle.plate,'鲁B862P7');assert.equal(edited.vehicle.vin,'LZWADAGA8NB072733');
+      assert.equal((await pool.query('select 1 from legacy_sync_outbox where order_id=$1',[order.id])).rowCount,0);
+      await assert.rejects(()=>db.signWorkOrderByToken(signature.token,{name:'旧预览'},signature.file),e=>[404,409,410].includes(e.status));
+      const renewed=await db.createSignatureTokenForOrder(order.id,advisor.name);
+      assert.notEqual(renewed.signatureToken,signature.token);signature.token=renewed.signatureToken;
       const pending=await db.signWorkOrderByToken(signature.token,{name:'车主',signedAt:new Date().toISOString()},signature.file);
+      await assert.rejects(()=>db.updateWorkOrder({...edited,vehicle:{...edited.vehicle,plate:'鲁B00000'}},advisor.name,'旧页面提交',advisor),e=>e.status===409);
+      assert.equal((await pool.query('select 1 from legacy_sync_outbox where order_id=$1',[order.id])).rowCount,0);
+      assert.equal((await db.findWorkOrderById(pool,order.id)).vehicle.plate,'鲁B862P7');
       assert.equal(pending.status,'待客户签字');
       const signed=await db.confirmCustomerSignature(order.id,advisor);
       assert.equal(signed.status,'待派工');
@@ -983,8 +993,8 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await run(unique,'submit-order');await run(inspector,'claim-inspection');await run(inspector,'inspect');
         assert.equal(current.stage,'维修完成');assert.equal(current.orderStatus,'待结算');
         await run(inspector,'send-review');
-        await run(advisor,'edit-repair-items',{repairItems:current.items.map(item=>({id:item.id,name:item.name,responsibleId:item.id===1?tech2.id:item.responsibleId})),reason:'回审分工'});
-        assert.equal(current.stage,'回审');assert.equal(current.items[0].responsibleId,tech2.id);
+        await assert.rejects(()=>run(advisor,'edit-repair-items',{repairItems:current.items.map(item=>({id:item.id,name:item.name,responsibleId:item.id===1?tech2.id:item.responsibleId})),reason:'回审分工'}),e=>e.status===403);
+        assert.equal(current.stage,'回审');assert.equal(current.items[0].responsibleId,tech.id);
       }
     });
     if(process.env.DISPATCH_UI_TEST==='true') await t.test('desktop and mobile UI complete assignment, acceptance, repair and inspection',async()=>{
@@ -1007,6 +1017,18 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
           await page.addInitScript(token=>localStorage.setItem('repair-h5-auth-token',token),token);
           await page.goto(`${base}/?dispatchOrder=${orderId}`);return page;
         }
+        const editableOrder=await db.createWorkOrder({shop:{id:'shop-hq'},vehicle:{plate:'鲁BEDIT01',vin:'LZWADAGA8NB072733'},customer:{name:'签字前编辑测试'},advisor:advisor.name,repairItems:[{id:1,name:'保养'}]},advisor.name,advisor);
+        await pool.query("update work_orders set status='待客户签字' where id=$1",[editableOrder.id]);
+        const editPage=await pageFor(advisor,false,'');
+        await editPage.getByRole('navigation',{name:'主导航'}).getByRole('button',{name:'工作台',exact:true}).click();
+        await editPage.getByPlaceholder('搜索车牌 / VIN / 工单号 / 派工号').fill('鲁BEDIT01');
+        await editPage.locator('.orders-table tbody tr').filter({hasText:'鲁BEDIT01'}).click();
+        await editPage.getByRole('button',{name:'编辑委托单',exact:true}).click();
+        await editPage.getByLabel('车牌号码',{exact:true}).fill('鲁B862P7');
+        await Promise.all([editPage.waitForResponse(response=>response.request().method()==='PUT'&&response.url().includes('/api/work-orders/')&&response.ok()),editPage.getByRole('button',{name:'保存修改',exact:true}).click()]);
+        assert.equal((await db.findWorkOrderById(pool,editableOrder.id)).vehicle.plate,'鲁B862P7');
+        assert.equal((await pool.query('select 1 from legacy_sync_outbox where order_id=$1',[editableOrder.id])).rowCount,0);
+        await editPage.close();
         async function assertNoDuplicateProjectActions(detail) {
           await detail.getByRole('heading',{name:/维修项目 ·/}).waitFor();
           assert.equal(await detail.getByRole('button',{name:/^改\s*派$/}).count(),0,'项目区域已支持改派，不显示重复底栏按钮');
@@ -1164,15 +1186,12 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
           await run(unique,'start-order');const imageId=await progressPhoto(id);await pool.query('update files set uploaded_by=$1 where id=$2',[unique.id,imageId]);
           await run(unique,'submit-order');await run(inspector,'claim-inspection');await run(inspector,'inspect');await run(inspector,'send-review');
           const mobile=await pageFor(advisor,true,id),review=mobile.locator('.dispatch-detail');
-          await review.getByRole('combobox',{name:'维修项目 1 负责人',exact:true}).click();
-          await mobile.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText('同名技师（账号 tech2）',{exact:true}).click();
-          await review.getByLabel('原因或交接说明',{exact:true}).fill('回审重新分工');
-          const savedResponse=mobile.waitForResponse(response=>response.url().endsWith(`/api/dispatch/tasks/${id}/actions`)&&response.request().method()==='POST');
-          await review.getByRole('button',{name:'保存维修项目',exact:true}).click();
-          assert.equal((await savedResponse).status(),200);
-          await review.getByRole('button',{name:'保存维修项目',exact:true}).waitFor({state:'hidden'});
+          await review.getByRole('heading',{name:/维修项目 ·/}).waitFor();
+          assert.equal(await review.locator('.repair-items-editor').count(),0);
+          assert.equal(await review.getByRole('button',{name:'＋ 新增增修项目',exact:true}).count(),0);
+          assert.equal(await review.getByRole('combobox',{name:'维修项目 1 负责人',exact:true}).count(),0);
           current=(await service.dispatchDetail(advisor,id)).task;
-          assert.equal(current.stage,'回审');assert.equal(current.items[0].responsibleId,tech2.id);
+          assert.equal(current.stage,'回审');assert.equal(current.items[0].responsibleId,tech.id);
           assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
         }
         // A legacy team reduced to one worker must still show and enforce that worker's pause.

@@ -77,10 +77,9 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     return {...structuredClone(task),technicianIds:[...input.technicianIds],technicianId:input.technicianIds[0],technicianName:names.join('、'),version:task.version+1};
   }
   if(input.action==='send-review') return sendReview(task,actor,canInspect,people);
-  const personalReviewEdit=input.action==='edit-repair-items'&&technicianIds(task).includes(actor.id)&&input.repairItems?.every(row=>task.items.some(item=>item.id===row.id&&item.responsibleId===actor.id)||row.id===undefined&&(!row.responsibleId||row.responsibleId===actor.id));
-  if(input.action==='submit-review' || task.stage==='回审'&&['edit-repair-items','start-order'].includes(input.action)&&!(input.action==='edit-repair-items'&&!personalReviewEdit&&!personalEditing&&hasAnyRole(actor,scheduling))) {
+  if(input.action==='submit-review' || task.stage==='回审'&&['edit-repair-items','start-order'].includes(input.action)) {
     if(task.stage!=='回审') fail('仅回审任务可提交回审');
-    const legacyContractorHandler=task.executionMode==='outsourced'&&!task.contractorId&&hasAnyRole(actor,scheduling);
+    const legacyContractorHandler=input.action!=='edit-repair-items'&&task.executionMode==='outsourced'&&!task.contractorId&&hasAnyRole(actor,scheduling);
     if(!legacyContractorHandler&&(!technicianIds(task).includes(actor.id)||!hasAnyRole(actor,['technician','outsourcing'])&&!actor.outsourcingRoleMember)) fail('仅当前维修工可编辑或提交回审',403);
     // Review edits stay scoped to the worker even when they also hold scheduling roles.
     const next=applyDispatchAction({...task,stage:'维修中'},{...input,action:input.action==='submit-review'?'submit-order':input.action},actor,people,now,recipientScope,true);
@@ -228,7 +227,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])];
   } else if(action==='edit-repair-items') {
     const scheduler=!personalEditing&&hasAnyRole(actor, scheduling);
-    if(scheduler) {stage('待派工','待接单','待开工','维修中','暂停','回审','维修完成');prepareSettlementAssignment(next,input);}
+    if(scheduler) {stage('待派工','待接单','待开工','维修中','暂停','维修完成');prepareSettlementAssignment(next,input);}
     else {requireOwner();stage('待开工','维修中','暂停');}
     if(scheduler&&task.stage==='待派工')transferUnfinishedResponsibilities(next);
     editRepairItems(next,input.repairItems,actor,now,{startNewItems:!scheduler,allowRemoval:scheduler});

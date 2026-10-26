@@ -104,7 +104,11 @@ export async function updateWorkOrder(order, actor, action, actorUser) {
   return transaction(async (client) => {
     const existing = await findWorkOrderById(client, order.id, true);
     if (!existing) throw new HttpError(404, "委托单不存在");
-    assertDraftEditable(existing.status);
+    assertDraftEditable(existing.status,existing);
+    if(existing.status==='待客户签字') {
+      const queued=await client.query('select 1 from legacy_sync_outbox where order_id=$1 limit 1',[existing.id]);
+      if(queued.rowCount)throw new HttpError(409,'委托单已进入润丰拉取队列，不能修改签字前内容');
+    }
     const next = {
       ...existing,
       ...order,
@@ -124,7 +128,7 @@ export async function updateWorkOrder(order, actor, action, actorUser) {
     };
     await upsertWorkOrder(client, next);
     await saveDraftPendingRepairs(client, next, actorUser, order.pendingRepairsVersion);
-    // Editing a draft invalidates onsite sessions so an old preview cannot be signed.
+    // Editing unsigned content invalidates every old signature session, including remote links.
     await client.query("update signature_tokens set expires_at=clock_timestamp() where order_id=$1 and not used", [next.id]);
     await attachPreRepairPhotos(client, next, actorUser?.id);
     await attachDraftVehicleLicense(client, next, actorUser?.id);

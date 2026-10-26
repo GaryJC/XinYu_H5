@@ -1,3 +1,4 @@
+import { isUnsignedOrderEditable } from "../../../../shared/workOrderEditPolicy.mjs";
 import { PendingRepairFollowups } from '../pending-repairs/PendingRepairFollowups';
 import { ArchiveFilterBar } from "./ArchiveFilterBar";
 import { archiveTimeLabel } from "./archiveFilters";
@@ -68,6 +69,10 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
     detailOrder?.status === "草稿" && detailOrder.shop.id === currentUser?.shopId
     && (role === "manager" || detailOrder.advisor === currentUser?.name)
   );
+
+  const canEditUnsigned = Boolean(detailOrder && isUnsignedOrderEditable(detailOrder)
+    && detailOrder.shop.id === currentUser?.shopId
+    && (role === "manager" || (role === "advisor" && detailOrder.advisor === currentUser?.name)));
 
   async function handleDeleteDraft(order: WorkOrder) {
     setDeleteError("");
@@ -177,8 +182,8 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
                 <Button danger icon={<Trash2 size={16} />} loading={actionLoading === "delete"}>删除草稿</Button>
               </Popconfirm>
             ) : null}
-            {canManageDraft && detailOrder ? (
-              <Button type="primary" icon={<PencilLine size={16} />} onClick={() => resumeDraft(detailOrder)}>继续编辑草稿</Button>
+            {canEditUnsigned && detailOrder ? (
+              <Button type="primary" icon={<PencilLine size={16} />} onClick={() => resumeDraft(detailOrder)}>{detailOrder.status === "草稿" ? "继续编辑草稿" : "编辑委托单"}</Button>
             ) : null}
             {detailOrder && canAssign(detailOrder) && <Button type="primary" onClick={() => { setDispatchOrder(detailOrder); setDetailOrderId(undefined); }}>派工</Button>}
             {canOpenDispatch && detailOrder && <Button onClick={() => {

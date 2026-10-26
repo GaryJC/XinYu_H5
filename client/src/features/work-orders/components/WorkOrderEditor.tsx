@@ -49,14 +49,14 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const confirmationRows=useRepairConfirmationRows(draft,setDraft);
   const paperOnly = draft.paperOrder?.mode === "pending";
   const paperDingTalk = draft.paperOrder?.mode === "dingtalk";
-  const showLegacySyncStatus = Boolean(selectedOrder && selectedOrder.status !== "草稿");
+  const showLegacySyncStatus = Boolean(selectedOrder && !["草稿","待客户签字"].includes(selectedOrder.status));
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
   const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "编码", "选择已有"].some((phrase) => error.includes(phrase)));
   const canResumeSignature = Boolean(selectedOrder?.status === "待客户签字" && !selectedOrder.signatures.customer);
   const signatureDisabled = Boolean(controller.preRepairPhotos.uploading) || !canResumeSignature && (!canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder)));
   const signatureDisabledReason = selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) ? `当前状态“${selectedOrder.status}”不能再次发起签字` : "";
   const signatureUploaded = Boolean(selectedOrder?.signatures.customer);
-  const signatureUploadDescription = selectedOrder?.legacySyncStatus === "synced"
+  const signatureUploadDescription = selectedOrder?.status === "待客户签字" ? "客户签名已保存，等待服务顾问确认；确认后才进入润丰拉取队列。" : selectedOrder?.legacySyncStatus === "synced"
     ? `委托单已同步至润丰${selectedOrder.dispatchNo ? `，派工号：${selectedOrder.dispatchNo}` : ""}。`
     : selectedOrder?.legacySyncStatus === "failed"
       ? `签字已保存，但润丰同步失败：${selectedOrder.legacySyncError || "请联系管理员处理"}`
@@ -131,6 +131,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               <Alert className="error-box" type="error" showIcon title={hasValidationError ? "请完善委托单信息" : "操作失败"} description={formErrors.join("；")} />
             ) : null}
 
+            {canEditForm&&selectedOrder?.status==="待客户签字"?<Alert type="info" showIcon title="客户尚未签字，可以修改委托单" description="保存修改后旧签字链接失效，请重新发送签字链接。"/>:null}
             {!canEditForm ? (
               <div className="readonly-banner">
                 <LockKeyhole size={16} />
@@ -414,7 +415,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               </div>
             </div>}
               <FormActionBar label="委托开单操作">
-                {(!paperOnly || !draft.paperOrder) && <Button size="large" icon={<Save size={16} />} onClick={saveDraft} loading={actionLoading === "save"} disabled={!canEditForm || Boolean(controller.preRepairPhotos.uploading)}>保存草稿</Button>}
+                {(!paperOnly || !draft.paperOrder) && <Button size="large" icon={<Save size={16} />} onClick={saveDraft} loading={actionLoading === "save"} disabled={!canEditForm || Boolean(controller.preRepairPhotos.uploading)}>{selectedOrder?.status==="待客户签字"?"保存修改":"保存草稿"}</Button>}
                 {draft.paperOrder ? <Button className={paperOnly ? "paper-order-create-action" : undefined} size="large" type="primary" loading={actionLoading==="save"}
                   disabled={!canEditForm || controller.paperPhotos.uploading || Boolean(controller.preRepairPhotos.uploading)} onClick={()=>void controller.submitPaperOrder()}>
                   {paperDingTalk ? "提交委托单（免签字）" : "创建纸质委托书"}</Button> : <Tooltip title={signatureDisabledReason}>

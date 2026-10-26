@@ -1,3 +1,4 @@
+import {isUnsignedOrderEditable} from '../../../../shared/workOrderEditPolicy.mjs';
 import { useArchiveFilters } from "./useArchiveFilters";
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import { usePaperOrderPhotos } from "../work-orders/hooks/usePaperOrderPhotos";
@@ -70,7 +71,7 @@ export function useWorkbenchController() {
   const visibleNavItems = useMemo(() => navItems.filter((item) => hasAnyRole(currentUser || {role}, item.roles) && (dispatchEnabled || !isDispatchNavigation(item.label))), [role,currentUser]);
   const canEditForm = canCreateOrder(role) && (
     !selectedOrder || (
-      selectedOrder.status === "草稿" && selectedOrder.shop.id === currentUser?.shopId
+      isUnsignedOrderEditable(selectedOrder) && selectedOrder.shop.id === currentUser?.shopId
       && (role === "manager" || selectedOrder.advisor === currentUser?.name)
     )
   );
@@ -364,7 +365,7 @@ export function useWorkbenchController() {
   }
 
   async function sendSignature() {
-    if (selectedOrder?.status === "待客户签字") {
+    if (selectedOrder?.status === "待客户签字" && !canEditForm) {
       setActionLoading("signature");setFormErrors([]);
       try {
         const order = await workOrderApi.createSignatureToken(selectedOrder.id, actor);

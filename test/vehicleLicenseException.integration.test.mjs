@@ -45,13 +45,13 @@ test('vehicle license exception persistence, signature rules, administrator fano
   order=await db.updateWorkOrder({...order,inspection:{...order.inspection,preRepairPhotos:photos}},advisor.name,'保存接车照片',advisor);
   const other=await db.createWorkOrder({...draft,vehicleLicenseException:order.vehicleLicenseException},advisor.name,advisor);
   assert.equal(other.vehicleLicenseException,undefined,'a new order never inherits the exception');
-  const signed=await db.createSignatureTokenForOrder(order.id,advisor.name,options);assert.equal(signed.status,'待客户签字');
-  await assert.rejects(()=>report(advisor,order.id,{...body,requestId:randomUUID(),reason:'锁定后修改'},options),e=>e.status===409);
+  const signed=await db.createSignatureTokenForOrder(order.id,advisor.name,{signatureMode:'remote'});assert.equal(signed.status,'待客户签字');
+  assert.equal((await report(advisor,order.id,{...body,requestId:randomUUID()},options)).id,results[0].id);
   // Main keeps license photos optional; an unreported second draft can still be signed.
   for(const [key,id] of Object.entries(photos))photos[key]=`other-${id}`;
   for(const id of Object.values(photos))await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,original_name,mime_type,size_bytes,uploaded_by) values($1,$2,'repair_order_photo','local','local','test','test.png','image/png',10,$3)",[id,other.id,advisor.id]);
   await db.updateWorkOrder({...other,inspection:{...other.inspection,preRepairPhotos:photos}},advisor.name,'接车照片',advisor);
-  assert.equal((await db.createSignatureTokenForOrder(other.id,advisor.name,options)).status,'待客户签字');
+  assert.equal((await db.createSignatureTokenForOrder(other.id,advisor.name,{signatureMode:'remote'})).status,'待客户签字');
   await Promise.all([worker.resolveLicenseExceptionManagers(),worker.resolveLicenseExceptionManagers()]);
   const targets=(await pool.query('select recipient_id from vehicle_license_exception_notifications order by recipient_id')).rows.map(r=>r.recipient_id);assert.deepEqual(targets,['m1','m2']);
   let sent=0,queried=0;
@@ -62,6 +62,21 @@ test('vehicle license exception persistence, signature rules, administrator fano
   while(await worker.processLicenseExceptionNotification({send,query:async()=>{queried++;return {status:'sent'};}})){}
   assert.equal(sent,2);assert.equal(queried,2);
   assert.equal((await pool.query("select count(*) from vehicle_license_exception_notifications where status='sent'")).rows[0].count,'2');
+  const before=await db.getWorkOrderDetail(order.id,advisor);
+  const edited=await db.updateWorkOrder({...before,vehicle:{...before.vehicle,plate:'鲁B862P7',vin:'LZWADAGA8NB072733'}},advisor.name,'待签字修正车辆',advisor);
+  const changed={...body,requestId:randomUUID(),vehiclePlate:edited.vehicle.plate,vehicleVin:edited.vehicle.vin};
+  const replacement=await report(advisor,order.id,changed,options);
+  assert.equal(replacement.vehicleVin,edited.vehicle.vin);assert.notEqual(replacement.id,results[0].id);
+  assert.equal((await pool.query('select 1 from legacy_sync_outbox where order_id=$1',[order.id])).rowCount,0);
+  const link=await db.createSignatureTokenForOrder(order.id,advisor.name,{signatureMode:'remote'});
+  await report(advisor,order.id,{...changed,requestId:randomUUID(),reason:'补充核实证件遗失原因'},options);
+  assert.equal(await db.findWorkOrderByToken(link.signatureToken),undefined,'备案内容改变后旧签字链接失效');
+  const fresh=await db.createSignatureTokenForOrder(order.id,advisor.name,{signatureMode:'remote'});
+  const file=randomUUID();
+  await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by) values($1,$2,'signature_image','local','','test','image/png',1,$3)",[file,order.id,advisor.id]);
+  await db.signWorkOrderByToken(fresh.signatureToken,'客户',file);
+  await assert.rejects(()=>report(advisor,order.id,{...changed,requestId:randomUUID()},options),e=>e.status===409);
+
  } finally {
   if(pool)await pool.end();
   await Promise.all(connectionsClosed);

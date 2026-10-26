@@ -1,3 +1,4 @@
+import {isUnsignedOrderEditable} from '../../shared/workOrderEditPolicy.mjs';
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import {randomUUID} from 'node:crypto';
 import {transaction} from '../database/pool.mjs';
@@ -18,7 +19,7 @@ export async function reportVehicleLicenseException(actor,orderId,raw,{runTransa
       if(previous.reason!==input.reason || previous.vehicle_plate!==plate || previous.vehicle_vin!==vin)throw new HttpError(409,'请求编号已用于其他备案内容');
       return mapLicenseException(previous);
     }
-    if(order.status!=='草稿')throw new HttpError(409,'只能在草稿阶段办理行驶证缺失备案');
+    if(!isUnsignedOrderEditable({status:order.status,paperOrder:order.paper_order,signatures:{customer:order.customer_signed},customerSignatureReview:order.customer_signature_review}) || order.queued)throw new HttpError(409,'只能在客户尚未签字且未入队时办理行驶证缺失备案');
     if(!plate || !/^[A-Z0-9]{17}$/.test(vin))throw new HttpError(400,'请先填写车牌和17位 VIN，再办理备案');
     if(input.vehiclePlate!==plate || input.vehicleVin!==vin)throw new HttpError(409,'车辆信息已变化，请核对车牌与 VIN 后重新备案');
     if(await orderHasLicense(client,orderId))throw new HttpError(409,'本单已上传行驶证，无需跳过');

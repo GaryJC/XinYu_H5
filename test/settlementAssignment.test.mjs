@@ -24,11 +24,14 @@ test('settlement reassignment rejects invalid owners, closed orders and ordinary
  for(const patch of [{active:false},{shopId:'other'},{role:'advisor'}])assert.throws(()=>act(t,advisor,'edit-repair-items',{repairItems:rows(t),reason:'换人'},[a,b,{...c,...patch},advisor,inspector]));
  assert.deepEqual(t,before);
 });
-test('review scheduling can change another worker assignment without ending review or unlocking submitted work',()=>{
+test('review edits are limited to the assigned worker and their own projects',()=>{
  const original={...task(),stage:'回审',items:task().items.map((item,index)=>({...item,status:index?'待检验':'维修中'}))};
- const t=act(original,advisor,'edit-repair-items',{repairItems:originalRows(original).map(row=>({...row,responsibleId:row.id===1?'c':row.responsibleId})),reason:'回审交接'});
- assert.equal(t.stage,'回审');assert.equal(t.items[0].responsibleId,'c');assert.deepEqual(t.items[1],original.items[1]);
- assert.throws(()=>act(original,advisor,'edit-repair-items',{repairItems:rows(original).map(row=>({...row,responsibleId:'c'})),reason:'换人'}));
+ for(const role of ['advisor','manager'])for(const repairItems of [originalRows(original),rows(original)]) {
+  assert.throws(()=>act(original,{...advisor,role},'edit-repair-items',{repairItems}),e=>e.status===403);
+ }
+ const t=act(original,a,'edit-repair-items',{repairItems:[{id:1,name:'本人项目修改',responsibleId:'a'}]});
+ assert.equal(t.stage,'回审');assert.equal(t.items[0].name,'本人项目修改');assert.deepEqual(t.items[1],original.items[1]);
+ assert.throws(()=>act(original,a,'edit-repair-items',{repairItems:originalRows(original)}),e=>e.status===403);
 });
 test('settlement permits new assigned work but does not unlock completed names or deletion',()=>{
  const t=task(),originalRows=t.items.map(({id,name,responsibleId})=>({id,name,responsibleId}));
@@ -44,7 +47,7 @@ test('inspected projects stay immutable even when submitted together with valid 
   if(mutation==='owner')edits[0].responsibleId='c';
   if(mutation==='name')edits[0].name='篡改名称';
   if(mutation==='remove')edits=edits.slice(1);
-  assert.throws(()=>act(t,advisor,'edit-repair-items',{repairItems:edits,reason:'新增任务'}),e=>e.status===409);
+  assert.throws(()=>act(t,advisor,'edit-repair-items',{repairItems:edits,reason:'新增任务'}),e=>e.status===(stage==='回审'?403:409));
   assert.deepEqual(t,before);
  }
 });

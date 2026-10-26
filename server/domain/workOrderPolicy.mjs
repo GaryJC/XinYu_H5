@@ -1,3 +1,4 @@
+import {isUnsignedOrderEditable} from '../../shared/workOrderEditPolicy.mjs';
 import {isCurrentLicenseException} from './vehicleLicenseException.mjs';
 import { HttpError } from "../http/HttpError.mjs";
 
@@ -23,8 +24,8 @@ const transitionPatchFields = new Map([
   ["完成", ["settlementAmount", "feeNote"]]
 ]);
 
-export function assertDraftEditable(status) {
-  if (status !== "草稿") throw new HttpError(409, `当前状态“${status}”不能修改委托单内容`);
+export function assertDraftEditable(status,order={status}) {
+  if (!isUnsignedOrderEditable(order)) throw new HttpError(409, `当前状态“${status}”不能修改委托单内容`);
 }
 
 export function assertOrderReadyForSignature(order) {

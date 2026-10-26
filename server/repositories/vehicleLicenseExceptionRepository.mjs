@@ -8,7 +8,7 @@ export async function readLicenseExceptions(client,ids) {
   return result;
 }
 
-export async function lockLicenseOrder(client,id) {return (await client.query('select * from work_orders where id=$1 for update',[id])).rows[0];}
+export async function lockLicenseOrder(client,id) {return (await client.query(`select wo.*, exists(select 1 from signatures s where s.order_id=wo.id and s.signer_type='customer') as customer_signed, exists(select 1 from legacy_sync_outbox q where q.order_id=wo.id) as queued from work_orders wo where wo.id=$1 for update of wo`,[id])).rows[0];}
 export async function licenseActor(client,id) {return (await client.query('select id,name,role,roles,active,shop_id from users where id=$1',[id])).rows[0];}
 export async function licenseRequest(client,id,requestId) {return (await client.query('select * from vehicle_license_exceptions where order_id=$1 and request_id=$2',[id,requestId])).rows[0];}
 export async function orderHasLicense(client,id) {return Boolean((await client.query("select id from files where order_id=$1 and kind='vehicle_license' limit 1",[id])).rows.length);}
@@ -17,5 +17,6 @@ export async function insertLicenseReport(client,{id,orderId,requestId,plate,vin
   const {rows:[saved]}=await client.query(`insert into vehicle_license_exceptions(id,order_id,request_id,vehicle_plate,vehicle_vin,reason,reported_by,reported_name,payload)
     values($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *`,[id,orderId,requestId,plate,vin,reason,user.id,user.name,JSON.stringify(payload)]);
   await client.query('insert into audit_logs(order_id,actor,action) values($1,$2,$3)',[orderId,user.name,`行驶证缺失备案：${reason}`]);
+  await client.query("update signature_tokens set expires_at=clock_timestamp() where order_id=$1 and not used",[orderId]);
   return saved;
 }
