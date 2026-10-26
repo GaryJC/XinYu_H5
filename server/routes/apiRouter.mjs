@@ -1,3 +1,4 @@
+import {handleVehicleLicenseHistory} from './vehicleLicenseHistoryRouter.mjs';
 import { handlePendingRepairs } from './pendingRepairsRouter.mjs';
 import { handlePrintPdfDownload, handlePrintPdfUpload } from "./printPdfRouter.mjs";
 import { handleCustomerSignature } from "./customerSignatureRouter.mjs";
@@ -75,6 +76,7 @@ export async function handleApiRequest(req, res, url) {
 
   if (!url.pathname.startsWith("/api/")) return false;
   const currentUser = requireAuthenticatedUser(await authenticateRequest(req));
+  if(await handleVehicleLicenseHistory(req,res,url,currentUser))return true;
 
   if (req.method === "GET" && url.pathname === "/api/auth/me") {
     sendJson(res, 200, currentUser);

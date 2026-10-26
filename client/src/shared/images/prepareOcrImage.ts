@@ -30,36 +30,38 @@ function encodeJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
 
 // Use Image/canvas rather than createImageBitmap for older DingTalk WebViews.
 export function prepareOcrImage(file: File) { return prepareImage(file, 'ocr'); }
-export function prepareUploadPhoto(file: File, uploadedAt?: Date) {
-  const watermark = uploadedAt ? `上传时间：${new Intl.DateTimeFormat('zh-CN', {
+export function prepareUploadPhoto(file: File, uploadedAt?: Date, extraLines: string[] = []) {
+  const watermark = uploadedAt ? [`上传时间：${new Intl.DateTimeFormat('zh-CN', {
     timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
-  }).format(uploadedAt).replace(/\//g, '-')}` : undefined;
+  }).format(uploadedAt).replace(/\//g, '-')}`, ...extraLines.map(line => line.replace(/\s+/g, ' ').trim()).filter(Boolean)] : undefined;
   return prepareImage(file, 'photo', watermark);
 }
 
-function drawWatermark(context: CanvasRenderingContext2D, canvas: HTMLCanvasElement, text: string) {
+function drawWatermark(context: CanvasRenderingContext2D, canvas: HTMLCanvasElement, lines: string[]) {
   const padding = Math.max(2, Math.round(Math.min(canvas.width, canvas.height) * 0.015));
   let fontSize = Math.max(1, Math.round(Math.min(canvas.width, canvas.height) * 0.032));
   context.save();
   context.font = `${fontSize}px sans-serif`;
   const availableWidth = Math.max(1, canvas.width - padding * 4);
-  if (context.measureText(text).width > availableWidth) {
-    fontSize *= availableWidth / context.measureText(text).width;
+  const textWidth = () => Math.max(...lines.map(line => context.measureText(line).width));
+  if (textWidth() > availableWidth) {
+    fontSize *= availableWidth / textWidth();
     context.font = `${fontSize}px sans-serif`;
   }
-  const height = fontSize + padding * 2;
+  const lineHeight = fontSize * 1.4;
+  const height = fontSize + lineHeight * (lines.length - 1) + padding * 2;
   const top = canvas.height - height - padding;
   context.fillStyle = 'rgba(0, 0, 0, 0.6)';
-  context.fillRect(padding, top, context.measureText(text).width + padding * 2, height);
+  context.fillRect(padding, top, textWidth() + padding * 2, height);
   context.fillStyle = '#fff';
   context.textAlign = 'left';
   context.textBaseline = 'top';
-  context.fillText(text, padding * 2, top + padding);
+  lines.forEach((line, index) => context.fillText(line, padding * 2, top + padding + index * lineHeight));
   context.restore();
 }
 
-async function prepareImage(file: File, profile: keyof typeof profiles, watermark?: string) {
+async function prepareImage(file: File, profile: keyof typeof profiles, watermark?: string[]) {
   const { targetBytes, maxEdge, qualities } = profiles[profile];
   const started = performance.now();
   const url = URL.createObjectURL(file);

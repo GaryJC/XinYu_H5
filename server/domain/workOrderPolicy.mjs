@@ -41,12 +41,14 @@ export function assertOrderReadyForSignature(order) {
   if (!order.customer?.phone?.trim()) missing.push("联系电话");
   const requestedItems=[...(order.repairItems||[]),...(order.pendingRepairs||[]).filter(p=>p.state!=='declined'&&!p.scheduled)];
   if (!requestedItems.length || requestedItems.some(item=>!item.name?.trim())) missing.push("维修项目");
+  const hasLicense=(order.files||[]).some(file=>file.kind==='vehicle_license'&&!(order.inspection?.replacedPhotoIds||[]).includes(file.id));
+  if(!order.vehicle?.isMilitary&&!hasLicense&&!isCurrentLicenseException(order.vehicleLicenseException,order.vehicle))missing.push('行驶证照片（无法提供时请填写理由并备案）');
   if (missing.length) throw new HttpError(400, `请完善必填项：${missing.join("、")}`);
 }
 
 export function assertVehicleLicenseRequirement(vehicleLookupStatus, hasVehicleLicense, exception, vehicle) {
-  if (vehicleLookupStatus === "new" && !hasVehicleLicense && !isCurrentLicenseException(exception,vehicle)) {
-    throw new HttpError(400, "公司系统中未找到该车辆，新车必须上传行驶证照片后再发起签字");
+  if (!vehicle?.isMilitary && !hasVehicleLicense && !isCurrentLicenseException(exception,vehicle)) {
+    throw new HttpError(400, "请上传行驶证照片，或选择“本次无法提供行驶证”并填写理由后再发起签字");
   }
 }
 

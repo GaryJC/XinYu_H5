@@ -42,3 +42,14 @@ test('replacement routes old other/damage images to their original API slot and 
   assert.equal(supplementaryPhotoSlot(original,'damage'),'other');
   assert.equal(supplementaryPhotoSlot(original,'old-missing-metadata'),'extra');
 });
+
+ test('license gallery shows only the selected current photo, or newest visible legacy photo',()=>{
+  const original=order();
+  original.files.push({...file('new-license','vehicle_license'),createdAt:'2026-10-26T10:00:00Z'});
+  original.files.find(value=>value.id==='license').createdAt='2026-10-25T10:00:00Z';
+  assert.deepEqual(orderPhotoCollections(original).licenseFiles.map(value=>value.id),['new-license']);
+  original.inspection.vehicleLicenseFileId='license';
+  assert.deepEqual(orderPhotoCollections(original).licenseFiles.map(value=>value.id),['license']);
+  original.inspection.replacedPhotoIds.push('license');
+  assert.deepEqual(orderPhotoCollections(original).licenseFiles.map(value=>value.id),['new-license']);
+});

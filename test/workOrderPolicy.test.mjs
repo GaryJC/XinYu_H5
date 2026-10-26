@@ -54,6 +54,7 @@ const readyOrder = {
     legacyCode: "grqdswjty",
     phone: "13800000000"
   },
+  files: [{id:"license",kind:"vehicle_license"}],
   repairItems: [{ name: "常规保养" }]
 };
 
@@ -72,10 +73,14 @@ test("signing requires the legacy model and organization codes used by Runfeng",
   );
 });
 
-test("signing permits orders without a vehicle-license attachment", () => {
+test("signing requires a license or a matching exception, with military exemption", () => {
   assert.doesNotThrow(() => assertOrderReadyForSignature({ ...readyOrder, vehicle: {...readyOrder.vehicle, isMilitary: true}, files: [] }));
-  assert.doesNotThrow(() => assertOrderReadyForSignature({ ...readyOrder, files: [] }));
-  assert.doesNotThrow(() => assertOrderReadyForSignature({ ...readyOrder, files: undefined }));
+  assert.throws(() => assertOrderReadyForSignature({ ...readyOrder, files: [] }),/行驶证/);
+  assert.throws(() => assertOrderReadyForSignature({ ...readyOrder, files: undefined }),/行驶证/);
+  assert.throws(()=>assertOrderReadyForSignature({...readyOrder,inspection:{replacedPhotoIds:["license"]}}),/行驶证/);
+  const exception={id:"e",reason:"客户遗失",vehiclePlate:readyOrder.vehicle.plate,vehicleVin:readyOrder.vehicle.vin};
+  assert.doesNotThrow(()=>assertOrderReadyForSignature({...readyOrder,files:[],vehicleLicenseException:exception}));
+  for(const patch of [{reason:" "},{vehiclePlate:"其他车"},{vehicleVin:"OTHER"}])assert.throws(()=>assertOrderReadyForSignature({...readyOrder,files:[],vehicleLicenseException:{...exception,...patch}}),/行驶证/);
 });
 
 test("repair-item actions reject missing items, unknown actions, and wrong states", () => {

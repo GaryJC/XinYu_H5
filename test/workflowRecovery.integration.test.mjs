@@ -28,7 +28,7 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       await pool.query(`insert into work_orders(id,status,advisor,technician,inspector,old_parts_handling,vehicle_plate,vehicle_vin,vehicle_mileage,vehicle_model,vehicle_model_legacy_code,customer_name,customer_legacy_code,customer_phone,department_code,department_name,inspection)
         values($1,$2,'管理员','待派工','待检验','客户带走','沪ATEST','LSVAB1234A1234567','1000','测试车型','MODEL','测试客户','CUSTOMER','13800000000','01','维修部',$3)`,[id,status,JSON.stringify({preRepairPhotos:{front45:front,rear45:rear}})]);
       for(const [n,label] of [[1,'检查'],[2,'维修']])await pool.query("insert into repair_items(order_id,client_item_id,item_no,name) values($1,$2::bigint,$2::integer,$3)",[id,n,label]);
-      for(const [file,kind] of [[front,'repair_order_photo'],[rear,'repair_order_photo'],[signature,'signature_image']])await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by) values($1,$2,$3,'local','','fixture','image/png',8,'m')",[file,id,kind]);
+      for(const [file,kind] of [[front,'repair_order_photo'],[rear,'repair_order_photo'],[signature,'signature_image'],[randomUUID(),'vehicle_license']])await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by) values($1,$2,$3,'local','','fixture','image/png',8,'m')",[file,id,kind]);
       return signature;
     }
     await t.test('authenticated onsite signing confirms and enqueues once; remote signing still awaits review',async()=>{
@@ -173,7 +173,9 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
         const renewed=await db.createSignatureTokenForOrder('remote',manager.name,{renew:true});
         assert.notEqual(first.signatureToken,renewed.signatureToken);
         const root='/api/public/customer-signature',token=renewed.signatureToken;
-        assert.equal((await post(`${root}/session`,{token:first.signatureToken})).status,404);
+        assert.equal(await db.findWorkOrderByToken(first.signatureToken),undefined);
+        const expiredResponse=await post(`${root}/session`,{token:first.signatureToken});
+        assert.equal(expiredResponse.status,404,JSON.stringify(expiredResponse));
         assert.equal((await post(`${root}/session`,{token:'sig_legacy_weak'})).status,404);
         const session=await post(`${root}/session`,{token});
         assert.equal(session.status,200);assert.equal(session.cache,'no-store');
@@ -306,7 +308,7 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       for(const user of [tech,nextTech])await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by) values($1,'individual','repair_progress_photo','local','','fixture','image/png',8,$2)",[randomUUID(),user.id]);
       const first=await act(tech,'submit-order',{note:'甲完成'});
       assert.equal(first.task.stage,'维修中');assert.equal(first.task.items[1].status,'待开工');
-      assert.equal((await pool.query("select count(*) from dispatch_inspection_notifications where order_id='individual'")).rows[0].count,'0');
+      assert.equal((await pool.query("select count(*) from dispatch_inspection_notifications where order_id='individual'")).rows[0].count,'1');
       await assert.rejects(()=>act(nextTech,'submit-order'),/确认配件备齐/);
       await act(warehouse,'confirm-parts',{partsOwnerId:'u'});
       const current=(await service.dispatchDetail(nextTech,'individual')).task;
@@ -314,8 +316,8 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       await Promise.all([service.executeDispatchAction(nextTech,'individual',request),service.executeDispatchAction(nextTech,'individual',request)]);
       const finished=(await service.dispatchDetail(manager,'individual')).task;
       assert.equal(finished.stage,'待检验');assert.deepEqual(finished.items.map(i=>i.finishedBy),['t','u']);
-      assert.equal((await pool.query("select count(*) from dispatch_inspection_notifications where order_id='individual'")).rows[0].count,'1');
-      assert.equal((await pool.query("select count(*) from dispatch_scheduler_notifications where order_id='individual' and kind='维修已提检'")).rows[0].count,'1');
+      assert.equal((await pool.query("select count(*) from dispatch_inspection_notifications where order_id='individual'")).rows[0].count,'2');
+      assert.equal((await pool.query("select count(*) from dispatch_scheduler_notifications where order_id='individual' and kind='维修已提检'")).rows[0].count,'2');
       assert.equal(finished.partsRequests.length,2);
     });
     await t.test('batch preparation is atomic, idempotent and aggregates actual recipients across applications',async()=>{

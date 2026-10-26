@@ -1,3 +1,4 @@
+import {selectSingleVehicleLicense,assertLicenseReuseIdentity} from './vehicleLicenseHistoryRepository.mjs';
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import { HttpError } from "../http/HttpError.mjs";
 import { assertPaperPhotoIds } from "./paperOrderRepository.mjs";
@@ -27,7 +28,7 @@ export async function updateWorkOrderPhoto(client, id, input, actor) {
   }
   const inspection = { ...(order.inspection || {}) };
   if ((inspection.replacedPhotoIds || []).includes(file.id)) throw new HttpError(409, "不能复用已替换的历史照片，请重新上传");
-  if (input.slot === "vehicleLicense") inspection.vehicleLicenseFileId = file.id;
+  if (input.slot === "vehicleLicense") {assertLicenseReuseIdentity(file,order.vehicle_vin);inspection.vehicleLicenseFileId = file.id;}
   if (input.replaceFileId) {
     const {rows: previousFiles} = await client.query("select * from files where id=$1 and order_id=$2", [input.replaceFileId, id]);
     const previous = previousFiles[0];
@@ -59,6 +60,7 @@ export async function updateWorkOrderPhoto(client, id, input, actor) {
   }
   await client.query("update files set order_id=$2 where id=$1", [file.id, id]);
   await client.query("update ocr_records set order_id=$2 where file_id=$1 and (order_id is null or order_id=$2)", [file.id, id]);
+  if(input.slot === "vehicleLicense")Object.assign(inspection,await selectSingleVehicleLicense(client,id,file.id,inspection,order.vehicle_vin));
   // Only attachment metadata changes. Signed fields, workflow and Runfeng outbox stay untouched.
   await client.query("update work_orders set inspection=$2::jsonb,updated_at=now() where id=$1", [id, JSON.stringify(inspection)]);
   await client.query("insert into audit_logs(order_id,actor,action) values($1,$2,$3)",

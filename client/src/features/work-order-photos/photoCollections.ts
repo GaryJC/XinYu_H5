@@ -19,7 +19,7 @@ export function orderPhotoCollections(order: WorkOrder) {
     photos: { ...photos, extra: supplementaryIds },
     supplementaryFiles: supplementaryIds.map((id, index) => describe(id, `补充照片 ${index + 1}`)),
     paperFiles: [...paperIds].filter(id => !hidden.has(id)).map((id, index) => describe(id, `纸质委托书照片 ${index + 1}`)),
-    licenseFiles: visible.filter(file => file.kind === 'vehicle_license' && !paperIds.has(file.id))
+    licenseFiles: visible.filter(file => file.kind === 'vehicle_license' && !paperIds.has(file.id)).sort((a,b)=>Number(b.id===order.inspection.vehicleLicenseFileId)-Number(a.id===order.inspection.vehicleLicenseFileId)||String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,1)
   };
 }
 

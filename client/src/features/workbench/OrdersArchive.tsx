@@ -19,7 +19,7 @@ import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
 import { QuickDispatchDialog } from "../dispatch/QuickDispatchDialog";
 import { dispatchEnabled } from "../dispatch/dispatchAvailability";
 import { useState, type ReactNode } from "react";
-import { Alert, Button, Card, Collapse, Descriptions, Empty, Grid, Input, Modal, Popconfirm, Table, Tag } from "antd";
+import { Alert, Button, Card, Collapse, Descriptions, Empty, Grid, Input, Modal, Popconfirm, Spin, Table, Tag } from "antd";
 import { ChevronRight, PencilLine, Trash2, RefreshCw } from "lucide-react";
 import { WorkOrder, UserProfile } from "../../../../shared/types";
 import { LegacySyncStatusChip, StatusChip } from "../../shared/ui/Status";
@@ -28,7 +28,7 @@ import { WorkbenchController } from "./useWorkbenchController";
 export function OrdersArchive({ controller }: { controller: WorkbenchController }) {
   const {
     searchTerm, setSearchTerm, searchedOrders, selectedId, selectOrder, setActiveNav,
-    role, currentUser, deleteDraft, actionLoading
+    role, currentUser, deleteDraft, actionLoading, ordersLoading
   } = controller;
   const signature = useArchiveSignature(currentUser, controller.acceptRefreshedOrder, controller.refreshArchiveSummary);
   const [detailOrderId, setLocalDetailOrderId] = useState<string | undefined>(()=>new URLSearchParams(location.search).get("paperOrder") || undefined);
@@ -93,7 +93,7 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minWidth: 0, maxWidth: "100%" }}>
         {["advisor","manager"].includes(role)&&<PendingRepairFollowups user={controller.currentUser||undefined}/>}
-        <Button onClick={() => void controller.refreshWorkbench()}>刷新列表</Button>
+        <Button loading={ordersLoading} onClick={() => void controller.refreshWorkbench()}>刷新列表</Button>
         {["advisor", "manager"].includes(role) && <Button icon={<RefreshCw size={16}/>} loading={Boolean(legacyRefresh.progress)}
           disabled={!refreshTargets.length || Boolean(legacyRefresh.progress)} onClick={() => void legacyRefresh.refresh(refreshTargets)}>
           {legacyRefresh.progress ? `正在更新 ${legacyRefresh.progress.done}/${legacyRefresh.progress.total}` : `全部从润丰更新（${refreshTargets.length}）`}
@@ -106,7 +106,8 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
       <ArchiveFilterBar key={currentUser?.id} archive={controller.archive} isMobile={isMobile} />
 
       {isMobile ? (
-        <div className="archive-mobile-list">
+        <Spin spinning={ordersLoading} description="正在加载委托单…">
+        <div className="archive-mobile-list" aria-busy={ordersLoading} style={ordersLoading ? { minHeight: 180 } : undefined}>
           {searchedOrders.length ? searchedOrders.map((order) => (
             <button className={order.id === selectedId ? "archive-order-card selected" : "archive-order-card"} type="button" key={order.id} onClick={() => openDetail(order)}>
               <div className="archive-order-card-main">
@@ -127,16 +128,19 @@ export function OrdersArchive({ controller }: { controller: WorkbenchController 
               </div>
               <ChevronRight size={18} />
             </button>
-          )) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无符合条件的委托单"><Button onClick={controller.archive.reset}>清空筛选</Button></Empty>}
+          )) : !ordersLoading && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无符合条件的委托单"><Button onClick={controller.archive.reset}>清空筛选</Button></Empty>}
         </div>
+        </Spin>
       ) : (
         <Table
           className="orders-table"
+          loading={{ spinning: ordersLoading, description: "正在加载委托单…" }}
+          aria-busy={ordersLoading}
           size="small"
           rowKey="id"
           scroll={{ x: "max-content" }}
           pagination={{ pageSize: 8, showSizeChanger: false, current: controller.archive.page, onChange: controller.archive.setPage }}
-          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无符合条件的委托单"><Button onClick={controller.archive.reset}>清空筛选</Button></Empty> }}
+          locale={{ emptyText: ordersLoading ? <div style={{ minHeight: 140 }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无符合条件的委托单"><Button onClick={controller.archive.reset}>清空筛选</Button></Empty> }}
           rowClassName={(order) => order.id === selectedId ? "selected" : ""}
           onRow={(order) => ({ onClick: () => openDetail(order) })}
           dataSource={searchedOrders}

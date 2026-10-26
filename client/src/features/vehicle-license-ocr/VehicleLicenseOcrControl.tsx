@@ -30,7 +30,7 @@ export function VehicleLicenseOcrControl({ state, result, fileId, disabled, onSc
   return (
     <div className="ocr-strip compact-ocr vehicle-license-ocr">
       <div className="ocr-main">
-        <strong>扫描行驶证（选填）</strong>
+        <strong>上传或扫描行驶证</strong>
         <span>{state.source} · {state.status}{state.value ? ` · ${state.value}` : ""}</span>
         {fileId && <div><AuthenticatedImage fileId={fileId} alt="已上传的行驶证照片" width={160} height={100}/>
           <p>照片已上传，保存委托单时会一并保存；识别失败不影响照片保存。</p></div>}

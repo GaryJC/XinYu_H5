@@ -85,6 +85,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await assert.rejects(()=>db.updateWorkOrder({...order,dispatchPlan:{...plan,technicianId:outside.id}},advisor.name,'跨店',advisor),e=>e.status===400);
       order=await db.updateWorkOrder({...order,dispatchPlan:plan},advisor.name,'预选',advisor);
       async function prepareSignature(order) {
+        await progressPhoto(order.id,0,"vehicle_license");
         const front45=await progressPhoto(order.id,0,'repair_order_photo'),rear45=await progressPhoto(order.id,0,'repair_order_photo');
         await pool.query('update work_orders set inspection=$2 where id=$1',[order.id,{preRepairPhotos:{front45,rear45}}]);
         await pool.query("update work_orders set status='待客户签字' where id=$1",[order.id]);
@@ -132,6 +133,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         let order=await db.createWorkOrder({shop:{id:'shop-hq'},department:{code:'D1',name:'维修部'},vehicle:{plate:'鲁B12345',vin:'LSVAA4182C2187611',mileage:'12000',model:'测试车型',modelLegacyCode:'M1'},customer:{name:'车主',legacyCode:'C1',phone:'13800000000'},advisor:advisor.name,repairItems:[{id:1,name:'保养'}]},advisor.name,advisor);
         const front45=await progressPhoto(order.id,0,'repair_order_photo'),rear45=await progressPhoto(order.id,0,'repair_order_photo');
         order=await db.updateWorkOrder({...order,inspection:{...order.inspection,preRepairPhotos:{front45,rear45}}},advisor.name,'接车照片',advisor);
+        await progressPhoto(order.id,0,'vehicle_license');
         order=await db.createSignatureTokenForOrder(order.id,advisor.name,{signatureMode:'remote'});
         return {order,file:await progressPhoto(order.id,0,'signature_image')};
       }
@@ -1090,7 +1092,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
           await page.addInitScript(token=>localStorage.setItem('repair-h5-auth-token',token),token);
           await page.goto(`${base}/?dispatchOrder=${orderId}`);return page;
         }
-        const editableOrder=await db.createWorkOrder({shop:{id:'shop-hq'},vehicle:{plate:'鲁BEDIT01',vin:'LZWADAGA8NB072733'},customer:{name:'签字前编辑测试'},advisor:advisor.name,repairItems:[{id:1,name:'保养'}]},advisor.name,advisor);
+        const editableOrder=await db.createWorkOrder({shop:{id:'shop-hq'},vehicle:{plate:'鲁BEDIT01',vin:'LZWADAGA8NB072799'},customer:{name:'签字前编辑测试'},advisor:advisor.name,repairItems:[{id:1,name:'保养'}]},advisor.name,advisor);
         await pool.query("update work_orders set status='待客户签字' where id=$1",[editableOrder.id]);
         const editPage=await pageFor(advisor,false,'');
         await editPage.getByRole('navigation',{name:'主导航'}).getByRole('button',{name:'工作台',exact:true}).click();
@@ -1109,7 +1111,89 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await Promise.all([editPage.waitForResponse(response=>response.request().method()==='PUT'&&response.url().includes('/api/work-orders/')&&response.ok()),editPage.getByRole('button',{name:'保存修改',exact:true}).click()]);
         assert.equal((await db.findWorkOrderById(pool,editableOrder.id)).vehicle.plate,'鲁B862P7');
         assert.equal((await pool.query('select 1 from legacy_sync_outbox where order_id=$1',[editableOrder.id])).rowCount,0);
+        await editPage.getByRole('button',{name:'保存修改',exact:true}).and(editPage.locator('button:not(.ant-btn-loading)')).waitFor();
+        const originalVin=await editPage.getByLabel('VIN/底盘号',{exact:true}).inputValue();
+        await editPage.getByLabel('VIN/底盘号',{exact:true}).fill('');
+        await editPage.getByRole('radio',{name:'本次无法提供行驶证',exact:true}).click();
+        const invalidLicense=editPage.getByRole('dialog',{name:'本次跳过行驶证上传',exact:true});
+        await invalidLicense.getByLabel('无法提供行驶证的说明',{exact:true}).fill('客户未携带');
+        await invalidLicense.getByRole('button',{name:'备案并跳过本次上传',exact:true}).click();
+        await invalidLicense.getByText('请先填写车牌和17位 VIN，再办理行驶证缺失备案',{exact:true}).waitFor();
+        assert.equal(await invalidLicense.getByLabel('无法提供行驶证的说明',{exact:true}).inputValue(),'客户未携带');
+        await invalidLicense.getByRole('button',{name:/取\s*消/}).click();
+        await editPage.getByLabel('VIN/底盘号',{exact:true}).fill(originalVin);
+        await editPage.getByRole('radio',{name:'本次无法提供行驶证',exact:true}).click();
+        const missingLicense=editPage.getByRole('dialog',{name:'本次跳过行驶证上传',exact:true});
+        await missingLicense.getByRole('button',{name:'备案并跳过本次上传',exact:true}).click();
+        await missingLicense.getByText('请填写本次无法提供行驶证的说明',{exact:true}).waitFor();
+        assert.equal((await db.findWorkOrderById(pool,editableOrder.id)).vehicleLicenseException,undefined);
+        await missingLicense.getByLabel('无法提供行驶证的说明',{exact:true}).fill('客户本次未携带，后续补传');
+        await missingLicense.getByRole('button',{name:'备案并跳过本次上传',exact:true}).click();
+        await missingLicense.waitFor({state:'hidden'});
+        await editPage.getByText('本次委托已办理行驶证缺失备案',{exact:true}).waitFor();
+        assert.equal((await db.findWorkOrderById(pool,editableOrder.id)).vehicleLicenseException.reason,'客户本次未携带，后续补传');
         await editPage.close();pages.splice(pages.indexOf(editPage),1);
+        // Real history lookup/preview/reuse; OCR response alone is stubbed to avoid external service calls.
+        const historyVin='LZWADAGA8NB072735';
+        const {saveUploadedFile}=await import('../server/storage.mjs');
+        const sourceLicense=await saveUploadedFile({kind:'vehicle_license',fileName:'历史行驶证.png',mimeType:'image/png',imageBase64:`data:image/png;base64,${editPhoto.toString('base64')}`,uploadedBy:advisor.id});
+        const licenseDraft={shop:{id:'shop-hq'},vehicle:{plate:'鲁BHIST01',vin:historyVin},customer:{name:'历史行驶证测试'},advisor:advisor.name,repairItems:[{id:1,name:'保养'}]};
+        const sourceOrder=await db.createWorkOrder({...licenseDraft,inspection:{vehicleLicenseFileId:sourceLicense.id}},advisor.name,advisor);
+        const reuseOrder=await db.createWorkOrder({...licenseDraft,vehicle:{...licenseDraft.vehicle,plate:'鲁BHIST02'}},advisor.name,advisor);
+        const historyPage=await pageFor(advisor,false,'');
+        await historyPage.getByRole('navigation',{name:'主导航'}).getByRole('button',{name:'工作台',exact:true}).click();
+        await historyPage.getByPlaceholder('搜索车牌 / VIN / 工单号 / 派工号').fill('鲁BHIST02');
+        await historyPage.locator('.orders-table tbody tr').filter({hasText:'鲁BHIST02'}).click();
+        await historyPage.getByRole('button',{name:'继续编辑草稿',exact:true}).click();
+        const reuseDialog=historyPage.getByRole('dialog',{name:'这辆车之前上传过行驶证，是否复用？',exact:true});
+        await reuseDialog.waitFor();
+        await reuseDialog.getByAltText('历史行驶证，点击查看大图').waitFor();
+        await reuseDialog.getByRole('button',{name:'重新上传',exact:true}).click();
+        await reuseDialog.waitFor({state:'hidden'});
+        await historyPage.getByLabel('车牌号码',{exact:true}).fill('鲁BHIST03');
+        await historyPage.waitForTimeout(800); // Beyond the lookup debounce: same VIN must not re-prompt.
+        assert.equal(await reuseDialog.isVisible(),false,'同车车牌回填不会重复弹窗');
+        await historyPage.getByLabel('VIN/底盘号',{exact:true}).fill('');
+        await historyPage.getByLabel('VIN/底盘号',{exact:true}).fill(historyVin);
+        await historyPage.waitForTimeout(800);
+        assert.equal(await reuseDialog.isVisible(),false,'同车 VIN 回填不会重复弹窗');
+        // A fresh editing session can offer history again.
+        await historyPage.reload();
+        await historyPage.getByRole('navigation',{name:'主导航'}).getByRole('button',{name:'工作台',exact:true}).click();
+        await historyPage.getByPlaceholder('搜索车牌 / VIN / 工单号 / 派工号').fill('鲁BHIST02');
+        await historyPage.locator('.orders-table tbody tr').filter({hasText:'鲁BHIST02'}).click();
+        await historyPage.getByRole('button',{name:'继续编辑草稿',exact:true}).click();
+        await reuseDialog.getByRole('button',{name:'复用历史行驶证',exact:true}).click();
+        await reuseDialog.waitFor({state:'hidden'});
+        assert.equal(await historyPage.getByText('扫描行驶证（选填）',{exact:true}).count(),0);
+        await Promise.all([historyPage.waitForResponse(r=>r.request().method()==='PUT'&&r.url().includes('/api/work-orders/')&&r.ok()),historyPage.getByRole('button',{name:'保存草稿',exact:true}).click()]);
+        const reusedOrder=await db.findWorkOrderById(pool,reuseOrder.id);
+        assert.ok(reusedOrder.inspection.vehicleLicenseFileId);assert.notEqual(reusedOrder.inspection.vehicleLicenseFileId,sourceLicense.id);
+        assert.equal((await db.findWorkOrderById(pool,sourceOrder.id)).inspection.vehicleLicenseFileId,sourceLicense.id);
+        await historyPage.route('**/api/ocr/vehicle-license',route=>route.fulfill({json:{plate:'鲁BHIST02',vin:historyVin,model:'',owner:'',address:'',confidence:99}}));
+        await historyPage.getByLabel('识别行驶证照片从相册选择',{exact:true}).setInputFiles({name:'新行驶证.png',mimeType:'image/png',buffer:editPhoto});
+        await reuseDialog.waitFor();
+        await reuseDialog.getByRole('button',{name:'使用本次上传',exact:true}).click();
+        await reuseDialog.waitFor({state:'hidden'});
+        await Promise.all([historyPage.waitForResponse(r=>r.request().method()==='PUT'&&r.url().includes('/api/work-orders/')&&r.ok()),historyPage.getByRole('button',{name:'保存草稿',exact:true}).click()]);
+        const replacedOrder=await db.findWorkOrderById(pool,reuseOrder.id);
+        assert.notEqual(replacedOrder.inspection.vehicleLicenseFileId,reusedOrder.inspection.vehicleLicenseFileId);
+        assert.ok(replacedOrder.inspection.replacedPhotoIds.includes(reusedOrder.inspection.vehicleLicenseFileId));
+        const {vehicleLicenseHistory}=await import('../server/services/vehicleLicenseHistoryService.mjs');
+        assert.equal((await vehicleLicenseHistory(advisor,{vin:historyVin})).fileId,replacedOrder.inspection.vehicleLicenseFileId);
+        assert.equal((await db.findWorkOrderById(pool,sourceOrder.id)).inspection.vehicleLicenseFileId,sourceLicense.id);
+        // Submitted detail has no add-another-license control, but keeps replace and preview.
+        await pool.query("update work_orders set status='已委托' where id=$1",[reuseOrder.id]);
+        await historyPage.reload();
+        await historyPage.getByRole('navigation',{name:'主导航'}).getByRole('button',{name:'工作台',exact:true}).click();
+        await historyPage.getByPlaceholder('搜索车牌 / VIN / 工单号 / 派工号').fill('鲁BHIST02');
+        await historyPage.locator('.orders-table tbody tr').filter({hasText:'鲁BHIST02'}).click();
+        const licenseGallery=historyPage.getByRole('region',{name:'行驶证照片',exact:true});
+        await licenseGallery.waitFor();
+        assert.equal(await licenseGallery.getByRole('button',{name:'添加行驶证照片',exact:true}).count(),0);
+        assert.equal((await db.findWorkOrderById(pool,reuseOrder.id)).files.filter(f=>f.kind==='vehicle_license'&&!replacedOrder.inspection.replacedPhotoIds.includes(f.id)).length,1);
+        await historyPage.close();pages.splice(pages.indexOf(historyPage),1);
+
         async function assertNoDuplicateProjectActions(detail) {
           await detail.getByRole('heading',{name:/维修项目 ·/}).waitFor();
           assert.equal(await detail.getByRole('button',{name:/^改\s*派$/}).count(),0,'项目区域已支持改派，不显示重复底栏按钮');

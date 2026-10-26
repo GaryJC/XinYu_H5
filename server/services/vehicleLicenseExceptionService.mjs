@@ -3,10 +3,9 @@ import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import {randomUUID} from 'node:crypto';
 import {transaction} from '../database/pool.mjs';
 import {HttpError} from '../http/HttpError.mjs';
-import {lookupVehicleInCompanySystem} from '../integrations/company/vehicleLookup.mjs';
 import {normalizeLicenseIdentifier,validateLicenseExceptionInput} from '../domain/vehicleLicenseException.mjs';
 import {mapLicenseException,lockLicenseOrder,licenseActor,licenseRequest,orderHasLicense,latestLicenseReport,insertLicenseReport} from '../repositories/vehicleLicenseExceptionRepository.mjs';
-export async function reportVehicleLicenseException(actor,orderId,raw,{runTransaction=transaction,lookup=lookupVehicleInCompanySystem}={}) {
+export async function reportVehicleLicenseException(actor,orderId,raw,{runTransaction=transaction}={}) {
   const input=validateLicenseExceptionInput(raw);
   return runTransaction(async client=>{
     const order=await lockLicenseOrder(client,orderId);
@@ -23,7 +22,6 @@ export async function reportVehicleLicenseException(actor,orderId,raw,{runTransa
     if(!plate || !/^[A-Z0-9]{17}$/.test(vin))throw new HttpError(400,'请先填写车牌和17位 VIN，再办理备案');
     if(input.vehiclePlate!==plate || input.vehicleVin!==vin)throw new HttpError(409,'车辆信息已变化，请核对车牌与 VIN 后重新备案');
     if(await orderHasLicense(client,orderId))throw new HttpError(409,'本单已上传行驶证，无需跳过');
-    if((await lookup({plate,vin})).status!=='new')throw new HttpError(409,'请先确认是公司系统中尚未登记的新车');
     const latest=await latestLicenseReport(client,orderId);
     if(latest?.reason===input.reason && latest.vehicle_plate===plate && latest.vehicle_vin===vin)return mapLicenseException(latest);
     const payload={orderId,shopId:order.shop_id,shopName:order.shop_name,plate,vin,customerName:order.customer_name,advisor:order.advisor,reportedName:user.name,reason:input.reason,arrivalDate:order.arrival_date};

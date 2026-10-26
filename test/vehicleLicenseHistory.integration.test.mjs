@@ -1,0 +1,52 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import pg from 'pg';
+import {randomUUID} from 'node:crypto';
+const adminUrl=process.env.DISPATCH_TEST_ADMIN_URL;
+test('vehicle license reuse preserves old orders, selects one current image and isolates vehicle/shop access',{skip:!adminUrl,timeout:120000},async()=>{
+ const url=new URL(adminUrl);assert.ok(['localhost','127.0.0.1','[::1]'].includes(url.hostname));
+ const admin=new pg.Client({connectionString:adminUrl});await admin.connect();const name=`license_history_${process.pid}_${Date.now()}`;let pool;
+ try{
+  await admin.query(`create database "${name}"`);url.pathname=`/${name}`;process.env.DATABASE_URL=url.toString();process.env.APP_ENV='test';
+  pool=(await import('../server/database/pool.mjs')).pool;
+  for(const file of (await fs.readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')&&f!=='202608070005_remove_obsolete_runfeng_sync_role.sql').sort())await pool.query(await fs.readFile(`supabase/migrations/${file}`,'utf8'));
+  const a={id:'a',name:'顾问甲',role:'advisor',shopId:'shop-hq',active:true},b={...a,id:'b',name:'顾问乙'};
+  for(const actor of [a,b])await pool.query("insert into users(id,name,role,shop_id,active) values($1,$2,'advisor','shop-hq',true)",[actor.id,actor.name]);
+  const db=await import('../server/db.mjs');const history=await import('../server/services/vehicleLicenseHistoryService.mjs');
+  const vin='LZWADAGA8NB072733',otherVin='LZWADAGA8NB072734';
+  const draft={advisor:a.name,shop:{id:a.shopId},vehicle:{plate:'鲁B862P7',vin},customer:{name:'客户'},repairItems:[{id:1,name:'检查'}]};
+  async function photo(actor){const id=randomUUID();await pool.query("insert into files(id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by) values($1,'vehicle_license','local','','shared-source','image/png',1,$2)",[id,actor.id]);return id;}
+  const firstFile=await photo(a);
+  const first=await db.createWorkOrder({...draft,inspection:{vehicleLicenseFileId:firstFile}},a.name,a);
+  assert.equal((await history.vehicleLicenseHistory(b,{vin})).fileId,firstFile);
+  assert.equal((await history.vehicleLicenseHistory(b,{plate:'鲁 B862P7'})).vin,vin);
+  assert.equal(await history.vehicleLicenseHistory({...b,shopId:'other'},{vin}),null);
+  await assert.rejects(()=>history.authorizeLicensePreview({...b,shopId:'other'},{vin,fileId:firstFile}),e=>e.status===404);
+  await assert.rejects(()=>history.reuseVehicleLicense({...b,role:'technician'},{vin,fileId:firstFile}),e=>e.status===403);
+  await assert.rejects(()=>history.reuseVehicleLicense(b,{vin:otherVin,fileId:firstFile}),e=>e.status===409);
+  assert.equal(await history.authorizeLicensePreview(b,{vin,fileId:firstFile}),firstFile);
+  const reused=await history.reuseVehicleLicense(b,{vin,fileId:firstFile});assert.notEqual(reused.fileId,firstFile);
+  await assert.rejects(()=>db.createWorkOrder({...draft,vehicle:{...draft.vehicle,vin:otherVin},inspection:{vehicleLicenseFileId:reused.fileId}},b.name,b),e=>e.status===409);
+  let second=await db.createWorkOrder({...draft,advisor:b.name,inspection:{vehicleLicenseFileId:reused.fileId}},b.name,b);
+  assert.equal((await db.findWorkOrderById(pool,first.id)).inspection.vehicleLicenseFileId,firstFile);
+  assert.equal((await pool.query('select order_id from files where id=$1',[firstFile])).rows[0].order_id,first.id);
+  const newer=await photo(b);second=await db.updateWorkOrder({...second,inspection:{...second.inspection,vehicleLicenseFileId:newer}},b.name,'重新上传',b);
+  assert.equal(second.inspection.vehicleLicenseFileId,newer);assert.ok(second.inspection.replacedPhotoIds.includes(reused.fileId));
+  assert.equal((await history.vehicleLicenseHistory(a,{vin})).fileId,newer);
+  await db.updateWorkOrder(first,a.name,'仅保存旧单',a);
+  assert.equal((await history.vehicleLicenseHistory(a,{vin})).fileId,newer,'保存旧委托不改变默认照片');
+  assert.equal((await db.findWorkOrderById(pool,first.id)).inspection.vehicleLicenseFileId,firstFile);
+  const {saveWorkOrderPhoto}=await import('../server/services/workOrderPhotoService.mjs');
+  await pool.query("update work_orders set status='已委托' where id=$1",[second.id]);
+  const latest=await photo(b);second=await saveWorkOrderPhoto(second.id,{slot:'vehicleLicense',fileId:latest},b);
+  assert.equal(second.inspection.vehicleLicenseFileId,latest);assert.ok(second.inspection.replacedPhotoIds.includes(newer));
+  assert.equal(second.files.filter(f=>f.kind==='vehicle_license'&&!second.inspection.replacedPhotoIds.includes(f.id)).length,1);
+  assert.equal((await history.vehicleLicenseHistory(a,{vin})).fileId,latest);
+  await db.createWorkOrder({...draft,vehicle:{...draft.vehicle,vin:otherVin},inspection:{vehicleLicenseFileId:await photo(a)}},a.name,a);
+  assert.equal(await history.vehicleLicenseHistory(a,{plate:draft.vehicle.plate}),null,'同牌不同车须核对 VIN');
+  assert.equal((await history.vehicleLicenseHistory(a,{plate:draft.vehicle.plate,vin})).fileId,latest);
+  const oldSource=(await pool.query('select object_key from files where id=$1',[firstFile])).rows[0].object_key;
+  assert.equal(oldSource,'shared-source');
+ }finally{if(pool)await pool.end();await admin.query(`drop database if exists "${name}" with (force)`);await admin.end();}
+});

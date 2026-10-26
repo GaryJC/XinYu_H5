@@ -9,7 +9,7 @@ import { orderPhotoCollections, supplementaryPhotoSlot } from './photoCollection
 export function SubmittedOrderPhotos({order, user, onUpdated, section = 'all'}: {
   order: WorkOrder; user?: UserProfile; onUpdated:(order: WorkOrder)=>void; section?:'all'|'license'|'repair'|'other';
 }) {
-  const upload = useOrderPhotoUpload(order.id, user?.id, onUpdated);
+  const upload = useOrderPhotoUpload(order.id, user?.id, onUpdated, order.customer);
   const canUpload = order.status !== '草稿' && user?.active && user.shopId === order.shop.id
     && (hasRole(user, 'manager') || hasRole(user, 'advisor') && user.name === order.advisor);
   const busy = Boolean(upload.uploading);
@@ -28,7 +28,7 @@ export function SubmittedOrderPhotos({order, user, onUpdated, section = 'all'}: 
     {!showStandard && upload.error && <Alert type="error" showIcon title={upload.error} style={{marginTop:12}}/>}
     {!showStandard && upload.successMessage && <Alert type="success" showIcon title={upload.successMessage} style={{marginTop:12}}/>}
     {showStandard && <PreRepairPhotos key={`${order.id}-${user?.id}`} required={!order.paperOrder} photos={collections.photos} disabled={!canUpload} controls={controls}/>}
-    {['all','license'].includes(section) && <OrderPhotoGallery key={`${order.id}-${user?.id}-license`} title="行驶证照片" files={collections.licenseFiles} editable={Boolean(canUpload)} busy={busy} multiple={false}
+    {['all','license'].includes(section) && <OrderPhotoGallery key={`${order.id}-${user?.id}-license`} title="行驶证照片" files={collections.licenseFiles} editable={Boolean(canUpload)} busy={busy} multiple={false} canAdd={!collections.licenseFiles.length}
       onUpload={(files, replaceId) => upload.uploadMany('vehicleLicense', files, replaceId)} onRemove={upload.remove}/>}
     {['all','other'].includes(section) && order.paperOrder && <OrderPhotoGallery key={`${order.id}-${user?.id}-paper`} title="纸质委托书照片" files={collections.paperFiles} editable={Boolean(canUpload)} busy={busy} multiple
       canAdd={order.paperOrder.mode === 'pending'} onUpload={(files, replaceId) => upload.uploadMany('other', files, replaceId)} onRemove={upload.remove}/>}

@@ -23,3 +23,12 @@ test('administrator notification includes explanation and opens order details wi
  const url=new URL(body.msg.markdown.text.match(/\[查看委托单详情\]\(([^)]+)\)/)[1]);
  assert.equal(url.searchParams.get('workOrder'),'WT-123');assert.equal(url.searchParams.has('dispatchOrder'),false);assert.equal(url.searchParams.get('corpid'),'ding-corp');
 });
+
+test('license requirement applies to existing, new and unqueried vehicles',()=>{
+ for(const status of ['new','found',undefined,'error']) {
+  assert.throws(()=>assertVehicleLicenseRequirement(status,false,undefined,vehicle),/行驶证/);
+  assert.doesNotThrow(()=>assertVehicleLicenseRequirement(status,true,undefined,vehicle));
+  assert.doesNotThrow(()=>assertVehicleLicenseRequirement(status,false,exception,vehicle));
+  assert.throws(()=>assertVehicleLicenseRequirement(status,false,{...exception,reason:' '},vehicle),/行驶证/);
+ }
+});

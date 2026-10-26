@@ -613,3 +613,7 @@ export interface PrintPdfDownload {
   path: string;
   expiresAt: string;
 }
+
+export type VehicleLicenseHistory = {fileId:string;plate:string;vin:string;selectedAt:string};
+export type VehicleLicenseHistoryQuery = {plate?:string;vin?:string;excludeOrderId?:string;fileId?:string};
+export type VehicleLicenseReuseResult = {fileId:string;vin:string};

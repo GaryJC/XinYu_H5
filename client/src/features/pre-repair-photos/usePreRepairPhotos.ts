@@ -4,7 +4,7 @@ import { prepareUploadPhoto } from '../../shared/images/prepareOcrImage';
 import { workOrderApi } from '../work-orders/api/workOrderApi';
 import type { PhotoSlot } from './photoSlots';
 
-export function usePreRepairPhotos(setDraft: Dispatch<SetStateAction<WorkOrderDraft>>, photos: PreRepairPhotos = {}) {
+export function usePreRepairPhotos(setDraft: Dispatch<SetStateAction<WorkOrderDraft>>, photos: PreRepairPhotos = {}, customer?: Pick<WorkOrderDraft['customer'], 'contact' | 'phone'>) {
   const generation = useRef(0);
   const inFlight = useRef(false);
   const latestPhotos = useRef(photos);
@@ -38,7 +38,8 @@ export function usePreRepairPhotos(setDraft: Dispatch<SetStateAction<WorkOrderDr
     try {
       // Process sequentially to keep large mobile images within WebView memory limits.
       for (const file of files) {
-        const image = await prepareUploadPhoto(file, slot === 'front45' || slot === 'rear45' ? new Date() : undefined);
+        const image = await prepareUploadPhoto(file, slot === 'front45' || slot === 'rear45' ? new Date() : undefined,
+          [customer?.contact?.trim() ? `联系人：${customer.contact.trim()}` : '', customer?.phone?.trim() ? `联系电话：${customer.phone.trim()}` : '']);
         if (generation.current !== session) return false;
         const stored = await workOrderApi.uploadFile({ kind: 'repair_order_photo', ...image });
         if (generation.current !== session) return false;

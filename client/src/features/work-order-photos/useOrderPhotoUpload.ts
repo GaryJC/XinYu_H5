@@ -3,7 +3,7 @@ import type { StoredFile, WorkOrder, WorkOrderPhotoUpdate } from "../../../../sh
 import { workOrderApi } from "../work-orders/api/workOrderApi";
 import { prepareOcrImage, prepareUploadPhoto } from "../../shared/images/prepareOcrImage";
 
-export function useOrderPhotoUpload(orderId: string, userId: string | undefined, onUpdated: (order: WorkOrder) => void) {
+export function useOrderPhotoUpload(orderId: string, userId: string | undefined, onUpdated: (order: WorkOrder) => void, customer?: Pick<WorkOrder['customer'], 'contact' | 'phone'>) {
   const [uploading, setUploading] = useState<WorkOrderPhotoUpdate["slot"] | "delete" | "">("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -32,7 +32,8 @@ export function useOrderPhotoUpload(orderId: string, userId: string | undefined,
       // Keep the whole batch locked and process images sequentially for mobile WebViews.
       for (const file of files) {
         const image = await (slot === "vehicleLicense" ? prepareOcrImage(file)
-          : prepareUploadPhoto(file, slot === "front45" || slot === "rear45" ? new Date() : undefined));
+          : prepareUploadPhoto(file, slot === "front45" || slot === "rear45" ? new Date() : undefined,
+            [customer?.contact?.trim() ? `联系人：${customer.contact.trim()}` : '', customer?.phone?.trim() ? `联系电话：${customer.phone.trim()}` : '']));
         if (session !== generation.current) return false;
         const kind: StoredFile["kind"] = slot === "vehicleLicense" ? "vehicle_license" : slot === "other" ? "other" : "repair_order_photo";
         const stored = await workOrderApi.uploadFile({kind, ...image});

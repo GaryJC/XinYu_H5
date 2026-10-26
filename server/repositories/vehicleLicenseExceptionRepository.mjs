@@ -11,7 +11,7 @@ export async function readLicenseExceptions(client,ids) {
 export async function lockLicenseOrder(client,id) {return (await client.query(`select wo.*, exists(select 1 from signatures s where s.order_id=wo.id and s.signer_type='customer') as customer_signed, exists(select 1 from legacy_sync_outbox q where q.order_id=wo.id) as queued from work_orders wo where wo.id=$1 for update of wo`,[id])).rows[0];}
 export async function licenseActor(client,id) {return (await client.query('select id,name,role,roles,active,shop_id from users where id=$1',[id])).rows[0];}
 export async function licenseRequest(client,id,requestId) {return (await client.query('select * from vehicle_license_exceptions where order_id=$1 and request_id=$2',[id,requestId])).rows[0];}
-export async function orderHasLicense(client,id) {return Boolean((await client.query("select id from files where order_id=$1 and kind='vehicle_license' limit 1",[id])).rows.length);}
+export async function orderHasLicense(client,id) {return Boolean((await client.query("select f.id from files f join work_orders w on w.id=f.order_id where f.order_id=$1 and f.kind='vehicle_license' and not (coalesce(w.inspection->'replacedPhotoIds','[]'::jsonb) ? f.id) limit 1",[id])).rows.length);}
 export async function latestLicenseReport(client,id) {return (await client.query('select * from vehicle_license_exceptions where order_id=$1 order by reported_at desc,id desc limit 1',[id])).rows[0];}
 export async function insertLicenseReport(client,{id,orderId,requestId,plate,vin,reason,user,payload}) {
   const {rows:[saved]}=await client.query(`insert into vehicle_license_exceptions(id,order_id,request_id,vehicle_plate,vehicle_vin,reason,reported_by,reported_name,payload)

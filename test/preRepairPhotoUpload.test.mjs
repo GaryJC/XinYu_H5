@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 const source = readFileSync(new URL('../client/src/features/pre-repair-photos/usePreRepairPhotos.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-function setup(api, photos = { front45: 'old-front', rear45: 'rear', mileage: 'meter', extra: ['extra-1','extra-2'] }) {
+function setup(api, photos = { front45: 'old-front', rear45: 'rear', mileage: 'meter', extra: ['extra-1','extra-2'] }, customer) {
   const state = [], cleanups = [], updates = [], prepared = [];
   let draft = { inspection: { preRepairPhotos: structuredClone(photos) } };
   const exports = {};
@@ -16,13 +16,18 @@ function setup(api, photos = { front45: 'old-front', rear45: 'rear', mileage: 'm
       useEffect(effect) { cleanups.push(effect()); }
     };
     if (name.endsWith('workOrderApi')) return { workOrderApi: api };
-    if (name.endsWith('prepareOcrImage')) return { prepareUploadPhoto: async (file, uploadedAt) => { prepared.push({file, uploadedAt}); return { fileName: file.name }; } };
+    if (name.endsWith('prepareOcrImage')) return { prepareUploadPhoto: async (file, uploadedAt, extraLines) => { prepared.push({file, uploadedAt, extraLines}); return { fileName: file.name }; } };
     throw new Error(`Unexpected import ${name}`);
   }});
-  const actions = exports.usePreRepairPhotos(updater => { draft = updater(draft); updates.push(draft); }, photos);
+  const actions = exports.usePreRepairPhotos(updater => { draft = updater(draft); updates.push(draft); }, photos, customer);
   return { actions, state, updates, prepared, photos: () => draft.inspection.preRepairPhotos, unmount: () => cleanups.forEach(cleanup => cleanup?.()) };
 }
 const files = [{name:'one.jpg',type:'image/jpeg'},{name:'two.jpg',type:'image/jpeg'},{name:'three.jpg',type:'image/jpeg'}];
+test('draft uploads include the order contact and phone rather than the customer company name', async () => {
+  const h = setup({async uploadFile(){return {id:'new'};}}, {}, {name:'测试公司',contact:' 张三 ',phone:' 13800000000 '});
+  for (const slot of ['front45','rear45']) assert.equal(await h.actions.upload(slot,files[0]),true);
+  for (const image of h.prepared) assert.deepEqual(Array.from(image.extraLines),['联系人：张三','联系电话：13800000000']);
+});
 test('draft front and rear photos request upload timestamps while other slots do not', async () => {
   const h = setup({async uploadFile() {return {id:'new'};}});
   for (const slot of ['front45','rear45','mileage','extra']) assert.equal(await h.actions.upload(slot,files[0]),true);

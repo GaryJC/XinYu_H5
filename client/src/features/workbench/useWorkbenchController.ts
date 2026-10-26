@@ -1,3 +1,4 @@
+import {useVehicleLicenseHistory} from '../vehicle-license-history/useVehicleLicenseHistory';
 import {isUnsignedOrderEditable} from '../../../../shared/workOrderEditPolicy.mjs';
 import { useArchiveFilters } from "./useArchiveFilters";
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
@@ -35,9 +36,12 @@ export function useWorkbenchController() {
   const [activeNav, setActiveNav] = useState("工作台");
   const [role, setRole] = useState<RoleKey>("advisor");
   const [orders, setOrders] = useState<WorkOrder[]>([]);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const orderLoads = useRef({ generation: 0, pending: 0 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { draft, setDraft, resetDraft, updateDraft, updateVehicle, updateCustomer, updateRepairItem, toggleArrayField } = useWorkOrderDraft();
-  const preRepairPhotos = usePreRepairPhotos(setDraft, draft.inspection.preRepairPhotos);
+  const preRepairPhotos = usePreRepairPhotos(setDraft, draft.inspection.preRepairPhotos, draft.customer);
   const paperPhotos = usePaperOrderPhotos(setDraft);
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [apiError, setApiError] = useState("");
@@ -75,6 +79,9 @@ export function useWorkbenchController() {
       && (role === "manager" || selectedOrder.advisor === currentUser?.name)
     )
   );
+  const licenseHistory=useVehicleLicenseHistory({plate:draft.vehicle.plate,vin:draft.vehicle.vin,fileId:vehicleLicenseFileId||draft.inspection.vehicleLicenseFileId,orderId:selectedId||undefined,userId:currentUser?.id,
+    enabled:Boolean(currentUser)&&canEditForm&&!draft.vehicle.isMilitary&&ocrState.vehicleLicense.status!=='识别中'&&(!selectedOrder||!vehicleLicenseFileId||vehicleLicenseFileId!==selectedOrder.inspection.vehicleLicenseFileId||draft.vehicle.vin!==selectedOrder.vehicle.vin),
+    onReuse:(fileId,vin)=>{resetOcr([],fileId);setDraft(current=>({...current,vehicle:{...current.vehicle,vin},inspection:{...current.inspection,vehicleLicenseFileId:fileId}}));}});
   const totalLabor = useMemo(() => sumLabor(draft.repairItems), [draft.repairItems]);
   const technicianOptions = useMemo(() => users.filter((user) => user.active && hasRole(user, 'technician')).map((user) => user.name), [users]);
   const inspectorOptions = useMemo(() => users.filter((user) => user.active && hasRole(user, 'inspector')).map((user) => user.name), [users]);
@@ -94,7 +101,7 @@ export function useWorkbenchController() {
   }, [orders]);
 
   useEffect(() => {
-    void bootstrapAuth();
+    void bootstrapAuth().finally(() => setAuthLoading(false));
   }, []);
 
   useEffect(() => {
@@ -102,6 +109,7 @@ export function useWorkbenchController() {
     preRepairPhotos.reset();
     paperPhotos.reset();
     if (!currentUser || (hasRole(currentUser, 'technician') && !currentUser.legacyEmployeeCode)) {
+      setOrdersLoading(false);
       setOrders([]);
       setDashboard(undefined);
       setUsers([]);
@@ -125,6 +133,10 @@ export function useWorkbenchController() {
   }, [activeNav, visibleNavItems]);
 
   async function loadOrders(nextRole = role, keepId = selectedId, generation = sessionGeneration.current) {
+    if (generation !== sessionGeneration.current) return;
+    if (orderLoads.current.generation !== generation) orderLoads.current = { generation, pending: 0 };
+    orderLoads.current.pending += 1;
+    setOrdersLoading(true);
     try {
       setApiError("");
       const next = nextRole === "warehouse" ? [] : await workOrderApi.list(nextRole);
@@ -151,6 +163,11 @@ export function useWorkbenchController() {
       paperPhotos.reset();
       resetDraft(undefined, currentUser?.name || "");
       setApiError(error instanceof Error ? error.message : "后端 API 暂时不可用");
+    } finally {
+      if (orderLoads.current.generation === generation) {
+        orderLoads.current.pending -= 1;
+        if (generation === sessionGeneration.current && orderLoads.current.pending === 0) setOrdersLoading(false);
+      }
     }
   }
 
@@ -299,7 +316,7 @@ export function useWorkbenchController() {
   }
 
   async function saveDraft() {
-    if (preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
+    if (licenseHistory.busy || preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
     if (!canCreateOrder(role)) {
       setFormErrors(["当前角色不能创建或编辑委托单"]);
       return;
@@ -326,8 +343,9 @@ export function useWorkbenchController() {
   }
 
   async function reportMissingVehicleLicense(reason:string) {
-    if(!draft.vehicle.plate.trim()||!/^[A-Z0-9]{17}$/i.test(draft.vehicle.vin.trim())){setFormErrors(['请先填写车牌和17位 VIN，再办理行驶证缺失备案']);return false;}
-    if(!canEditForm || preRepairPhotos.isUploading()){setFormErrors(['请先等待照片上传完成，并确认当前草稿可以编辑']);return false;}
+    if(!draft.vehicle.plate.trim()||!/^[A-Z0-9]{17}$/i.test(draft.vehicle.vin.trim()))return '请先填写车牌和17位 VIN，再办理行驶证缺失备案';
+    if(!canEditForm)return '当前委托单不可编辑，无法办理行驶证缺失备案';
+    if(licenseHistory.busy || preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading())return '照片正在上传或复用，请等待完成后再办理备案';
     setActionLoading('save');setFormErrors([]);
     try {
       const cleaned={...draft,repairItems:filterEmptyRepairItems(draft.repairItems)};
@@ -340,7 +358,7 @@ export function useWorkbenchController() {
       await workOrderApi.reportLicenseException(order.id,{...input,requestId:exceptionRequest.current.requestId});
       exceptionRequest.current=undefined;
       await loadOrders(role,order.id);return true;
-    } catch(error){setFormErrors([actionError(error,'行驶证缺失备案失败')]);return false;}
+    } catch(error){return actionError(error,'行驶证缺失备案失败');}
     finally{setActionLoading('');}
   }
 
@@ -374,7 +392,7 @@ export function useWorkbenchController() {
       } catch (error) { setFormErrors([actionError(error, "恢复客户签字失败")]);return undefined; }
       finally { setActionLoading(""); }
     }
-    if (preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
+    if (licenseHistory.busy || preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
     const errors = validateBeforeSignature();
     if (errors.length) {
       setFormErrors(errors);
@@ -419,7 +437,9 @@ export function useWorkbenchController() {
   }
 
   function validateBeforeSignature() {
+    const hasLicense=Boolean(vehicleLicenseFileId||draft.inspection.vehicleLicenseFileId||selectedOrder?.files?.some(file=>file.kind==='vehicle_license'&&!draft.inspection.replacedPhotoIds?.includes(file.id)));
     const errors = [...validateWorkOrderDraft(draft), ...(draft.paperOrder ? [] : missingPhotoErrors(draft.inspection.preRepairPhotos))];
+    if(!draft.vehicle.isMilitary&&!hasLicense&&!isCurrentVehicleLicenseException(draft.vehicleLicenseException,draft.vehicle))errors.push('请上传行驶证照片，或选择“本次无法提供行驶证”并填写理由');
     if (!draft.vehicle.modelLegacyCode.trim()) {
       errors.push("车型尚未确认，请从搜索结果中选择，或新增车型并确认编码");
     }
@@ -448,6 +468,7 @@ export function useWorkbenchController() {
   }
 
   return {
+    licenseHistory,
     acceptRefreshedOrder: (updated: WorkOrder) => {
       setOrders(previous => previous.map(order => order.id === updated.id
         ? { ...updated, dispatchStage: updated.dispatchStage ?? order.dispatchStage } : order));
@@ -463,6 +484,7 @@ export function useWorkbenchController() {
     role,
     setRole,
     orders,
+    ordersLoading: authLoading || devLoginLoading || ordersLoading,
     selectedId,
     draft,
     setDraft,

@@ -75,11 +75,13 @@ test('paper order creation, notification, import and signature-free completion t
       assert.equal(supplemental.signaturePurpose,'supplement');assert.equal(supplemental.status,'草稿');
       await assert.rejects(()=>submitPaperDingTalkOrder(order.id,advisor),/必填/);
     });
-    await t.test('DingTalk completion requires normal form data but no signature or vehicle photos, emits exactly one outgoing create',async()=>{
+    await t.test('DingTalk completion requires normal form data and license but no signature or reception photos, emits exactly one outgoing create',async()=>{
       const filled={...order,department:{code:'A',name:'维修部'},vehicle:{plate:'鲁B12345',vin:'LSVAB1234A1234567',mileage:'1000',model:'测试车型',modelLegacyCode:'TEST'},
         customer:{name:'测试单位',legacyCode:'TESTORG',phone:'13000000000'},repairItems:[{id:1,name:'常规检查'}],paperOrder:undefined};
       order=await updateWorkOrder(filled,advisor.name,'补全纸质委托单',advisor);
       assert.equal(order.paperOrder.mode,'dingtalk');
+      await assert.rejects(()=>submitPaperDingTalkOrder(order.id,advisor),/行驶证/);
+      await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by) values('paper-license',$1,'vehicle_license','local','','test','image/png',1,$2)",[order.id,advisor.id]);
       order=await submitPaperDingTalkOrder(order.id,advisor);
       assert.equal(order.status,'已委托');assert.deepEqual(order.signatures,{});assert.equal(order.legacySyncStatus,'pending');
       const outbox=(await pool.query('select payload from legacy_sync_outbox where order_id=$1',[order.id])).rows;

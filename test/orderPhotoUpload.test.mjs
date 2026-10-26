@@ -6,10 +6,10 @@ import ts from "typescript";
 
 const source = readFileSync(new URL("../client/src/features/work-order-photos/useOrderPhotoUpload.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-function setup(api) {
+function setup(api, customer) {
   const state = [], updates = [], cleanups = [], prepared = [];
   const exports = {};
-  const prepare = async (file, uploadedAt) => { prepared.push({file, uploadedAt}); return {fileName:file.name,mimeType:"image/jpeg",imageBase64:"image"}; };
+  const prepare = async (file, uploadedAt, extraLines) => { prepared.push({file, uploadedAt, extraLines}); return {fileName:file.name,mimeType:"image/jpeg",imageBase64:"image"}; };
   vm.runInNewContext(compiled, { exports, Error, require(name) {
     if (name === "react") return {
       useState(initial) { const i = state.length; state.push(initial); return [initial, value => { state[i] = value; }]; },
@@ -20,10 +20,15 @@ function setup(api) {
     if (name.endsWith("prepareOcrImage")) return { prepareUploadPhoto: prepare, prepareOcrImage: prepare };
     throw new Error(`Unexpected import ${name}`);
   }});
-  const actions = exports.useOrderPhotoUpload("order1", "user1", order => updates.push(order));
+  const actions = exports.useOrderPhotoUpload("order1", "user1", order => updates.push(order), customer);
   return {actions,state,updates,prepared,unmount:()=>cleanups.forEach(cleanup=>cleanup?.())};
 }
 const files = [{name:"one.jpg"},{name:"two.jpg"},{name:"three.jpg"}];
+test('submitted photo replacements include the current order contact and phone', async () => {
+  const h = setup({async uploadFile(){return {id:'new'};},async updatePhoto(id){return {id};}}, {contact:' 李四 ',phone:' 13900000000 '});
+  for (const slot of ['front45','rear45']) assert.equal(await h.actions.upload(slot,files[0],'old'),true);
+  for (const image of h.prepared) assert.deepEqual(Array.from(image.extraLines),['联系人：李四','联系电话：13900000000']);
+});
 test('submitted front and rear replacements request timestamps without watermarking documents or other photos', async () => {
   const h = setup({async uploadFile(){return {id:'new'};},async updatePhoto(id){return {id};}});
   for (const slot of ['front45','rear45','mileage','extra','other','vehicleLicense']) assert.equal(await h.actions.upload(slot,files[0],'old'),true);

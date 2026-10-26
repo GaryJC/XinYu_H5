@@ -50,6 +50,20 @@ test('every additional size reduction redraws the timestamp before encoding', as
   assert.ok(h.encoded.length>3);
   for (const size of h.encoded) assert.ok(h.draws.some(draw=>draw.type==='text' && draw.width===size.width && draw.height===size.height));
 });
+test('contact details appear below the timestamp on separate lines and survive size reduction', async () => {
+  const h = setup({largeOutput:true});
+  await h.prepareUploadPhoto(file,uploadedAt,['联系人：张三','联系电话：13800000000']);
+  for (const size of h.encoded) {
+    const lines = h.draws.filter(draw=>draw.type==='text' && draw.width===size.width && draw.height===size.height);
+    assert.deepEqual(lines.map(line=>line.text),['上传时间：2026-10-26 09:02:03','联系人：张三','联系电话：13800000000']);
+    assert.ok(lines[0].y<lines[1].y && lines[1].y<lines[2].y && lines[2].y<size.height);
+  }
+});
+test('empty contact lines are omitted and embedded line breaks are normalized', async () => {
+  const h = setup();
+  await h.prepareUploadPhoto(file,uploadedAt,['','  ','联系人：张\n三']);
+  assert.deepEqual(h.draws.filter(draw=>draw.type==='text').map(draw=>draw.text),['上传时间：2026-10-26 09:02:03','联系人：张 三']);
+});
 test('timestamp failures reject instead of uploading an unmarked original and still release resources', async () => {
   for (const options of [{encodingFails:true},{decodingFails:true},{missingContext:true}]) {
     const h = setup(options);

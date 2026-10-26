@@ -1,3 +1,4 @@
+import {VehicleLicenseHistoryPrompt} from '../../vehicle-license-history/VehicleLicenseHistoryPrompt';
 import { useRepairConfirmationRows } from "../hooks/useRepairConfirmationRows";
 import { CustomerSignatureSection } from "../../signature/CustomerSignatureSection";
 import { SignatureReview } from "../../signature/SignatureReview";
@@ -6,7 +7,7 @@ import { CustomerVehicleUpdateTag } from "../../customer-vehicle-update/Customer
 import { PaperOrderResolution } from "./PaperOrderResolution";
 import { SubmittedOrderPhotos } from "../../work-order-photos/SubmittedOrderPhotos";
 import { VehicleScanIllustration } from "../../vehicle-identity/VehicleScanIllustration";
-import {VehicleLicenseExceptionNotice,VehicleLicenseExceptionButton} from './VehicleLicenseException';
+import {VehicleLicenseExceptionNotice,VehicleLicenseAvailability} from './VehicleLicenseException';
 import {isCurrentVehicleLicenseException} from '../domain/vehicleLicenseException';
 import "../work-order-form.css";
 import { PreRepairPhotos } from "../../pre-repair-photos/PreRepairPhotos";
@@ -64,9 +65,9 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
         ? "签字和委托单已上传，润丰正在处理。"
         : "签字和委托单已上传，正在等待润丰系统拉取。";
   const licenseExceptionCurrent=isCurrentVehicleLicenseException(draft.vehicleLicenseException,draft.vehicle);
-  const hasVehicleLicense = selectedOrder && selectedOrder.status !== "草稿"
+  const hasVehicleLicense = !canEditForm && selectedOrder && selectedOrder.status !== "草稿"
     ? Boolean(selectedOrder.files?.some(file => file.kind === "vehicle_license" && !selectedOrder.inspection.replacedPhotoIds?.includes(file.id)))
-    : Boolean(controller.vehicleLicenseFileId || selectedOrder?.files?.some(file => file.kind === "vehicle_license" && !selectedOrder.inspection.replacedPhotoIds?.includes(file.id)));
+    : Boolean(controller.vehicleLicenseFileId || draft.inspection.vehicleLicenseFileId || selectedOrder?.files?.some(file => file.kind === "vehicle_license" && !selectedOrder.inspection.replacedPhotoIds?.includes(file.id)));
 
   async function handleSendSignature() {
     const session = await sendSignature();
@@ -146,7 +147,8 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 onUpdated={order=>{controller.acceptRefreshedOrder(order);controller.selectOrder(order);}} onEdit={controller.selectOrder}/>}
             </FormSection>}
             {!paperOnly && <>
-            <FormSection title="车辆识别与资料" description="先查询车辆档案；行驶证照片及 OCR 确认均为选填。">
+            <VehicleLicenseHistoryPrompt controller={controller.licenseHistory}/>
+            <FormSection title="车辆识别与资料" description="请上传行驶证照片；本次无法提供时须填写理由，后续可在委托单详情补传。OCR 确认选填。">
             <VehicleIdentityRecognition
               disabled={!canEditForm}
               recognition={identifierRecognition}
@@ -164,9 +166,11 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               </Radio.Group>
             </Form.Item>
             {draft.vehicle.isMilitary ? <Alert type="info" showIcon title="军车无需上传行驶证" style={{marginBottom:16}}/> : <>
+            <VehicleLicenseAvailability key={`${draft.vehicle.plate}-${draft.vehicle.vin}-${licenseExceptionCurrent}-${hasVehicleLicense}`} disabled={!canEditForm||Boolean(actionLoading)} missing={licenseExceptionCurrent} hasPhoto={hasVehicleLicense} onConfirm={controller.reportMissingVehicleLicense}/>
             <Form.Item
               className="ocr-form-item"
-              label="行驶证照片（选填）"
+              label="行驶证照片"
+              required={!licenseExceptionCurrent}
               validateStatus={fieldError("行驶证") ? "error" : undefined}
               help={fieldError("行驶证")}
             >
@@ -182,7 +186,6 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 />
               </div>}
               {draft.vehicleLicenseException?<div style={{marginTop:12}}><VehicleLicenseExceptionNotice exception={draft.vehicleLicenseException} current={licenseExceptionCurrent}/></div>:null}
-              {vehicleHistory?.status==='new'&&!hasVehicleLicense&&!licenseExceptionCurrent?<VehicleLicenseExceptionButton disabled={!canEditForm||Boolean(actionLoading)} onConfirm={controller.reportMissingVehicleLicense}/>:null}
             </Form.Item>
             </>}
 
