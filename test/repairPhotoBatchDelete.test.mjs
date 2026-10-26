@@ -9,7 +9,7 @@ function database({stage='维修中',round=1,individual=false,submitted=false}={
   const calls=[];
   return{calls,get files(){return files;},async query(sql,params=[]) {
     calls.push({sql,params});
-    if(sql.includes('from work_orders wo left join dispatch_tasks'))return{rows:[{order_id:'o',shop_id:'shop',order_status:'维修中',stage,version:1,technician_id:'worker',data:{repairRound:round,technicianIds:individual?['worker','other']:['worker'],items:[{id:1,status:submitted?'待检验':'维修中',responsibleId:'worker'},{id:2,status:'维修中',responsibleId:individual?'other':'worker'}]},repair_items:[]}]};
+    if(sql.includes('from work_orders wo left join dispatch_tasks'))return{rows:[{order_id:'o',shop_id:'shop',order_status:'维修中',stage,version:1,technician_id:'worker',data:{repairRound:round,workerSubmissions:submitted?{worker:{at:'submitted'}}:undefined,technicianIds:individual?['worker','other']:['worker'],items:[{id:1,status:submitted?'待检验':'维修中',responsibleId:'worker'},{id:2,status:'维修中',responsibleId:individual?'other':'worker'}]},repair_items:[]}]};
     if(sql.includes('select role,active,shop_id'))return{rows:[{role:actor.role,active:true,shop_id:'shop'}]};
     if(sql.includes('select id from files where')||sql.includes('delete from files where')) {
       const [ids,orderId,currentRound,ownerId]=params;

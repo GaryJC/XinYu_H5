@@ -59,6 +59,9 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     if(task.stage==='待接单'&&!task.feedback) actions.push('accept','decline');
     if(['待开工','维修中'].includes(task.stage)) actions.push('pause');
     if(task.stage==='暂停') actions.push('resume');
+    if(task.stage==='回审'&&task.executionMode==='outsourced'&&!task.contractorId&&controller.manager&&!waitingForParts&&task.items.length) {
+      actions.push(task.items.some(item=>['待开工','待派工','待领料'].includes(item.status))?'start-order':'submit-review');
+    }
     if(!waitingForParts&&task.stage==='维修中'&&task.items.length&&task.items.every(i=>['待检验','已完工'].includes(i.status))) actions.push('submit');
   }
   const independent=!workers.includes(user.id)&&!task.participantIds?.includes(user.id)&&!task.items.some(i=>i.responsibleId===user.id||i.startedBy===user.id||i.finishedBy===user.id);

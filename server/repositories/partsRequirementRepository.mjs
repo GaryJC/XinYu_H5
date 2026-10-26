@@ -16,19 +16,20 @@ export async function validatePartsPickupNotification(row,user,database) {
   if(!user?.active || user.shopId!==row.payload.shopId) return false;
   const {rows}=await database.query('select stage,data,technician_id from dispatch_tasks where order_id=$1',[row.order_id]);
   const task=rows[0],data=task?.data,parts=row.payload.partsOwnerId?data?.partsRequests?.find(p=>p.ownerId===row.payload.partsOwnerId):data?.partsRequirement;
+  if(!task||!data||!['待开工','维修中','暂停','回审'].includes(task.stage))return false;
   if(row.kind==='配件可领取'&&row.payload.preparationGroups){
     if(!task||user.id!==row.recipient_id||!(hasAnyRole(user, ['technician','outsourcing'])||user.outsourcingRoleMember)||!(data.technicianIds??[task.technician_id]).includes(row.recipient_id)||(data.repairRound||0)!==(row.payload.repairRound||0))return false;
     return row.payload.preparationGroups.length>0&&row.payload.preparationGroups.every(group=>{
       const requirement=group.partsOwnerId?data.partsRequests?.find(p=>p.ownerId===group.partsOwnerId):data.partsRequirement;
-      return requirement&&requirement.recordedAt===group.partsRecordedAt&&requirement.revision===group.partsRevision&&group.items.length>0&&group.items.every(selected=>{
+      return requirement&&!requirement.issuedAt&&requirement.recordedAt===group.partsRecordedAt&&requirement.revision===group.partsRevision&&group.items.length>0&&group.items.every(selected=>{
         const item=requirement.items?.[selected.index];
-        return item?.preparedAt===selected.preparedAt&&item.recipientId===row.recipient_id;
+        return !item?.issuedAt&&item?.preparedAt===selected.preparedAt&&item.recipientId===row.recipient_id;
       });
     });
   }
   if(row.kind==='配件可领取'&&row.payload.partsPreparation){
-    if(!parts||parts.recordedAt!==row.payload.partsRecordedAt||parts.revision!==row.payload.partsRevision||(data.repairRound||0)!==(row.payload.repairRound||0))return false;
-    return (hasAnyRole(user, ['technician','outsourcing'])||user.outsourcingRoleMember)&&row.payload.partsPreparation.length>0&&row.payload.partsPreparation.every(r=>{const item=parts.items?.[r.index];return item?.preparedAt===r.preparedAt&&item.recipientId===row.recipient_id;})&&(data.technicianIds??[task.technician_id]).includes(row.recipient_id);
+    if(!parts||parts.issuedAt||parts.recordedAt!==row.payload.partsRecordedAt||parts.revision!==row.payload.partsRevision||(data.repairRound||0)!==(row.payload.repairRound||0))return false;
+    return (hasAnyRole(user, ['technician','outsourcing'])||user.outsourcingRoleMember)&&row.payload.partsPreparation.length>0&&row.payload.partsPreparation.every(r=>{const item=parts.items?.[r.index];return !item?.issuedAt&&item?.preparedAt===r.preparedAt&&item.recipientId===row.recipient_id;})&&(data.technicianIds??[task.technician_id]).includes(row.recipient_id);
   }
   if(row.kind==='配件已出库'){if(parts?.recipientIds&&!parts.recipientIds.includes(row.recipient_id))return false;}
   else if(parts?.ownerId&&parts.ownerId!==row.recipient_id)return false;

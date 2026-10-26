@@ -75,10 +75,11 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
       || task.items.find(item=>item.responsibleId===id)?.responsibleName || id);
     return {...structuredClone(task),technicianIds:[...input.technicianIds],technicianId:input.technicianIds[0],technicianName:names.join('、'),version:task.version+1};
   }
-  if(input.action==='send-review') return sendReview(task,actor,canInspect);
+  if(input.action==='send-review') return sendReview(task,actor,canInspect,people);
   if(input.action==='submit-review' || task.stage==='回审'&&['edit-repair-items','start-order'].includes(input.action)) {
     if(task.stage!=='回审') fail('仅回审任务可提交回审');
-    if(!technicianIds(task).includes(actor.id)||!hasAnyRole(actor,['technician','outsourcing'])&&!actor.outsourcingRoleMember) fail('仅当前维修工可编辑或提交回审',403);
+    const legacyContractorHandler=task.executionMode==='outsourced'&&!task.contractorId&&hasAnyRole(actor,scheduling);
+    if(!legacyContractorHandler&&(!technicianIds(task).includes(actor.id)||!hasAnyRole(actor,['technician','outsourcing'])&&!actor.outsourcingRoleMember)) fail('仅当前维修工可编辑或提交回审',403);
     // Review edits stay scoped to the worker even when they also hold scheduling roles.
     const next=applyDispatchAction({...task,stage:'维修中'},{...input,action:input.action==='submit-review'?'submit-order':input.action},actor,people,now,recipientScope,true);
     if(input.action!=='submit-review'||next.stage!=='待检验') next.stage='回审';

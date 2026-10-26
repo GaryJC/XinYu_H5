@@ -32,8 +32,7 @@ export async function uploadRepairPhoto(actor,id,body,{runTransaction=transactio
     if((body.repairRound||0)!==(task.repairRound||0)) throw new HttpError(409,'维修轮次已变化，请刷新后重新上传');
     if(!(body.purpose==='parts'?['待接单','待开工','维修中','暂停','回审']:["待开工","维修中","暂停","回审"]).includes(task.stage)||task.stage==='待接单'&&task.feedback) throw new HttpError(409,'当前状态不能上传维修照片');
     // Legacy item-by-item completion may still need a photo before its first personal submission.
-    const submitted=task.workerSubmissions?.[actor.id]||task.items.filter(item=>item.responsibleId===actor.id).every(item=>item.status==='已完工');
-    if(submitted&&hasSubmittedPersonalWork(task,actor.id))throw new HttpError(409,'本人项目已提交，不能上传维修照片');
+    if(hasSubmittedPersonalWork(task,actor.id))throw new HttpError(409,'本人项目已提交，不能上传维修照片');
     const file=await save({orderId:id,kind,fileName:body.fileName,mimeType:body.mimeType,imageBase64:body.imageBase64,uploadedBy:actor.id,uploadRequestId:body.requestId,database:client});
     await client.query('update files set repair_round=$2 where id=$1',[file.id,task.repairRound||0]);
     return {...file,repairRound:task.repairRound||0};

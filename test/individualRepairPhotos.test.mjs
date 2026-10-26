@@ -40,3 +40,9 @@ test('legacy item completions without personal submission can still upload requi
  const result=await uploadRepairPhoto(actor,'o',body,{runTransaction:fn=>fn(db),save:async()=>{saves++;return {id:'new'};}});
  assert.equal(result.id,'new');assert.equal(saves,1);
 });
+
+test('legacy item completion permits replacing a mistaken photo before personal submission',async()=>{
+ const db=database('待检验',{legacy:true});
+ assert.deepEqual(await removeRepairPhotos(db,actor,'o',['photo']),{ids:['photo']});
+ assert.ok(db.calls.some(call=>call.sql.startsWith('delete from files')));
+});

@@ -811,6 +811,75 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await run(tech,'accept',{partsRequirement:{mode:'none'}});
       assert.ok(current.acceptedAt);assert.equal(current.stage,'维修中');
     });
+    await t.test('review after whole-task handover restores historical owners and their notifications',async()=>{
+      const id='review-historical-owner';await seed(id);
+      let current=(await service.dispatchDetail(advisor,id)).task;
+      const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+      await run(advisor,'assign',{technicianIds:[tech.id,tech2.id],dueAt,repairItems:current.items.map((item,index)=>({...item,responsibleId:index?tech2.id:tech.id}))});
+      await run(tech,'accept',{partsRequirement:{mode:'none'}});await progressPhoto(id);
+      await run(tech,'submit-order');await run(inspector,'claim-inspection');await run(inspector,'inspect');
+      await run(advisor,'reassign',{technicianIds:[unique.id],dueAt,reason:'整单交班'});
+      await run(unique,'accept',{partsRequirement:{mode:'none'}});
+      const photo=await progressPhoto(id);await pool.query('update files set uploaded_by=$1 where id=$2',[unique.id,photo]);
+      await run(unique,'submit-order');await run(inspector,'claim-inspection');await run(inspector,'inspect');
+      assert.deepEqual(current.technicianIds,[unique.id]);
+      const version=current.version;
+      await pool.query('update users set active=false where id=$1',[tech.id]);
+      try {
+        await assert.rejects(()=>run(inspector,'send-review'),e=>e.status===409);
+        assert.equal((await service.dispatchDetail(advisor,id)).task.version,version);
+        assert.equal((await service.dispatchDetail(advisor,id)).task.stage,'维修完成');
+      } finally {await pool.query('update users set active=true where id=$1',[tech.id]);}
+      await run(inspector,'send-review');
+      assert.deepEqual(new Set(current.technicianIds),new Set([tech.id,unique.id]));
+      await service.dispatchDetail(tech,id);
+      const recipients=(await pool.query("select recipient_id from dispatch_notifications where order_id=$1 and kind='维修单回审'",[id])).rows.map(row=>row.recipient_id);
+      assert.deepEqual(new Set(recipients),new Set([tech.id,unique.id]));
+      await run(tech,'submit-review');await run(unique,'submit-review');
+      assert.equal(current.stage,'待检验');
+      await run(inspector,'claim-inspection');await run(inspector,'inspect');assert.equal(current.stage,'维修完成');
+    });
+    await t.test('delayed grouped and individual pickup notices expire after issuance or inspection',async()=>{
+      const warehouse={id:'warehouse',role:'warehouse',name:'仓管',active:true,shopId:'shop-hq'};
+      const {validatePartsPickupNotification:validate}=await import('../server/repositories/partsRequirementRepository.mjs');
+      for(const grouped of [false,true]) {
+        const id=`pickup-lifecycle-${grouped}`;await seed(id);
+        let current=(await service.dispatchDetail(advisor,id)).task;
+        const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+        await run(advisor,'assign',{technicianIds:[tech.id,tech2.id],dueAt,repairItems:current.items.map((item,index)=>({...item,responsibleId:index?tech2.id:tech.id}))});
+        await run(tech,'accept',{partsRequirement:{mode:'list',items:[{name:'滤芯',quantity:1,unit:'个'}]}});
+        const items=[{index:0,recipientId:tech.id}];
+        await run(warehouse,'confirm-parts',grouped?{preparationGroups:[{partsOwnerId:tech.id,items}]}:{partsOwnerId:tech.id,partsPreparation:items});
+        const notice=(await pool.query("select * from dispatch_notifications where order_id=$1 and kind='配件可领取'",[id])).rows[0];
+        assert.equal(await validate(notice,tech,pool),true);
+        if(grouped) {
+          await run(warehouse,'issue-parts',{partsOwnerId:tech.id,partsIssue:[{index:0,recipientId:tech.id}]});
+          assert.equal(await validate(notice,tech,pool),false);
+        }
+        await run(tech2,'record-parts',{partsRequirement:{mode:'none'}});
+        await progressPhoto(id);const photo=await progressPhoto(id);await pool.query('update files set uploaded_by=$1 where id=$2',[tech2.id,photo]);
+        await run(tech,'submit-order');await run(tech2,'submit-order');
+        assert.equal(await validate(notice,tech,pool),false);
+        await run(inspector,'claim-inspection');await run(inspector,'inspect');
+        assert.equal(await validate(notice,tech,pool),false);
+      }
+    });
+    await t.test('legacy item completion photos remain editable until personal submission is recorded',async()=>{
+      const id='legacy-personal-photo-edit';await seed(id);
+      let current=(await service.dispatchDetail(advisor,id)).task;
+      const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+      await run(advisor,'assign',{technicianIds:[tech.id,tech2.id],dueAt,repairItems:current.items.map((item,index)=>({...item,responsibleId:index?tech2.id:tech.id}))});
+      await run(tech,'accept',{partsRequirement:{mode:'none'}});await run(tech2,'record-parts',{partsRequirement:{mode:'none'}});
+      // Fixture for pre-personal-submission data created by the historical item finish endpoint.
+      current.items[0].status='待检验';current.items[0].finishedBy=tech.id;
+      await repo.saveDispatchTask(pool,current);
+      const {deleteRepairPhotos}=await import('../server/services/repairPhotoService.mjs');
+      const mistaken=await progressPhoto(id);await deleteRepairPhotos(tech,id,{fileIds:[mistaken]});
+      assert.equal((await pool.query('select 1 from files where id=$1',[mistaken])).rowCount,0);
+      const replacement=await progressPhoto(id);await run(tech,'submit-order');
+      await assert.rejects(()=>deleteRepairPhotos(tech,id,{fileIds:[replacement]}),e=>e.status===409);
+      assert.equal((await pool.query('select 1 from files where id=$1',[replacement])).rowCount,1);
+    });
     if(process.env.DISPATCH_UI_TEST==='true') await t.test('desktop and mobile UI complete assignment, acceptance, repair and inspection',async()=>{
       uiUploadRoot=await fs.mkdtemp(path.join(os.tmpdir(),'repair-dispatch-ui-'));
       process.env.LOCAL_UPLOAD_ROOT=uiUploadRoot;
@@ -962,6 +1031,23 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await inspection.getByRole('button',{name:/提交检验结果/}).click();
         await inspectionDialog.getByRole('button',{name:'确认提交检验结果',exact:true}).click();await inspectionDialog.waitFor({state:'hidden'});
         assert.equal((await service.dispatchDetail(manager,'ui-order')).task.stage,'维修完成');
+        // Historical external contractors have no employee login; the advisor must be able to resubmit review.
+        {
+          const id='ui-legacy-contractor-review';await seed(id);
+          let current=(await service.dispatchDetail(advisor,id)).task;
+          Object.assign(current,{executionMode:'outsourced',contractor:'历史承包方',outsourcingMode:'offsite',stage:'待检验',technicianIds:[],technicianId:undefined,acceptedAt:new Date().toISOString()});
+          current.items.forEach(item=>{item.status='待检验';delete item.responsibleId;});
+          await repo.saveDispatchTask(pool,current);await progressPhoto(id);
+          await service.executeDispatchAction(inspector,id,{action:'send-review',expectedVersion:current.version,requestId:randomUUID()});
+          const page=await pageFor(advisor,true,id);
+          const form=page.locator('.dispatch-detail');
+          await form.getByRole('button',{name:'提交回审',exact:true}).click();
+          const modal=page.getByRole('dialog',{name:'提交回审',exact:true});
+          await modal.getByRole('button',{name:/^确\s*认$/}).click();await modal.waitFor({state:'hidden'});
+          current=(await service.dispatchDetail(advisor,id)).task;
+          assert.equal(current.stage,'待检验');assert.ok(current.items.every(item=>item.finishedBy===advisor.id));
+          await assertActionBarLayout(page);
+        }
         for(const outsourcingMode of ['onsite','offsite']) {
           const id=`ui-outsourced-${outsourcingMode}`;await seed(id);
           const page=await pageFor(advisor,true,id);

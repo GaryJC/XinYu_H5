@@ -5,7 +5,8 @@ const workers=task=>task.technicianIds??(task.technicianId?[task.technicianId]:[
 export const individualRepair=task=>workers(task).length>1||Boolean(task.partsRequests?.length);
 export function hasSubmittedPersonalWork(task,ownerId) {
   const own=task.items.filter(item=>item.responsibleId===ownerId);
-  return individualRepair(task)&&own.length>0&&own.every(item=>['待检验','已完工'].includes(item.status));
+  return individualRepair(task)&&own.length>0&&own.every(item=>['待检验','已完工'].includes(item.status))
+    && Boolean(task.workerSubmissions?.[ownerId]||task.stage==='待检验'||own.every(item=>item.status==='已完工'));
 }
 export function personalParts(task,ownerId) {return task.partsRequests?.find(p=>p.ownerId===ownerId);}
 export function actionParts(task,input,actor) {
