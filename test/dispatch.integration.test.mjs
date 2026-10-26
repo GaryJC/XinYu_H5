@@ -127,6 +127,36 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal((await service.dispatchDetail(advisor,fallback.id)).task.stage,'待接单');
       assert.equal((await pool.query('select activation_error from work_order_dispatch_plans where order_id=$1',[fallback.id])).rows[0].activation_error,'');
     });
+    await t.test('unsigned edits roll back atomically and serialize against customer signing',async()=>{
+      async function fixture() {
+        let order=await db.createWorkOrder({shop:{id:'shop-hq'},department:{code:'D1',name:'维修部'},vehicle:{plate:'鲁B12345',vin:'LSVAA4182C2187611',mileage:'12000',model:'测试车型',modelLegacyCode:'M1'},customer:{name:'车主',legacyCode:'C1',phone:'13800000000'},advisor:advisor.name,repairItems:[{id:1,name:'保养'}]},advisor.name,advisor);
+        const front45=await progressPhoto(order.id,0,'repair_order_photo'),rear45=await progressPhoto(order.id,0,'repair_order_photo');
+        order=await db.updateWorkOrder({...order,inspection:{...order.inspection,preRepairPhotos:{front45,rear45}}},advisor.name,'接车照片',advisor);
+        order=await db.createSignatureTokenForOrder(order.id,advisor.name,{signatureMode:'remote'});
+        return {order,file:await progressPhoto(order.id,0,'signature_image')};
+      }
+      const {order,file}=await fixture();
+      await assert.rejects(()=>db.updateWorkOrder({...order,vehicle:{...order.vehicle,plate:'鲁BFAIL'},dispatchPlan:{technicianId:outside.id,dueAt}},advisor.name,'无效派工',advisor),e=>e.status===400);
+      assert.equal((await db.findWorkOrderById(pool,order.id)).vehicle.plate,order.vehicle.plate);
+      assert.ok(await db.findWorkOrderByToken(order.signatureToken),'保存失败不使原签字链接失效');
+      const outcomes=await Promise.allSettled([
+        db.updateWorkOrder({...order,vehicle:{...order.vehicle,plate:'鲁B862P7'}},advisor.name,'并发编辑',advisor),
+        db.signWorkOrderByToken(order.signatureToken,'客户',file)
+      ]);
+      assert.equal(outcomes.filter(result=>result.status==='fulfilled').length,1,'同一旧签字会话与编辑只能一个成功');
+      const stored=await db.findWorkOrderById(pool,order.id);
+      if(outcomes[0].status==='fulfilled') {
+        assert.equal(stored.vehicle.plate,'鲁B862P7');assert.equal(Boolean(stored.signatures.customer),false);
+        assert.ok([404,409].includes(outcomes[1].reason.status));
+      } else {
+        assert.equal(outcomes[0].reason.status,409);assert.equal(stored.vehicle.plate,order.vehicle.plate);assert.ok(stored.signatures.customer);
+      }
+      assert.equal((await pool.query('select 1 from legacy_sync_outbox where order_id=$1',[order.id])).rowCount,0);
+      const queued=await fixture();
+      await pool.query("insert into legacy_sync_outbox(event_id,order_id,revision,event_type,payload) values($1,$2,1,'created','{}')",[randomUUID(),queued.order.id]);
+      await assert.rejects(()=>db.updateWorkOrder({...queued.order,vehicle:{...queued.order.vehicle,plate:'鲁BBLOCK'}},advisor.name,'异常已入队',advisor),e=>e.status===409);
+      assert.equal((await db.findWorkOrderById(pool,queued.order.id)).vehicle.plate,queued.order.vehicle.plate);
+    });
     await t.test('warehouse applications persist confirmation, concurrency, notifications and revision history',async()=>{
       const warehouse={id:'warehouse',name:'仓管',role:'warehouse',shopId:'shop-hq',active:true};
       await pool.query("insert into users(id,name,role,shop_id,active) values('warehouse','仓管','warehouse','shop-hq',true)");
@@ -292,6 +322,18 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal((await fetch(base+'/api/admin/access-users')).status,401);
       const advisorToken=createTokenForUser(advisor.id);await createAuthSession({token:advisorToken,userId:advisor.id,expiresAt:new Date(Date.now()+3600000)});
       assert.equal((await fetch(base+'/api/admin/access-users',{headers:{Authorization:`Bearer ${advisorToken}`}})).status,403);
+      const unsigned=await db.createWorkOrder({shop:{id:'shop-hq'},vehicle:{plate:'鲁BHTTP',vin:'LZWADAGA8NB072733'},customer:{name:'权限测试'},advisor:advisor.name,repairItems:[{id:1,name:'保养'}]},advisor.name,advisor);
+      await pool.query("update work_orders set status='待客户签字' where id=$1",[unsigned.id]);
+      for(const actor of [outside,tech,{...advisor,id:'other-advisor',name:'其他顾问'},advisor,manager]) {
+        if(actor.id==='other-advisor')await pool.query("insert into users(id,name,role,shop_id,active) values($1,$2,'advisor','shop-hq',true)",[actor.id,actor.name]);
+        const auth=createTokenForUser(actor.id);await createAuthSession({token:auth,userId:actor.id,expiresAt:new Date(Date.now()+3600000)});
+        const currentUnsigned=await db.findWorkOrderById(pool,unsigned.id);
+        const response=await fetch(`${base}/api/work-orders/${unsigned.id}`,{method:'PUT',headers:{Authorization:`Bearer ${auth}`,'Content-Type':'application/json'},body:JSON.stringify({order:{...currentUnsigned,vehicle:{...currentUnsigned.vehicle,plate:'鲁BHTTP2'}},action:'签字前修改'})});
+        assert.equal(response.status,[advisor.id,manager.id].includes(actor.id)?200:403,`待签字编辑权限：${actor.id}`);
+        await response.text();
+      }
+      assert.equal((await pool.query('select 1 from legacy_sync_outbox where order_id=$1',[unsigned.id])).rowCount,0);
+
 
       // Warehouse search keeps authentication and order access checks before legacy reads.
       assert.equal((await fetch(base+'/api/dispatch/tasks/warehouse-order/parts-stock?query=机油')).status,401);
@@ -981,12 +1023,19 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         const originalRows=current.items.map(({id,name,responsibleId})=>({id,name,responsibleId}));
         await assert.rejects(()=>run(advisor,'edit-repair-items',{repairItems:[...originalRows.map(row=>({...row,responsibleId:unique.id})),{name:'新增检查',responsibleId:unique.id}],reason:'非法改派'}),e=>e.status===409);
         assert.deepEqual((await service.dispatchDetail(advisor,id)).task.items,unchanged);
-        await run(advisor,'edit-repair-items',{repairItems:[...originalRows,{name:'新增检查',responsibleId:unique.id}]});
+        const addition={action:'edit-repair-items',expectedVersion:current.version,requestId:randomUUID(),repairItems:[...originalRows,{name:'新增检查',responsibleId:unique.id}]};
+        const repeated=await Promise.all([service.executeDispatchAction(advisor,id,addition),service.executeDispatchAction(advisor,id,addition)]);
+        current=repeated[0].task;
+        assert.equal(repeated[1].task.version,current.version);
+        assert.equal((await pool.query('select 1 from dispatch_events where order_id=$1 and request_id=$2',[id,addition.requestId])).rowCount,1);
+        await assert.rejects(()=>service.executeDispatchAction(advisor,id,{...addition,requestId:randomUUID()}),e=>e.status===409);
+        await assert.rejects(()=>service.executeDispatchAction(advisor,id,{...addition,repairItems:[...originalRows,{name:'另一个项目',responsibleId:unique.id}]}),e=>e.status===409);
+        assert.equal((await service.dispatchDetail(advisor,id)).task.items.length,3);
         assert.equal(current.stage,'维修中');assert.equal(current.orderStatus,'维修中');assert.equal(current.items[2].status,'待开工');assert.deepEqual(current.items.slice(0,2),unchanged);
         assert.equal((await pool.query('select status from work_orders where id=$1',[id])).rows[0].status,'维修中');
         if(round)assert.equal((await pool.query('select closed from dispatch_repair_rounds where order_id=$1 and round_no=1',[id])).rows[0].closed,false);
         const notices=(await pool.query("select recipient_id from dispatch_notifications where order_id=$1 and kind='新增维修项目'",[id])).rows.map(r=>r.recipient_id);
-        assert.deepEqual(new Set(notices),new Set([unique.id]));
+        assert.deepEqual(notices,[unique.id],'重复增项请求只通知一次');
         await run(unique,'start-order');
         await assert.rejects(()=>run(unique,'submit-order'),e=>e.status===409);
         const photo=await progressPhoto(id,round);await pool.query('update files set uploaded_by=$1 where id=$2',[unique.id,photo]);
@@ -995,6 +1044,30 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await run(inspector,'send-review');
         await assert.rejects(()=>run(advisor,'edit-repair-items',{repairItems:current.items.map(item=>({id:item.id,name:item.name,responsibleId:item.id===1?tech2.id:item.responsibleId})),reason:'回审分工'}),e=>e.status===403);
         assert.equal(current.stage,'回审');assert.equal(current.items[0].responsibleId,tech.id);
+        const beforeConcurrent=structuredClone(current);
+        const additions=['并发增项甲','并发增项乙'].map(name=>({action:'edit-repair-items',expectedVersion:current.version,requestId:randomUUID(),repairItems:[...current.items.map(({id,name,responsibleId})=>({id,name,responsibleId})),{name,responsibleId:tech2.id}]}));
+        const races=await Promise.allSettled(additions.map(input=>service.executeDispatchAction(advisor,id,input)));
+        assert.equal(races.filter(result=>result.status==='fulfilled').length,1);
+        assert.equal(races.find(result=>result.status==='rejected').reason.status,409);
+        current=(await service.dispatchDetail(advisor,id)).task;
+        assert.equal(current.items.length,4);assert.deepEqual(current.items.slice(0,3),beforeConcurrent.items);
+        assert.equal((await pool.query("select 1 from dispatch_notifications where order_id=$1 and recipient_id=$2 and kind='新增维修项目'",[id,tech2.id])).rowCount,1);
+        const addedId=current.items[3].id;
+        await run(tech2,'record-parts',{partsRequirement:{mode:'list',items:[{name:'密封圈',quantity:1,unit:'个'}],photoIds:[]}});
+        await assert.rejects(()=>run(tech2,'start-order'),e=>e.status===409);
+        await run({id:'warehouse',name:'仓管',role:'warehouse',shopId:'shop-hq',active:true},'confirm-parts',{partsOwnerId:tech2.id,partsPreparation:[{index:0,recipientId:tech2.id}]});
+        assert.equal(current.items.find(item=>item.id===addedId).status,'待开工');
+        await run(tech2,'start-order');
+        await assert.rejects(()=>run(tech2,'submit-review'),e=>e.status===409);
+        const addedPhoto=await progressPhoto(id,round);await pool.query('update files set uploaded_by=$1 where id=$2',[tech2.id,addedPhoto]);
+        await run(tech2,'submit-review');await run(inspector,'claim-inspection');
+        await run(inspector,'inspect',{rejectedItemIds:[addedId],reason:'新增项目需要补修'});
+        assert.equal(current.stage,'回审');assert.equal(current.items.find(item=>item.id===addedId).status,'待开工');
+        await assert.rejects(()=>run(tech2,'submit-review'),e=>e.status===409);
+        await run(tech2,'start-order');await run(tech2,'submit-review');await run(tech,'submit-review');await run(unique,'submit-review');
+        assert.equal(current.stage,'待检验');
+        await run(inspector,'claim-inspection');await run(inspector,'inspect');
+        assert.equal(current.stage,'维修完成');assert.equal(current.orderStatus,'待结算');
       }
     });
     if(process.env.DISPATCH_UI_TEST==='true') await t.test('desktop and mobile UI complete assignment, acceptance, repair and inspection',async()=>{
@@ -1025,10 +1098,18 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await editPage.locator('.orders-table tbody tr').filter({hasText:'鲁BEDIT01'}).click();
         await editPage.getByRole('button',{name:'编辑委托单',exact:true}).click();
         await editPage.getByLabel('车牌号码',{exact:true}).fill('鲁B862P7');
+        const {default:editSharp}=await import('sharp');
+        const editPhoto=await editSharp({create:{width:100,height:100,channels:3,background:'#447799'}}).png().toBuffer();
+        await editPage.getByRole('button',{name:'添加斜前方 45°照片',exact:true}).click();
+        await editPage.getByLabel('斜前方 45°照片从相册选择',{exact:true}).setInputFiles({name:'待签字接车照片.png',mimeType:'image/png',buffer:editPhoto});
+        await editPage.getByRole('button',{name:'斜前方 45°照片操作',exact:true}).waitFor();
+        assert.equal(await editPage.getByLabel('车牌号码',{exact:true}).inputValue(),'鲁B862P7','上传照片不丢失未保存车辆修改');
+        assert.equal((await db.findWorkOrderById(pool,editableOrder.id)).vehicle.plate,'鲁BEDIT01','点击保存前不提前覆盖订单');
+
         await Promise.all([editPage.waitForResponse(response=>response.request().method()==='PUT'&&response.url().includes('/api/work-orders/')&&response.ok()),editPage.getByRole('button',{name:'保存修改',exact:true}).click()]);
         assert.equal((await db.findWorkOrderById(pool,editableOrder.id)).vehicle.plate,'鲁B862P7');
         assert.equal((await pool.query('select 1 from legacy_sync_outbox where order_id=$1',[editableOrder.id])).rowCount,0);
-        await editPage.close();
+        await editPage.close();pages.splice(pages.indexOf(editPage),1);
         async function assertNoDuplicateProjectActions(detail) {
           await detail.getByRole('heading',{name:/维修项目 ·/}).waitFor();
           assert.equal(await detail.getByRole('button',{name:/^改\s*派$/}).count(),0,'项目区域已支持改派，不显示重复底栏按钮');
@@ -1185,11 +1266,25 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
           assert.equal(current.orderStatus,'维修中');assert.equal(current.stage,'维修中');assert.deepEqual(current.items.slice(0,2),untouched);
           await run(unique,'start-order');const imageId=await progressPhoto(id);await pool.query('update files set uploaded_by=$1 where id=$2',[unique.id,imageId]);
           await run(unique,'submit-order');await run(inspector,'claim-inspection');await run(inspector,'inspect');await run(inspector,'send-review');
+          const {pendingRepairCommand,pendingRepairList}=await import('../server/services/pendingRepairsService.mjs');
+          const pendingBefore=await pendingRepairList(advisor,id);
+          const pendingAdded=await pendingRepairCommand(advisor,id,{action:'add',expectedVersion:pendingBefore.version,requestId:randomUUID(),name:'回审待确认项目',reason:'等待客户回复'});
+          const pendingItem=pendingAdded.items.at(-1);
           const mobile=await pageFor(advisor,true,id),review=mobile.locator('.dispatch-detail');
           await review.getByRole('heading',{name:/维修项目 ·/}).waitFor();
-          assert.equal(await review.locator('.repair-items-editor').count(),0);
-          assert.equal(await review.getByRole('button',{name:'＋ 新增增修项目',exact:true}).count(),0);
           assert.equal(await review.getByRole('combobox',{name:'维修项目 1 负责人',exact:true}).count(),0);
+          const beforeReview=structuredClone((await service.dispatchDetail(advisor,id)).task.items);
+          await review.getByRole('button',{name:'＋ 新增增修项目',exact:true}).click();
+          await review.getByRole('textbox',{name:'维修项目 4 名称',exact:true}).fill('回审追加检查');
+          await review.getByRole('combobox',{name:'维修项目 4 负责人',exact:true}).click();
+          await mobile.locator('.ant-select-dropdown:visible').getByText(unique.name,{exact:true}).click();
+          await Promise.all([mobile.waitForResponse(response=>response.request().method()==='POST'&&response.url().includes('/api/dispatch/tasks/')&&response.ok()),review.getByRole('button',{name:'新增并分配任务',exact:true}).click()]);
+          await review.getByRole('button',{name:'新增并分配任务',exact:true}).waitFor({state:'hidden'});
+          const addedReview=(await service.dispatchDetail(advisor,id)).task;
+          assert.equal(addedReview.stage,'回审');assert.equal(addedReview.items[3].status,'待开工');assert.deepEqual(addedReview.items.slice(0,3),beforeReview);
+          assert.equal(await review.getByRole('button',{name:'安排维修',exact:true}).isEnabled(),true);
+          await pendingRepairCommand(advisor,id,{action:'approve-and-schedule',id:pendingItem.id,expectedVersion:pendingAdded.version,requestId:randomUUID(),technicianId:unique.id});
+          assert.equal((await pendingRepairList(advisor,id)).items.at(-1).scheduled,true);
           current=(await service.dispatchDetail(advisor,id)).task;
           assert.equal(current.stage,'回审');assert.equal(current.items[0].responsibleId,tech.id);
           assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);

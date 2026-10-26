@@ -7,9 +7,9 @@ import ts from "typescript";
 const source = readFileSync(new URL("../client/src/features/work-order-photos/useOrderPhotoUpload.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 function setup(api) {
-  const state = [], updates = [], cleanups = [];
+  const state = [], updates = [], cleanups = [], prepared = [];
   const exports = {};
-  const prepare = async file => ({fileName:file.name,mimeType:"image/jpeg",imageBase64:"image"});
+  const prepare = async (file, uploadedAt) => { prepared.push({file, uploadedAt}); return {fileName:file.name,mimeType:"image/jpeg",imageBase64:"image"}; };
   vm.runInNewContext(compiled, { exports, Error, require(name) {
     if (name === "react") return {
       useState(initial) { const i = state.length; state.push(initial); return [initial, value => { state[i] = value; }]; },
@@ -21,9 +21,14 @@ function setup(api) {
     throw new Error(`Unexpected import ${name}`);
   }});
   const actions = exports.useOrderPhotoUpload("order1", "user1", order => updates.push(order));
-  return {actions,state,updates,unmount:()=>cleanups.forEach(cleanup=>cleanup?.())};
+  return {actions,state,updates,prepared,unmount:()=>cleanups.forEach(cleanup=>cleanup?.())};
 }
 const files = [{name:"one.jpg"},{name:"two.jpg"},{name:"three.jpg"}];
+test('submitted front and rear replacements request timestamps without watermarking documents or other photos', async () => {
+  const h = setup({async uploadFile(){return {id:'new'};},async updatePhoto(id){return {id};}});
+  for (const slot of ['front45','rear45','mileage','extra','other','vehicleLicense']) assert.equal(await h.actions.upload(slot,files[0],'old'),true);
+  assert.deepEqual(h.prepared.map(item => Boolean(item.uploadedAt)),[true,true,false,false,false,false]);
+});
 
 test("photo batch uploads and saves every image in selection order", async () => {
   const calls = [];

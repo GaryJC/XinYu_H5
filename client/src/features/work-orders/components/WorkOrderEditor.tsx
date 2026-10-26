@@ -170,7 +170,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               validateStatus={fieldError("行驶证") ? "error" : undefined}
               help={fieldError("行驶证")}
             >
-              {selectedOrder && selectedOrder.status !== "草稿" ? <SubmittedOrderPhotos key={selectedOrder.id} section="license" order={selectedOrder}
+              {selectedOrder && selectedOrder.status !== "草稿" && !canEditForm ? <SubmittedOrderPhotos key={selectedOrder.id} section="license" order={selectedOrder}
                 user={controller.currentUser} onUpdated={controller.acceptRefreshedOrder}/> : <div className="ocr-grid">
                 <VehicleLicenseOcrControl
                   disabled={!canEditForm}
@@ -324,7 +324,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             </div>
             <TextArea disabled={!canEditForm} label="故障描述 / 客户诉求" value={draft.faultDescription} onChange={(value) => updateDraft({ faultDescription: value })} />
 
-            {selectedOrder && selectedOrder.status !== "草稿" ? <SubmittedOrderPhotos key={selectedOrder.id} section="repair" order={selectedOrder}
+            {selectedOrder && selectedOrder.status !== "草稿" && !canEditForm ? <SubmittedOrderPhotos key={selectedOrder.id} section="repair" order={selectedOrder}
               user={controller.currentUser} onUpdated={controller.acceptRefreshedOrder}/> : !draft.paperOrder && <PreRepairPhotos key={`${controller.currentUser?.id}-${controller.preRepairPhotos.sessionId}`} photos={draft.inspection.preRepairPhotos} disabled={!canEditForm || Boolean(actionLoading)} controls={controller.preRepairPhotos} errors={formErrors} />}
 
             <div className="check-section">

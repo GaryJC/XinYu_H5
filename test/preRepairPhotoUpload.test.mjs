@@ -6,7 +6,7 @@ import ts from 'typescript';
 const source = readFileSync(new URL('../client/src/features/pre-repair-photos/usePreRepairPhotos.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 function setup(api, photos = { front45: 'old-front', rear45: 'rear', mileage: 'meter', extra: ['extra-1','extra-2'] }) {
-  const state = [], cleanups = [], updates = [];
+  const state = [], cleanups = [], updates = [], prepared = [];
   let draft = { inspection: { preRepairPhotos: structuredClone(photos) } };
   const exports = {};
   vm.runInNewContext(compiled, { exports, Error, require(name) {
@@ -16,13 +16,19 @@ function setup(api, photos = { front45: 'old-front', rear45: 'rear', mileage: 'm
       useEffect(effect) { cleanups.push(effect()); }
     };
     if (name.endsWith('workOrderApi')) return { workOrderApi: api };
-    if (name.endsWith('prepareOcrImage')) return { prepareUploadPhoto: async file => ({ fileName: file.name }) };
+    if (name.endsWith('prepareOcrImage')) return { prepareUploadPhoto: async (file, uploadedAt) => { prepared.push({file, uploadedAt}); return { fileName: file.name }; } };
     throw new Error(`Unexpected import ${name}`);
   }});
   const actions = exports.usePreRepairPhotos(updater => { draft = updater(draft); updates.push(draft); }, photos);
-  return { actions, state, updates, photos: () => draft.inspection.preRepairPhotos, unmount: () => cleanups.forEach(cleanup => cleanup?.()) };
+  return { actions, state, updates, prepared, photos: () => draft.inspection.preRepairPhotos, unmount: () => cleanups.forEach(cleanup => cleanup?.()) };
 }
 const files = [{name:'one.jpg',type:'image/jpeg'},{name:'two.jpg',type:'image/jpeg'},{name:'three.jpg',type:'image/jpeg'}];
+test('draft front and rear photos request upload timestamps while other slots do not', async () => {
+  const h = setup({async uploadFile() {return {id:'new'};}});
+  for (const slot of ['front45','rear45','mileage','extra']) assert.equal(await h.actions.upload(slot,files[0]),true);
+  assert.deepEqual(h.prepared.map(item => Boolean(item.uploadedAt)),[true,true,false,false]);
+  for (const item of h.prepared.slice(0,2)) assert.ok(Math.abs(Date.now() - item.uploadedAt.getTime()) < 5000);
+});
 test('draft replacement succeeds in place and signals completion without changing other photos', async () => {
   const h = setup({ async uploadFile() { return { id:'replacement' }; } });
   assert.equal(await h.actions.replaceExtra('extra-1',files[0]),true);

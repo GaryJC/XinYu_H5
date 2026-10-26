@@ -1,3 +1,4 @@
+import {pendingRepairScheduleBlock} from '../../shared/pendingRepairScheduling.mjs';
 import { pool,transaction } from '../database/pool.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 import { hasAnyRole } from '../../shared/roles.mjs';
@@ -36,7 +37,8 @@ export async function pendingRepairCommand(actor,id,input) {
    if(scheduling) {
     if(item.state!=='approved')throw new HttpError(409,'请先登记客户同意维修');
     const task=await getDispatchTask(client,id,actor,true);
-    if(['草稿','待客户签字','回审','待检验'].includes(task.stage))throw new HttpError(409,'请先完成签字、回审或当前检验，再安排追加维修');
+    const schedulingBlock=pendingRepairScheduleBlock(task.stage);
+    if(schedulingBlock)throw new HttpError(409,schedulingBlock);
     if(task.stage==='维修完成'&&(typeof input.dueAt!=='string'||!Number.isFinite(Date.parse(input.dueAt))||Date.parse(input.dueAt)<=Date.now()))throw new HttpError(400,'请选择维修工并填写晚于当前时间的预计完工时间');
     if(task.items.some(i=>i.id===item.itemId))throw new HttpError(409,'项目编号已存在，请管理员核对');
     const reopen=task.stage==='维修完成';

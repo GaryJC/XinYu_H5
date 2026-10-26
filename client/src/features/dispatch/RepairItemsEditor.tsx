@@ -4,13 +4,13 @@ import type {ReactNode} from 'react';
 import type {DispatchItem,RepairItemEdit,UserProfile} from '../../../../shared/types';
 import {personDisplayName,displayTime} from './dispatchLabels';
 import './repair-items-editor.css';
-export function RepairItemsEditor({items,rows,onChange,editing=false,disabled=false,technicians=[],showResponsibilities=true,selection,onResponsibleChange,allowRemoval=false,renderItemActions}:{items:DispatchItem[];rows:RepairItemEdit[];onChange:(rows:RepairItemEdit[])=>void;editing?:boolean;disabled?:boolean;technicians?:UserProfile[];showResponsibilities?:boolean;onResponsibleChange?:(index:number,responsibleId:string)=>void;allowRemoval?:boolean;selection?:{selected:number[];onChange:(selected:number[])=>void};renderItemActions?:(item:DispatchItem)=>ReactNode}) {
- const eligible=rows.flatMap((row,index)=>items.some(item=>item.id===row.id&&['待检验','已完工'].includes(item.status))?[]:[index]);
- const hasLocked=rows.some(row=>items.some(item=>item.id===row.id&&['待检验','已完工'].includes(item.status)));
+export function RepairItemsEditor({items,rows,onChange,editing=false,disabled=false,technicians=[],showResponsibilities=true,selection,onResponsibleChange,allowRemoval=false,lockExisting=false,renderItemActions}:{items:DispatchItem[];rows:RepairItemEdit[];onChange:(rows:RepairItemEdit[])=>void;editing?:boolean;disabled?:boolean;technicians?:UserProfile[];showResponsibilities?:boolean;onResponsibleChange?:(index:number,responsibleId:string)=>void;allowRemoval?:boolean;lockExisting?:boolean;selection?:{selected:number[];onChange:(selected:number[])=>void};renderItemActions?:(item:DispatchItem)=>ReactNode}) {
+ const eligible=rows.flatMap((row,index)=>items.some(item=>item.id===row.id&&(lockExisting||['待检验','已完工'].includes(item.status)))?[]:[index]);
+ const hasLocked=rows.some(row=>items.some(item=>item.id===row.id&&(lockExisting||['待检验','已完工'].includes(item.status))));
  return <div className={`repair-items-editor${editing?' is-editing':''}`}>
    {editing?<div className="repair-items-toolbar"><div className="repair-items-summary">{selection?<Checkbox aria-label="全选可分配项目" disabled={disabled||!eligible.length} checked={eligible.length>0&&eligible.every(index=>selection.selected.includes(index))} indeterminate={selection.selected.length>0&&!eligible.every(index=>selection.selected.includes(index))} onChange={e=>selection.onChange(e.target.checked?eligible:[])}>全选</Checkbox>:null}<span>共 <strong>{rows.length}</strong> 项</span></div><Button type="link" size="small" icon={<PlusOutlined/>} aria-label="＋ 新增增修项目" disabled={disabled||rows.length>=200} onClick={()=>onChange([...rows,{name:'',responsibleId:showResponsibilities&&technicians.length===1?technicians[0].id:undefined}])}>新增维修项目</Button></div>:null}
    <ol className="repair-item-list">{rows.map((row,index)=>{
-    const item=items.find(item=>item.id===row.id),locked=item&&['待检验','已完工'].includes(item.status);
+    const item=items.find(item=>item.id===row.id),locked=item&&(lockExisting||['待检验','已完工'].includes(item.status));
     return <li key={row.id??`new-${index}`} className="repair-item-row">
       <div className="repair-item-leading">{editing&&selection?<Checkbox aria-label={`选取维修项目 ${index+1}`} checked={selection.selected.includes(index)} disabled={disabled||Boolean(locked)} onChange={e=>selection.onChange(e.target.checked?[...selection.selected,index]:selection.selected.filter(i=>i!==index))}/>:null}<span className="repair-item-number">{String(index+1).padStart(2,'0')}</span></div>
       <div className="repair-item-content">
@@ -25,6 +25,6 @@ export function RepairItemsEditor({items,rows,onChange,editing=false,disabled=fa
       </div>
     </li>;
    })}</ol>
-   {editing&&hasLocked?<p className="repair-items-lock-note"><LockOutlined/> 已提检或检验通过的项目仅供查看</p>:null}
+   {editing&&hasLocked?<p className="repair-items-lock-note"><LockOutlined/> {lockExisting?'已有项目仅供查看，仅可新增并分配项目':'已提检或检验通过的项目仅供查看'}</p>:null}
  </div>;
 }

@@ -26,7 +26,7 @@ test('settlement reassignment rejects invalid owners, closed orders and ordinary
 });
 test('review edits are limited to the assigned worker and their own projects',()=>{
  const original={...task(),stage:'回审',items:task().items.map((item,index)=>({...item,status:index?'待检验':'维修中'}))};
- for(const role of ['advisor','manager'])for(const repairItems of [originalRows(original),rows(original)]) {
+ for(const role of ['advisor','manager'])for(const repairItems of [originalRows(original)]) {
   assert.throws(()=>act(original,{...advisor,role},'edit-repair-items',{repairItems}),e=>e.status===403);
  }
  const t=act(original,a,'edit-repair-items',{repairItems:[{id:1,name:'本人项目修改',responsibleId:'a'}]});
@@ -47,7 +47,22 @@ test('inspected projects stay immutable even when submitted together with valid 
   if(mutation==='owner')edits[0].responsibleId='c';
   if(mutation==='name')edits[0].name='篡改名称';
   if(mutation==='remove')edits=edits.slice(1);
-  assert.throws(()=>act(t,advisor,'edit-repair-items',{repairItems:edits,reason:'新增任务'}),e=>e.status===(stage==='回审'?403:409));
+  assert.throws(()=>act(t,advisor,'edit-repair-items',{repairItems:edits,reason:'新增任务'}),e=>e.status===(stage==='回审'&&mutation==='remove'?403:409));
   assert.deepEqual(t,before);
+ }
+});
+
+test('settlement additions to an original worker require a new start and preserve original inspections',()=>{
+ for(const worker of [a,b]) {
+  const original=task();
+  let t=act(original,advisor,'edit-repair-items',{repairItems:[...originalRows(original),{name:'本人追加检查',responsibleId:worker.id}]});
+  assert.throws(()=>act(t,worker,'submit-order'),e=>e.status===409);
+  const edited=t.items.map(({id,name,responsibleId})=>({id,name,responsibleId}));
+  edited[0].responsibleId='c';
+  assert.throws(()=>act(t,advisor,'edit-repair-items',{repairItems:edited}),e=>e.status===409,'退回维修后仍不可改派原已检验项目');
+  t=act(t,worker,'start-order');t=act(t,worker,'submit-order');
+  assert.deepEqual(t.items.slice(0,2),original.items);
+  t=act(t,inspector,'claim-inspection');t=act(t,inspector,'inspect');
+  assert.equal(t.stage,'维修完成');assert.deepEqual(t.items.slice(0,2),original.items);
  }
 });

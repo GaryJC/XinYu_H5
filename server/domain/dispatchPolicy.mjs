@@ -1,3 +1,4 @@
+import {addReviewProjects} from './reviewAssignment.mjs';
 import {prepareSettlementAssignment} from './settlementAssignment.mjs';
 import {hasPendingInspection,allWorkersHaveItems} from '../../shared/repairProgress.mjs';
 import {canEditDispatchTechnicians,requiredDispatchTechnicians} from '../../shared/dispatchTechniciansPolicy.mjs';
@@ -77,6 +78,9 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     return {...structuredClone(task),technicianIds:[...input.technicianIds],technicianId:input.technicianIds[0],technicianName:names.join('、'),version:task.version+1};
   }
   if(input.action==='send-review') return sendReview(task,actor,canInspect,people);
+  if(task.stage==='回审'&&input.action==='edit-repair-items'&&hasAnyRole(actor,scheduling)
+    &&input.repairItems?.some(row=>row.id===undefined)&&task.items.every(item=>input.repairItems.some(row=>row.id===item.id)))
+    return addReviewProjects(task,input,actor,people,now);
   if(input.action==='submit-review' || task.stage==='回审'&&['edit-repair-items','start-order'].includes(input.action)) {
     if(task.stage!=='回审') fail('仅回审任务可提交回审');
     const legacyContractorHandler=input.action!=='edit-repair-items'&&task.executionMode==='outsourced'&&!task.contractorId&&hasAnyRole(actor,scheduling);

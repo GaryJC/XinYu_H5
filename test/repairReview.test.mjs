@@ -73,3 +73,52 @@ test('multi-person review keeps individual requests independent and forbids mate
  t=materials(t,'confirm-parts',warehouse,{partsOwnerId:'t2',partsPreparation:[{index:1,recipientId:'t2'}]});
  assert.equal(act(t,'submit-review',tech2).stage,'待检验');
 });
+
+test('partial review inspection survives another worker editing and adding their own work',()=>{
+ const original={...task('维修完成'),technicianIds:['t','t2'],items:[...task('维修完成').items,{id:2,name:'其他项目',status:'已完工',responsibleId:'t2',startAt:'old'}]};
+ let t=act(original,'send-review',inspector);
+ t=act(t,'submit-review',tech);t=act(t,'claim-inspection',inspector);t=act(t,'inspect',inspector);
+ assert.equal(t.stage,'回审');assert.equal(t.items[0].status,'已完工');
+ const inspected=structuredClone(t.items[0]);
+ t=act(t,'edit-repair-items',tech2,{repairItems:[{id:2,name:'乙核对修改',responsibleId:'t2'},{name:'乙补充项目',responsibleId:'t2'}]});
+ assert.deepEqual(t.items[0],inspected);assert.equal(t.items[2].responsibleId,'t2');assert.equal(t.stage,'回审');
+ t=act(t,'submit-review',tech2);t=act(t,'claim-inspection',inspector);t=act(t,'inspect',inspector);
+ assert.equal(t.stage,'维修完成');assert.deepEqual(t.items[0],inspected);
+});
+
+test('review cannot be reassigned through scheduling alternatives or a technician with manager roles',()=>{
+ const t=act({...task('维修完成'),technicianIds:['t','t2'],items:[...task('维修完成').items,{id:2,name:'乙项目',status:'已完工',responsibleId:'t2'}]},'send-review',inspector);
+ const manager={...tech,id:'manager',role:'manager'};
+ for(const action of ['assign','reassign'])assert.throws(()=>act(t,action,manager,{technicianIds:['t2'],dueAt:'2027-01-01T00:00:00Z',reason:'换人'}),e=>e.status===409);
+ assert.throws(()=>act(t,'update-technicians',manager,{technicianIds:['t2']}),e=>e.status===403);
+ for(const role of ['advisor','manager']) {
+  const dual={...tech,role,roles:[role,'technician']};
+  for(const repairItems of [[{id:2,name:'越权修改',responsibleId:'t2'}],[{id:1,name:'原项目',responsibleId:'t2'}],[{id:1,name:'原项目',responsibleId:'t'},{name:'越权增项',responsibleId:'t2'}]])
+   assert.throws(()=>act(t,'edit-repair-items',dual,{repairItems}),e=>e.status===403);
+ }
+ assert.equal(t.version,2);assert.equal(t.items.length,2);
+});
+
+test('schedulers add assigned review projects without changing existing work or starting new work',()=>{
+ const advisor={...tech,id:'advisor',role:'advisor'},fresh={...tech,id:'fresh',name:'新增维修工'};
+ const roster=[...people,advisor,fresh];
+ const original=act(task('维修完成'),'send-review',inspector);
+ const request={action:'edit-repair-items',expectedVersion:original.version,requestId:randomUUID(),repairItems:[...original.items.map(({id,name,responsibleId})=>({id,name,responsibleId})),{name:'回审增项',responsibleId:fresh.id}]};
+ let next=applyDispatchAction(original,request,advisor,roster);
+ assert.equal(next.stage,'回审');assert.deepEqual(next.items[0],original.items[0]);assert.equal(next.items[1].status,'待开工');assert.equal(next.items[1].startAt,undefined);assert.ok(next.technicianIds.includes(fresh.id));
+ const run=(actor,action)=>{next=applyDispatchAction(next,{action,expectedVersion:next.version,requestId:randomUUID()},actor,roster);};
+ assert.throws(()=>run(fresh,'submit-review'),e=>e.status===409);
+ run(fresh,'start-order');run(fresh,'submit-review');assert.equal(next.stage,'回审');run(tech,'submit-review');assert.equal(next.stage,'待检验');
+ for(const patch of [{active:false},{shopId:'other'},{role:'advisor'}])assert.throws(()=>applyDispatchAction(original,request,advisor,[...people,advisor,{...fresh,...patch}]),e=>e.status===409);
+ const tampered=structuredClone(request);tampered.repairItems[0].name='改旧项目';
+ assert.throws(()=>applyDispatchAction(original,tampered,advisor,roster),e=>e.status===409);
+});
+
+test('adding the current inspector as a review worker releases their inspection claim',()=>{
+ const advisor={...tech,id:'advisor',role:'advisor'},dual={...tech2,roles:['technician','inspector']};
+ const original={...act(task('维修完成'),'send-review',inspector),inspectorId:dual.id,inspectorName:dual.name,inspectionClaimedAt:'old'};
+ original.items[0].status='待检验';
+ const next=applyDispatchAction(original,{action:'edit-repair-items',expectedVersion:original.version,requestId:randomUUID(),repairItems:[{id:1,name:original.items[0].name,responsibleId:tech.id},{name:'追加检查',responsibleId:dual.id}]},advisor,[...people.filter(p=>p.id!==dual.id),dual,advisor]);
+ assert.equal(next.inspectorId,undefined);assert.equal(next.inspectionClaimedAt,undefined);assert.equal(original.inspectorId,dual.id);
+ assert.throws(()=>applyDispatchAction(next,{action:'claim-inspection',expectedVersion:next.version,requestId:randomUUID()},dual,[...people,advisor]),e=>e.status===403);
+});

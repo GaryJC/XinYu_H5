@@ -30,9 +30,36 @@ function encodeJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
 
 // Use Image/canvas rather than createImageBitmap for older DingTalk WebViews.
 export function prepareOcrImage(file: File) { return prepareImage(file, 'ocr'); }
-export function prepareUploadPhoto(file: File) { return prepareImage(file, 'photo'); }
+export function prepareUploadPhoto(file: File, uploadedAt?: Date) {
+  const watermark = uploadedAt ? `上传时间：${new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+  }).format(uploadedAt).replace(/\//g, '-')}` : undefined;
+  return prepareImage(file, 'photo', watermark);
+}
 
-async function prepareImage(file: File, profile: keyof typeof profiles) {
+function drawWatermark(context: CanvasRenderingContext2D, canvas: HTMLCanvasElement, text: string) {
+  const padding = Math.max(2, Math.round(Math.min(canvas.width, canvas.height) * 0.015));
+  let fontSize = Math.max(1, Math.round(Math.min(canvas.width, canvas.height) * 0.032));
+  context.save();
+  context.font = `${fontSize}px sans-serif`;
+  const availableWidth = Math.max(1, canvas.width - padding * 4);
+  if (context.measureText(text).width > availableWidth) {
+    fontSize *= availableWidth / context.measureText(text).width;
+    context.font = `${fontSize}px sans-serif`;
+  }
+  const height = fontSize + padding * 2;
+  const top = canvas.height - height - padding;
+  context.fillStyle = 'rgba(0, 0, 0, 0.6)';
+  context.fillRect(padding, top, context.measureText(text).width + padding * 2, height);
+  context.fillStyle = '#fff';
+  context.textAlign = 'left';
+  context.textBaseline = 'top';
+  context.fillText(text, padding * 2, top + padding);
+  context.restore();
+}
+
+async function prepareImage(file: File, profile: keyof typeof profiles, watermark?: string) {
   const { targetBytes, maxEdge, qualities } = profiles[profile];
   const started = performance.now();
   const url = URL.createObjectURL(file);
@@ -44,7 +71,7 @@ async function prepareImage(file: File, profile: keyof typeof profiles) {
     const image = await loadImage(url);
     const edge = Math.max(image.naturalWidth, image.naturalHeight);
     const supported = /image\/(jpeg|png|webp)/i.test(file.type);
-    if (file.size > targetBytes || edge > maxEdge || !supported) {
+    if (watermark || file.size > targetBytes || edge > maxEdge || !supported) {
       const scale = Math.min(1, maxEdge / edge);
       canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
       canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
@@ -53,6 +80,7 @@ async function prepareImage(file: File, profile: keyof typeof profiles) {
       context.fillStyle = "#fff";
       context.fillRect(0, 0, canvas.width, canvas.height);
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      if (watermark) drawWatermark(context, canvas, watermark);
       // OCR keeps small characters readable; ordinary record photos use smaller files.
       for (const quality of qualities) {
         const candidate = await encodeJpeg(canvas, quality);
@@ -72,15 +100,17 @@ async function prepareImage(file: File, profile: keyof typeof profiles) {
           context.fillStyle = '#fff';
           context.fillRect(0, 0, canvas.width, canvas.height);
           context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          if (watermark) drawWatermark(context, canvas, watermark);
           output = await encodeJpeg(canvas, 0.76);
         }
       }
-      if (supported && edge <= maxEdge && output.size >= file.size) {
+      if (!watermark && supported && edge <= maxEdge && output.size >= file.size) {
         output = file;
         converted = false;
       }
     }
   } catch {
+    if (watermark) throw new Error('照片时间水印添加失败，请重新选择照片或重试');
     // Preserve existing format handling when a WebView cannot decode/encode an image.
     output = file;
     converted = false;

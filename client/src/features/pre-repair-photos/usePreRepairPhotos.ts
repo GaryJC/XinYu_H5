@@ -38,7 +38,7 @@ export function usePreRepairPhotos(setDraft: Dispatch<SetStateAction<WorkOrderDr
     try {
       // Process sequentially to keep large mobile images within WebView memory limits.
       for (const file of files) {
-        const image = await prepareUploadPhoto(file);
+        const image = await prepareUploadPhoto(file, slot === 'front45' || slot === 'rear45' ? new Date() : undefined);
         if (generation.current !== session) return false;
         const stored = await workOrderApi.uploadFile({ kind: 'repair_order_photo', ...image });
         if (generation.current !== session) return false;

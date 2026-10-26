@@ -76,7 +76,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
   }
   return <div className={`dispatch-detail task-detail-layout${actions.length?" has-task-actions":""}`} style={actions.length?{paddingBottom:Math.max(90,actionBarHeight+16)}:undefined}>
     <TaskOverview task={task} techniciansEditor={<TaskTechniciansEditor controller={controller} user={user} blocked={photoBlocked}/>} dueEditor={<TaskDueDateEditor key={`${task.orderId}-${user.id}`} controller={controller} user={user} blocked={photoBlocked} />}><Space wrap><Tag>{executionLabels[task.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(task)}</Tag>{task.urgent?<Tag color="red">加急</Tag>:null}{task.overdue?<Tag color="red">超期</Tag>:null}{task.rework&&!task.repairRound?<Tag color="orange">返工第 {task.reworkCount} 次</Tag>:null}</Space></TaskOverview>
-    <PendingRepairsPanel orderId={task.orderId} user={user} onChanged={()=>{void controller.refreshDetail();void controller.refresh();}}/>
+    <PendingRepairsPanel stage={task.stage} orderId={task.orderId} user={user} onChanged={()=>{void controller.refreshDetail();void controller.refresh();}}/>
     {unsigned?<Alert type="info" showIcon title="确认客户签字后才能派工" description="请在委托开单中完成工单与客户签字，确认客户签字后即可从派工台安排维修。"/>:null}
     {task.needsReview?<Alert type="warning" title="历史任务待核对" description="历史记录未能完整确认人员或进度；管理员核对后才能继续，不补造历史时间。"/>:null}
     {task.feedback?<Alert type="warning" title="无法接单 · 待服务顾问处理" description={task.feedback}/>:null}
@@ -90,7 +90,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     </section>:null}
     {!hasPendingInspection(task)||task.items.some(item=>!['待检验','已完工'].includes(item.status))?<section className="task-projects">
     <h3>维修项目 · {task.items.filter(i=>['待检验','已完工'].includes(i.status)).length}/{task.items.length} 已提报或通过</h3>
-    {controller.manager&&!unsigned&&!task.needsReview&&(['待派工','待接单','待开工','维修中','暂停'].includes(task.stage)||task.stage==='维修完成'&&task.orderStatus==='待结算'&&task.executionMode!=='outsourced')?<DispatchProjectsEditor key={task.orderId} task={task} controller={controller} actionsTarget={projectActionsTarget}/>:task.items.map(item=><Card key={item.id} size="small" title={item.name} extra={<Tag>{item.status}</Tag>}>
+    {controller.manager&&!unsigned&&!task.needsReview&&(['待派工','待接单','待开工','维修中','暂停'].includes(task.stage)||task.stage==='回审'&&task.executionMode!=='outsourced'||task.stage==='维修完成'&&task.orderStatus==='待结算'&&task.executionMode!=='outsourced')?<DispatchProjectsEditor key={task.orderId} task={task} controller={controller} actionsTarget={projectActionsTarget}/>:task.items.map(item=><Card key={item.id} size="small" title={item.name} extra={<Tag>{item.status}</Tag>}>
       <p>负责人：{item.responsibleName||'待指定'}</p>
       <div className="dispatch-item-times"><span>开工：{displayTime(item.startAt)}</span><span>完工提报：{displayTime(item.finishAt)}</span><span>检验：{item.inspectorName||'未检验'} · {displayTime(item.inspectedAt)}</span><span>领料确认：{displayTime(item.pickedAt)}</span></div>
       <DispatchItemProgressActions task={task} item={item} controller={controller} enabled={owner&&!unsigned}/>

@@ -31,7 +31,8 @@ export function useOrderPhotoUpload(orderId: string, userId: string | undefined,
     try {
       // Keep the whole batch locked and process images sequentially for mobile WebViews.
       for (const file of files) {
-        const image = await (slot === "vehicleLicense" ? prepareOcrImage(file) : prepareUploadPhoto(file));
+        const image = await (slot === "vehicleLicense" ? prepareOcrImage(file)
+          : prepareUploadPhoto(file, slot === "front45" || slot === "rear45" ? new Date() : undefined));
         if (session !== generation.current) return false;
         const kind: StoredFile["kind"] = slot === "vehicleLicense" ? "vehicle_license" : slot === "other" ? "other" : "repair_order_photo";
         const stored = await workOrderApi.uploadFile({kind, ...image});
