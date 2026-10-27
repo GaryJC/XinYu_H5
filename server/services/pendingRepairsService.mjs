@@ -17,7 +17,7 @@ export async function pendingRepairFollowups(actor) {
  return listPendingFollowups(pool,actor.shopId);
 }
 export async function pendingRepairCommand(actor,id,input) {
- if(!input||!['add','approve','decline','schedule','approve-and-schedule','cancel'].includes(input.action)||!Number.isInteger(input.expectedVersion)||typeof input.requestId!=='string'||!/^[\w-]{8,100}$/.test(input.requestId))throw new HttpError(400,'待确认操作参数无效');
+ if(!input||!['add','approve','decline','schedule','approve-and-schedule','cancel','remind-inspector'].includes(input.action)||!Number.isInteger(input.expectedVersion)||typeof input.requestId!=='string'||!/^[\w-]{8,100}$/.test(input.requestId))throw new HttpError(400,'待确认操作参数无效');
  const result=await transaction(async client=>{
   const row=await readPendingRepairs(client,id,true);access(actor,row);
   const previous=await readPendingRequest(client,id,actor.id,input.requestId);
@@ -25,7 +25,7 @@ export async function pendingRepairCommand(actor,id,input) {
   if(row.version!==input.expectedVersion)throw new HttpError(409,'待确认项目已更新，请刷新');
   if(row.items.find(p=>p.id===input.id)?.source==='inspection')return processInspectionDeferred(client,actor,id,input,row);
   access(actor,row,input.action==='add'?'add':true);
-  if(input.action==='cancel')throw new HttpError(400,'仅检验待定项目支持撤销');
+  if(['cancel','remind-inspector'].includes(input.action))throw new HttpError(400,'仅检验待定项目支持撤销');
   const items=structuredClone(row.items);
   if(input.action==='add') {if(items.length>=100)throw new HttpError(400,'待确认项目最多 100 项');items.push(await newPendingRepair(client,input,actor));}
   else {

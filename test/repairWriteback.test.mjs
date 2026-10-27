@@ -197,3 +197,70 @@ test('consecutive cancellation snapshots retain legacy positions and ignore live
  assert.equal(baseline.removeItem.legacyPosition,2);assert.deepEqual(baseline.items.map(i=>i.id),[3]);
  assert.doesNotThrow(()=>validateWritebackSnapshot(baseline));
 });
+
+test('positionless removal accepts the unpublished original name and is idempotent when absent',async()=>{
+ const removal={...snapshot,operation:'remove',removeItem:{id:1,name:'【待定】更换机油',legacyPosition:null},items:[],allowEmptyRemoval:true};
+ for(const name of ['更换机油','【待定】更换机油']) {
+  const mock=sqlHarness({removalRows:[{position:7,name}]});
+  await replaceLegacyRepairItems(removal,{executeTransaction:mock.executeTransaction,source:'test'});
+  const deletes=mock.state().statements.filter(s=>s.query.startsWith('delete'));
+  assert.equal(deletes.length,2);assert.ok(deletes.every(s=>s.params.name===name&&s.params.xh===7));
+  assert.ok(!mock.state().statements.some(s=>s.query.startsWith('insert into dbo.qxwxmxb')));
+ }
+ const absent=sqlHarness({removalRows:[]});
+ await replaceLegacyRepairItems(removal,{executeTransaction:absent.executeTransaction,source:'test'});
+ assert.equal(absent.state().committed,true);
+ assert.ok(!absent.state().statements.some(s=>s.query.startsWith('delete')));
+ assert.equal(absent.state().statements.filter(s=>s.query.startsWith('insert into dbo.h5_repair_writeback_receipts')).length,2);
+ const duplicate=sqlHarness({removalRows:[{position:1,name:'更换机油'},{position:2,name:'【待定】更换机油'}]});
+ await assert.rejects(()=>replaceLegacyRepairItems(removal,{executeTransaction:duplicate.executeTransaction,source:'test'}),/位置或名称/);
+ assert.equal(duplicate.state().rolledBack,true);
+});
+
+test('removal uses creation identities before first inspection and skips an unpublished same-name project',async()=>{
+ const {enqueueRepairRemoval}=await import('../server/repositories/repairWritebackRepository.mjs');
+ let baseline;const jobs=[];
+ const client={query:async(sql,args)=>{
+  if(sql.startsWith('select snapshot'))return {rows:baseline?[{snapshot:baseline}]:[]};
+  if(sql.startsWith('select payload'))return {rows:[{items:[{id:1,name:'原项目'},{id:2,name:'原项目二'}]}]};
+  if(sql.startsWith('insert into repair_writebacks')){baseline=JSON.parse(args[2]);jobs.push(baseline);}
+  return {rows:[]};
+ }};
+ const task={orderId:'o',plate:'鲁B12345',items:[{id:99,name:'未检验项目'}]};
+ await enqueueRepairRemoval(client,task,1,{itemId:99,name:'原项目'});
+ assert.equal(jobs.length,0);
+ await enqueueRepairRemoval(client,task,2,{itemId:1,name:'已改名的本地项目'});
+ assert.deepEqual(jobs[0].removeItem,{id:1,name:'原项目',legacyPosition:null});
+ await enqueueRepairRemoval(client,task,3,{itemId:2,name:'原项目二'});
+ assert.deepEqual(jobs[1].removeItem,{id:2,name:'原项目二',legacyPosition:null});
+});
+
+test('multiple removals without a known baseline never turn an incomplete list into publication evidence',async()=>{
+ const {enqueueRepairRemoval}=await import('../server/repositories/repairWritebackRepository.mjs');
+ let baseline;const jobs=[];
+ const client={query:async(sql,args)=>{
+  if(sql.startsWith('select snapshot'))return {rows:baseline?[{snapshot:baseline}]:[]};
+  if(sql.startsWith('insert into repair_writebacks')){baseline=JSON.parse(args[2]);jobs.push(baseline);}
+  return {rows:[]};
+ }};
+ for(const id of [1,2])await enqueueRepairRemoval(client,{orderId:'o',plate:'鲁B12345'},id,{itemId:id,name:`项目${id}`});
+ assert.equal(jobs.length,2);assert.ok(jobs.every(job=>job.baselineIncomplete&&job.removeItem.legacyPosition===null));
+});
+
+test('an old positionless removal no longer blocks the following complete writeback',async()=>{
+ const {processRepairWritebacks}=await import('../server/repositories/repairWritebackRepository.mjs');
+ const jobs=[
+  {id:1,event_id:'41',order_id:'o',status:'pending',attempts:0,snapshot:{orderId:'o',plate:snapshot.plate,operation:'remove',removeItem:{id:2,name:'【待定】已不存在',legacyPosition:null},items:[],allowEmptyRemoval:true}},
+  {id:2,event_id:'42',order_id:'o',status:'pending',attempts:0,snapshot}
+ ];
+ const client={query:async(sql,args)=>{
+  if(sql.startsWith('select j.*'))return {rows:jobs.filter(j=>j.status==='pending').slice(0,1)};
+  if(sql.startsWith('select dispatch_no'))return {rows:[{dispatch_no:snapshot.dispatchNo,department_code:snapshot.departmentCode,legacy_document_no:snapshot.documentNo,legacy_reid:snapshot.legacyReid,vehicle_plate:snapshot.plate}]};
+  if(sql.includes("set status='synced'"))jobs.find(j=>j.id===args[0]).status='synced';
+  else if(sql.startsWith('update repair_writebacks'))throw new Error('Writeback unexpectedly failed');
+  return {rows:[]};
+ }};
+ const mock=sqlHarness({removalRows:[]});
+ await processRepairWritebacks(fn=>fn(client),payload=>replaceLegacyRepairItems(payload,{executeTransaction:mock.executeTransaction,source:'test'}));
+ assert.deepEqual(jobs.map(j=>j.status),['synced','synced']);
+});

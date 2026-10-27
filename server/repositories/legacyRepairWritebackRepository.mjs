@@ -74,12 +74,17 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
   for(const header of pending) {
    const target=(req,sql)=>{req.input('wd',sql.Char(1),header.wd);req.input('dh',sql.Int,Number(header.dh));};
    if(snapshot.operation==='remove') {
-    const removal=(req,sql)=>{target(req,sql);req.input('name',sql.NVarChar(200),snapshot.removeItem.name);req.input('xh',sql.Int,snapshot.removeItem.legacyPosition);};
+    // Without a published position, the original row may not yet carry the
+    // deferred prefix. Match both exact names, require uniqueness, and treat
+    // an absent row as already removed. This also recovers old queued removals
+    // without changing their payload hash or durable receipt identity.
+    const originalName=snapshot.removeItem.name.replace(/^(?:【待定】)+/u,'');
+    const removal=(req,sql)=>{target(req,sql);req.input('name',sql.NVarChar(200),snapshot.removeItem.name);req.input('original_name',sql.NVarChar(200),originalName);req.input('xh',sql.Int,snapshot.removeItem.legacyPosition);};
     const {recordset:matches}=await execute(`select Xh as position,RTRIM(hh) as name from dbo.qxwxmxb with (updlock,holdlock)
-     where wd=@wd and dh=@dh and lb=N'项目' and ((@xh is not null and Xh=@xh) or (@xh is null and RTRIM(hh)=@name))`,removal);
-    if(!Array.isArray(matches)||matches.length>1||matches.some(row=>row.name!==snapshot.removeItem.name))throw new Error('润丰撤销项目位置或名称已变化，请人工核对后处理');
-    if(!matches.length&&snapshot.removeItem.legacyPosition===null)throw new Error('缺少可定位的润丰待定项目，请人工核对是否已移除');
-    if(matches.length)await execute(`delete from dbo.qxwxmxb where wd=@wd and dh=@dh and lb=N'项目' and RTRIM(hh)=@name and (@xh is null or Xh=@xh)`,removal);
+     where wd=@wd and dh=@dh and lb=N'项目' and ((@xh is not null and Xh=@xh) or (@xh is null and RTRIM(hh) in (@name,@original_name)))`,removal);
+    const allowedNames=snapshot.removeItem.legacyPosition===null?[snapshot.removeItem.name,originalName]:[snapshot.removeItem.name];
+    if(!Array.isArray(matches)||matches.length>1||matches.some(row=>!allowedNames.includes(row.name)||!Number.isSafeInteger(row.position)||row.position<1))throw new Error('润丰撤销项目位置或名称已变化，请人工核对后处理');
+    if(matches.length)await execute(`delete from dbo.qxwxmxb where wd=@wd and dh=@dh and lb=N'项目' and RTRIM(hh)=@name and Xh=@xh`,(req,sql)=>{target(req,sql);req.input('name',sql.NVarChar(200),matches[0].name);req.input('xh',sql.Int,matches[0].position);});
    } else {
    const totals=await execute(`select isnull(sum(je),0) as amount,isnull(sum(cb),0) as cost from dbo.qxwxmxb with (updlock,holdlock) where wd=@wd and dh=@dh and lb=N'项目'`,target);
    const amount=Number(totals.recordset?.[0]?.amount||0),cost=Number(totals.recordset?.[0]?.cost||0);

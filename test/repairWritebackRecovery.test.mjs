@@ -72,3 +72,10 @@ test('retry migrates an invalid old cancellation into removal only, excluding un
  assert.deepEqual(client.job.snapshot.items.map(i=>i.id),[1]);
  assert.equal(client.job.status,'pending');
 });
+
+test('retry of a cancellation-completed round repairs its full snapshot instead of reverting to removal',async()=>{
+ const client=recoveryClient({snapshot:{...validSnapshot,operation:'replace',items:[{...validSnapshot.items[0],employeeCode:null}]},users:[{id:'t',legacy_employee_code:'002',legacy_employee_name:'乙'}],event:{action:'inspection-deferred-cancel',detail:{itemId:2}}});
+ await retryFailedRepairWriteback(client,'o','管理员');
+ assert.equal(client.job.snapshot.operation,'replace');assert.equal(client.job.snapshot.items[0].employeeCode,'002');
+ assert.equal(client.job.status,'pending');
+});

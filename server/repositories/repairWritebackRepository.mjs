@@ -6,7 +6,7 @@ import {makeWritebackSnapshot,writebackAllowed,writebackDispatchAllowlist,valida
 import {readRepairRounds} from './repairRoundRepository.mjs';
 import {repairWritebackSimulationEnabled} from '../domain/repairWritebackSimulation.mjs';
 import {readRepairWritebackSimulation,retryRepairWritebackSimulation} from './repairWritebackSimulationRepository.mjs';
-export async function enqueueRepairWriteback(client,task,eventId) {
+export async function enqueueRepairWriteback(client,task,eventId,{deferValidation=false}={}) {
  // Replacement must include prior completed rounds, not just the current rework subset.
  const all=new Map();
  for(const round of await readRepairRounds(client,task.orderId))for(const item of round.task.items){const ids=round.task.technicianIds??(round.task.technicianId?[round.task.technicianId]:[]);all.set(item.id,{...item,responsibleId:item.responsibleId||(ids.length===1?ids[0]:undefined)});}
@@ -15,24 +15,37 @@ export async function enqueueRepairWriteback(client,task,eventId) {
  const pending=await readPendingRepairs(client,task.orderId);
  const snapshot=makeWritebackSnapshot(task,mergePendingWriteback([...all.values()],pending.items),users);
  if(!snapshot.items.length&&pending.items.some(p=>p.source==='inspection'&&p.inspectionState==='cancelled'))snapshot.allowEmptyRemoval=true;
+ let validationError='';
+ if(deferValidation)snapshot.operation='replace';
  if(task.executionMode!=='outsourced')try{validateWritebackSnapshot(snapshot);
   const {rows:orders}=await client.query('select dispatch_no from work_orders where id=$1',[task.orderId]);
-  if(writebackAllowed(orders[0]?.dispatch_no))await validateLegacyRepairStrings(snapshot);
- }catch(error){throw new HttpError(409,`润丰写回校验未通过：${error.message}`);}
- await client.query('insert into repair_writebacks(event_id,order_id,snapshot,status,error) values($1,$2,$3,$4,$5) on conflict(event_id) do nothing',[eventId,task.orderId,JSON.stringify(snapshot),task.executionMode==='outsourced'?'manual':'pending',task.executionMode==='outsourced'?'外包任务需人工在润丰登记维修项目及维修人':'']);
+  if(!deferValidation&&writebackAllowed(orders[0]?.dispatch_no))await validateLegacyRepairStrings(snapshot);
+ }catch(error){if(!deferValidation)throw new HttpError(409,`润丰写回校验未通过：${error.message}`);validationError=String(error.message);}
+ await client.query('insert into repair_writebacks(event_id,order_id,snapshot,status,error) values($1,$2,$3,$4,$5) on conflict(event_id) do nothing',[eventId,task.orderId,JSON.stringify(snapshot),task.executionMode==='outsourced'?'manual':validationError?'failed':'pending',task.executionMode==='outsourced'?'外包任务需人工在润丰登记维修项目及维修人':validationError]);
 }
 // Keep the last published positions: removing a row must never publish active work
 // or renumber the remaining legacy rows. FIFO execution orders this after its baseline.
 export async function enqueueRepairRemoval(client,task,eventId,entry) {
  const {rows}=await client.query('select snapshot from repair_writebacks where order_id=$1 order by id desc limit 1',[task.orderId]);
- const snapshot=makeRemovalSnapshot(task,rows[0]?.snapshot,entry);
+ const baseline=rows[0]?.snapshot||await readInitialRemovalBaseline(client,task.orderId);
+ // A complete prior replacement proves this ID was never published. Avoid a
+ // name-only delete that could hit another project with the same name.
+ if(baseline&&!baseline.baselineIncomplete&&!baseline.items.some(item=>item.id===entry.itemId))return;
+ const snapshot=makeRemovalSnapshot(task,baseline,entry);
  validateWritebackSnapshot(snapshot);
  await client.query('insert into repair_writebacks(event_id,order_id,snapshot,status,error) values($1,$2,$3,$4,$5) on conflict(event_id) do nothing',[eventId,task.orderId,JSON.stringify(snapshot),task.executionMode==='outsourced'?'manual':'pending',task.executionMode==='outsourced'?'外包任务需人工在润丰移除对应维修项目':'']);
 }
+async function readInitialRemovalBaseline(client,orderId) {
+ // The creation payload records IDs and names before any inspection. Its
+ // order is not assumed to equal legacy Xh: name-only removal must be unique.
+ const {rows}=await client.query("select payload->'order'->'repairItems' as items from legacy_sync_outbox where order_id=$1 and event_type='created' order by revision asc limit 1",[orderId]);
+ return Array.isArray(rows[0]?.items)?{items:rows[0].items.map(item=>({...item,legacyPosition:null}))}:undefined;
+}
 function makeRemovalSnapshot(task,baseline,entry) {
- const previous=(baseline?.items||[]).map((item,index)=>({...item,legacyPosition:item.legacyPosition??index+1}));
+ const previous=(baseline?.items||[]).map((item,index)=>({...item,legacyPosition:item.legacyPosition===undefined?index+1:item.legacyPosition}));
  const target=previous.find(item=>item.id===entry.itemId);
  return {orderId:task.orderId,repairRound:task.repairRound||0,plate:task.plate,operation:'remove',
+  ...(!baseline||baseline.baselineIncomplete?{baselineIncomplete:true}:{}),
   removeItem:{id:entry.itemId,name:target?.name||`【待定】${entry.name.replace(/^(?:【待定】)+/u,'')}`,legacyPosition:target?.legacyPosition??null},
   items:previous.filter(item=>item.id!==entry.itemId),allowEmptyRemoval:true};
 }
@@ -82,13 +95,13 @@ export async function retryFailedRepairWriteback(client,id,actorName) {
  if(job.status==='failed'&&invalid) {
   const {rows:events}=await client.query('select action,detail from dispatch_events where id=$1 and order_id=$2',[job.event_id,id]);
   let snapshot;
-  if(events[0]?.action==='inspection-deferred-cancel') {
+  if(events[0]?.action==='inspection-deferred-cancel'&&job.snapshot.operation!=='replace') {
    const {rows:previous}=await client.query('select snapshot from repair_writebacks where order_id=$1 and id<$2 order by id desc limit 1',[id,job.id]);
    const itemId=events[0].detail?.itemId;
    const target=events[0].detail?.previousItems?.find(item=>item.id===itemId);
    const baselineTarget=previous[0]?.snapshot?.items?.find(item=>item.id===itemId);
    if(!target&&!baselineTarget)throw new HttpError(409,'无法恢复撤销项目，请核对原始项目记录');
-   snapshot=makeRemovalSnapshot(job.snapshot,previous[0]?.snapshot,{itemId,name:target?.name||baselineTarget.name});
+   snapshot=makeRemovalSnapshot(job.snapshot,previous[0]?.snapshot||await readInitialRemovalBaseline(client,id),{itemId,name:target?.name||baselineTarget.name});
   } else {
    if(!Array.isArray(job.snapshot?.items))throw new HttpError(409,'维修项目快照不完整，请人工核对');
    const {rows:users}=await client.query('select u.id,u.legacy_employee_code,u.legacy_employee_name from users u join work_orders w on w.shop_id=u.shop_id where w.id=$1',[id]);

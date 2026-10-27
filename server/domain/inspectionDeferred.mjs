@@ -14,7 +14,7 @@ export function reconcileInspectionDeferred(pending,task,next,input,actor,now) {
   const original=task.items.find(item=>item.id===id);
   let entry=items.find(item=>item.itemId===id);
   if(!entry) {entry={id:`inspection-${id}-${task.repairRound||0}`,itemId:id,history:[]};items.push(entry);}
-  Object.assign(entry,{source:'inspection',name:original.name,reason:input.deferredReason.trim(),state:'pending',scheduled:false,inspectionState:'pending',sourceRound:task.repairRound||0,sourceRequestId:input.requestId,lastOperationRequestId:input.requestId,originalItem:structuredClone(original)});
+  Object.assign(entry,{source:'inspection',sourceInspectorId:actor.id,sourceInspectorName:actor.name,lastReminderAt:undefined,name:original.name,reason:input.deferredReason.trim(),state:'pending',scheduled:false,inspectionState:'pending',sourceRound:task.repairRound||0,sourceRequestId:input.requestId,lastOperationRequestId:input.requestId,originalItem:structuredClone(original)});
   entry.history.push({action:'检验待定',actor:actor.name,actorId:actor.id,at:now,note:input.deferredReason.trim()});
  }
  for(const entry of items) {

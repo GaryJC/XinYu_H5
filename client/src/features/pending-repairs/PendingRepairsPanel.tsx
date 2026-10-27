@@ -1,3 +1,4 @@
+import {inspectionDeferredOwner} from '../../../../shared/inspectionDeferredOwnership.mjs';
 import {canRegisterPendingRepair,canManagePendingRepair} from '../../../../shared/pendingRepairPermissions.mjs';
 import {pendingRepairScheduleBlock} from '../../../../shared/pendingRepairScheduling.mjs';
 import {PlusOutlined,InfoCircleOutlined} from '@ant-design/icons';
@@ -18,6 +19,8 @@ export function PendingRepairsPanel({orderId,user,onChanged,stage,refreshVersion
  const canRegister=canRegisterPendingRepair(user);
  const [dialog,setDialog]=useState<{action:PendingRepairCommand['action'];item?:PendingRepair}>();
  const [formError,setFormError]=useState('');
+ const [reminderNotice,setReminderNotice]=useState('');
+ async function remind(item:PendingRepair){setReminderNotice('');if(await c.act({action:'remind-inspector',id:item.id}))setReminderNotice(`已加入通知队列，将提醒${inspectionDeferredOwner(item).name}处理此工单。`);}
  const [execution,setExecution]=useState<DispatchExecution>({executionMode:'internal'});
  const [name,setName]=useState(''),[reason,setReason]=useState(''),[note,setNote]=useState(''),[technicianId,setTechnician]=useState<string>(),[dueAt,setDue]=useState('');
  function open(action:PendingRepairCommand['action'],item?:PendingRepair){setFormError('');setName('');setReason('');setNote('');setTechnician(undefined);setDue('');setDialog({action,item});if(['schedule','approve-and-schedule'].includes(action))void c.loadPeople().then(result=>{if(result){const {task,defaultTechnicianId}=result;setTechnician(defaultTechnicianId);const {executionMode,contractorId,contractor,outsourcingMode,serviceUnit,serviceAddress,serviceContact}=task;setExecution({executionMode,contractorId,contractor,outsourcingMode,serviceUnit,serviceAddress,serviceContact});}});}
@@ -30,19 +33,19 @@ export function PendingRepairsPanel({orderId,user,onChanged,stage,refreshVersion
    {canRegister&&<Button className="pending-repairs-add" icon={<PlusOutlined/>} aria-label="登记待确认项目" disabled={!c.loaded||c.busy} onClick={()=>open('add')}>登记项目</Button>}
   </header>
   {editable&&schedulingBlock&&c.data.items.some(item=>!item.scheduled&&item.state!=='declined')&&<Alert type="info" showIcon title={schedulingBlock}/>}
-  {c.error&&<Alert type="error" showIcon title={c.error}/>}
-  <div className="pending-repairs-list">{c.data.items.map((item,index)=><article key={item.id} className={`pending-repair-card is-${item.state}`}>
+  {c.error&&<Alert type="error" showIcon title={c.error}/>}{reminderNotice&&<Alert type="success" showIcon title={reminderNotice}/>}
+  <div className="pending-repairs-list">{c.data.items.map((item,index)=>{const owner=inspectionDeferredOwner(item);return <article key={item.id} className={`pending-repair-card is-${item.state}`}>
    <div className="pending-repair-heading"><div className="pending-repair-name"><span className="pending-repair-number">{String(index+1).padStart(2,'0')}</span><strong>{item.name}</strong></div><Tag color={item.scheduled?(item.progress==='检验通过'?'green':item.progress==='暂停'||item.progress==='进度待核对'?'orange':'blue'):item.state==='pending'?'orange':item.state==='approved'?'green':'default'}>{item.scheduled?(item.progress||'进度待核对'):item.source==='inspection'?(item.inspectionState==='cancelled'?'不再维修':'检验待定'):labels[item.state]}</Tag></div>
    <div className="pending-repair-reason"><span>{item.source==='inspection'?'待定原因':'待确认原因'}</span><p>{item.reason}</p></div>
-   {item.source==='inspection'&&inspectionEditable&&['pending','scheduled'].includes(item.inspectionState||'')&&<div className="pending-repair-actions">{item.inspectionState==='pending'?<><Button type="primary" disabled={c.busy||Boolean(schedulingBlock)} onClick={()=>open('schedule',item)}>派工维修</Button><Button danger disabled={c.busy} onClick={()=>open('decline',item)}>删除／不再维修</Button></>:<Button danger disabled={c.busy} onClick={()=>open('cancel',item)}>撤销维修</Button>}</div>}
+   {item.source==='inspection'&&inspectionEditable&&['pending','scheduled'].includes(item.inspectionState||'')&&(owner.id===user?.id?<div className="pending-repair-actions">{item.inspectionState==='pending'?<><Button type="primary" disabled={c.busy||Boolean(schedulingBlock)} onClick={()=>open('schedule',item)}>派工维修</Button><Button danger disabled={c.busy} onClick={()=>open('decline',item)}>删除／不再维修</Button></>:<Button danger disabled={c.busy} onClick={()=>open('cancel',item)}>撤销维修</Button>}</div>:<Alert type="info" showIcon title={owner.id?`此项目须由原检验人${owner.name}处理`: '此项目缺少原检验人记录，请联系管理员核对'} description={owner.id?<Button disabled={c.busy||!c.loaded} onClick={()=>void remind(item)}>提醒原检验人处理</Button>:undefined}/>)}
    {item.source!=='inspection'&&editable&&(item.state==='pending'||item.state==='approved'&&!item.scheduled)&&<div className="pending-repair-actions">
     <Button type="primary" disabled={c.busy||Boolean(schedulingBlock)} onClick={()=>open(item.state==='pending'?'approve-and-schedule':'schedule',item)}>安排维修</Button>
     {item.state==='pending'&&<Button disabled={c.busy} onClick={()=>open('decline',item)}>本次暂不维修</Button>}
    </div>}
    <Collapse className="pending-repair-history" ghost items={[{key:'history',label:'处理记录',children:<ol className="pending-repair-history-list">{item.history.map((h,i)=><li key={i}><div><strong>{h.action}</strong><span>{h.actor}{h.respondent?` · 回复人：${h.respondent}`:''}</span></div><time>{displayTime(h.at)}</time>{h.note&&<p>{h.note}</p>}</li>)}</ol>}]}/>
-  </article>)}</div>
+  </article>;})}</div>
   {!c.data.items.length&&c.loaded&&<p className="pending-repairs-empty">暂无待确认项目</p>}
-  {c.data.items.length>0&&<details className="pending-repairs-sync"><summary><InfoCircleOutlined/> 润丰同步说明</summary><p>检验待定项目可由检验员直接派工；本轮结束后回写【待定】前缀，再次通过后移除前缀。删除或撤销另行同步，历史记录保留。首次开单带入客户待确认项目；开单后新增项目在后续一轮全部检验通过后随完整清单写回。检验通过不代表同步成功，请查看润丰写回结果。润丰已审核、结算，或项目已有非零金额、工时等计价数据时停止覆盖，需人工处理。</p></details>}
+  {c.data.items.length>0&&<details className="pending-repairs-sync"><summary><InfoCircleOutlined/> 润丰同步说明</summary><p>检验待定项目须由原检验人直接派工，其他有权限人员可发送处理提醒；本轮结束后回写【待定】前缀，再次通过后移除前缀。删除或撤销另行同步，历史记录保留。首次开单带入客户待确认项目；开单后新增项目在后续一轮全部检验通过后随完整清单写回。检验通过不代表同步成功，请查看润丰写回结果。润丰已审核、结算，或项目已有非零金额、工时等计价数据时停止覆盖，需人工处理。</p></details>}
   {dialog&&<FormDialog open title={dialog.action==='add'?'登记待确认项目':scheduling?'安排维修':dialog.item?.source==='inspection'?'不再维修':'登记客户回复'} onCancel={()=>{if(!c.busy)setDialog(undefined);}} onOk={()=>void submit()} confirmLoading={c.busy} okText={scheduling?'安排维修':dialog.action==='cancel'?'确认撤销维修':dialog.action==='decline'?(dialog.item?.source==='inspection'?'确认不再维修':'本次暂不维修'):'确定'} okButtonProps={{disabled:scheduling&&(!c.task||Boolean(schedulingBlock))}}>
    <Form layout="vertical">
     {scheduling&&schedulingBlock&&<Alert type="info" showIcon title={schedulingBlock}/>}

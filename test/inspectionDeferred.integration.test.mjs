@@ -35,10 +35,19 @@ test('inspection deferred lifecycle persists atomically, dispatches directly and
   assert.equal(jobs.length,1);assert.equal(jobs[0].snapshot.items[0].name,'【待定】项目一');
   await transaction(c=>executeDispatchActionInTransaction(c,inspector,orderId,inspect));assert.equal((await pendingRepairList(inspector,orderId)).version,pending.version);
   const rowId=pending.items[0].id;
+  const reminder={action:'remind-inspector',id:rowId,expectedVersion:pending.version,requestId:randomUUID()};
+  await assert.rejects(()=>pendingRepairCommand(manager,orderId,{action:'decline',id:rowId,expectedVersion:pending.version,requestId:randomUUID(),note:'代操作'}),e=>e.status===403);
+  pending=await pendingRepairCommand(manager,orderId,reminder);
+  await pendingRepairCommand(manager,orderId,reminder);
+  const reminders=(await pool.query("select * from dispatch_notifications where order_id=$1 and kind='待定项目处理提醒'",[orderId])).rows;
+  assert.equal(reminders.length,1);assert.equal(reminders[0].recipient_id,inspector.id);
+  assert.equal(await validateDeferredNotification(reminders[0],inspector,pool),true);
+  await assert.rejects(()=>pendingRepairCommand(manager,orderId,{...reminder,expectedVersion:pending.version,requestId:randomUUID()}),/刚刚/);
   const schedule={action:'schedule',id:rowId,expectedVersion:pending.version,requestId:randomUUID(),technicianId:tech.id,dueAt:new Date(Date.now()+86400000).toISOString()};
   await assert.rejects(()=>pendingRepairCommand({...inspector,shopId:'other'},orderId,schedule),e=>e.status===403);
   await assert.rejects(()=>pendingRepairCommand(tech,orderId,schedule),e=>e.status===403);
   pending=await pendingRepairCommand(inspector,orderId,schedule);assert.equal(pending.items[0].inspectionState,'scheduled');
+  assert.equal(await validateDeferredNotification(reminders[0],inspector,pool),false);
   task=await getDispatchTask(pool,orderId,inspector);assert.equal(task.stage,'待接单');assert.equal(task.repairRound,1);assert.equal(task.items[0].id,1);
   assert.equal((await queryDispatchTasks(inspector,{stage:'待定'})).some(t=>t.orderId===orderId),true);
   let notifications=(await pool.query('select * from dispatch_notifications where order_id=$1 order by created_at',[orderId])).rows;
@@ -48,7 +57,7 @@ test('inspection deferred lifecycle persists atomically, dispatches directly and
   task=await getDispatchTask(pool,orderId,inspector);assert.equal(task.stage,'维修完成');assert.equal(task.inspectionDeferredCount,0);assert.equal(task.items.length,0);
   assert.equal(await validateDeferredNotification(dispatch,tech,pool),false);
   jobs=(await pool.query('select * from repair_writebacks where order_id=$1 order by id',[orderId])).rows;
-  assert.equal(jobs.length,2);assert.deepEqual(jobs[1].snapshot.items,[]);assert.equal(jobs[1].snapshot.allowEmptyRemoval,true);assert.equal(jobs[1].snapshot.operation,'remove');assert.equal(jobs[1].snapshot.removeItem.legacyPosition,1);
+  assert.equal(jobs.length,2);assert.deepEqual(jobs[1].snapshot.items,[]);assert.equal(jobs[1].snapshot.allowEmptyRemoval,true);assert.equal(jobs[1].snapshot.operation,'replace');assert.equal(jobs[1].snapshot.removeItem,undefined);
   notifications=(await pool.query("select * from dispatch_notifications where order_id=$1 and kind='待定维修已撤销'",[orderId])).rows;
   assert.ok(notifications.some(n=>n.recipient_id===tech.id));
   assert.equal(await validateDeferredNotification(notifications.find(n=>n.recipient_id===tech.id),tech,pool),true);

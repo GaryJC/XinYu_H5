@@ -27,7 +27,7 @@ export function taskStatusLabel(task:DispatchTask) {
 }
 
 export function dispatchEventLabel(event:Pick<DispatchEvent,'action'|'detail'>) {
-  const deferredLabels:Record<string,string>={'inspection-deferred-schedule':'待定项目派工','inspection-deferred-cancel':'待定维修已撤销'};
+  const deferredLabels:Record<string,string>={'inspection-deferred-remind':'提醒原检验人处理','inspection-deferred-schedule':'待定项目派工','inspection-deferred-cancel':'待定维修已撤销'};
   if(deferredLabels[event.action])return deferredLabels[event.action];
   if(event.action==='reopen-repair'&&event.detail.roundKind==='additional')return '安排追加维修';
   if(event.action==='reassign'&&event.detail.reassignItemIds)return '项目改派';

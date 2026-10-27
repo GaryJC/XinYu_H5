@@ -110,6 +110,7 @@ export type VehicleHistoryLookupResult = {
 };
 
 export type PendingRepair = {
+ sourceInspectorId?: string; sourceInspectorName?: string; lastReminderAt?: string;
  source?: "inspection" | "customer"; inspectionState?: "pending" | "scheduled" | "completed" | "cancelled"; sourceRound?:number; sourceRequestId?:string; lastOperationRequestId?:string; originalItem?:DispatchItem; cancelledItem?:DispatchItem;
  id: string; itemId: number; draftItemId?: number; name: string; reason: string;
  state: 'pending' | 'approved' | 'declined'; scheduled: boolean;
@@ -120,7 +121,7 @@ export type PendingRepair = {
 };
 export type PendingRepairList = { items: PendingRepair[]; version: number };
 export type PendingRepairCommand = DispatchExecution & {
- action: 'add' | 'approve' | 'decline' | 'schedule' | 'approve-and-schedule' | 'cancel';
+ action: 'add' | 'approve' | 'decline' | 'schedule' | 'approve-and-schedule' | 'cancel' | 'remind-inspector';
  id?: string; name?: string; reason?: string; respondent?: string; note?: string;
  technicianId?: string; dueAt?: string; expectedVersion: number; requestId: string;
 };
