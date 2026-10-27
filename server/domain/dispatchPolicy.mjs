@@ -269,6 +269,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     const unstarted=next.items.filter(i=>['待开工','待派工','待领料'].includes(i.status));
     if(unstarted.length) fail(task.rework?`退回项目尚未开工：${unstarted.map(i=>i.name).join('、')}，请先点击开始返工`:'全部维修项目开工后才能提交完工');
     if(next.items.some(i=>!['维修中','待检验','已完工'].includes(i.status))) fail('维修项目状态异常');
+    if(next.items.some(i=>i.status==='维修中'&&(typeof i.name!=='string'||!i.name.trim()))) fail('请填写维修项目名称',400);
     if(next.items.some(i=>i.status==='维修中'&&i.name.length>100)) fail('维修项目名称不能超过 100 个字符',400);
     next.items.filter(i=>i.status==='维修中').forEach(i=>{i.status='待检验';i.finishAt=now;i.finishedBy=actor.id;});
     next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])];
@@ -288,7 +289,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   } else if(['start','finish','pick'].includes(action)) {
     requireOwner(); stage('待开工','维修中'); assertPartsIssued(task);const current=item();
     if(action==='start') { if(!['待开工','待派工','待领料'].includes(current.status)) fail('该项目不能开工'); current.status='维修中'; current.startAt ||= now; current.startedBy=actor.id; next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])]; next.firstStartedAt ||= now; next.stage='维修中'; }
-    if(action==='finish') { resolveRepairResponsibilities(next,people,{required:true});if(current.status!=='维修中') fail('请先开工'); if(current.name.length>100) fail('维修项目名称不能超过 100 个字符',400); current.status='待检验'; current.finishAt=now; current.finishedBy=actor.id; next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])]; }
+    if(action==='finish') { resolveRepairResponsibilities(next,people,{required:true});if(current.status!=='维修中') fail('请先开工'); if(typeof current.name!=='string'||!current.name.trim()) fail('请填写维修项目名称',400); if(current.name.length>100) fail('维修项目名称不能超过 100 个字符',400); current.status='待检验'; current.finishAt=now; current.finishedBy=actor.id; next.participantIds=[...new Set([...(task.participantIds||[]),actor.id])]; }
     if(action==='pick') { if(current.pickedAt) fail('已确认领料'); current.pickedAt=now; }
   } else if(action==='pause') {
     requireOwner(); stage('待开工','维修中');

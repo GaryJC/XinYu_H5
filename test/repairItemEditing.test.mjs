@@ -51,3 +51,15 @@ test('completion cannot bypass name validation by omitting the edits payload',()
  assert.throws(()=>applyDispatchAction(t,{action:'finish',itemId:1,expectedVersion:t.version,requestId:'long-name-finish'},tech,[tech]),e=>e.status===400&&/100/.test(e.message));
  assert.equal(t.items[0].status,'维修中');
 });
+
+test('missing or invalid saved names return validation errors without mutating repair progress',()=>{
+ for(const name of [undefined,null,123,'','   ']) {
+  for(const action of ['submit-order','submit-review','finish']) {
+   const t={...task(),stage:action==='submit-review'?'回审':'维修中'};
+   t.items[0].name=name;
+   const before=structuredClone(t);
+   assert.throws(()=>applyDispatchAction(t,{action,itemId:action==='finish'?1:undefined,expectedVersion:t.version,requestId:'invalid-saved-name'},tech,[tech]),e=>e.status===400&&/请填写维修项目名称/.test(e.message));
+   assert.deepEqual(t,before);
+  }
+ }
+});
