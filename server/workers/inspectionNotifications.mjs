@@ -1,3 +1,4 @@
+import {hasSubmissionNotification} from '../repositories/dispatchNotificationRepository.mjs';
 import {hasPendingInspection} from '../../shared/repairProgress.mjs';
 import { randomUUID } from 'node:crypto';
 import { pool,transaction } from '../database/pool.mjs';
@@ -30,7 +31,10 @@ export async function processInspectionNotifications({database=pool,runTransacti
       const people=await dispatchPeople({shopId},client);
       const recipients=people.filter(p=>canInspect(task,p) && (!ids || ids.includes(p.id)));
       if(!recipients.length) throw new Error('暂无本店可独立检验的检验员或门店管理员，请检查钉钉角色、员工状态及维修参与情况后重试');
-      for(const p of recipients) await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,'待检验',$5) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),job.order_id,job.event_id,p.id,JSON.stringify({orderId:job.order_id,plate:task.plate,dispatchNo:task.dispatchNo,summary:task.items.map(i=>i.name).join('、').slice(0,200),dueAt:task.dueAt})]);
+      for(const p of recipients) {
+       if(await hasSubmissionNotification(client,job.order_id,job.event_id,p.id))continue;
+       await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,'待检验',$5) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),job.order_id,job.event_id,p.id,JSON.stringify({orderId:job.order_id,plate:task.plate,dispatchNo:task.dispatchNo,summary:task.items.map(i=>i.name).join('、').slice(0,200),dueAt:task.dueAt})]);
+      }
       await client.query("update dispatch_inspection_notifications set status='ready',error='',locked_until=null,lease_id=null where event_id=$1",[job.event_id]);
     });
   } catch(error) {

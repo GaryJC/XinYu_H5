@@ -1,3 +1,4 @@
+import {hasSubmissionNotification} from '../repositories/dispatchNotificationRepository.mjs';
 import { hasAnyRole } from "../../shared/roles.mjs";
 import {randomUUID} from 'node:crypto';
 import {pool,transaction} from '../database/pool.mjs';
@@ -21,7 +22,10 @@ export async function processSchedulerNotifications({database=pool,runTransactio
       if(current[0]?.lease_id!==lease)return;
       const recipients=(await dispatchPeople({shopId},client)).filter(p=>p.active && hasAnyRole(p, ['advisor','manager']) && (!ids || ids.includes(p.id)));
       if(!recipients.length)throw new Error('暂无本店有效服务顾问或管理员，请检查钉钉角色后重试');
-      for(const p of recipients)await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),job.order_id,job.event_id,p.id,job.kind,JSON.stringify(job.payload)]);
+      for(const p of recipients) {
+       if(['维修已提检','回审已提交'].includes(job.kind)&&await hasSubmissionNotification(client,job.order_id,job.event_id,p.id))continue;
+       await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),job.order_id,job.event_id,p.id,job.kind,JSON.stringify(job.payload)]);
+      }
       await client.query("update dispatch_scheduler_notifications set status='ready',error='',locked_until=null,lease_id=null where event_id=$1",[job.event_id]);
     });
   } catch(error) {

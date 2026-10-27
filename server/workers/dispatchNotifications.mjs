@@ -34,8 +34,8 @@ export function startDispatchNotifications() {
   let stopped=false; let running; let lastDueScan=0;
   const tick=()=>{if(stopped || running) return; running=(async()=>{
     if(Date.now()-lastDueScan>=60000) {await queueDueReminders();lastDueScan=Date.now();}
-    await processSchedulerNotifications();
     await processInspectionNotifications();
+    await processSchedulerNotifications();
     for(let i=0;i<10 && !stopped;i++) if(!await processNotification()) break;
   })().catch(error=>console.error('Dispatch notification worker:',error.message)).finally(()=>{running=undefined;});};
   const timer=setInterval(tick,5000); timer.unref(); tick();

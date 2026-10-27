@@ -21,8 +21,8 @@ export function DispatchProjectsEditor({task,controller:c,actionsTarget}:{task:D
   const [reason,setReason]=useState('');
   const handover=hasResponsibilityHandover(task,draft.rows);
   const needsOwners=(pending?assignment.execution.executionMode:task.executionMode)!=='outsourced';
-  const validNames=draft.rows.length>0&&draft.rows.every(row=>row.name.trim()&&row.name.length<=200);
-  const valid=draft.rows.length>0&&draft.rows.every(row=>row.name.trim()&&row.name.length<=200&&(!needsOwners||row.responsibleId||task.items.some(i=>i.id===row.id&&['待检验','已完工'].includes(i.status))));
+  const validNames=draft.rows.length>0&&draft.rows.every(row=>row.name.trim()&&row.name.length<=100);
+  const valid=draft.rows.length>0&&draft.rows.every(row=>row.name.trim()&&row.name.length<=100&&(!needsOwners||row.responsibleId||task.items.some(i=>i.id===row.id&&['待检验','已完工'].includes(i.status))));
   const reset=()=>{draft.reset();assignment.reset();bulk.clear();setReason('');};
   async function save(dispatch=false) {
     if(draft.stale||c.busy||!(pending&&!dispatch?validNames:valid)||dispatch&&!assignment.valid)return;

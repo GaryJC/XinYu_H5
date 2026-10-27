@@ -144,9 +144,13 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
     }
     if(input.action==='retry-notification') {
       if(!input.notificationId) throw new HttpError(400,'请选择通知');
-      const result=await client.query(`update dispatch_notifications set status='pending',error='',attempts=0,polls=0,task_id=null,next_attempt_at=now(),updated_at=now(),locked_until=null,lease_id=null
-        where id::text=$1 and order_id=$2 and status='failed' and (locked_until is null or locked_until<now()) returning id`,[input.notificationId,id]);
-      if(!result.rowCount) throw new HttpError(409,'仅明确失败的通知可重新发送；结果未知时请先核对钉钉记录');
+      const result=await client.query(`update dispatch_notifications n set status='pending',error='',attempts=0,polls=0,task_id=null,next_attempt_at=now(),updated_at=now(),locked_until=null,lease_id=null
+        where n.id::text=$1 and n.order_id=$2 and n.status='failed' and (n.locked_until is null or n.locked_until<now())
+        and not (n.kind in ('维修已提检','回审已提交','待检验') and exists(
+          select 1 from dispatch_notifications sibling where sibling.order_id=n.order_id and sibling.event_id=n.event_id
+          and sibling.recipient_id=n.recipient_id and sibling.id<>n.id
+          and sibling.kind in ('维修已提检','回审已提交','待检验') and sibling.status<>'failed')) returning n.id`,[input.notificationId,id]);
+      if(!result.rowCount) throw new HttpError(409,'仅明确失败且没有同次提检通知在发送或已送达时可重试；结果未知时请先核对钉钉记录');
       return;
     }
     const recipients=[];

@@ -12,7 +12,7 @@ export function personDisplayName(person:{id:string;name:string},people:Array<{i
 }
 
 export const statusFilters = [
-  {value:'待派工',label:'未派工'}, {value:'',label:'全部未完结'}, {value:'待客户确认',label:'待客户确认'},
+  {value:'',label:'全部未完结'}, {value:'待派工',label:'未派工'}, {value:'待客户确认',label:'待客户确认'},
   {value:'待定',label:'待定'}, {value:'待接单',label:'未接单'}, {value:'待开工',label:'待开工'},
   {value:'维修中',label:'正在维修'}, {value:'暂停',label:'暂停'},
   {value:'待检验',label:'待检验'}, {value:'回审',label:'回审'}, {value:'待结算',label:'待结算'},

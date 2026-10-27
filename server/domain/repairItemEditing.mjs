@@ -4,7 +4,7 @@ export function validateRepairItemEdits(input) {
  if(!['assign','reassign','edit-repair-items','submit-order','submit-review'].includes(input.action))throw new HttpError(400,'请通过维修项目编辑入口修改');
  const rows=input.repairItems;
  if(Array.isArray(rows)&&rows.some(row=>row?.responsibleId!==undefined&&(typeof row.responsibleId!=='string'||row.responsibleId.length>200)))throw new HttpError(400,'项目负责人无效');
- if(!Array.isArray(rows)||!rows.length||rows.length>200||rows.some(row=>!row||typeof row.name!=='string'||!row.name.trim()||row.name.length>200||row.id!==undefined&&!Number.isSafeInteger(row.id)))throw new HttpError(400,'维修项目须填写名称，每项不超过 200 字');
+ if(!Array.isArray(rows)||!rows.length||rows.length>200||rows.some(row=>!row||typeof row.name!=='string'||!row.name.trim()||row.name.length>100||row.id!==undefined&&!Number.isSafeInteger(row.id)))throw new HttpError(400,'维修项目须填写名称，每项不超过 100 个字符');
  const ids=rows.filter(row=>row.id!==undefined).map(row=>row.id);
  if(new Set(ids).size!==ids.length)throw new HttpError(400,'维修项目编号重复');
 }

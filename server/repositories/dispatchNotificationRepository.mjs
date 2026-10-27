@@ -56,3 +56,12 @@ export async function validateAddedRepairRecipient(row,user,database=pool) {
   return allowed && row.payload.itemIds.every(id=>data.items?.some(item=>item.id===id
     && !['待检验','已完工'].includes(item.status) && (!item.responsibleId || item.responsibleId===user.id)));
 }
+
+// Both fanout workers call this while holding the work-order row lock. One
+// submission is one notification per recipient, even with overlapping roles.
+export async function hasSubmissionNotification(client,orderId,eventId,recipientId) {
+ const {rows}=await client.query(`select 1 from dispatch_notifications
+  where order_id=$1 and event_id=$2 and recipient_id=$3
+   and kind in ('维修已提检','回审已提交','待检验') and status<>'failed' limit 1`,[orderId,eventId,recipientId]);
+ return rows.length>0;
+}

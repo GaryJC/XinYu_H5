@@ -32,3 +32,22 @@ test('new IDs never reuse previous repair round IDs and do not change closed sna
  const t={...task(),repairRound:2,repairCatalog:[{id:1},{id:2},{id:-4}]},before=structuredClone(t);
  assert.equal(act(t,rows()).items[2].id,-5);assert.deepEqual(t,before);
 });
+test('repair item names accept 100 characters and reject 101 before saving or submitting',()=>{
+ for(const action of ['edit-repair-items','submit-order','submit-review']) {
+  const t={...task(),stage:action==='submit-review'?'回审':'维修中'};
+  for(const character of ['修','a']) {
+   const edits=[{id:1,name:character.repeat(100)},{id:2,name:'已检验项目'}];
+   assert.equal(act(t,edits,action).items[0].name.length,100);
+   const before=structuredClone(t);
+   edits[0].name+=character;
+   assert.throws(()=>act(t,edits,action),e=>e.status===400&&/100/.test(e.message));
+   assert.deepEqual(t,before);
+  }
+ }
+});
+test('completion cannot bypass name validation by omitting the edits payload',()=>{
+ const t=task();t.items[0].name='修'.repeat(101);
+ assert.throws(()=>act(t,undefined,'submit-order'),e=>e.status===400&&/100/.test(e.message));
+ assert.throws(()=>applyDispatchAction(t,{action:'finish',itemId:1,expectedVersion:t.version,requestId:'long-name-finish'},tech,[tech]),e=>e.status===400&&/100/.test(e.message));
+ assert.equal(t.items[0].status,'维修中');
+});

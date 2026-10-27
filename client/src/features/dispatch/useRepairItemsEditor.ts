@@ -8,7 +8,7 @@ export function useRepairItemsEditor(task:DispatchTask,c:DispatchController) {
  const handover=hasResponsibilityHandover(task,rows);
  const begin=()=>{setRows(task.items.map(({id,name,responsibleId,responsibleName})=>({id,name,responsibleName,responsibleId:responsibleId??((task.technicianIds??[task.technicianId]).length===1?task.technicianId:undefined)})));setVersion(task.version);setHandoverReason('');setEditing(true);};
  const cancel=()=>setEditing(false);
- const valid=rows.length>0&&rows.length<=200&&rows.every(row=>Boolean(row.name.trim())&&row.name.length<=200);
+ const valid=rows.length>0&&rows.length<=200&&rows.every(row=>Boolean(row.name.trim())&&row.name.length<=100);
  const stale=editing&&version!==task.version;
  async function save(submit=false,note='') {
   if(!valid||stale||c.busy)return false;
