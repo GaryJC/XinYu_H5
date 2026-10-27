@@ -3,11 +3,14 @@ param(
     [string]$ProcessName = "xinyu-h5",
     [int]$Port = 8787,
     [string]$NpmCachePath = "",
+    [string]$SourcePath = "",
     [switch]$SkipSqlServerCheck
 )
 
 $ErrorActionPreference = "Stop"
 $AppPath = (Resolve-Path -LiteralPath $AppPath).Path
+if (-not $SourcePath) { $SourcePath = Split-Path -Parent $PSScriptRoot }
+$SourcePath = (Resolve-Path -LiteralPath $SourcePath).Path
 Set-Location $AppPath
 $env:PM2_HOME = Join-Path $AppPath ".pm2"
 $env:PM2_PROCESS_NAME = $ProcessName
@@ -44,7 +47,7 @@ function Invoke-Native {
 $deploymentLock = $null
 try {
     $deploymentLock = [System.IO.File]::Open((Join-Path $AppPath ".deployment.lock"), [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
-    $preparedJson = & node.exe scripts/prepare-deployment-release.mjs "$AppPath" "$ProcessName" "$Port"
+    $preparedJson = & node.exe (Join-Path $SourcePath "scripts/prepare-deployment-release.mjs") "$AppPath" "$ProcessName" "$Port" "$SourcePath"
     if ($LASTEXITCODE -ne 0) { throw "Release preparation failed; previous application remains running" }
     $prepared = $preparedJson | ConvertFrom-Json
     $releasePath = $prepared.releasePath
@@ -76,7 +79,7 @@ try {
 
     Write-Host "Release prepared; switching application on port $Port."
     Invoke-Native {
-        node.exe scripts/activate-deployment-release.mjs "$releasePath" (Join-Path $deploymentToolsPath "node_modules\pm2")
+        node.exe (Join-Path $releasePath "scripts/activate-deployment-release.mjs") "$releasePath" (Join-Path $deploymentToolsPath "node_modules\pm2")
     } "Prepared release activation failed"
 }
 finally {

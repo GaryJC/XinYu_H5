@@ -48,6 +48,35 @@ test("preparing a release preserves live dependencies, build, uploads and exclud
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("staged source never replaces live code and uses only live configuration and uploads", async () => {
+  const base = await mkdtemp(path.join(os.tmpdir(), "repair-staged-"));
+  const root = path.join(base, "live"), source = path.join(base, "artifact");
+  try {
+    for (const directory of [root, source]) {
+      for (const entry of ["client", "server/data/uploads", "shared", "scripts", "supabase", "test", "dist", "node_modules"])
+        await mkdir(path.join(directory, entry), { recursive: true });
+      await writeFile(path.join(directory, "server/server.mjs"), directory === root ? "old code" : "new code");
+      await writeFile(path.join(directory, "server/data/uploads/photo.jpg"), directory === root ? "live upload" : "artifact upload");
+      await writeFile(path.join(directory, ".env.production"), directory === root ? "API_PORT=8787\n" : "API_PORT=9999\n");
+    }
+    for (const entry of ["package.json", "tsconfig.json", "tsconfig.node.json", "vite.config.ts"])
+      await writeFile(path.join(source, entry), "{}");
+    await writeFile(path.join(source, "package-lock.json"), JSON.stringify({ packages: { "node_modules/pm2": { version: "7.0.3" } } }));
+    await writeFile(path.join(root, "dist/index.html"), "old frontend");
+    await writeFile(path.join(root, "node_modules/locked.dll"), "old dependency");
+    await writeFile(path.join(root, "server/retired.mjs"), "old file not in artifact");
+    const result = await prepareDeploymentRelease(root, "test-app", 8787, source);
+    assert.equal(await readFile(path.join(result.releasePath, "server/server.mjs"), "utf8"), "new code");
+    assert.equal(await readFile(path.join(result.releasePath, ".env.production"), "utf8"), "API_PORT=8787\n");
+    assert.equal(await readFile(path.join(result.releasePath, "server/data/uploads/photo.jpg"), "utf8"), "live upload");
+    assert.equal(await readFile(path.join(root, "server/server.mjs"), "utf8"), "old code");
+    assert.equal(await readFile(path.join(root, "dist/index.html"), "utf8"), "old frontend");
+    assert.equal(await readFile(path.join(root, "node_modules/locked.dll"), "utf8"), "old dependency");
+    for (const entry of ["server/retired.mjs", "dist", "node_modules"])
+      await assert.rejects(readFile(path.join(result.releasePath, entry)), { code: "ENOENT" });
+  } finally { await rm(base, { recursive: true, force: true }); }
+});
+
 test("only root and immediate release directories are managed", () => {
   assert.equal(isManagedDirectory(release.root, release.root), true);
   assert.equal(isManagedDirectory(release.root, old.pm2_env.pm_cwd), true);

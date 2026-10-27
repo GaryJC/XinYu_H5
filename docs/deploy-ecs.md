@@ -143,11 +143,45 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\apps\Xinyu_H5_test\sc
 `-SkipSqlServerCheck` 仅用于未配置润丰 SQL Server 的隔离测试环境；正式环境不应使用该开关。
 
 `ecosystem.config.cjs` 会以项目目录为工作目录，并让 Node 每次启动时读取 `.env.production`。
-云效的 Windows PowerShell 部署步骤应在解压部署包后调用：
+云效的 Windows PowerShell 部署步骤使用下面的完整命令。必须重新构建包含
+`SourcePath` 支持的制品。内层源码包仅解压到本次部署的临时目录，禁止覆盖生产根目录：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\apps\XinYu_H5\scripts\deploy-windows.ps1
+$ErrorActionPreference = "Stop"
+$A = "C:\apps\XinYu_H5"
+$P = "C:\temp\XinYu_H5-package.tgz"
+$RunId = [guid]::NewGuid().ToString("N")
+$S = "C:\temp\xinyu-artifact-$RunId"
+$L = "C:\temp\xinyu-deploy-$RunId.log"
+try {
+    if (!(Test-Path -LiteralPath $P)) { throw "Artifact missing" }
+    $Outer = Join-Path $S "outer"
+    $Source = Join-Path $S "source"
+    New-Item $Outer, $Source -ItemType Directory -Force | Out-Null
+    tar.exe -xzf $P -C $Outer
+    if ($LASTEXITCODE -ne 0) { throw "Outer extract failed" }
+    $Packages = @(Get-ChildItem $Outer -Filter package.tgz -Recurse -File)
+    if ($Packages.Count -ne 1) { throw "Expected exactly one inner package.tgz" }
+    tar.exe -xzf $Packages[0].FullName -C $Source
+    if ($LASTEXITCODE -ne 0) { throw "Inner extract failed" }
+    $Deploy = Join-Path $Source "scripts\deploy-windows.ps1"
+    if (!(Test-Path -LiteralPath $Deploy)) { throw "Deployment script missing" }
+    # Merge child output via cmd to retain native error text in the pipeline log.
+    $Command = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "{0}" -AppPath "{1}" -SourcePath "{2}" > "{3}" 2>&1' -f $Deploy, $A, $Source, $L
+    cmd.exe /d /c $Command
+    $Code = $LASTEXITCODE
+    Get-Content -LiteralPath $L
+    if ($Code -ne 0) { throw "Deploy failed: $Code" }
+} finally {
+    Remove-Item -LiteralPath $S -Recurse -Force -ErrorAction SilentlyContinue
+}
 ```
+
+临时目录和日志使用每次运行的唯一编号，避免相互清理；日志保留用于排障。
+流水线仍应禁止并发部署同一环境（包括覆盖同一路径的下载制品）。
+部署脚本的 `-SourcePath` 指向制品源码，`-AppPath` 指向生产配置及数据目录；
+省略 `-SourcePath` 时默认使用脚本所在源码目录。准备和激活脚本均从新制品读取，
+不会误用生产根目录遗留的旧脚本。
 
 `START_LOCAL_API` 仅供 `npm run dev` 使用，生产环境不需要设置。
 Windows 部署脚本在 `<AppPath>/.releases/<版本>` 独立目录安装依赖、运行检查和迁移，
@@ -164,11 +198,11 @@ PM2 工具位于 `<AppPath>/.deploy-tools`，进程空间固定在 `<AppPath>/.p
 根目录 `dist` 在健康检查成功后改为指向新版本的目录联接，兼容固定 Nginx/IIS 静态目录，
 并保留上一版本的哈希静态资源供已打开页面加载。`STATIC_DIR` 在版本运行配置中固定为该版本的 `dist`。
 
-云效解压步骤必须保留 `.releases`、`.deploy-tools`、`.pm2`、`.npm-cache`、`.env.production` 和 `server/data`。
+云效不得向生产根目录解压或清理文件；`.releases`、`.deploy-tools`、`.pm2`、`.npm-cache`、`.env.production` 和 `server/data` 均保留。
 版本目录及原静态目录备份不自动删除，清理时避开正在运行及需要回退的版本。
 部署锁阻止同一目录内两个部署脚本并发切换，但不保护云效外层的并发解压；流水线应禁止并发部署同一环境。
-首次从根目录旧部署过渡时，云效已覆盖的旧源码不能恢复，回退只能尝试用原目录启动；
-完成一次版本目录部署后，后续旧版本代码和依赖均独立保留。
+使用上述临时目录流程首次从根目录旧部署过渡时，也不会覆盖旧源码和依赖。
+此前覆盖部署已改写的文件无法通过此流程自动恢复；需另行使用已知正常版本恢复。
 
 ### 云效构建制品
 

@@ -6,8 +6,9 @@ import { pathToFileURL } from "node:url";
 
 const entries = ["client", "server", "shared", "scripts", "supabase", "test", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.node.json", "vite.config.ts", ".env.production"];
 
-export async function prepareDeploymentRelease(appPath, processName, port) {
+export async function prepareDeploymentRelease(appPath, processName, port, sourcePath = appPath) {
   const root = path.resolve(appPath);
+  const sourceRoot = path.resolve(sourcePath);
   const config = spawnSync(process.execPath, ["--env-file=.env.production", "--input-type=module", "-e",
     'console.log(JSON.stringify({port:process.env.API_PORT||"8787",uploads:process.env.LOCAL_UPLOAD_ROOT||"server/data/uploads"}))'],
   { cwd: root, encoding: "utf8", windowsHide: true });
@@ -20,9 +21,11 @@ export async function prepareDeploymentRelease(appPath, processName, port) {
   const dataPath = path.join(root, "server", "data");
   await mkdir(dataPath, { recursive: true });
   for (const entry of entries) {
-    await cp(path.join(root, entry), path.join(releasePath, entry), {
+    // Configuration and uploads belong to the live installation, never the artifact.
+    const entryRoot = entry === ".env.production" ? root : sourceRoot;
+    await cp(path.join(entryRoot, entry), path.join(releasePath, entry), {
       recursive: true,
-      filter: source => source !== dataPath && ![".DS_Store", ".temp", ".branches"].includes(path.basename(source))
+      filter: source => source !== path.join(sourceRoot, "server", "data") && ![".DS_Store", ".temp", ".branches"].includes(path.basename(source))
     });
   }
   await symlink(dataPath, path.join(releasePath, "server", "data"), process.platform === "win32" ? "junction" : "dir");
@@ -41,8 +44,8 @@ export async function prepareDeploymentRelease(appPath, processName, port) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   try {
-    const [root, name, port] = process.argv.slice(2);
+    const [root, name, port, sourcePath] = process.argv.slice(2);
     if (!root || !name || !port) throw new Error("Expected application path, process name and port");
-    console.log(JSON.stringify(await prepareDeploymentRelease(root, name, port)));
+    console.log(JSON.stringify(await prepareDeploymentRelease(root, name, port, sourcePath)));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

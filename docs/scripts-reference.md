@@ -328,6 +328,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\apps\XinYu_H5\scripts
 | 参数 | 默认值 |
 | --- | --- |
 | `AppPath` | `C:\apps\XinYu_H5` |
+| `SourcePath` | 部署脚本所在源码目录（云效应传临时解压目录） |
 | `ProcessName` | `xinyu-h5` |
 | `Port` | `8787` |
 
@@ -343,7 +344,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\apps\XinYu_H5\scripts
 
 安装和检查失败不停止旧服务；切换失败尝试恢复上一版，流水线仍返回失败。
 固定端口切换会短暂中断；回退应用不回退数据库迁移。
-版本目录保留，不自动删除；云效解压不得清空 `.releases`、上传目录和其他持久目录。
+版本目录保留，不自动删除；云效必须解压到临时目录，不能向生产根目录覆盖解压。
+完整云效命令见 [ECS 部署步骤](deploy-ecs.md)，需使用支持 `SourcePath` 的新制品。
 
 任何一步失败都会让部署返回非零退出码。
 
