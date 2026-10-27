@@ -1,3 +1,4 @@
+import { handleOrderOverview, handleOrderPhotoDownload } from './orderOverviewRouter.mjs';
 import {handleVehicleLicenseHistory} from './vehicleLicenseHistoryRouter.mjs';
 import { handlePendingRepairs } from './pendingRepairsRouter.mjs';
 import { handlePrintPdfDownload, handlePrintPdfUpload } from "./printPdfRouter.mjs";
@@ -53,6 +54,7 @@ import { assertOcrRecordAccess, assertWorkOrderAccess } from "../repositories/ac
 import { confirmOcrRecord, createOcrRecord } from "../repositories/ocrRecordRepository.mjs";
 
 export async function handleApiRequest(req, res, url) {
+  if (handleOrderPhotoDownload(req,res,url)) return true;
   if (handlePrintPdfDownload(req, res, url)) return true;
   if (await handleCustomerSignature(req, res, url)) return true;
   if (await handleSupplierPortal(req,res,url)) return true;
@@ -94,6 +96,7 @@ export async function handleApiRequest(req, res, url) {
   }
   if (await handleProcurement(req,res,url,currentUser)) return true;
   assertEmployeeBound(currentUser);
+  if (await handleOrderOverview(req,res,url,currentUser)) return true;
   if (await handlePrintPdfUpload(req, res, url, currentUser)) return true;
   if (await handlePendingRepairs(req,res,url,currentUser)) return true;
   if (await handleDispatchRequest(req, res, url, currentUser)) return true;
@@ -195,7 +198,7 @@ export async function handleApiRequest(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/files") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     const body = await readJson(req);
-    if (["repair_parts_photo","repair_progress_photo"].includes(body.kind)) throw new HttpError(400, "维修照片请通过维修任务上传");
+    if (["repair_completed_photo", "repair_parts_photo", "repair_progress_photo"].includes(body.kind)) throw new HttpError(400, "维修照片请通过维修任务上传");
     if (body.orderId) await assertWorkOrderAccess(body.orderId, currentUser);
     sendJson(res, 201, await saveUploadedFile({ ...body, uploadedBy: currentUser.id }));
     return true;

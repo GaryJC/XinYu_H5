@@ -15,6 +15,6 @@ export async function savePrintFile(url: string, name: string) {
   try {
     await previewFileInDingTalk({ ...file, corpId });
   } catch {
-    throw new Error("PDF 已保存到钉盘，但未能打开预览。请到钉盘打开刚保存的文件进行转发或下载。");
+    throw new Error("文件已保存到钉盘，但未能打开预览。请到钉盘打开刚保存的文件进行转发或下载。");
   }
 }

@@ -27,7 +27,7 @@ const files = [{name:"one.jpg"},{name:"two.jpg"},{name:"three.jpg"}];
 test('submitted photo replacements include the current order contact and phone', async () => {
   const h = setup({async uploadFile(){return {id:'new'};},async updatePhoto(id){return {id};}}, {contact:' 李四 ',phone:' 13900000000 '});
   for (const slot of ['front45','rear45']) assert.equal(await h.actions.upload(slot,files[0],'old'),true);
-  for (const image of h.prepared) assert.deepEqual(Array.from(image.extraLines),['联系人：李四','联系电话：13900000000']);
+  for (const image of h.prepared) assert.deepEqual(Array.from(image.extraLines),['抚顺路4号鑫裕新能源汽修','联系人：李四','联系电话：13900000000']);
 });
 test('submitted front and rear replacements request timestamps without watermarking documents or other photos', async () => {
   const h = setup({async uploadFile(){return {id:'new'};},async updatePhoto(id){return {id};}});

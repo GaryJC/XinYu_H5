@@ -33,7 +33,7 @@ export function useOrderPhotoUpload(orderId: string, userId: string | undefined,
       for (const file of files) {
         const image = await (slot === "vehicleLicense" ? prepareOcrImage(file)
           : prepareUploadPhoto(file, slot === "front45" || slot === "rear45" ? new Date() : undefined,
-            [customer?.contact?.trim() ? `联系人：${customer.contact.trim()}` : '', customer?.phone?.trim() ? `联系电话：${customer.phone.trim()}` : '']));
+            ['抚顺路4号鑫裕新能源汽修', customer?.contact?.trim() ? `联系人：${customer.contact.trim()}` : '', customer?.phone?.trim() ? `联系电话：${customer.phone.trim()}` : '']));
         if (session !== generation.current) return false;
         const kind: StoredFile["kind"] = slot === "vehicleLicense" ? "vehicle_license" : slot === "other" ? "other" : "repair_order_photo";
         const stored = await workOrderApi.uploadFile({kind, ...image});

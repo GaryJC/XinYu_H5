@@ -136,6 +136,8 @@ export function WorkbenchPage() {
           </>
         ) : null}
 
+        {activeNav === "工单全览" && currentUser && hasAnyRole(currentUser, ["advisor", "manager"]) ? <OrdersArchive key={currentUser.id} controller={controller} overview/> : null}
+
         {activeNav === "委托开单" ? (
           <Suspense fallback={<div role="status">正在加载委托开单…</div>}>
             <WorkOrderEditor controller={controller} />

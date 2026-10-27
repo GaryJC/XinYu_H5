@@ -239,7 +239,7 @@ export type StoredFile = {
   repairRound?: number;
   id: string;
   orderId?: string;
-  kind: "repair_parts_photo" | "repair_progress_photo" | "vehicle_license" | "repair_order_photo" | "damage_photo" | "signature_image" | "other";
+  kind: "repair_completed_photo" | "repair_parts_photo" | "repair_progress_photo" | "vehicle_license" | "repair_order_photo" | "damage_photo" | "signature_image" | "other";
   storageProvider: "oss" | "local";
   bucket: string;
   objectKey: string;
@@ -436,7 +436,7 @@ export type DispatchItem = {
 };
 export type RepairPhotoDeleteRequest = { fileIds: string[] };
 export type RepairPhotoDeleteResponse = { ids: string[] };
-export type RepairPhotoUploadRequest = {requestId:string;fileName:string;mimeType:string;imageBase64:string;repairRound?:number;purpose?:"progress"|"parts"};
+export type RepairPhotoUploadRequest = {requestId:string;fileName:string;mimeType:string;imageBase64:string;repairRound?:number;purpose?:"progress"|"parts"|"completed"};
 export type PartsRequirement = { referencePhotoIds?:string[]; preparationOnly?:boolean; applicantId?:string; applicantName?:string; ownerId?:string; ownerName?:string; sourcePhotoIds?:string[]; revision?:number; batch?:number; preparedBy?:string; preparedName?:string; preparedAt?:string; issuedBy?:string; issuedName?:string; issuedAt?:string; recipientIds?:string[]; recipientName?:string; confirmedBy?:string; confirmedName?:string; confirmedAt?:string; mode:"none"|"list"|"photo"; items:Array<{name:string;quantity:number;unit:string;recipientId?:string;recipientName?:string;issuedAt?:string;issuedBy?:string;issuedName?:string;preparedAt?:string;preparedBy?:string;preparedName?:string}>; photoIds:string[]; recordedBy?:string; recordedName?:string; recordedAt?:string };
 export type DispatchTask = DispatchExecution & {
   settlementAssignment?: boolean;
@@ -621,3 +621,8 @@ export interface PrintPdfDownload {
 export type VehicleLicenseHistory = {fileId:string;plate:string;vin:string;selectedAt:string};
 export type VehicleLicenseHistoryQuery = {plate?:string;vin?:string;excludeOrderId?:string;fileId?:string};
 export type VehicleLicenseReuseResult = {fileId:string;vin:string};
+
+export type OrderPhotoCategory = 'reception' | 'repair' | 'completed';
+export type OrderOverview = { order: WorkOrder; dispatch: DispatchDetail };
+export type OrderPhotoExportRequest = { categories: OrderPhotoCategory[] };
+export type OrderPhotoExportDownload = { path: string; fileName: string; expiresAt: string; photoCount: number };

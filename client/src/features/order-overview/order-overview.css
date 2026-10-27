@@ -1,0 +1,6 @@
+.order-overview-detail > section { margin-bottom: 20px; }
+.order-overview-detail h3 { margin: 20px 0 12px; }
+.order-overview-detail p { overflow-wrap: anywhere; }
+.overview-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
+.overview-photo-grid img { object-fit: contain; }
+.overview-photo-grid small { display: block; overflow-wrap: anywhere; }

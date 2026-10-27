@@ -17,7 +17,7 @@ function database(ownStatus,{existing=false,legacy=false}={}) {
  }};
 }
 test('submitted worker cannot upload new progress or parts photos while peers continue',async()=>{
- for(const status of ['待检验','已完工'])for(const purpose of ['progress','parts']) {
+ for(const status of ['待检验','已完工'])for(const purpose of ['progress','parts','completed']) {
   const db=database(status);let saves=0;
   await assert.rejects(()=>uploadRepairPhoto(actor,'o',{...body,purpose},{runTransaction:fn=>fn(db),save:async()=>{saves++;return {id:'new'};}}),e=>e.status===409);
   assert.equal(saves,0);
@@ -45,4 +45,11 @@ test('legacy item completion permits replacing a mistaken photo before personal 
  const db=database('待检验',{legacy:true});
  assert.deepEqual(await removeRepairPhotos(db,actor,'o',['photo']),{ids:['photo']});
  assert.ok(db.calls.some(call=>call.sql.startsWith('delete from files')));
+});
+
+
+test('completion photo stores a distinct kind and remains in the current repair round',async()=>{
+ const db=database('维修中',{legacy:true});let saved;
+ const result=await uploadRepairPhoto(actor,'o',{...body,purpose:'completed'},{runTransaction:fn=>fn(db),save:async input=>{saved=input;return {id:'completed'};}});
+ assert.equal(saved.kind,'repair_completed_photo');assert.equal(result.repairRound,0);
 });

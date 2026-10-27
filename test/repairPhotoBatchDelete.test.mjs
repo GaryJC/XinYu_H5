@@ -5,7 +5,7 @@ const {removeRepairPhotos,removeRepairPhoto}=await import('../server/repositorie
 const actor={id:'worker',name:'维修工',role:'technician',active:true,shopId:'shop'};
 const file=(id,extra={})=>({id,orderId:'o',kind:'repair_progress_photo',repairRound:1,uploadedBy:'worker',...extra});
 function database({stage='维修中',round=1,individual=false,submitted=false}={}) {
-  let files=[file('a'),file('b'),file('old',{repairRound:0}),file('foreign',{uploadedBy:'other'}),file('parts',{kind:'repair_parts_photo'}),file('wrong-order',{orderId:'elsewhere'})];
+  let files=[file('a'),file('b'),file('completed',{kind:'repair_completed_photo'}),file('old',{repairRound:0}),file('foreign',{uploadedBy:'other'}),file('parts',{kind:'repair_parts_photo'}),file('wrong-order',{orderId:'elsewhere'})];
   const calls=[];
   return{calls,get files(){return files;},async query(sql,params=[]) {
     calls.push({sql,params});
@@ -13,8 +13,8 @@ function database({stage='维修中',round=1,individual=false,submitted=false}={
     if(sql.includes('select role,active,shop_id'))return{rows:[{role:actor.role,active:true,shop_id:'shop'}]};
     if(sql.includes('select id from files where')||sql.includes('delete from files where')) {
       const [ids,orderId,currentRound,ownerId]=params;
-      assert.match(sql,/kind='repair_progress_photo'/);assert.match(sql,/coalesce\(repair_round,0\)=\$3/);
-      const chosen=files.filter(f=>ids.includes(f.id)&&f.orderId===orderId&&f.kind==='repair_progress_photo'&&f.repairRound===currentRound&&(!ownerId||f.uploadedBy===ownerId));
+      assert.match(sql,/kind in \('repair_progress_photo','repair_completed_photo'\)/);assert.match(sql,/coalesce\(repair_round,0\)=\$3/);
+      const chosen=files.filter(f=>ids.includes(f.id)&&f.orderId===orderId&&['repair_progress_photo','repair_completed_photo'].includes(f.kind)&&f.repairRound===currentRound&&(!ownerId||f.uploadedBy===ownerId));
       if(sql.startsWith('delete'))files=files.filter(f=>!chosen.includes(f));
       return{rows:chosen.map(f=>({id:f.id}))};
     }
@@ -56,3 +56,5 @@ test('old single-photo entrypoint stays compatible and current stage/role restri
   await assert.rejects(()=>removeRepairPhotos(database(),{...actor,role:'advisor'},'o',['a']),error=>error.status===403);
   await assert.rejects(()=>removeRepairPhotos(database(),{...actor,shopId:'elsewhere'},'o',['a']),error=>error.status===403);
 });
+
+test('completed photos share current-round deletion protections',async()=>{const db=database();assert.deepEqual(await removeRepairPhotos(db,actor,'o',['completed']),{ids:['completed']});});

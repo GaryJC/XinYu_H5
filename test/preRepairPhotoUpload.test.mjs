@@ -26,7 +26,7 @@ const files = [{name:'one.jpg',type:'image/jpeg'},{name:'two.jpg',type:'image/jp
 test('draft uploads include the order contact and phone rather than the customer company name', async () => {
   const h = setup({async uploadFile(){return {id:'new'};}}, {}, {name:'测试公司',contact:' 张三 ',phone:' 13800000000 '});
   for (const slot of ['front45','rear45']) assert.equal(await h.actions.upload(slot,files[0]),true);
-  for (const image of h.prepared) assert.deepEqual(Array.from(image.extraLines),['联系人：张三','联系电话：13800000000']);
+  for (const image of h.prepared) assert.deepEqual(Array.from(image.extraLines),['抚顺路4号鑫裕新能源汽修','联系人：张三','联系电话：13800000000']);
 });
 test('draft front and rear photos request upload timestamps while other slots do not', async () => {
   const h = setup({async uploadFile() {return {id:'new'};}});

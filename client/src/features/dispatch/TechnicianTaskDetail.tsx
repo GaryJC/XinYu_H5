@@ -31,7 +31,7 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
   const materialController=partsController(c,individual?user.id:undefined);
   const itemsEditor=useRepairItemsEditor(task,ownController);
   const canEditItems=!task.needsReview&&(task.technicianIds??[task.technicianId]).includes(user.id)&&['待开工','维修中','暂停','回审'].includes(task.stage);
-  const hasRepairPhoto=c.detail!.files.some(f=>f.kind==='repair_progress_photo'&&(f.repairRound||0)===(task.repairRound||0)&&(!individual||f.uploadedBy===user.id));
+  const hasRepairPhoto=c.detail!.files.some(f=>['repair_progress_photo','repair_completed_photo'].includes(f.kind)&&(f.repairRound||0)===(task.repairRound||0)&&(!individual||f.uploadedBy===user.id));
   const editable=!task.needsReview && (task.technicianIds??[task.technicianId]).includes(user.id);
   const ownDone=individual&&task.items.length>0&&task.items.every(i=>['待检验','已完工'].includes(i.status))&&Boolean(task.workerSubmissions?.[user.id]||task.stage==='待检验'||task.items.every(i=>i.status==='已完工'));
   const canPhoto=editable&&!ownDone&&['待开工','维修中','暂停','回审'].includes(task.stage);

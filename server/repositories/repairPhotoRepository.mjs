@@ -22,7 +22,7 @@ export async function removeRepairPhotos(client, actor, orderId, fileIds) {
   if (!['待开工','维修中','暂停','回审'].includes(task.stage)) throw new HttpError(409, '当前状态不能删除维修照片');
   if(hasSubmittedPersonalWork(task,actor.id))throw new HttpError(409,'本人项目已提交，不能删除维修照片');
   const params = [fileIds, orderId, task.repairRound || 0, individualRepair(task) ? actor.id : null];
-  const condition = "id=any($1::text[]) and order_id=$2 and kind='repair_progress_photo' and coalesce(repair_round,0)=$3 and ($4::text is null or uploaded_by=$4)";
+  const condition = "id=any($1::text[]) and order_id=$2 and kind in ('repair_progress_photo','repair_completed_photo') and coalesce(repair_round,0)=$3 and ($4::text is null or uploaded_by=$4)";
   const { rows: selected } = await client.query(`select id from files where ${condition} for update`, params);
   if (selected.length !== fileIds.length) throw new HttpError(409, '所选照片不存在、属于历史维修轮次或无权删除，请刷新后重试');
   const { rows } = await client.query(`delete from files where ${condition} returning id`, params);

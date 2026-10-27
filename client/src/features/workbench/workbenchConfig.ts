@@ -5,6 +5,7 @@ import { RoleKey } from "../../../../shared/types";
 export const navItems: Array<{ label: string; icon: typeof LayoutDashboard; roles: RoleKey[] }> = [
   { label: "工作台", icon: LayoutDashboard, roles: ["advisor", "manager"] },
   { label: "委托开单", icon: ClipboardList, roles: ["advisor", "manager"] },
+  { label: "工单全览", icon: ClipboardList, roles: ["advisor", "manager"] },
   { label: "派工台", icon: ClipboardList, roles: ["advisor", "manager"] },
   { label: "配件竞价", icon: ClipboardList, roles: ["warehouse", "manager"] },
   { label: "配件申请", icon: ClipboardList, roles: ["warehouse"] },
