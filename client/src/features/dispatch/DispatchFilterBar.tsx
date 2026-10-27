@@ -5,7 +5,7 @@ import {executionLabels} from './DispatchExecutionFields';
 import {personDisplayName,statusFilters} from './dispatchLabels';
 import {activeFilterCount,advancedFilterCount,useDispatchFilterDraft} from './useDispatchFilterDraft';
 import './dispatch-filter-bar.css';
-const inspectionStatuses=[{value:'',label:'全部未完结'},{value:'待检验',label:'待检验'},{value:'回审',label:'回审'},{value:'维修完成',label:'已检验'},{value:'完成',label:'已完结'}];
+const inspectionStatuses=[{value:'',label:'全部未完结'},{value:'待检验',label:'待检验'},{value:'待定',label:'待定'},{value:'回审',label:'回审'},{value:'维修完成',label:'已检验'},{value:'完成',label:'已完结'}];
 export function DispatchFilterBar({controller:c,inspection}:{controller:DispatchController;inspection:boolean}) {
  const {token}=theme.useToken(),f=useDispatchFilterDraft(c.filters,c.setFilters);
  const advanced=advancedFilterCount(c.filters),active=activeFilterCount(c.filters);

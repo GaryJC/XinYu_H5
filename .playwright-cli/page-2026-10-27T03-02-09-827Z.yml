@@ -1,0 +1,65 @@
+- main [ref=e3]:
+  - region "任务概览" [ref=e4]:
+    - generic [ref=e5]:
+      - text: 检验任务
+      - generic [ref=e6]: 待定 × 1
+      - generic "维修与领料批次"
+    - generic [ref=e7]: 派工号 QA-001
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - term [ref=e10]: 托修单位
+        - definition [ref=e11]: 未填写
+      - generic [ref=e12]:
+        - term [ref=e13]: 车型 / 里程
+        - definition [ref=e14]: 未填写
+      - generic [ref=e15]:
+        - term [ref=e16]: 维修员工
+        - definition [ref=e17]: 待指派
+      - generic [ref=e18]:
+        - term [ref=e19]: 预计完工
+        - definition [ref=e20]: 未记录
+  - heading "待检项目" [level=3] [ref=e21]
+  - list [ref=e22]:
+    - listitem [ref=e23]:
+      - generic [ref=e24]:
+        - generic [ref=e25]: "01"
+        - generic [ref=e26]:
+          - strong [ref=e27]: 检查更换发动机冷却系统水泵总成
+          - generic [ref=e28]: 负责人：维修工甲
+      - radiogroup "检验结果：检查更换发动机冷却系统水泵总成" [ref=e29]:
+        - generic [ref=e30] [cursor=pointer]:
+          - generic [ref=e31]:
+            - radio "通过"
+          - generic [ref=e32]: 通过
+        - generic [ref=e33] [cursor=pointer]:
+          - generic [ref=e34]:
+            - radio "退回"
+          - generic [ref=e35]: 退回
+        - generic [ref=e36] [cursor=pointer]:
+          - generic [ref=e37]:
+            - radio "待定" [checked] [active]
+          - generic [ref=e38]: 待定
+  - button "提交检验结果" [ref=e39] [cursor=pointer]
+  - region "待客户确认项目" [ref=e41]:
+    - generic [ref=e43]:
+      - heading "待定及待客户确认项目" [level=3] [ref=e44]
+      - generic [ref=e45]: 1 项待回复
+    - article [ref=e47]:
+      - generic [ref=e48]:
+        - generic [ref=e49]:
+          - generic [ref=e50]: "01"
+          - strong [ref=e51]: 发动机支架异响
+        - generic [ref=e52]: 检验待定
+      - generic [ref=e53]:
+        - text: 待定原因
+        - paragraph [ref=e54]: 等待配件型号确认
+      - generic [ref=e55]:
+        - button "派工维修" [ref=e56] [cursor=pointer]
+        - button "删除／不再维修" [ref=e58] [cursor=pointer]
+      - button "collapsed 处理记录" [ref=e62] [cursor=pointer]:
+        - img "collapsed" [ref=e64]
+        - generic [ref=e67]: 处理记录
+    - group [ref=e68]:
+      - generic [ref=e69] [cursor=pointer]:
+        - img "info-circle" [ref=e70]
+        - text: 润丰同步说明

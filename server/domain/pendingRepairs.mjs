@@ -12,7 +12,7 @@ export function mergePendingWriteback(items, pending = []) {
  for(const p of pending) {
   if(p.state === 'declined') {result.delete(p.itemId);continue;}
   const item = result.get(p.itemId);
-  if(item?.status === '已完工' && p.state === 'approved') continue;
+  if(item?.status === '已完工' && p.state === 'approved' && (p.source!=='inspection'||p.inspectionState==='completed')) continue;
   result.set(p.itemId, {...item,id:p.itemId,name:pendingName(p.name),pendingConfirmation:true});
  }
  return [...result.values()];
@@ -27,6 +27,7 @@ export function pendingRepairProgress(items, task, rounds = []) {
  }
  for(const item of task?.items||[])latest.set(item.id,{item,task,round:task.repairRound||0});
  return items.map(p=>{
+  if(p.source==='inspection'&&p.inspectionState==='cancelled')return {...p,progress:'已撤销'};
   if(!p.scheduled)return {...p};
   const found=latest.get(p.itemId);
   if(!found)return {...p,progress:'进度待核对'};

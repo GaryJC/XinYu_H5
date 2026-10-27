@@ -13,7 +13,7 @@ export function personDisplayName(person:{id:string;name:string},people:Array<{i
 
 export const statusFilters = [
   {value:'待派工',label:'未派工'}, {value:'',label:'全部未完结'}, {value:'待客户确认',label:'待客户确认'},
-  {value:'待接单',label:'未接单'}, {value:'待开工',label:'待开工'},
+  {value:'待定',label:'待定'}, {value:'待接单',label:'未接单'}, {value:'待开工',label:'待开工'},
   {value:'维修中',label:'正在维修'}, {value:'暂停',label:'暂停'},
   {value:'待检验',label:'待检验'}, {value:'回审',label:'回审'}, {value:'待结算',label:'待结算'},
   {value:'草稿',label:'草稿'}, {value:'待客户签字',label:'待客户签字'},
@@ -27,6 +27,8 @@ export function taskStatusLabel(task:DispatchTask) {
 }
 
 export function dispatchEventLabel(event:Pick<DispatchEvent,'action'|'detail'>) {
+  const deferredLabels:Record<string,string>={'inspection-deferred-schedule':'待定项目派工','inspection-deferred-cancel':'待定维修已撤销'};
+  if(deferredLabels[event.action])return deferredLabels[event.action];
   if(event.action==='reopen-repair'&&event.detail.roundKind==='additional')return '安排追加维修';
   if(event.action==='reassign'&&event.detail.reassignItemIds)return '项目改派';
   if((event.detail.partsRequirement?.batch??1)>1) {

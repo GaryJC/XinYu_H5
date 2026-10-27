@@ -86,7 +86,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     {hasPendingInspection(task)?<section className="task-projects">
       <h3>待检项目 · {inspectionDraft.pending.length} 项</h3>
       <InspectionItems items={task.items} choices={inspectionDraft.choices} onChange={inspectionDraft.change} disabled={!inspect||!task.inspectorId||unsigned||task.needsReview||controller.busy}/>
-      <p className="inspection-progress">{inspect&&task.inspectorId?`已选择 ${inspectionDraft.pending.filter(item=>inspectionDraft.choices[item.id]).length} / ${inspectionDraft.pending.length} 项，请逐项确认通过或退回。`:'领取检验任务后，可逐项选择通过或退回。'}</p>
+      <p className="inspection-progress">{inspect&&task.inspectorId?`已选择 ${inspectionDraft.pending.filter(item=>inspectionDraft.choices[item.id]).length} / ${inspectionDraft.pending.length} 项，请逐项确认通过、退回或待定。`:'领取检验任务后，可逐项选择通过、退回或待定。'}</p>
     </section>:null}
     {!hasPendingInspection(task)||task.items.some(item=>!['待检验','已完工'].includes(item.status))?<section className="task-projects">
     <h3>维修项目 · {task.items.filter(i=>['待检验','已完工'].includes(i.status)).length}/{task.items.length} 已提报或通过</h3>
@@ -144,15 +144,16 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
       {event.detail.itemId?<p>项目：{task.items.find(i=>i.id===event.detail.itemId)?.name||event.detail.itemId}</p>:null}
       {event.action==='reopen-repair'?<p>本次项目：{event.detail.items?.map(i=>i.name).join('、')}</p>:null}
       <RepairProjectChanges event={event}/>
+      {event.detail.deferredItemIds?.length?<p>待定项目：{event.detail.deferredItemIds.map(id=>event.detail.previousItems?.find(i=>i.id===id)?.name||id).join('、')} · {event.detail.deferredReason}</p>:null}
       {event.detail.rejectedItemIds?.length?<p>退回项目：{event.detail.rejectedItemIds.map(id=>task.items.find(i=>i.id===id)?.name||id).join('、')}</p>:null}
       {event.detail.dueAt?<p>预计完工：{event.action==='update-due'?`${displayTime(event.detail.previousDueAt)} → `:''}{displayTime(event.detail.dueAt)}{event.detail.urgent?' · 加急':''}</p>:null}
       {event.detail.pauseReason?<p>{event.detail.pauseReason}</p>:null}
       {event.detail.reason?<p>{event.detail.reason}</p>:null}{event.detail.note?<p>{event.detail.note}</p>:null}</div>}))}/>
     </>}]} />
     {actions.length?<div ref={setActionBar} className="task-detail-actions"><div ref={setProjectActionsTarget} className="project-actions-slot"/><Space wrap>{actions.map(action=><Button key={action} danger={action==='reopen-repair'} type={['assign','accept','submit','inspect','claim-inspection'].includes(action)?'primary':'default'} loading={controller.busy} disabled={controller.busy||photoBlocked||action==='inspect'&&!inspectionDraft.complete} onClick={()=>{
-      if(action==='inspect'){if(!inspectionDraft.complete){controller.setError('请先为每个待检项目选择通过或退回');return;}setInspectionReview({version:task.version,choices:{...inspectionDraft.choices}});setDialog(action);}
+      if(action==='inspect'){if(!inspectionDraft.complete){controller.setError('请先为每个待检项目选择通过、退回或待定');return;}setInspectionReview({version:task.version,choices:{...inspectionDraft.choices}});setDialog(action);}
       else if(action==='accept')setPartsDialog(true);else if(['resume','reoffer','remind','claim-inspection','retry-inspection-notifications'].includes(action)) void controller.act({action});else setDialog(action);
-    }}>{action==='inspect'?(inspectionDraft.complete?`提交检验结果（通过 ${inspectionDraft.pending.length-inspectionDraft.rejectedItemIds.length} · 退回 ${inspectionDraft.rejectedItemIds.length}）`:`还剩 ${inspectionDraft.pending.filter(item=>!inspectionDraft.choices[item.id]).length} 项未确认`):actionLabels[action]}</Button>)}</Space></div>:null}
+    }}>{action==='inspect'?(inspectionDraft.complete?`提交检验结果（通过 ${inspectionDraft.pending.length-inspectionDraft.rejectedItemIds.length-inspectionDraft.deferredItemIds.length} · 退回 ${inspectionDraft.rejectedItemIds.length} · 待定 ${inspectionDraft.deferredItemIds.length}）`:`还剩 ${inspectionDraft.pending.filter(item=>!inspectionDraft.choices[item.id]).length} 项未确认`):actionLabels[action]}</Button>)}</Space></div>:null}
     {partsDialog?<PartsRequirementDialog controller={controller} accepting={task.stage==='待接单'} onClose={()=>setPartsDialog(false)}/>:null}
     {dialog?<DispatchActionDialog key={`${task.orderId}-${dialog}`} action={dialog} task={task} controller={controller} inspectionReview={inspectionReview} onClose={()=>setDialog(undefined)}/>:null}
   </div>;

@@ -30,7 +30,7 @@ test('snapshot uses bound employee names and remains immutable after personnel e
 import {replaceLegacyRepairItems,assertLegacyRepairHeaders} from '../server/repositories/legacyRepairWritebackRepository.mjs';
 const snapshot={orderId:'o',eventId:'42',plate:'鲁B12345',dispatchNo:'A123',departmentCode:'01',legacyReid:10,documentNo:20,items:[{id:1,name:'更换机油',responsibleId:'t',employeeCode:'027',employeeName:'李富强'}]};
 const headers=()=>[{reid:10,dh:20,wd:'',plate:'鲁B12345',department:'01',xmfy:0,xmfy0:0},{reid:11,dh:20,wd:'1',plate:'鲁B12345',department:'01',xmfy:0,xmfy0:0}];
-function sqlHarness({failInsert=false,existingHash,downstream=0,headerRows=headers(),protectedCounts={}}={}) {
+function sqlHarness({failInsert=false,existingHash,downstream=0,headerRows=headers(),protectedCounts={},removalRows=[{position:1,name:'更换机油'}]}={}) {
  let statements=[],committed=false,rolledBack=false;
  const executeTransaction=async work=>{
   try {const result=await work(async(query,configure)=>{
@@ -39,6 +39,7 @@ function sqlHarness({failInsert=false,existingHash,downstream=0,headerRows=heade
    if(query.startsWith('select payload_hash'))return {recordset:existingHash?[{payload_hash:existingHash}]:[]};
    if(query.includes('as assignments'))return {recordset:[{assignments:downstream,completions:0,payments:0,returns:0}]};
    if(query.includes('as protected_count'))return {recordset:[{protected_count:protectedCounts[params.wd]??0}]};
+   if(query.startsWith('select Xh'))return {recordset:removalRows};
    if(query.startsWith('select isnull(sum'))return {recordset:[{amount:0,cost:0}]};
    if(failInsert&&query.startsWith('insert into dbo.qxwxmxb'))throw new Error('injected SQL failure');
    return {recordset:[],rowsAffected:[1]};
@@ -153,4 +154,46 @@ test('audited or settled external document blocks the whole writeback',async()=>
   await assert.rejects(()=>replaceLegacyRepairItems(snapshot,{executeTransaction:mock.executeTransaction,source:'test'}),/删除、结算或审核/);
   assert.ok(!mock.state().statements.some(s=>/^(delete|insert|update)/.test(s.query)));
  }
+});
+
+test('explicit final deferred removal clears only mutable project rows and still enforces pricing protection',async()=>{
+ const empty={...snapshot,items:[],allowEmptyRemoval:true};
+ const mock=sqlHarness();await replaceLegacyRepairItems(empty,{executeTransaction:mock.executeTransaction,source:'test'});
+ assert.equal(mock.state().committed,true);assert.equal(mock.state().statements.filter(s=>s.query.startsWith('delete')).length,2);
+ assert.equal(mock.state().statements.filter(s=>s.query.startsWith('insert into dbo.qxwxmxb')).length,0);
+ const protectedMock=sqlHarness({protectedCounts:{'':1}});
+ await assert.rejects(()=>replaceLegacyRepairItems(empty,{executeTransaction:protectedMock.executeTransaction,source:'test'}),/计价数据/);
+ assert.equal(protectedMock.state().statements.some(s=>s.query.startsWith('delete')),false);
+});
+
+
+test('deferred removal deletes only its original position without publishing unrelated work or requiring employee bindings',async()=>{
+ const removal={...snapshot,operation:'remove',removeItem:{id:1,name:'更换机油',legacyPosition:1},items:[{id:2,name:'未检验项目',employeeCode:null}],allowEmptyRemoval:true};
+ const mock=sqlHarness();await replaceLegacyRepairItems(removal,{executeTransaction:mock.executeTransaction,source:'test'});
+ const writes=mock.state().statements;
+ assert.equal(writes.filter(s=>s.query.startsWith('delete')).length,2);
+ assert.ok(writes.filter(s=>s.query.startsWith('delete')).every(s=>s.query.includes('Xh=@xh')&&s.params.xh===1&&s.params.name==='更换机油'));
+ assert.ok(!writes.some(s=>s.query.startsWith('insert into dbo.qxwxmxb')||s.query.startsWith('update dbo.qxwxb')));
+ for(const options of [{removalRows:[{position:1,name:'其他项目'}]},{removalRows:[{position:1,name:'更换机油'},{position:1,name:'更换机油'}]},{protectedCounts:{'':1}},{headerRows:[{...headers()[0],approved:'1'}]}]) {
+  const blocked=sqlHarness(options);await assert.rejects(()=>replaceLegacyRepairItems(removal,{executeTransaction:blocked.executeTransaction,source:'test'}));
+  assert.ok(!blocked.state().statements.some(s=>s.query.startsWith('delete')));
+ }
+ const replay=sqlHarness({existingHash:writebackHash(removal)});
+ assert.deepEqual(await replaceLegacyRepairItems(removal,{executeTransaction:replay.executeTransaction,source:'test'}),{duplicate:true});
+});
+
+test('consecutive cancellation snapshots retain legacy positions and ignore live uninspected items',async()=>{
+ const {enqueueRepairRemoval}=await import('../server/repositories/repairWritebackRepository.mjs');
+ let baseline={items:[{id:1,name:'【待定】一'},{id:2,name:'【待定】二'},{id:3,name:'已通过',employeeCode:null}]};
+ const client={query:async(sql,args)=>{
+  if(sql.startsWith('select snapshot'))return {rows:[{snapshot:baseline}]};
+  assert.ok(sql.startsWith('insert into repair_writebacks'));baseline=JSON.parse(args[2]);return {rows:[]};
+ }};
+ const live={orderId:'o',plate:'鲁B12345',items:[{id:4,name:'正在维修',responsibleId:'unbound'}]};
+ await enqueueRepairRemoval(client,live,1,{itemId:1,name:'一'});
+ assert.deepEqual(baseline.items.map(i=>[i.id,i.legacyPosition]),[[2,2],[3,3]]);
+ assert.doesNotThrow(()=>validateWritebackSnapshot(baseline));
+ await enqueueRepairRemoval(client,live,2,{itemId:2,name:'二'});
+ assert.equal(baseline.removeItem.legacyPosition,2);assert.deepEqual(baseline.items.map(i=>i.id),[3]);
+ assert.doesNotThrow(()=>validateWritebackSnapshot(baseline));
 });

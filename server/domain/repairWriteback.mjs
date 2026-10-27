@@ -9,7 +9,13 @@ export function makeWritebackSnapshot(task,items,users) {
 }
 export function writebackHash(snapshot) {return createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');}
 export function validateWritebackSnapshot(snapshot) {
- if(!snapshot.plate||!snapshot.items?.length||snapshot.items.length>200)throw new Error('维修项目快照不完整');
+ if(!snapshot.plate||(!Array.isArray(snapshot.items)||!snapshot.items.length&&!snapshot.allowEmptyRemoval)||snapshot.items.length>200)throw new Error('维修项目快照不完整');
+ if(snapshot.operation==='remove') {
+  const target=snapshot.removeItem;
+  if(!Number.isSafeInteger(target?.id)||!target.name?.trim()||target.name.length>100||
+    (target.legacyPosition!==null&&(!Number.isSafeInteger(target.legacyPosition)||target.legacyPosition<1)))throw new Error('撤销项目快照不完整');
+  return; // Removal never writes employee names or any remaining project.
+ }
  for(const item of snapshot.items) {
   if(!item.name?.trim())throw new Error('维修项目名称为空');
   if(item.name.length>100)throw new Error(`项目“${item.name.slice(0,20)}…”超出润丰字段长度，请缩短名称`);

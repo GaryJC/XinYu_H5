@@ -1,3 +1,6 @@
+import {reconcileInspectionDeferred} from '../domain/inspectionDeferred.mjs';
+import {writePendingRepairs} from '../repositories/pendingRepairsRepository.mjs';
+import {enqueueDeferredNotifications} from '../repositories/inspectionDeferredRepository.mjs';
 import {partsSubmissionNotifications} from '../domain/partsSubmissionNotifications.mjs';
 import {hasPendingInspection} from '../../shared/repairProgress.mjs';
 import { readPendingRepairs } from '../repositories/pendingRepairsRepository.mjs';
@@ -29,6 +32,7 @@ export async function queryDispatchTasks(actor, query={}) {
     if(query.stage==='进行中' && !['待开工','维修中','暂停'].includes(t.stage)) return false;
     if(query.stage==='完成') { if(t.orderStatus!=='完成' || hasActiveRepairRound(t)) return false; }
     else if(query.stage==='待结算') { if(t.orderStatus!=='待结算' || hasActiveRepairRound(t)) return false; }
+    else if(query.stage==='待定') {if(!t.inspectionDeferredCount)return false;}
     else if(query.stage==='待客户确认') {if(!t.pendingRepairCount) return false;}
     else if(query.stage==='待检验') {if(!hasPendingInspection(t))return false;}
     else if(query.stage && query.stage!=='进行中' && t.stage!==query.stage) return false;
@@ -36,12 +40,12 @@ export async function queryDispatchTasks(actor, query={}) {
     if(query.overdue==='true' && !t.overdue) return false;
     if(query.search && ![t.orderId,t.dispatchNo,t.plate].some(v=>v.toLowerCase().includes(query.search.toLowerCase()))) return false;
     if(hasRole(actor, 'warehouse')) return true;
-    if(t.orderStatus==='完成' && !hasActiveRepairRound(t) && !['完成','维修完成','待客户确认'].includes(query.stage) && query.metric!=='completed') return false;
+    if(t.orderStatus==='完成' && !hasActiveRepairRound(t) && !['完成','维修完成','待客户确认','待定'].includes(query.stage) && query.metric!=='completed') return false;
     if(query.metric) return dispatchMetric(t,query.metric,range.from,range.to);
     // Only an explicit historical view includes closed orders. Unsettled repairs
     // stay visible regardless of completion date, including undated legacy orders.
     if(['完成','维修完成'].includes(query.stage)) return !t.completedAt || dispatchMetric(t,'completed',range.from,range.to);
-    return query.stage==='待客户确认' || t.orderStatus!=='完成' || hasActiveRepairRound(t);
+    return ['待客户确认','待定'].includes(query.stage) || t.orderStatus!=='完成' || hasActiveRepairRound(t);
   });
 }
 export async function myRepairCounts(actor) {
@@ -93,7 +97,16 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
       if(task.inspectorId || !jobs[0]?.error || jobs[0].status==='ready') throw new HttpError(409,'当前无需重试检验员通知');
     }
     if(input.action==='reopen-repair'||input.action==='edit-repair-items'||input.repairItems!==undefined) task.repairCatalog=await repairCatalog(client,task);
+    if(input.reworkItemIds?.length){
+      const pending=await readPendingRepairs(client,id,true);
+      if(pending.items.some(p=>p.source==='inspection'&&p.inspectionState!=='completed'&&input.reworkItemIds.includes(p.itemId)))throw new HttpError(409,'待定或已撤销项目不能通过普通返工恢复，请使用待定项目入口');
+    }
     const next=applyDispatchAction(task,input,currentActor,people);
+    if(input.action==='inspect') {
+      const pending=await readPendingRepairs(client,id,true);
+      const updated=reconcileInspectionDeferred(pending.items,task,next,input,currentActor,new Date().toISOString());
+      if(JSON.stringify(updated)!==JSON.stringify(pending.items))await writePendingRepairs(client,id,updated);
+    }
     if(input.repairItems) {
       const pending=await readPendingRepairs(client,id);
       if(pending.items.some(p=>p.scheduled&&task.items.some(i=>i.id===p.itemId)&&!next.items.some(i=>i.id===p.itemId)))throw new HttpError(409,'已安排的客户确认项目不能直接删除，请保留项目及确认记录');
@@ -116,9 +129,10 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
     if(input.action!=='update-technicians') await saveRepairRound(client,task,next,currentActor,input.action);
     await saveDispatchTask(client,next,{metadataOnly:input.action==='update-due',techniciansOnly:input.action==='update-technicians'});
     if(input.action==='assign') await markDispatchPlan(client,id);
-    const detail={preparationGroups,partsPreparation:input.partsPreparation,partsIssue:input.partsIssue,reassignItemIds:input.reassignItemIds,previousItems:input.repairItems||['send-review','reassign','inspect'].includes(input.action)?task.items:undefined,partsRequirement:parts,roundKind:next.roundKind,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
+    const detail={deferredItemIds:input.deferredItemIds,deferredReason:input.deferredReason,preparationGroups,partsPreparation:input.partsPreparation,partsIssue:input.partsIssue,reassignItemIds:input.reassignItemIds,previousItems:input.repairItems||['send-review','reassign','inspect'].includes(input.action)?task.items:undefined,partsRequirement:parts,roundKind:next.roundKind,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
       technicianName:next.technicianName,previousTechnicianName:task.technicianName,inspectorName:next.inspectorName,dueAt:next.dueAt,urgent:next.urgent,previousDueAt:task.dueAt};
     const {rows:[event]}=await client.query(`insert into dispatch_events(order_id,actor_id,actor_name,request_id,request_body,action,detail) values($1,$2,$3,$4,$5,$6,$7) returning id`,[id,actor.id,actor.name,input.requestId,JSON.stringify(input),input.action,JSON.stringify(detail)]);
+    if(input.deferredItemIds?.length)await enqueueDeferredNotifications(client,task,next,event.id,currentActor,'deferred',input.deferredItemIds,input.deferredReason,people,input.requestId);
     if(input.action==='inspect'&&next.stage==='维修完成')await enqueueRepairWriteback(client,next,event.id);
     await client.query('insert into audit_logs(order_id,actor,action) values($1,$2,$3)',[id,actor.name,`派工：${input.action}${input.reason?` · ${input.reason}`:''}`]);
     if(input.action==='retry-scheduler-notifications') {

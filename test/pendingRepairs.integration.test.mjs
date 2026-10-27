@@ -108,6 +108,50 @@ test('pending repairs persist, enforce ownership, schedule once, and preserve cl
 
 
   {
+   const inspector={...manager,id:'p-inspector',role:'inspector',name:'检验员'};
+   await pool.query("insert into users(id,name,role,shop_id,active) values($1,$2,$3,$4,true)",[inspector.id,inspector.name,inspector.role,inspector.shopId]);
+   const before=await s.pendingRepairList(inspector,'p-order');
+   const input={action:'add',name:'检验发现待确认项目',reason:'等待客户回复',expectedVersion:before.version,requestId:randomUUID()};
+   for(const actor of [{...inspector,active:false},{...inspector,shopId:'other'}])await assert.rejects(()=>s.pendingRepairCommand(actor,'p-order',input),e=>e.status===403);
+   const added=await s.pendingRepairCommand(inspector,'p-order',input);
+   const item=added.items.at(-1);
+   assert.equal(item.state,'pending');assert.equal(Boolean(item.scheduled),false);
+   assert.equal(item.history[0].actor,inspector.name);
+   await s.pendingRepairCommand(inspector,'p-order',input);
+   assert.equal((await s.pendingRepairList(inspector,'p-order')).version,added.version);
+   for(const action of ['approve','decline','schedule','approve-and-schedule'])await assert.rejects(()=>s.pendingRepairCommand(inspector,'p-order',{action,id:item.id,expectedVersion:added.version,requestId:randomUUID()}),e=>e.status===403);
+   const confirmed=await call({action:'decline',id:item.id,expectedVersion:added.version});
+   assert.equal(confirmed.items.at(-1).state,'declined');
+  }
+
+  {
+   // Pending customer work belongs to the shop, not its original registrant.
+   const firstAdvisor={...manager,id:'p-advisor-first',name:'登记顾问',role:'advisor'};
+   const secondAdvisor={...manager,id:'p-advisor-second',name:'接手顾问',role:'advisor'};
+   for(const actor of [firstAdvisor,secondAdvisor])await pool.query('insert into users(id,name,role,shop_id,active) values($1,$2,$3,$4,true)',[actor.id,actor.name,actor.role,actor.shopId]);
+   const orderId='p-shared-customer';
+   await pool.query("insert into work_orders(id,status,advisor,technician,inspector,shop_id,old_parts_handling,vehicle_plate,arrival_date) values($1,'已委托',$2,'待派工','待检验','shop-hq','客户带走','鲁B22222','2026-10-23')",[orderId,firstAdvisor.name]);
+   await pool.query("insert into repair_items(order_id,client_item_id,item_no,name,status) values($1,1,1,'原维修项目','待派工')",[orderId]);
+   const command=async(actor,input)=>s.pendingRepairCommand(actor,orderId,{expectedVersion:(await s.pendingRepairList(firstAdvisor,orderId)).version,requestId:randomUUID(),...input});
+   let result=await command(firstAdvisor,{action:'add',name:'跨顾问安排项目',reason:'等待回复'});
+   const item=result.items.at(-1);
+   for(const actor of [{...secondAdvisor,shopId:'other'},{...secondAdvisor,active:false}])await assert.rejects(()=>command(actor,{action:'approve',id:item.id}),e=>e.status===403);
+   result=await command(secondAdvisor,{action:'approve',id:item.id});
+   assert.equal(result.items.at(-1).state,'approved');
+   result=await command(secondAdvisor,{action:'schedule',id:item.id});
+   assert.equal(result.items.at(-1).scheduled,true);
+   assert.deepEqual(result.items.at(-1).history.map(h=>h.actor),[firstAdvisor.name,secondAdvisor.name,secondAdvisor.name]);
+   const sharedTask=(await pool.query('select data from dispatch_tasks where order_id=$1',[orderId])).rows[0].data;
+   assert.equal(sharedTask.items.filter(i=>i.id===item.itemId).length,1);
+   result=await command(firstAdvisor,{action:'add',name:'跨顾问拒绝项目',reason:'等待回复'});
+   result=await command(secondAdvisor,{action:'decline',id:result.items.at(-1).id});
+   assert.equal(result.items.at(-1).state,'declined');
+   result=await command(firstAdvisor,{action:'add',name:'跨顾问一步安排',reason:'客户确认'});
+   result=await command(secondAdvisor,{action:'approve-and-schedule',id:result.items.at(-1).id});
+   assert.equal(result.items.at(-1).scheduled,true);
+  }
+
+  {
   // Full workflow: original completion, customer approval, partial inspection,
   // second additional round, stable IDs and immutable writeback snapshots.
   process.env.RUNFENG_REPAIR_WRITEBACK_ENABLED='false';

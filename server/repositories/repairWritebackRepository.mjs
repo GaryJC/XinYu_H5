@@ -14,11 +14,27 @@ export async function enqueueRepairWriteback(client,task,eventId) {
  const {rows:users}=await client.query('select id,legacy_employee_code,legacy_employee_name from users where shop_id=$1',[task.shopId]);
  const pending=await readPendingRepairs(client,task.orderId);
  const snapshot=makeWritebackSnapshot(task,mergePendingWriteback([...all.values()],pending.items),users);
+ if(!snapshot.items.length&&pending.items.some(p=>p.source==='inspection'&&p.inspectionState==='cancelled'))snapshot.allowEmptyRemoval=true;
  if(task.executionMode!=='outsourced')try{validateWritebackSnapshot(snapshot);
   const {rows:orders}=await client.query('select dispatch_no from work_orders where id=$1',[task.orderId]);
   if(writebackAllowed(orders[0]?.dispatch_no))await validateLegacyRepairStrings(snapshot);
  }catch(error){throw new HttpError(409,`润丰写回校验未通过：${error.message}`);}
  await client.query('insert into repair_writebacks(event_id,order_id,snapshot,status,error) values($1,$2,$3,$4,$5) on conflict(event_id) do nothing',[eventId,task.orderId,JSON.stringify(snapshot),task.executionMode==='outsourced'?'manual':'pending',task.executionMode==='outsourced'?'外包任务需人工在润丰登记维修项目及维修人':'']);
+}
+// Keep the last published positions: removing a row must never publish active work
+// or renumber the remaining legacy rows. FIFO execution orders this after its baseline.
+export async function enqueueRepairRemoval(client,task,eventId,entry) {
+ const {rows}=await client.query('select snapshot from repair_writebacks where order_id=$1 order by id desc limit 1',[task.orderId]);
+ const snapshot=makeRemovalSnapshot(task,rows[0]?.snapshot,entry);
+ validateWritebackSnapshot(snapshot);
+ await client.query('insert into repair_writebacks(event_id,order_id,snapshot,status,error) values($1,$2,$3,$4,$5) on conflict(event_id) do nothing',[eventId,task.orderId,JSON.stringify(snapshot),task.executionMode==='outsourced'?'manual':'pending',task.executionMode==='outsourced'?'外包任务需人工在润丰移除对应维修项目':'']);
+}
+function makeRemovalSnapshot(task,baseline,entry) {
+ const previous=(baseline?.items||[]).map((item,index)=>({...item,legacyPosition:item.legacyPosition??index+1}));
+ const target=previous.find(item=>item.id===entry.itemId);
+ return {orderId:task.orderId,repairRound:task.repairRound||0,plate:task.plate,operation:'remove',
+  removeItem:{id:entry.itemId,name:target?.name||`【待定】${entry.name.replace(/^(?:【待定】)+/u,'')}`,legacyPosition:target?.legacyPosition??null},
+  items:previous.filter(item=>item.id!==entry.itemId),allowEmptyRemoval:true};
 }
 export async function readRepairWriteback(client,id) {
  if(repairWritebackSimulationEnabled()){const simulated=await readRepairWritebackSimulation(client,id);if(simulated)return simulated;}
@@ -55,8 +71,41 @@ export async function processRepairWritebacks(runTransaction,write,shouldContinu
 
 export async function retryFailedRepairWriteback(client,id,actorName) {
  if(repairWritebackSimulationEnabled())return retryRepairWritebackSimulation(client,id,actorName);
- const {rows}=await client.query("select id,status from repair_writebacks where order_id=$1 and status<>'manual' order by (status<>'synced') desc,case when status<>'synced' then id end asc,id desc limit 1 for update",[id]);
+ const {rows}=await client.query("select id,status,snapshot,event_id from repair_writebacks where order_id=$1 and status<>'manual' order by (status<>'synced') desc,case when status<>'synced' then id end asc,id desc limit 1 for update",[id]);
  if(!rows[0]||!['failed','synced'].includes(rows[0].status))throw new HttpError(409,'仅失败或已完成的同步任务可以重试');
+ const job=rows[0];
+ // Only structurally invalid snapshots are safe to repair in place: the writer
+ // validates them before opening SQL Server or recording an idempotency receipt.
+ // Valid (including synced) snapshots must remain byte-for-byte stable on retry.
+ let invalid=false;
+ try {validateWritebackSnapshot(job.snapshot);} catch {invalid=true;}
+ if(job.status==='failed'&&invalid) {
+  const {rows:events}=await client.query('select action,detail from dispatch_events where id=$1 and order_id=$2',[job.event_id,id]);
+  let snapshot;
+  if(events[0]?.action==='inspection-deferred-cancel') {
+   const {rows:previous}=await client.query('select snapshot from repair_writebacks where order_id=$1 and id<$2 order by id desc limit 1',[id,job.id]);
+   const itemId=events[0].detail?.itemId;
+   const target=events[0].detail?.previousItems?.find(item=>item.id===itemId);
+   const baselineTarget=previous[0]?.snapshot?.items?.find(item=>item.id===itemId);
+   if(!target&&!baselineTarget)throw new HttpError(409,'无法恢复撤销项目，请核对原始项目记录');
+   snapshot=makeRemovalSnapshot(job.snapshot,previous[0]?.snapshot,{itemId,name:target?.name||baselineTarget.name});
+  } else {
+   if(!Array.isArray(job.snapshot?.items))throw new HttpError(409,'维修项目快照不完整，请人工核对');
+   const {rows:users}=await client.query('select u.id,u.legacy_employee_code,u.legacy_employee_name from users u join work_orders w on w.shop_id=u.shop_id where w.id=$1',[id]);
+   snapshot={...job.snapshot,items:job.snapshot.items.map(item=>{
+    if(item.pendingConfirmation||item.employeeCode?.trim()&&item.employeeName?.trim())return item;
+    const person=users.find(user=>user.id===item.responsibleId);
+    return {...item,employeeCode:person?.legacy_employee_code||null,employeeName:person?.legacy_employee_name||null};
+   })};
+  }
+  try {
+   validateWritebackSnapshot(snapshot);
+   const {rows:orders}=await client.query('select dispatch_no from work_orders where id=$1',[id]);
+   if(snapshot.operation!=='remove'&&writebackAllowed(orders[0]?.dispatch_no))await validateLegacyRepairStrings(snapshot);
+  } catch(error) {throw new HttpError(409,`润丰写回校验未通过：${error.message}`);}
+  await client.query('update repair_writebacks set snapshot=$2 where id=$1',[job.id,JSON.stringify(snapshot)]);
+  await client.query('insert into audit_logs(order_id,actor,action) values($1,$2,$3)',[id,actorName,`恢复无效润丰写回快照 ${job.id}`]);
+ }
  await client.query("update repair_writebacks set status='pending',error='',attempts=0,next_attempt_at=now() where id=$1",[rows[0].id]);
  await client.query("insert into audit_logs(order_id,actor,action) values($1,$2,'重试润丰检验写回')",[id,actorName]);
 }

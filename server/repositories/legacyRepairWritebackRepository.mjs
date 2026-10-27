@@ -65,7 +65,7 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
    if(count>0)throw new Error('润丰维修项目已录入非零单价、金额、成本、工时或其他计价数据，禁止覆盖，请在润丰人工处理');
   }
   // Validate every string before any delete, using the legacy database code page.
-  for(const item of snapshot.items) {
+  for(const item of snapshot.operation==='remove'?[]:snapshot.items) {
    const worker=item.pendingConfirmation?'':`${item.employeeCode.trim()} ${item.employeeName.trim()}`;
    await execute(`if DATALENGTH(CONVERT(varchar(8000),@name))>100 or CONVERT(nvarchar(200),CONVERT(varchar(8000),@name))<>@name
       or DATALENGTH(CONVERT(varchar(8000),@worker))>100 or CONVERT(nvarchar(200),CONVERT(varchar(8000),@worker))<>@worker
@@ -73,6 +73,14 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
   }
   for(const header of pending) {
    const target=(req,sql)=>{req.input('wd',sql.Char(1),header.wd);req.input('dh',sql.Int,Number(header.dh));};
+   if(snapshot.operation==='remove') {
+    const removal=(req,sql)=>{target(req,sql);req.input('name',sql.NVarChar(200),snapshot.removeItem.name);req.input('xh',sql.Int,snapshot.removeItem.legacyPosition);};
+    const {recordset:matches}=await execute(`select Xh as position,RTRIM(hh) as name from dbo.qxwxmxb with (updlock,holdlock)
+     where wd=@wd and dh=@dh and lb=N'项目' and ((@xh is not null and Xh=@xh) or (@xh is null and RTRIM(hh)=@name))`,removal);
+    if(!Array.isArray(matches)||matches.length>1||matches.some(row=>row.name!==snapshot.removeItem.name))throw new Error('润丰撤销项目位置或名称已变化，请人工核对后处理');
+    if(!matches.length&&snapshot.removeItem.legacyPosition===null)throw new Error('缺少可定位的润丰待定项目，请人工核对是否已移除');
+    if(matches.length)await execute(`delete from dbo.qxwxmxb where wd=@wd and dh=@dh and lb=N'项目' and RTRIM(hh)=@name and (@xh is null or Xh=@xh)`,removal);
+   } else {
    const totals=await execute(`select isnull(sum(je),0) as amount,isnull(sum(cb),0) as cost from dbo.qxwxmxb with (updlock,holdlock) where wd=@wd and dh=@dh and lb=N'项目'`,target);
    const amount=Number(totals.recordset?.[0]?.amount||0),cost=Number(totals.recordset?.[0]?.cost||0);
    // Unknown legacy pricing adjustments must not be silently recalculated.
@@ -85,6 +93,7 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
    await execute(`update dbo.qxwxb set xmfy=0,xmfy0=0,fyhj=isnull(fyhj,0)-@amount,cbhj=isnull(cbhj,0)-@cost where reid=@reid`,(req,sql)=>{
     req.input('amount',sql.Decimal(18,4),amount);req.input('cost',sql.Decimal(18,4),cost);req.input('reid',sql.Int,Number(header.reid));
    });
+   }
    await execute(`insert into dbo.h5_repair_writeback_receipts(event_key,payload_hash,dispatch_no) values(@event_key,@hash,@dispatch_no)`,(req,sql)=>{
     req.input('event_key',sql.VarChar(150),header.documentKey);dispatch(req,sql);req.input('hash',sql.Char(64),hash);
    });
@@ -97,6 +106,7 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
 export async function validateLegacyRepairStrings(snapshot,{execute=executeSqlServerQuery}={}) {
  validateWritebackSnapshot(snapshot);
  const values=snapshot.items.flatMap(item=>[item.name,item.pendingConfirmation?'':`${item.employeeCode.trim()} ${item.employeeName.trim()}`]);
+ if(!values.length)return;
  const query=values.map((_,i)=>`if DATALENGTH(CONVERT(varchar(8000),@v${i}))>100 or CONVERT(nvarchar(200),CONVERT(varchar(8000),@v${i}))<>@v${i} raiserror(N'维修项目或负责人超出润丰字段长度或包含不支持字符，请修改后重新检验',16,1)`).join('\n');
  await execute(query,(request,sql)=>values.forEach((value,i)=>request.input(`v${i}`,sql.NVarChar(200),value)));
 }

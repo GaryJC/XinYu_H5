@@ -1,4 +1,4 @@
-import {hasPendingInspection,isIndividualRepair} from '../../shared/repairProgress.mjs';
+import {hasPendingInspection,allWorkersHaveItems,isIndividualRepair} from '../../shared/repairProgress.mjs';
 import { hasAnyRole } from "../../shared/roles.mjs";
 import {HttpError} from '../http/HttpError.mjs';
 const workers=task=>task.technicianIds??(task.technicianId?[task.technicianId]:[]);
@@ -63,7 +63,7 @@ export function applyIndividualAction(task,input,actor,people,now,apply,{persona
       delete next.inspectorId;delete next.inspectorName;delete next.inspectionClaimedAt;
     }
   }
-  const allDone=workers(task).every(id=>next.items.some(i=>i.responsibleId===id))&&next.items.every(i=>['待检验','已完工'].includes(i.status));
+  const allDone=allWorkersHaveItems(next)&&next.items.every(i=>['待检验','已完工'].includes(i.status));
   if(input.action==='submit-order'&&allDone)Object.assign(next,{stage:'待检验',submittedAt:now,submissionNote:Object.entries(next.workerSubmissions||{}).map(([id,s])=>`${people.find(p=>p.id===id)?.name||id}：${s.note}`).join('\n')});
   else if(task.stage!=='暂停'&&['待接单','待开工','维修中'].includes(task.stage))next.stage=next.items.some(i=>['维修中','待检验','已完工'].includes(i.status))?'维修中':'待开工';
   return next;

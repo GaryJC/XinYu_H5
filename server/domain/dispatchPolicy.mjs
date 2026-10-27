@@ -1,3 +1,4 @@
+import {validateInspectionDeferred} from './inspectionDeferred.mjs';
 import {addReviewProjects} from './reviewAssignment.mjs';
 import {prepareSettlementAssignment} from './settlementAssignment.mjs';
 import {hasPendingInspection,allWorkersHaveItems} from '../../shared/repairProgress.mjs';
@@ -31,6 +32,7 @@ export function validateDispatchRequest(input) {
   validateReopenItems(input||{});
   validateRepairItemEdits(input||{});
   validateProjectReassignment(input||{});
+  validateInspectionDeferred(input||{});
   const actions = ['update-technicians','update-due','send-review','submit-review','edit-repair-items','edit-parts','issue-parts','confirm-parts','record-parts','reopen-repair','start-order','submit-order','claim-inspection','reassign-inspection','retry-inspection-notifications','retry-scheduler-notifications','record-hours','assign','reassign','reoffer','cancel','accept','decline','start','finish','pick','pause','resume','submit','inspect','update','remind','retry-notification','reconcile'];
   if (!input || !actions.includes(input.action) || !Number.isInteger(input.expectedVersion) || input.expectedVersion < 0 || typeof input.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(input.requestId)) fail('操作参数无效：需要版本号及唯一请求编号',400);
   for (const key of ['note','reason','pauseReason','technicianId','inspectorId','notificationId','notificationJobId']) {
@@ -304,14 +306,16 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   } else if(action==='inspect') {
     if(!hasPendingInspection(task))fail('当前没有待检验项目');
     if(!canInspect(task,actor) || !hasAnyRole(actor, ['manager','inspector']) || (!hasRole(actor, 'manager')&&task.inspectorId!==actor.id) || (actor.id===task.technicianId || technicianIds(task).includes(actor.id) || (task.participantIds||[]).includes(actor.id)) || next.items.some(i=>i.responsibleId===actor.id || i.startedBy===actor.id || i.finishedBy===actor.id)) fail('不能自检，或没有当前任务检验权限',403);
-    const rejected=input.rejectedItemIds || [];
+    const rejected=input.rejectedItemIds || [],deferred=input.deferredItemIds||[];
+    validateInspectionDeferred(input);
+    if(deferred.some(id=>!task.items.some(item=>item.id===id&&item.status==='待检验')))fail('待定项目不在本次待检验项目中',400);
     // Only submitted items belong to this inspection; unfinished work may still await assignment.
-    resolveRepairResponsibilities({...next,items:next.items.filter(i=>i.status==='待检验'&&!rejected.includes(i.id))},people,{required:true});
+    resolveRepairResponsibilities({...next,items:next.items.filter(i=>i.status==='待检验'&&!rejected.includes(i.id)&&!deferred.includes(i.id))},people,{required:true});
     if(rejected.length) reason();
     if(rejected.length && input.workHours!==undefined) fail('退回维修时无需填写工时，请在全部检验通过时填写',400);
     if(rejected.some(id=>!next.items.some(i=>i.id===id && i.status==='待检验'))) fail('退回项目不在本次待检验项目中',400);
     for(const current of next.items) {
-      if(current.status!=='待检验') continue;
+      if(current.status!=='待检验'||deferred.includes(current.id)) continue;
       if(rejected.includes(current.id)) {
         next.participantIds=[...new Set([...(next.participantIds||[]),current.responsibleId,current.startedBy,current.finishedBy].filter(Boolean))];
         current.status='待开工'; current.finishAt=undefined; current.rejectionReason=input.reason.trim();
@@ -321,9 +325,14 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
       }
       else { delete current.rejectionReason; current.status='已完工'; current.inspectedBy=actor.id; current.inspectorName=actor.name; current.inspectedAt=now; }
     }
+    next.participantIds=[...new Set([...(next.participantIds||[]),...task.items.filter(item=>deferred.includes(item.id)).flatMap(item=>[item.responsibleId,item.startedBy,item.finishedBy]).filter(Boolean)])];
+    next.deferredItems=[...(next.deferredItems||[]).filter(item=>!deferred.includes(item.id)),...task.items.filter(item=>deferred.includes(item.id))];
+    next.repairItemIdFloor=Math.min(next.repairItemIdFloor||0,...task.items.map(item=>item.id));
+    const workersCovered=allWorkersHaveItems(next);
+    next.items=next.items.filter(item=>!deferred.includes(item.id));
     if(rejected.length) { next.reworkReason=input.reason; next.rejectedItemIds=rejected; next.stage=['暂停','回审'].includes(task.stage)?task.stage:'维修中'; next.rework=true; next.reworkCount=(task.reworkCount||0)+1; }
     else {
-      const completed=next.items.every(i=>i.status==='已完工')&&allWorkersHaveItems(next);
+      const completed=next.items.every(i=>i.status==='已完工')&&workersCovered;
       if(input.workHours!==undefined&&!completed) fail('全部项目检验通过后才能填写整单工时',400);
       if(input.workHours!==undefined) Object.assign(next,{workHours:input.workHours,workHoursRecordedBy:actor.id,workHoursRecordedName:actor.name,workHoursRecordedAt:now});
       next.stage=completed?'维修完成':['回审','暂停'].includes(task.stage)?task.stage:'维修中';

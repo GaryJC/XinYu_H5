@@ -1,0 +1,80 @@
+- generic [ref=e1]:
+  - main [ref=e3]:
+    - region "任务概览" [ref=e4]:
+      - generic [ref=e5]:
+        - text: 检验任务
+        - generic [ref=e6]: 待定 × 1
+        - generic "维修与领料批次"
+      - generic [ref=e7]: 派工号 QA-001
+      - generic [ref=e8]:
+        - generic [ref=e9]:
+          - term [ref=e10]: 托修单位
+          - definition [ref=e11]: 未填写
+        - generic [ref=e12]:
+          - term [ref=e13]: 车型 / 里程
+          - definition [ref=e14]: 未填写
+        - generic [ref=e15]:
+          - term [ref=e16]: 维修员工
+          - definition [ref=e17]: 待指派
+        - generic [ref=e18]:
+          - term [ref=e19]: 预计完工
+          - definition [ref=e20]: 未记录
+    - heading "待检项目" [level=3] [ref=e21]
+    - list [ref=e22]:
+      - listitem [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]: "01"
+          - generic [ref=e26]:
+            - strong [ref=e27]: 检查更换发动机冷却系统水泵总成
+            - generic [ref=e28]: 负责人：维修工甲
+        - radiogroup "检验结果：检查更换发动机冷却系统水泵总成" [ref=e29]:
+          - generic [ref=e30] [cursor=pointer]:
+            - generic [ref=e31]:
+              - radio "通过"
+            - generic [ref=e32]: 通过
+          - generic [ref=e33] [cursor=pointer]:
+            - generic [ref=e34]:
+              - radio "退回"
+            - generic [ref=e35]: 退回
+          - generic [ref=e36] [cursor=pointer]:
+            - generic [ref=e37]:
+              - radio "待定" [checked]
+            - generic [ref=e38]: 待定
+    - button "提交检验结果" [ref=e39] [cursor=pointer]
+    - region "待客户确认项目" [ref=e253]:
+      - generic [ref=e255]:
+        - heading "待定及待客户确认项目" [level=3] [ref=e256]
+        - generic [ref=e257]: 0 项待客户回复 · 检验待定 1 项
+      - article [ref=e259]:
+        - generic [ref=e260]:
+          - generic [ref=e261]:
+            - generic [ref=e262]: "01"
+            - strong [ref=e263]: 发动机支架异响
+          - generic [ref=e264]: 待接单
+        - generic [ref=e265]:
+          - text: 待定原因
+          - paragraph [ref=e266]: 等待配件型号确认
+        - button "撤销维修" [ref=e268] [cursor=pointer]
+        - button "collapsed 处理记录" [ref=e272] [cursor=pointer]:
+          - img "collapsed" [ref=e274]
+          - generic [ref=e277]: 处理记录
+      - group [ref=e278]:
+        - generic [ref=e279] [cursor=pointer]:
+          - img "info-circle" [ref=e280]
+          - text: 润丰同步说明
+  - generic [ref=e284]:
+    - dialog "不再维修":
+      - generic [ref=e285]:
+        - button "Close" [ref=e286] [cursor=pointer]:
+          - generic "Close" [ref=e287]:
+            - img "close" [ref=e288]
+        - generic [ref=e291]: 不再维修
+        - generic [ref=e294]:
+          - generic [ref=e296]:
+            - generic "不再维修原因（必填）" [ref=e298]: "* 不再维修原因（必填）"
+            - textbox "不再维修原因" [ref=e302]
+          - alert [ref=e308]:
+            - generic [ref=e309]: 请填写不再维修原因
+        - generic [ref=e303]:
+          - button "Cancel" [ref=e304] [cursor=pointer]
+          - button "确认撤销维修" [active] [ref=e306] [cursor=pointer]

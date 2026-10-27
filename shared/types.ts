@@ -110,16 +110,17 @@ export type VehicleHistoryLookupResult = {
 };
 
 export type PendingRepair = {
+ source?: "inspection" | "customer"; inspectionState?: "pending" | "scheduled" | "completed" | "cancelled"; sourceRound?:number; sourceRequestId?:string; lastOperationRequestId?:string; originalItem?:DispatchItem; cancelledItem?:DispatchItem;
  id: string; itemId: number; draftItemId?: number; name: string; reason: string;
  state: 'pending' | 'approved' | 'declined'; scheduled: boolean;
  /** Read-only projection of current/latest repair round; never a customer decision. */
- progress?: '待派工' | '待接单' | '待开工' | '维修中' | '暂停' | '待检验' | '检验通过' | '进度待核对';
+ progress?: '已撤销' | '待派工' | '待接单' | '待开工' | '维修中' | '暂停' | '待检验' | '检验通过' | '进度待核对';
  repairRound?: number;
- history: Array<{action: string; actor: string; at: string; note: string; respondent?: string}>;
+ history: Array<{action: string; actorId?:string; actor: string; at: string; note: string; respondent?: string}>;
 };
 export type PendingRepairList = { items: PendingRepair[]; version: number };
 export type PendingRepairCommand = DispatchExecution & {
- action: 'add' | 'approve' | 'decline' | 'schedule' | 'approve-and-schedule';
+ action: 'add' | 'approve' | 'decline' | 'schedule' | 'approve-and-schedule' | 'cancel';
  id?: string; name?: string; reason?: string; respondent?: string; note?: string;
  technicianId?: string; dueAt?: string; expectedVersion: number; requestId: string;
 };
@@ -442,6 +443,8 @@ export type DispatchTask = DispatchExecution & {
   settlementAssignment?: boolean;
   hasPartsHistory?:boolean;
   pendingRepairCount?:number;
+  inspectionDeferredCount?:number;
+  deferredItems?:DispatchItem[];
   partsRequirement?:PartsRequirement;
   partsRequests?:PartsRequirement[];
   workerPauses?:Record<string,{pauseReason?:string;pauseNote?:string;pausedAt?:string;resumeStage?:DispatchStage}>;
@@ -468,6 +471,7 @@ export type RepairItemEdit = {id?:number;name:string;responsibleId?:string;respo
 export type PartsPreparationGroup = {partsOwnerId?:string;items:Array<{index:number;recipientId:string}>};
 export type DispatchActionName = "update-technicians" | "update-due" | "send-review" | "submit-review" | "edit-repair-items" | "edit-parts" | "issue-parts" | "confirm-parts" | "record-parts" | "reopen-repair" | "retry-scheduler-notifications" | "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
 export type DispatchActionRequest = DispatchExecution & {
+  deferredItemIds?:number[]; deferredReason?:string;
   preparationGroups?:PartsPreparationGroup[];
   partsOwnerId?:string;
   partsIssue?:Array<{index:number;recipientId:string}>; partsPreparation?:Array<{index:number;recipientId:string}>;
@@ -494,7 +498,7 @@ export type DispatchNotification = {
 };
 export type DispatchEvent = {
   id: string; actorName: string; action: string; at: string;
-  detail: { roundKind?: 'additional' | 'rework'; preparationGroups?:Array<PartsPreparationGroup & {partsRequirement:PartsRequirement}>; partsIssue?:Array<{index:number;recipientId:string}>; partsPreparation?:Array<{index:number;recipientId:string}>; reassignItemIds?:number[]; previousItems?:DispatchItem[]; partsRequirement?:PartsRequirement; repairRound?:number; items?:DispatchItem[]; reworkItemIds?:number[]; additionalItems?:string[]; workHours?: number; previousWorkHours?: number; note?: string; reason?: string; technicianName?: string; previousTechnicianName?: string; dueAt?: string; previousDueAt?: string; urgent?: boolean; stage: DispatchStage; itemId?: number; rejectedItemIds?: number[]; pauseReason?: string };
+  detail: { deferredItemIds?:number[]; deferredReason?:string; roundKind?: 'additional' | 'rework'; preparationGroups?:Array<PartsPreparationGroup & {partsRequirement:PartsRequirement}>; partsIssue?:Array<{index:number;recipientId:string}>; partsPreparation?:Array<{index:number;recipientId:string}>; reassignItemIds?:number[]; previousItems?:DispatchItem[]; partsRequirement?:PartsRequirement; repairRound?:number; items?:DispatchItem[]; reworkItemIds?:number[]; additionalItems?:string[]; workHours?: number; previousWorkHours?: number; note?: string; reason?: string; technicianName?: string; previousTechnicianName?: string; dueAt?: string; previousDueAt?: string; urgent?: boolean; stage: DispatchStage; itemId?: number; rejectedItemIds?: number[]; pauseReason?: string };
 };
 export type RepairRound = { round:number; task:DispatchTask; reason:string; openedBy?:string; openedName:string; openedAt?:string; completedAt?:string; closed:boolean };
 export type RepairWriteback = {simulated?:boolean;id:string;repairRound?:number;status:"pending"|"synced"|"failed"|"manual";error:string;attempts:number;createdAt:string;syncedAt?:string;enabled:boolean};

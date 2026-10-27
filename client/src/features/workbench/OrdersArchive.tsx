@@ -89,7 +89,7 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
     <Card className="panel lower-panel">
       <div className="panel-header archive-header">
         <div>
-          <h2>{overview ? "工单全览" : "归档查询"}</h2>
+          <h2>{overview ? "派工单" : "归档查询"}</h2>
           <p>{overview ? "查看本店全部工单资料、维修流程，按分类下载照片 Word。" : "点击任一委托单可查看完整归档内容。"}</p>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minWidth: 0, maxWidth: "100%" }}>

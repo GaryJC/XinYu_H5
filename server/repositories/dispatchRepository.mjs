@@ -7,7 +7,8 @@ import { pool } from '../database/pool.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 import { assertDispatchAccess, canInspect, dispatchMetric, technicianIds } from '../domain/dispatchPolicy.mjs';
 const projection = `select wo.id as order_id, wo.shop_id, wo.vehicle_plate, wo.dispatch_no, wo.arrival_date,
-  (select count(*)::integer from jsonb_array_elements(wo.pending_repairs) p where p->>'state'='pending') as pending_repair_count,
+  (select count(*)::integer from jsonb_array_elements(wo.pending_repairs) p where p->>'state'='pending' and coalesce(p->>'source','customer')<>'inspection') as pending_repair_count,
+  (select count(*)::integer from jsonb_array_elements(wo.pending_repairs) p where p->>'source'='inspection' and p->>'inspectionState' in ('pending','scheduled')) as inspection_deferred_count,
   wo.vehicle_vin,wo.vehicle_model,wo.vehicle_mileage,wo.customer_name,wo.advisor,wo.status as order_status, wo.fault_description, wo.technician as legacy_technician,
   exists(select 1 from dispatch_events e where e.order_id=wo.id and e.action in ('accept','record-parts','edit-parts') and e.detail->'partsRequirement' is not null) as has_parts_history,
   dt.technician_id, dt.inspector_id, dt.stage, dt.version, dt.data,
@@ -20,7 +21,7 @@ export function mapTask(row) {
     technicianId:row.technician_id || undefined, inspectorId:row.inspector_id || undefined,
     stage:['草稿','待客户签字'].includes(row.order_status)?row.order_status:row.stage || (['待结算','完成'].includes(row.order_status)?'维修完成':row.order_status==='维修中'?'维修中':'待派工'),
     version:row.version || 0, plate:row.vehicle_plate, dispatchNo:row.dispatch_no || '', arrivalDate:row.arrival_date,
-    pendingRepairCount:row.pending_repair_count||0, orderStatus:row.order_status, faultDescription:row.fault_description };
+    pendingRepairCount:row.pending_repair_count||0, inspectionDeferredCount:row.inspection_deferred_count||0, orderStatus:row.order_status, faultDescription:row.fault_description };
   const ids=task.technicianIds??(task.technicianId?[task.technicianId]:[]);
   if(ids.length===1)task.items=task.items.map(item=>({...item,responsibleId:item.responsibleId||ids[0],responsibleName:item.responsibleName||(item.responsibleId&&item.responsibleId!==ids[0]?undefined:task.technicianName)}));
   task.overdue=dispatchMetric(task,'overdue');
@@ -56,7 +57,7 @@ export async function dispatchPeople(actor, client=pool) {
   return rows.map(r=>({id:r.id,name:r.name,role:r.role,roles:r.roles,active:r.active,shopId:r.shop_id,inspectorRoleMember:r.inspector_role_member,outsourcingRoleMember:r.outsourcing_role_member}));
 }
 export async function saveDispatchTask(client, task, { metadataOnly = false, techniciansOnly = false } = {}) {
-  const {hasPartsHistory,pendingRepairCount,orderId,shopId,technicianId,inspectorId,stage,version,plate,dispatchNo,arrivalDate,orderStatus,faultDescription,overdue,repairCatalog,vehicleVin,vehicleModel,vehicleMileage,customerName,advisor,...data}=task;
+  const {inspectionDeferredCount,hasPartsHistory,pendingRepairCount,orderId,shopId,technicianId,inspectorId,stage,version,plate,dispatchNo,arrivalDate,orderStatus,faultDescription,overdue,repairCatalog,vehicleVin,vehicleModel,vehicleMileage,customerName,advisor,...data}=task;
   await client.query(`insert into dispatch_tasks(order_id,shop_id,technician_id,inspector_id,stage,version,data)
     values($1,$2,$3,$4,$5,$6,$7) on conflict(order_id) do update set technician_id=excluded.technician_id,
     inspector_id=excluded.inspector_id,stage=excluded.stage,version=excluded.version,data=excluded.data,updated_at=now()`,
@@ -73,7 +74,7 @@ export async function saveDispatchTask(client, task, { metadataOnly = false, tec
   const started=task.firstStartedAt || task.startHistoryUnknown || task.items.some(i=>i.startAt || ['维修中','待检验','已完工'].includes(i.status));
   const status=task.settlementAssignment&&orderStatus!=='完成'?(stage==='维修完成'?'待结算':'维修中'):stage==='维修完成'?(orderStatus==='完成'?'完成':'待结算'):started?'维修中':'待派工';
   await client.query(`update work_orders set status=$2,technician=$3,inspector=$4,updated_at=now() where id=$1`,[orderId,status,task.technicianName||'待派工',task.inspectorName||'待检验']);
-  await client.query('delete from repair_items where order_id=$1 and not (client_item_id=any($2::bigint[]))',[orderId,task.items.map(item=>item.id)]);
+  await client.query('delete from repair_items where order_id=$1 and not (client_item_id=any($2::bigint[]))',[orderId,[...task.items,...(task.deferredItems||[])].map(item=>item.id)]);
   for(const [index,item] of task.items.entries()) await client.query(`insert into repair_items(order_id,client_item_id,item_no,name) values($1,$2,$3,$4)
     on conflict(order_id,client_item_id) do update set name=excluded.name,item_no=excluded.item_no`,[orderId,item.id,index+1,item.name]);
   for(const item of task.items) await client.query(`update repair_items set owner=$3,status=$4,start_at=$5,finish_at=$6,inspector=$7 where order_id=$1 and client_item_id=$2`,[orderId,item.id,item.responsibleName||task.technicianName||'待派工',item.status,item.startAt||'',item.finishAt||'',item.inspectorName||'待检验']);

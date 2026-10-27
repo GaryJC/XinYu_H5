@@ -14,3 +14,5 @@
 
 .inspection-notes>.business-form-section-heading{display:none}
 .dispatch-form .inspection-notes.business-form-section{margin-top:20px;padding-top:0;border-top:0}
+
+.inspection-item.is-deferred{border-color:#ffe0a3;background:#fffbf0}

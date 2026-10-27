@@ -1,3 +1,4 @@
+import {validateDeferredNotification} from '../repositories/inspectionDeferredRepository.mjs';
 import { hasRole } from "../../shared/roles.mjs";
 import { validateSignatureReviewRecipient } from '../repositories/customerSignatureReviewRepository.mjs';
 import { validateInspectionRecipient } from '../repositories/dispatchRepository.mjs';
@@ -8,12 +9,13 @@ import { queueDueReminders, validateDueReminder } from './dueReminders.mjs';
 import { processInspectionNotifications } from './inspectionNotifications.mjs';
 import { notificationConfiguration,sendWorkNotification,queryWorkNotification } from '../integrations/dingtalk/notifications.mjs';
 import { claimNotification,finishNotification,notificationRecipient,validateAddedRepairRecipient } from '../repositories/dispatchNotificationRepository.mjs';
-export async function processNotification({claim=claimNotification,finish=finishNotification,recipient=notificationRecipient,send=sendWorkNotification,query=queryWorkNotification,validateParts=(row,user)=>validatePartsPickupNotification(row,user,pool),validateInspection=validateInspectionRecipient,validateDue=validateDueReminder,validateScheduler=validateSchedulerRecipient,validateAddedRepair=validateAddedRepairRecipient}={}) {
+export async function processNotification({claim=claimNotification,finish=finishNotification,recipient=notificationRecipient,send=sendWorkNotification,query=queryWorkNotification,validateParts=(row,user)=>validatePartsPickupNotification(row,user,pool),validateInspection=validateInspectionRecipient,validateDue=validateDueReminder,validateScheduler=validateSchedulerRecipient,validateAddedRepair=validateAddedRepairRecipient,validateDeferred=(row,user)=>validateDeferredNotification(row,user,pool)}={}) {
   const row=await claim(); if(!row) return false;
   let result; let sendStarted=false;
   try {
     const user=await recipient(row.recipient_id);
     if(row.previous_status!=='pending') result=await query(row,user?.dingtalk_user_id);
+    else if(['检验项目待定','待定项目派工','待定维修已撤销'].includes(row.kind)&&!await validateDeferred(row,user)) result={status:'failed',error:'待定项目状态或接收人权限已变化',retryable:false};
     else if(row.kind==='需确认用户签字' && !await validateSignatureReviewRecipient(row,user)) result={status:'failed',error:'签字已确认或收件人已无权限',retryable:false};
     else if(['新增维修项目','追加维修派工'].includes(row.kind) && !await validateAddedRepair(row,user)) result={status:'failed',error:'项目进度、维修轮次或负责人已变化，旧追加维修通知已取消',retryable:false};
     else if(row.kind==='待检验' && !await validateInspection(row,user)) result={status:'failed',error:'任务状态、检验人或本店独立检验权限已变化，旧检验通知已取消',retryable:false};
