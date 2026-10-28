@@ -1,4 +1,7 @@
-.vehicle-nameplate-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-.vehicle-nameplate-heading h3 { margin: 0; }
+.vehicle-nameplate-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; min-height: 32px; }
+.vehicle-nameplate-heading h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.vehicle-nameplate > p { margin: 0 0 16px; font-size: 12px; line-height: 1.7; color: #788497; }
+.vehicle-nameplate > .dispatch-muted { margin: 10px 0 0; }
+.ant-modal-body > .vehicle-nameplate { margin-top: 16px; padding: 16px; background: #f7f9fc; border: 1px solid #e8ecf1; border-radius: 10px; }
 .vehicle-nameplate-preview { overflow: hidden; border-radius: 12px; background: #f5f7fa; }
 .vehicle-nameplate-preview .ant-image-img { object-fit: contain; }

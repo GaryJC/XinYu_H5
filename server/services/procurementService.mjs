@@ -1,3 +1,4 @@
+import {assertProcurementPhotos} from '../repositories/procurementPhotoRepository.mjs';
 import { isDeepStrictEqual } from "node:util";
 import { createHash,randomBytes,randomUUID } from 'node:crypto';
 import { pool,transaction } from '../database/pool.mjs';
@@ -26,7 +27,7 @@ export async function listTenders(user) {procurementAccess(user);return repo.rea
 export async function tenderDetail(user,id) {procurementAccess(user);const result=await repo.detail(user.shopId,uuid(id));if(!result)throw missing();return result;}
 export async function publishTender(user,body) {
   procurementAccess(user);const input=tenderInput(body);
-  return transaction(async db=>{await actor(user,db);const id=randomUUID();const saved=await repo.createTender(db,user,id,input);
+  return transaction(async db=>{await actor(user,db);await assertProcurementPhotos(db,user.shopId,[...input.data.nameplatePhotoIds,...input.data.otherPhotoIds]);const id=randomUUID();const saved=await repo.createTender(db,user,id,input);
     if(!saved){const prior=await repo.tenderRequest(db,user,input.requestId);if(!same(prior.request_body,input))throw new HttpError(409,'请求编号已被其他内容使用');return {tender:(await repo.readTenders(user.shopId,{id:prior.id},db))[0],links:[]};}
     const links=[];
     for(const supplierId of [...input.supplierIds].sort()) {
@@ -48,6 +49,7 @@ export async function tenderAction(user,id,body) {
       if(!['open','closed'].includes(tender.status))throw new HttpError(409,'已结标或取消的询价不能编辑');
       if(body.expectedVersion!==tender.version)throw new HttpError(409,'询价已变化，请刷新后重新编辑');
       const input=tenderInput({...body,requestId:randomUUID(),supplierIds:tender.invitations.map(i=>i.supplierId)});
+      await assertProcurementPhotos(db,user.shopId,[...input.data.nameplatePhotoIds,...input.data.otherPhotoIds]);
       const {deliveryAddress:ignored,...previousTerms}=tender.data;
       const termsChanged=!same(input.data,previousTerms),deadlineChanged=input.deadline!==tender.deadline;
       if(!termsChanged&&!deadlineChanged)return repo.detail(user.shopId,id,db);
@@ -159,4 +161,9 @@ export async function resumePortal(session,body) {
   const current=await repo.sessionLink(pool,hashToken(session||''));
   if(!current||current.token_hash!==hashToken(token))throw new HttpError(401,'请填写供应商信息');
   return portal(session);
+}
+
+export async function authorizePortalPhoto(session,id) {
+ const view=await portal(session);
+ if(view.kind!=='quote'||![...(view.terms.nameplatePhotoIds||[]),...(view.terms.otherPhotoIds||[])].includes(id))throw new HttpError(403,'无权查看此询价照片');
 }

@@ -4,11 +4,13 @@ import fs from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import pg from 'pg';
+import os from 'node:os';
+import path from 'node:path';
 const adminUrl=process.env.PROCUREMENT_TEST_ADMIN_URL;
 test('procurement PostgreSQL, supplier isolation, concurrency, reports and notification persistence',{skip:!adminUrl,timeout:120000},async t=>{
   const url=new URL(adminUrl);assert.ok(['localhost','127.0.0.1','[::1]'].includes(url.hostname),'Only an isolated local test database is allowed');
   const connectionsClosed=[];
-  const admin=new pg.Client({connectionString:adminUrl}),name=`codex_procurement_${Date.now()}_${process.pid}`;let pool,server;
+  const admin=new pg.Client({connectionString:adminUrl}),name=`codex_procurement_${Date.now()}_${process.pid}`;let pool,server,uploadRoot;
   await admin.connect();
   try{
     await admin.query(`create database "${name}"`);url.pathname=`/${name}`;
@@ -25,7 +27,7 @@ test('procurement PostgreSQL, supplier isolation, concurrency, reports and notif
     const suppliers=[];
     for(let n=0;n<6;n++)suppliers.push(await s.updateSupplier(warehouse,null,{name:`供应商${n}`,contactName:`联系人${n}`,phone:`1380000000${n}`,categories:'制动',note:'内部信息',active:true}));
     const future=days=>new Date(Date.now()+days*86400000).toISOString();
-    const body=()=>({partName:'刹车片',category:'制动',specification:'P-1',brand:'原厂',quantity:2,unit:'件',deliveryAddress:'门店',deliveryBy:future(3),paymentTerms:'含税发票',qualityRequirements:'全新',imageUrls:[],supplierIds:suppliers.slice(0,5).map(v=>v.id),deadline:null,requestId:randomUUID()});
+    const body=()=>({partName:'刹车片',vin:'LSVAB1234A1234567',category:'制动',specification:'P-1',brand:'原厂',quantity:2,unit:'件',deliveryAddress:'门店',deliveryBy:future(3),paymentTerms:'含税发票',qualityRequirements:'全新',imageUrls:[],supplierIds:suppliers.slice(0,5).map(v=>v.id),deadline:null,requestId:randomUUID()});
     const quote=(price,invitationId)=>({invitationId,requestId:randomUUID(),unitPriceFen:price,freightFen:0,deliveryAt:future(2),meetsRequirements:true,declined:false,note:'可供货'});
     let created,sessions=[];
     await t.test('exclusive equal roles, cross-store denial, supplier archives and idempotent publication',async()=>{
@@ -39,6 +41,33 @@ test('procurement PostgreSQL, supplier isolation, concurrency, reports and notif
       assert.equal((await s.listTenders(manager)).length,1);
       assert.equal((await pool.query('select count(*) from procurement_notification_jobs')).rows[0].count,'1');
       await assert.rejects(()=>s.publishTender(manager,{...input,partName:'其他配件'}),e=>e.status===409);
+    });
+    await t.test('nameplate uploads are private, idempotent, scoped to shop and supplier invitation',async()=>{
+      uploadRoot=await fs.mkdtemp(path.join(os.tmpdir(),'procurement-photo-'));process.env.LOCAL_UPLOAD_ROOT=uploadRoot;
+      const photos=await import('../server/services/procurementPhotoService.mjs');
+      const input={requestId:randomUUID(),mimeType:'image/png',imageBase64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aY9sAAAAASUVORK5CYII='};
+      await assert.rejects(()=>photos.uploadProcurementPhoto(advisor,input),e=>e.status===403);
+      const uploaded=await Promise.all([photos.uploadProcurementPhoto(manager,input),photos.uploadProcurementPhoto(manager,input)]);
+      assert.equal(uploaded[0].id,uploaded[1].id);
+      const id=uploaded[0].id;
+      const otherId=(await photos.uploadProcurementPhoto(manager,{...input,requestId:randomUUID()})).id;
+      await assert.rejects(()=>s.publishTender(outside,{...body(),otherPhotoIds:[otherId]}),e=>e.status===403);
+      await assert.rejects(()=>photos.procurementPhoto(outside,id),e=>e.status===403);
+      await assert.rejects(()=>s.publishTender(outside,{...body(),nameplatePhotoIds:[id]}),e=>e.status===403);
+      assert.ok((await photos.procurementPhoto(warehouse,id)).body.length);
+      const withPhoto=await s.publishTender(manager,{...body(),nameplatePhotoIds:[id],otherPhotoIds:[otherId],vehicleModel:'NKR77'});
+      const supplier=suppliers.find(v=>v.name===withPhoto.links[0].supplierName);
+      const session=(await s.verifyPortal({token:withPhoto.links[0].token,phone:supplier.phone,identity:supplier.name},'photo-ip')).session;
+      await s.authorizePortalPhoto(session,id);
+      await s.authorizePortalPhoto(session,otherId);
+      assert.deepEqual((await s.portal(session)).terms.otherPhotoIds,[otherId]);
+      const unrelated=(await s.verifyPortal({token:created.links[0].token,phone:supplier.phone,identity:supplier.name},'unrelated-ip')).session;
+      await assert.rejects(()=>s.authorizePortalPhoto(unrelated,id),e=>e.status===403);
+      await assert.rejects(()=>s.authorizePortalPhoto(unrelated,otherId),e=>e.status===403);
+      const tender=withPhoto.tender;
+      await s.tenderAction(manager,tender.id,{action:'revoke-link',invitationId:tender.invitations.find(i=>i.supplierId===supplier.id).id});
+      await assert.rejects(()=>s.authorizePortalPhoto(session,id),e=>e.status===401);
+      await s.tenderAction(manager,tender.id,{action:'cancel',reason:'测试结束'});
     });
     await t.test('supplier information matching, sessions and zero competitor disclosure',async()=>{
       for(let n=0;n<created.links.length;n++){
@@ -178,6 +207,7 @@ test('procurement PostgreSQL, supplier isolation, concurrency, reports and notif
       let limited=false;for(let n=0;n<25;n++){const response=await req({});if(response.status===429){limited=true;break;}}assert.ok(limited);
     });
   } finally {
+    if(uploadRoot)await fs.rm(uploadRoot,{recursive:true,force:true});
     if(server){server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
     if(pool){await pool.end();await Promise.all(connectionsClosed);}
     await admin.query(`drop database if exists "${name}" with (force)`);await admin.end();

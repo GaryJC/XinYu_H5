@@ -1,12 +1,17 @@
+import {uploadProcurementPhoto,procurementPhoto} from '../services/procurementPhotoService.mjs';
+import {readStoredFile} from '../storage.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 import { readJson,sendJson } from '../http/response.mjs';
 import * as service from '../services/procurementService.mjs';
+function sendPhoto(res,file) {res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Content-Type',file.record.mimeType);res.end(file.body);}
 const cookieName='procurement_supplier';
 async function readInput(req) {const input=await readJson(req);if(!input||typeof input!=='object'||Array.isArray(input))throw new HttpError(400,'请求内容必须是JSON对象');return input;}
 function sessionCookie(req) {return (req.headers.cookie||'').split(';').map(v=>v.trim()).find(v=>v.startsWith(`${cookieName}=`))?.slice(cookieName.length+1)||'';}
 export async function handleSupplierPortal(req,res,url) {
   if(!url.pathname.startsWith('/api/supplier-portal/'))return false;
   res.setHeader('Cache-Control','no-store');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Content-Type-Options','nosniff');
+  const photo=url.pathname.match(/^\/api\/supplier-portal\/photos\/([^/]+)$/);
+  if(photo&&req.method==='GET'){await service.authorizePortalPhoto(sessionCookie(req),photo[1]);sendPhoto(res,await readStoredFile(photo[1]));return true;}
   if(req.method==='POST') {
     // JSON-only mutations and same-origin checks prevent form-based and cross-site session injection.
     if(!String(req.headers['content-type']||'').toLowerCase().startsWith('application/json'))throw new HttpError(415,'请使用JSON请求');
@@ -29,7 +34,10 @@ export async function handleProcurement(req,res,url,user) {
   if(!url.pathname.startsWith('/api/procurement/'))return false;
   res.setHeader('Cache-Control','no-store');
   const suffix=url.pathname.slice('/api/procurement/'.length),method=req.method;
+  const photo=suffix.match(/^photos\/([^/]+)$/);
+  if(photo&&method==='GET'){sendPhoto(res,await procurementPhoto(user,photo[1]));return true;}
   let result;
+  if(suffix==='photos'&&method==='POST'){sendJson(res,200,await uploadProcurementPhoto(user,await readInput(req)));return true;}
   if(suffix==='suppliers'&&method==='GET')result=await service.listSuppliers(user);
   else if(suffix==='suppliers'&&method==='POST')result=await service.updateSupplier(user,null,await readInput(req));
   else if(/^suppliers\/[^/]+$/.test(suffix)&&method==='PUT')result=await service.updateSupplier(user,suffix.split('/')[1],await readInput(req));

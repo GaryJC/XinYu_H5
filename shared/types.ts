@@ -550,7 +550,7 @@ export type ProcurementSupplier = {
 };
 export type ProcurementSupplierInput = Omit<ProcurementSupplier, 'id'>;
 export type ProcurementTerms = {
-  partName: string; category: string; specification: string; brand: string; quantity: number; unit: string;
+  vehicleModel?: string; vin?: string; nameplatePhotoIds?: string[]; otherPhotoIds?: string[]; partName: string; category: string; specification: string; brand: string; quantity: number; unit: string;
   deliveryBy: string; paymentTerms: string; qualityRequirements: string; imageUrls: string[];
 };
 export type ProcurementCreateInput = ProcurementTerms & { supplierIds: string[]; deadline: string | null; requestId: string };

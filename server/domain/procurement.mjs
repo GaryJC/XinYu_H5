@@ -32,9 +32,15 @@ export function tenderInput(input,now=Date.now()) {
   if(!Array.isArray(input.supplierIds)||input.supplierIds.length<1||input.supplierIds.length>100||new Set(input.supplierIds).size!==input.supplierIds.length) throw new HttpError(400,'请选择1至100家不同供应商');
   const imageUrls=input.imageUrls??[];
   if(!Array.isArray(imageUrls)||imageUrls.length>5||imageUrls.some(u=>{try{const url=new URL(u);return url.protocol!=='https:'||url.username||url.password||u.length>2000;}catch{return true;}})) throw new HttpError(400,'最多填写5个HTTPS配件图片地址');
+  const vin=text(input.vin??'','车架号',17,false).toUpperCase();
+  if(vin&&!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin))throw new HttpError(400,'请输入17位车架号，不含 I、O、Q');
+  const nameplatePhotoIds=input.nameplatePhotoIds??[];
+  if(!Array.isArray(nameplatePhotoIds)||nameplatePhotoIds.length>1||new Set(nameplatePhotoIds).size!==nameplatePhotoIds.length||nameplatePhotoIds.some(id=>typeof id!=='string'||!/^file_[A-Za-z0-9_-]+$/.test(id)))throw new HttpError(400,'铭牌照片只能上传1张，且必须为有效照片');
+  const otherPhotoIds=input.otherPhotoIds??[];
+  if(!Array.isArray(otherPhotoIds)||otherPhotoIds.length>10||new Set(otherPhotoIds).size!==otherPhotoIds.length||otherPhotoIds.some(id=>typeof id!=='string'||!/^file_[A-Za-z0-9_-]+$/.test(id)||nameplatePhotoIds.includes(id)))throw new HttpError(400,'其他照片最多10张，且不能重复');
   return {requestId:uuid(input.requestId),supplierIds:input.supplierIds.map(uuid),deadline,data:{
-    partName:text(input.partName,'配件名称',100),category:text(input.category,'配件分类',100),
-    specification:text(input.specification,'规格',1000),brand:text(input.brand,'品牌要求',100),quantity,unit:text(input.unit,'单位',20),
+    partName:text(input.partName,'配件名称',100),vehicleModel:text(input.vehicleModel??'','车辆型号',100,false),vin,nameplatePhotoIds,otherPhotoIds,category:text(input.category??'','配件分类',100,false),
+    specification:text(input.specification??'','规格',1000,false),brand:text(input.brand??'','品牌要求',100,false),quantity,unit:text(input.unit,'单位',20),
     deliveryBy,paymentTerms:text(input.paymentTerms,'发票及付款要求',500),
     qualityRequirements:text(input.qualityRequirements??'','质量要求',1000,false),imageUrls}};
 }

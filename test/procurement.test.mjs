@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { procurementAccess,quoteInput,tenderInput,settlement,effectiveStatus } from '../server/domain/procurement.mjs';
 import { analyze,supplierReport } from '../server/services/procurementAnalytics.mjs';
 const date='2026-10-15T10:00:00.000Z';
-const terms={partName:'刹车片',category:'制动',specification:'P-1',brand:'指定品牌',quantity:2,unit:'件',deliveryAddress:'门店',deliveryBy:'2026-12-01T00:00:00.000Z',paymentTerms:'含税含运费',qualityRequirements:'原厂',imageUrls:[]};
+const terms={partName:'刹车片',vin:'LSVAB1234A1234567',category:'制动',specification:'P-1',brand:'指定品牌',quantity:2,unit:'件',deliveryAddress:'门店',deliveryBy:'2026-12-01T00:00:00.000Z',paymentTerms:'含税含运费',qualityRequirements:'原厂',imageUrls:[]};
 const offer=(id,price,extra={})=>({id,supplierId:id,supplierName:id,invalidReason:'',quotes:[{totalFen:price,deliveryAt:date,meetsRequirements:true,declined:false,...extra}]});
 const tender=(id,invitations,extra={})=>({id,data:terms,status:'awarded',closedAt:date,winnerId:invitations[0].supplierId,invitations,...extra});
 test('procurement belongs exclusively to active store managers and warehouse staff',()=>{
@@ -66,4 +66,23 @@ test('fractional quantities round money exactly without floating point drift',()
 test('quotes for superseded procurement requirements are excluded from settlement',()=>{
   const t=tender('revision',[offer('a',100),offer('b',120,{termsVersion:2})],{status:'closed',termsVersion:2});
   assert.equal(settlement(t,{action:'settle'}).winnerId,'b');
+});
+
+test('new procurement permits omitted VIN, classification, specification and brand',()=>{
+ const input={...terms,requestId:randomUUID(),supplierIds:[randomUUID()],deadline:null};
+ const result=tenderInput({...input,category:undefined,specification:undefined,brand:undefined},Date.parse(date));
+ assert.equal(result.data.vin,terms.vin);assert.equal(result.data.category,'');assert.equal(result.data.specification,'');assert.equal(result.data.brand,'');
+ for(const vin of [undefined,null,'','   '])assert.equal(tenderInput({...input,vin},Date.parse(date)).data.vin,'');
+ assert.equal(tenderInput({...input,vin:terms.vin.toLowerCase()},Date.parse(date)).data.vin,terms.vin);
+ for(const vin of ['ABC','LSVAB1234A123456I',123])assert.throws(()=>tenderInput({...input,vin},Date.parse(date)),e=>e.status===400);
+ for(const nameplatePhotoIds of [['invalid'],['file_a','file_b'],['file_same','file_same']])assert.throws(()=>tenderInput({...input,nameplatePhotoIds},Date.parse(date)),e=>e.status===400);
+});
+
+test('tender photos allow one nameplate and ten distinct supporting images',()=>{
+ const input={...terms,requestId:randomUUID(),supplierIds:[randomUUID()],deadline:null,nameplatePhotoIds:['file_plate']};
+ const otherPhotoIds=Array.from({length:10},(_,i)=>`file_other_${i}`);
+ assert.deepEqual(tenderInput({...input,otherPhotoIds},Date.parse(date)).data.otherPhotoIds,otherPhotoIds);
+ for(const ids of [[...otherPhotoIds,'file_extra'],['file_same','file_same'],['file_plate'],['invalid'],'file_other'])
+  assert.throws(()=>tenderInput({...input,otherPhotoIds:ids},Date.parse(date)),e=>e.status===400);
+ assert.deepEqual(tenderInput(input,Date.parse(date)).data.otherPhotoIds,[]);
 });

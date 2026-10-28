@@ -2,6 +2,7 @@ import { request } from '../../shared/api/httpClient';
 import type { ProcurementSupplier,ProcurementSupplierInput,ProcurementTender,ProcurementCreateInput,ProcurementDetail,ProcurementLink,ProcurementAnalytics,ProcurementReportRecord,ProcurementAudit,ProcurementPortal,ProcurementQuoteInput } from '../../../../shared/types';
 const root='/api/procurement';
 export const procurementApi={
+  uploadPhoto:(body:{imageBase64:string;mimeType:string;fileName?:string;requestId:string})=>request<{id:string}>(`${root}/photos`,{method:'POST',body}),
   suppliers:()=>request<ProcurementSupplier[]>(`${root}/suppliers`),
   saveSupplier:(input:ProcurementSupplierInput,id?:string)=>request<ProcurementSupplier>(`${root}/suppliers${id?`/${id}`:''}`,{method:id?'PUT':'POST',body:input}),
   tenders:()=>request<ProcurementTender[]>(`${root}/tenders`),

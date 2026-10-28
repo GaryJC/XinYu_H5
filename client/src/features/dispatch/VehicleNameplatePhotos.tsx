@@ -1,4 +1,4 @@
-import {VehicleNameplateIllustration} from './VehicleNameplateIllustration';
+import {VehicleNameplateIllustration} from '../../shared/ui/VehicleNameplateIllustration';
 import {useRef,useState} from 'react';
 import {Alert,Button,Popover} from 'antd';
 import {ReloadOutlined} from '@ant-design/icons';

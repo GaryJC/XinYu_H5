@@ -26,7 +26,7 @@ export function SupplierPortalPage() {
       <Card title={`${data.supplierName} · ${data.terms.partName}`} extra={<Button loading={p.busy} onClick={()=>void p.refresh()}>刷新状态</Button>}>
         <Alert type={data.status==='awarded'?'success':'info'} title={`${statusLabels[data.status]} · ${data.result}`} description={`报价截止：${dateTime(data.deadline)}。供应商之间的报价互不可见。`}/>
         {data.quotes[0]&&data.quotes[0].termsVersion!==data.termsVersion?<Alert type="warning" showIcon title="采购要求已修改，请核对最新信息并重新提交报价。原报价暂不参与比价。"/>:null}
-        <ProcurementTermsView terms={data.terms}/>
+        <ProcurementTermsView terms={data.terms} portal/>
       </Card>
       {open?<Card title={data.quotes.length?'修改并重新提交报价':'提交报价'}><Form form={form} layout="vertical" initialValues={{unitPrice:data.quotes[0]?.unitPriceFen?data.quotes[0].unitPriceFen/100:undefined,freight:(data.quotes[0]?.freightFen||0)/100,
         deliveryAt:localDateTime(new Date(data.quotes[0]?.deliveryAt||data.terms.deliveryBy)),note:data.quotes[0]?.note||'',meetsRequirements:false}}
