@@ -12,7 +12,7 @@ function prune() { for (const [key,value] of downloads) if (value.expiresAt <= D
 const timer = setInterval(prune, 60000); timer.unref();
 export function validatePhotoCategories(input) {
   const categories = input?.categories;
-  if (!Array.isArray(categories) || !categories.length || categories.length > 3 || categories.some(key => !Object.hasOwn(photoAlbumLabels,key)) || new Set(categories).size !== categories.length) throw new HttpError(400,'请选择有效的照片分类');
+  if (!Array.isArray(categories) || !categories.length || categories.length > Object.keys(photoAlbumLabels).length || categories.some(key => !Object.hasOwn(photoAlbumLabels,key)) || new Set(categories).size !== categories.length) throw new HttpError(400,'请选择有效的照片分类');
   return categories;
 }
 export async function prepareOrderPhotoExport(id, input, user) {
@@ -35,7 +35,7 @@ export async function prepareOrderPhotoExport(id, input, user) {
     if ([...downloads.values()].reduce((sum,file)=>sum+file.body.length,body.length) > 96*1024*1024) throw new HttpError(503,'文件服务繁忙，请稍后重试');
     const token = randomBytes(32).toString('hex');
     const expiresAt = Date.now()+5*60000;
-    const fileName = `${order.vehicle.plate || order.id}-${categories.length===3?'全部照片':categories.map(key=>photoAlbumLabels[key]).join('-')}.docx`.replace(/[\r\n/\\]/g,'_');
+    const fileName = `${order.vehicle.plate || order.id}-${categories.length===Object.keys(photoAlbumLabels).length?'全部照片':categories.map(key=>photoAlbumLabels[key]).join('-')}.docx`.replace(/[\r\n/\\]/g,'_');
     downloads.set(token,{body,fileName,expiresAt,userId:user.id});
     return {path:`/api/order-photo-documents/${token}.docx`,fileName,expiresAt:new Date(expiresAt).toISOString(),photoCount:photos.length};
   } finally {running.delete(user.id);}

@@ -1,0 +1,4 @@
+.vehicle-nameplate-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.vehicle-nameplate-heading h3 { margin: 0; }
+.vehicle-nameplate-preview { overflow: hidden; border-radius: 12px; background: #f5f7fa; }
+.vehicle-nameplate-preview .ant-image-img { object-fit: contain; }

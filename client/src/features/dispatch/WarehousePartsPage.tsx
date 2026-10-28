@@ -56,7 +56,7 @@ export function WarehousePartsPage({controller:source}:{controller:DispatchContr
       <p className="warehouse-muted">申请时间：{displayTime(task.partsRequirement?.recordedAt)}</p>
     </Card>)}
     <Drawer destroyOnHidden title="配件申请详情" className="warehouse-drawer" open={Boolean(c.selectedId)} onClose={()=>{if(!c.busy){setIssuing(false);c.select();}}} size={600} styles={{wrapper:{maxWidth:'100vw'}}}
-      footer={detail?<div className="warehouse-footer"><p>{actionable?`${available.length} ${available.every(t=>t.partsRequirement?.ownerId)?'人':'份'}申请 · ${pendingItems} 项待备料${photoRequests?` · ${photoRequests} 份照片清单待整理`:''}`:allPrepared?'备料已完成':'当前申请暂不可处理'}</p>{actionable?<Button block size="large" type="primary" disabled={c.busy||!pendingItems} onClick={()=>setIssuing(true)}>确认备料</Button>:<Button block onClick={()=>c.select()}>关闭详情</Button>}</div>:null}>
+      footer={detail?<div className="warehouse-footer"><p>{actionable?`${available.length} ${available.every(t=>t.partsRequirement?.ownerId)?'人':'份'}申请 · ${pendingItems} 项待备料${photoRequests?` · ${photoRequests} 份照片清单待备料`:''}`:allPrepared?'备料已完成':'当前申请暂不可处理'}</p>{actionable?<Button block size="large" type="primary" disabled={c.busy||(!pendingItems&&!photoRequests)} onClick={()=>setIssuing(true)}>确认备料</Button>:<Button block onClick={()=>c.select()}>关闭详情</Button>}</div>:null}>
       {c.error?<Alert type="error" showIcon title={c.error}/>:null}
       {!detail?<p role="status">正在加载申请…</p>:<WarehousePartsDetail key={`${detail.task.orderId}-${owner||"legacy"}`} detail={detail} controller={source} onOpenOrder={()=>setWorkOrderId(detail.task.orderId)}/>}
     </Drawer>

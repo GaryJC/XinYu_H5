@@ -9,7 +9,7 @@ import { measureStage } from "./http/requestTiming.mjs";
 let ossClient;
 const pendingThumbnails = new Map();
 
-const allowedFileKinds = new Set(["repair_completed_photo", "repair_parts_photo", "repair_progress_photo", "vehicle_license", "repair_order_photo", "damage_photo", "signature_image", "other"]);
+const allowedFileKinds = new Set(["vehicle_nameplate_photo", "repair_completed_photo", "repair_parts_photo", "repair_progress_photo", "vehicle_license", "repair_order_photo", "damage_photo", "signature_image", "other"]);
 const allowedImageMimeTypes = new Set([
   "image/jpeg",
   "image/png",

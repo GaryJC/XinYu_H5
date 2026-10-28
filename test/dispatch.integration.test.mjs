@@ -38,14 +38,17 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
     ];
     for(const p of people) await pool.query('insert into users(id,name,role,shop_id,active,dingtalk_user_id) values($1,$2,$3,$4,$5,$6)',[p.id,p.name,p.role,p.shopId,p.active,`ding-${p.id}`]);
     const [manager,dispatcher,tech,tech2,unique,inspector,advisor,outside]=people;
+    let schemaReady=false;
     async function seed(id,status='已委托',technician='待派工'){
       await pool.query(`insert into work_orders(id,status,advisor,technician,inspector,shop_id,old_parts_handling,vehicle_plate,arrival_date) values($1,$2,'顾问',$3,'待检验','shop-hq','客户带走','鲁B12345','2026-09-11')`,[id,status,technician]);
       for(const item of [1,2]) await pool.query(`insert into repair_items(order_id,client_item_id,item_no,name,status) values($1,$2::bigint,$2::integer,$3,'待派工')`,[id,item,`项目${item}`]);
+      if(schemaReady)await progressPhoto(id,0,'vehicle_nameplate_photo');
     }
     await seed('legacy-ambiguous','维修中','同名技师');await seed('legacy-unique','待结算','唯一技师');
     await pool.query(await fs.readFile('supabase/migrations/202609110001_dispatch_management.sql','utf8'));
     await pool.query(await fs.readFile('supabase/migrations/202609110002_advisor_dispatch_plans.sql','utf8'));
     for(const file of files.filter(f=>f>'202609110002_advisor_dispatch_plans.sql')) await pool.query(await fs.readFile(`supabase/migrations/${file}`,'utf8'));
+    schemaReady=true;
     await pool.query("update users set legacy_employee_code='027',legacy_employee_name=name,legacy_employee_department='test',legacy_employee_bound_at=now() where role='technician'");
     await pool.query("insert into users(id,name,role,shop_id,active) values('external','测试外包单位','outsourcing','shop-hq',true)");
     dispatcher.role='advisor';
@@ -616,6 +619,40 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal(whole.workHours,undefined);assert.equal(whole.workHoursRecordedBy,undefined);
       const {assertInspectionCompleted}=await import('../server/repositories/dispatchRepository.mjs');
       await assertInspectionCompleted(pool,'whole');
+    });
+    await t.test('nameplate upload, shared acceptance, replacement and outbox commit atomically',async()=>{
+      const id='nameplate-flow';await seed(id);
+      await pool.query('delete from files where order_id=$1',[id]);
+      let current=(await service.executeDispatchAction(advisor,id,{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianIds:[tech.id,tech2.id],dueAt})).task;
+      const command=(action)=>({action,expectedVersion:current.version,requestId:randomUUID(),partsRequirement:{mode:'list',items:[{name:'滤芯',quantity:1,unit:'个'}]}});
+      await assert.rejects(()=>service.executeDispatchAction(tech,id,command('accept')),e=>e.status===400&&/铭牌/.test(e.message));
+      assert.equal((await service.dispatchDetail(manager,id)).task.version,current.version);
+      const {uploadRepairPhoto}=await import('../server/services/repairPhotoService.mjs');
+      const {createFileRecord}=await import('../server/repositories/fileRepository.mjs');
+      const save=data=>createFileRecord({...data,storageProvider:'local',bucket:'local',objectKey:'nameplate-fixture',sizeBytes:8});
+      const upload={purpose:'nameplate',requestId:randomUUID(),repairRound:0,mimeType:'image/png',imageBase64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aY9sAAAAASUVORK5CYII='};
+      await assert.rejects(()=>uploadRepairPhoto(tech,id,upload,{save:async data=>{await save(data);throw Error('storage failure');}}),/storage failure/);
+      assert.equal((await pool.query('select 1 from files where order_id=$1',[id])).rowCount,0);
+      const first=await uploadRepairPhoto(tech,id,upload,{save});
+      assert.equal((await service.dispatchDetail(manager,id)).task.vehicleNameplateFileId,first.id);
+      assert.equal((await pool.query("select 1 from dispatch_notifications where order_id=$1 and kind='车辆铭牌已更新'",[id])).rowCount,0);
+      current=(await service.executeDispatchAction(tech,id,command('accept'))).task;
+      current=(await service.executeDispatchAction(tech2,id,command('record-parts'))).task;
+      const replacement={...upload,requestId:randomUUID()};
+      const second=await uploadRepairPhoto(tech2,id,replacement,{save});
+      assert.equal((await uploadRepairPhoto(tech2,id,replacement,{save})).id,second.id);
+      const detail=await service.dispatchDetail(manager,id);
+      assert.equal(detail.task.vehicleNameplateFileId,second.id);
+      assert.equal(detail.files.filter(f=>f.kind==='vehicle_nameplate_photo').length,2);
+      const warehouse={id:'warehouse',name:'仓管',role:'warehouse',active:true,shopId:'shop-hq'};
+      await assertFileReadAccess(second.id,warehouse);
+      await assert.rejects(()=>assertFileReadAccess(second.id,{...warehouse,shopId:'other'}),e=>e.status===403);
+      const notices=(await pool.query("select * from dispatch_notifications where order_id=$1 and kind='车辆铭牌已更新'",[id])).rows;
+      assert.equal(notices.length,1);
+      const {validateNameplateNotification}=await import('../server/repositories/vehicleNameplateRepository.mjs');
+      assert.equal(await validateNameplateNotification(notices[0],warehouse,pool),true);
+      await uploadRepairPhoto(tech,id,{...upload,requestId:randomUUID()},{save});
+      assert.equal(await validateNameplateNotification(notices[0],warehouse,pool),false);
     });
     await t.test('acceptance requires parts, starts repair atomically and validates handwritten photo scope',async()=>{
       await seed('parts-accept');await seed('parts-other');

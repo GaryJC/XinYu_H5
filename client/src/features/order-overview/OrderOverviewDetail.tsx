@@ -25,7 +25,7 @@ export function OrderOverviewDetail({id}:{id:string}) {
   const task=dispatch.task;
   return <div className="order-overview-detail">
     <section aria-label="照片下载"><h3>照片下载</h3>
-      <p>每个 Word 文件包含本单所选照片，每页最多 4 张，双栏大图排版，按接车、维修时、维修完成排序。接车包括行驶证、车况及纸质委托书；维修时包括过程和配件照片，不包含签名图片。</p>
+      <p>每个 Word 文件包含本单所选照片，每页最多 4 张，双栏大图排版，按接车、维修时排序。接车包括行驶证、车况及纸质委托书；维修时包括维修过程、历史完工、配件和铭牌照片，不包含签名图片。</p>
       <Checkbox.Group aria-label="下载照片分类" value={selected} disabled={exporter.busy} onChange={values=>setSelected(values as OrderPhotoCategory[])} options={categories.map(key=>({label:`${photoAlbumLabels[key]}（${albums[key].length}）`,value:key}))}/>
       <Space wrap style={{margin:'12px 0'}}>
         <Button type="primary" loading={exporter.busy} disabled={!count} onClick={()=>void exporter.generate(categories)}>一键下载全部照片（{count}）</Button>

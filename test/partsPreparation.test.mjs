@@ -49,3 +49,24 @@ test('batch supports shared legacy applications and skips unselected photo reque
  const mixed=individual();Object.assign(mixed.partsRequests[1],{mode:'photo',photoIds:['photo'],items:[]});
  const next=batch(mixed,[{partsOwnerId:'a',items:[{index:0,recipientId:'a'}]}]);assert.deepEqual(next.partsRequests.find(p=>p.ownerId==='b'),mixed.partsRequests[1]);
 });
+
+test('photo-only legacy request can be prepared without inventing line items',()=>{
+ const original={...task(),technicianIds:['a'],items:[task().items[0]],partsRequirement:{mode:'photo',items:[],photoIds:['p1','p2'],revision:2,batch:1}};
+ const next=applyDispatchAction(original,{action:'confirm-parts',expectedVersion:original.version,requestId:'photo-prepare'},w,people,'2026-10-28T01:00:00Z');
+ assert.equal(next.partsRequirement.preparedAt,'2026-10-28T01:00:00Z');
+ assert.equal(next.partsRequirement.preparedBy,w.id);assert.equal(next.partsRequirement.issuedAt,undefined);
+ assert.deepEqual(next.partsRequirement.photoIds,['p1','p2']);assert.deepEqual(next.partsRequirement.items,[]);
+ assert.equal(next.stage,'维修中');assert.equal(original.partsRequirement.preparedAt,undefined);
+ assert.throws(()=>applyDispatchAction(next,{action:'confirm-parts',expectedVersion:next.version,requestId:'photo-repeat'},w,people),/已备料完成/);
+});
+
+test('photo preparation isolates personal, legacy and coworker requirements',()=>{
+ const original=individual();original.partsRequirement={...task().partsRequirement,preparedAt:'earlier',preparedBy:'w'};
+ Object.assign(original.partsRequests[1],{mode:'photo',photoIds:['personal-photo'],items:[]});
+ const next=applyDispatchAction(original,{action:'confirm-parts',partsOwnerId:'b',expectedVersion:original.version,requestId:'personal-photo'},w,people,'now');
+ assert.ok(next.partsRequests.find(p=>p.ownerId==='b').preparedAt);
+ assert.deepEqual(next.partsRequests.find(p=>p.ownerId==='a'),original.partsRequests[0]);
+ assert.deepEqual(next.partsRequirement,original.partsRequirement);
+ assert.deepEqual(next.items[0],original.items[0]);assert.equal(next.items[1].status,'维修中');
+ assert.throws(()=>applyDispatchAction(next,{action:'confirm-parts',partsOwnerId:'b',expectedVersion:original.version,requestId:'stale-photo'},w,people),/已更新/);
+});

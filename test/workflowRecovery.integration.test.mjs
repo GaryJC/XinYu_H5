@@ -28,7 +28,7 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       await pool.query(`insert into work_orders(id,status,advisor,technician,inspector,old_parts_handling,vehicle_plate,vehicle_vin,vehicle_mileage,vehicle_model,vehicle_model_legacy_code,customer_name,customer_legacy_code,customer_phone,department_code,department_name,inspection)
         values($1,$2,'管理员','待派工','待检验','客户带走','沪ATEST','LSVAB1234A1234567','1000','测试车型','MODEL','测试客户','CUSTOMER','13800000000','01','维修部',$3)`,[id,status,JSON.stringify({preRepairPhotos:{front45:front,rear45:rear}})]);
       for(const [n,label] of [[1,'检查'],[2,'维修']])await pool.query("insert into repair_items(order_id,client_item_id,item_no,name) values($1,$2::bigint,$2::integer,$3)",[id,n,label]);
-      for(const [file,kind] of [[front,'repair_order_photo'],[rear,'repair_order_photo'],[signature,'signature_image'],[randomUUID(),'vehicle_license']])await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by) values($1,$2,$3,'local','','fixture','image/png',8,'m')",[file,id,kind]);
+      for(const [file,kind] of [[front,'repair_order_photo'],[rear,'repair_order_photo'],[signature,'signature_image'],[randomUUID(),'vehicle_license'],[randomUUID(),'vehicle_nameplate_photo']])await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by) values($1,$2,$3,'local','','fixture','image/png',8,'m')",[file,id,kind]);
       return signature;
     }
     await t.test('authenticated onsite signing confirms and enqueues once; remote signing still awaits review',async()=>{

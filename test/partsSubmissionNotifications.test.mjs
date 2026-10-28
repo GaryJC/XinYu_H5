@@ -14,13 +14,14 @@ const people=[tech,warehouse,{...warehouse,id:'w2',role:'advisor',roles:['adviso
 const parts=()=>({mode:'list',ownerId:'t',ownerName:'维修甲',recordedAt:'old',revision:1,batch:1,items:[{name:'滤芯',quantity:1,unit:'个'},{name:'耗材',quantity:2,unit:'片'}],photoIds:[]});
 const initial=()=>({orderId:'o',shopId:'s',orderStatus:'维修中',plate:'沪ATEST',stage:'待开工',acceptedAt:'accepted',version:1,technicianId:'t',technicianIds:['t'],partsRequests:[parts()],items:[{id:1,name:'保养项目',responsibleId:'t',status:'待开工'}]});
 const request=(task,requirement)=>({action:'record-parts',expectedVersion:task.version,requestId:randomUUID(),partsRequirement:requirement});
-function database(task,{previous}={}) {
+function database(task,{previous,nameplate=true}={}) {
  const calls=[];
  return {calls,async query(sql,params=[]) {
   calls.push({sql,params});
   if(sql.includes('from work_orders wo left join dispatch_tasks'))return {rows:[{order_id:'o',shop_id:'s',order_status:'维修中',stage:task.stage,version:task.version,technician_id:'t',data:task,repair_items:[]}]};
   if(sql.includes('select request_body'))return {rows:previous?[{request_body:previous}]:[]};
   if(sql.includes('select id,name,role,active,shop_id'))return {rows:people.map(p=>({...p,shop_id:p.shopId}))};
+  if(sql.includes("kind='vehicle_nameplate_photo'"))return {rows:nameplate?[{id:'shared-nameplate'}]:[]};
   if(sql.includes('insert into dispatch_events'))return {rows:[{id:99}]};
   return {rows:[],rowCount:1};
  }};
@@ -96,4 +97,31 @@ test('warehouse delivery rejects stale revisions, rounds, roles and inactive wor
  await processNotification({...deps,validateParts:async()=>false});assert.equal(sent,0);assert.equal(result.retryable,false);
  await processNotification({...deps,validateParts:async()=>{throw Error('database down');}});assert.equal(sent,0);assert.equal(result.retryable,true);
  await processNotification({...deps,validateParts:()=>check()});assert.equal(sent,1);assert.equal(result.status,'accepted');
+});
+
+test('parts submission without a vehicle nameplate stops before persistence or notifications',async()=>{
+ const task=initial(),db=database(task,{nameplate:false});
+ await assert.rejects(()=>executeDispatchActionInTransaction(db,tech,'o',request(task,{mode:'list',items:[{name:'滤芯',quantity:1,unit:'个'}]})),e=>e.status===400&&/铭牌/.test(e.message));
+ assert.equal(queued(db).length,0);
+ assert.ok(!db.calls.some(call=>call.sql.includes('insert into dispatch_events')||call.sql.includes('insert into dispatch_tasks')));
+});
+
+test('accepting inherited requests does not require backfilling a nameplate',async()=>{
+ for(const personal of [false,true]) {
+  const task={...initial(),stage:'待接单',acceptedAt:undefined};
+  if(!personal){task.partsRequirement=task.partsRequests[0];delete task.partsRequests;}
+  const db=database(task,{nameplate:false});
+  await executeDispatchActionInTransaction(db,tech,'o',{action:'accept',expectedVersion:task.version,requestId:randomUUID(),partsRequirement:{mode:'none'}});
+  assert.equal(stored(db).mode,'list');
+ }
+});
+
+test('new acceptance requires a nameplate but no-parts acceptance does not',async()=>{
+ for(const mode of ['list','none']) {
+  const task={...initial(),stage:'待接单',acceptedAt:undefined,partsRequests:[]};
+  const db=database(task,{nameplate:false});
+  const run=()=>executeDispatchActionInTransaction(db,tech,'o',{action:'accept',expectedVersion:1,requestId:randomUUID(),partsRequirement:{mode,items:mode==='list'?parts().items:[]}});
+  if(mode==='list')await assert.rejects(run,e=>e.status===400&&/铭牌/.test(e.message));
+  else await run();
+ }
 });

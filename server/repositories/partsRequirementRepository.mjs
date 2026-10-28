@@ -45,3 +45,9 @@ export async function validatePartsPickupNotification(row,user,database) {
   if(row.kind==='配件需求已调整')return true;
   return row.kind==='配件可领取'?Boolean(parts.preparedAt&&!parts.issuedAt):Boolean(parts.issuedAt||parts.items?.some(item=>item.issuedAt&&item.recipientId===row.recipient_id));
 }
+
+export async function assertVehicleNameplate(client,task,requirement) {
+  if(!requirement||requirement.mode==='none')return;
+  const {rows}=await client.query("select id from files where order_id=$1 and kind='vehicle_nameplate_photo' limit 1",[task.orderId]);
+  if(!rows.length)throw new HttpError(400,'申请配件前请上传车辆铭牌照片，同一工单只需上传一次');
+}

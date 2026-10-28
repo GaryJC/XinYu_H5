@@ -6,6 +6,7 @@ import "./image-source-picker.css";
 type Props = {
   disabled?: boolean;
   loading?: boolean;
+  loadingLabel?: string;
   label: string;
   emphasized?: boolean;
   cameraArtwork?: ReactNode;
@@ -16,7 +17,7 @@ type Props = {
   onSelect: (file: File) => void | Promise<void>;
 };
 
-export function ImageSourcePicker({ disabled, loading, label, emphasized, primaryActionLabel, galleryActionLabel, cameraArtwork, multiple, onSelectMany, onSelect }: Props) {
+export function ImageSourcePicker({ disabled, loading, loadingLabel, label, emphasized, primaryActionLabel, galleryActionLabel, cameraArtwork, multiple, onSelectMany, onSelect }: Props) {
   const pickerDisabled = disabled || loading;
 
   async function handleChange(event: ChangeEvent<HTMLInputElement>) {
@@ -36,7 +37,7 @@ export function ImageSourcePicker({ disabled, loading, label, emphasized, primar
         {cameraArtwork ? (
           <div className="camera-source-artwork" aria-hidden="true">
             {cameraArtwork}
-            <span className="camera-source-caption">{loading ? "正在识别…" : primaryActionLabel || "拍照识别"}</span>
+            <span className="camera-source-caption">{loading ? loadingLabel || "正在识别…" : primaryActionLabel || "拍照识别"}</span>
             <span className="camera-source-badge">{loading ? <Spin size="small" /> : <Camera size={27} strokeWidth={1.8} />}</span>
           </div>
         ) : <Button

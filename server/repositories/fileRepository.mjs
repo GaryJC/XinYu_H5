@@ -1,3 +1,4 @@
+import {getDispatchTask} from './dispatchRepository.mjs';
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import { pool, transaction } from "../database/pool.mjs";
 import { createId, formatDate, nowString } from "../domain/workOrderModel.mjs";
@@ -81,8 +82,12 @@ export async function assertFileReadAccess(fileId, user, database = pool) {
   if (!user.shopId || file.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店文件");
   if (hasRole(user, 'manager')) return;
   if (hasRole(user, 'advisor') && (file.uploaded_by === user.id || file.advisor)) return;
-  if (user.active && hasRole(user, 'warehouse') && file.kind === "repair_parts_photo" && !["草稿","待客户签字"].includes(file.status)) return;
-  if (["repair_completed_photo", "repair_parts_photo", "repair_progress_photo", "repair_order_photo", "damage_photo", "other"].includes(file.kind)) {
+  if (user.active && hasRole(user, 'warehouse') && ["repair_parts_photo","vehicle_nameplate_photo"].includes(file.kind) && !["草稿","待客户签字"].includes(file.status)) return;
+  if(user.active&&hasRole(user,'warehouse')&&file.order_id&&['vehicle_license','repair_order_photo','damage_photo','other','repair_progress_photo','repair_completed_photo'].includes(file.kind)) {
+    await getDispatchTask(database,file.order_id,user);
+    return;
+  }
+  if (["vehicle_nameplate_photo", "repair_completed_photo", "repair_parts_photo", "repair_progress_photo", "repair_order_photo", "damage_photo", "other"].includes(file.kind)) {
     if ((hasAnyRole(user, ["technician","outsourcing"])||user.outsourcingRoleMember) && (file.technician_id === user.id || file.technician_ids?.includes(user.id))) return;
     if (hasRole(user, 'inspector') && user.inspectorRoleMember!==false && (file.inspector_id === user.id || file.stage==='待检验' && ![file.technician_id,...(file.technician_ids||[]),...(file.participant_ids||[])].includes(user.id) && !(file.items||[]).some(i=>i.startedBy===user.id || i.finishedBy===user.id))) return;
   }

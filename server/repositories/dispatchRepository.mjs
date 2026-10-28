@@ -85,7 +85,7 @@ export async function dispatchDetail(actor,id,client=pool) {
   const {rows:notifications}=await client.query(`select n.id,n.kind,n.status,n.error,n.created_at,n.attempts,n.task_id,u.name
     from dispatch_notifications n join users u on u.id=n.recipient_id where n.order_id=$1
     ${hasAnyRole(actor, ['manager','advisor'])?'':'and n.recipient_id=$2'} order by n.created_at desc`,hasAnyRole(actor, ['manager','advisor'])?[id]:[id,actor.id]);
-  const {rows:files}=await client.query("select repair_round,id,kind,original_name,mime_type,size_bytes,created_at,uploaded_by,(select name from users where users.id=files.uploaded_by) as uploaded_name from files where order_id=$1 and kind in ('repair_completed_photo','repair_parts_photo','repair_progress_photo','repair_order_photo','damage_photo','other') order by created_at",[id]);
+  const {rows:files}=await client.query("select repair_round,id,kind,original_name,mime_type,size_bytes,created_at,uploaded_by,(select name from users where users.id=files.uploaded_by) as uploaded_name from files where order_id=$1 and kind in ('vehicle_nameplate_photo','repair_completed_photo','repair_parts_photo','repair_progress_photo','repair_order_photo','damage_photo','other') order by created_at",[id]);
   const {rows:jobs}=await client.query('select status,error from dispatch_inspection_notifications where order_id=$1 order by event_id desc limit 1',[id]);
   const schedulerNotifications=hasAnyRole(actor, ['manager','advisor'])?(await client.query('select event_id::text as "eventId",kind,status,error from dispatch_scheduler_notifications where order_id=$1 order by event_id desc limit 20',[id])).rows:undefined;
   const repairRounds=await readRepairRounds(client,id);

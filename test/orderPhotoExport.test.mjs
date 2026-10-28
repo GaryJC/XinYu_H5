@@ -8,13 +8,13 @@ process.env.DATABASE_URL ||= 'postgresql://test:test@127.0.0.1:5432/test';
 const {validatePhotoCategories}=await import('../server/services/orderPhotoExportService.mjs');
 const {readOrderOverview}=await import('../server/repositories/orderOverviewRepository.mjs');
 const file=(id,kind,extra={})=>({id,kind,mimeType:'image/jpeg',createdAt:'2026-10-27T02:00:00Z',originalName:id,...extra});
-test('albums deduplicate files, exclude replaced photos/signatures and preserve explicit completion category',()=>{
+test('albums deduplicate files, exclude replaced photos/signatures and include historical completion photos in the repair album',()=>{
   const result=collectOrderPhotoAlbums({inspection:{replacedPhotoIds:['hidden']},files:[file('a','vehicle_license'),file('b','damage_photo'),file('hidden','other'),file('sign','signature_image'),file('pdf','other',{mimeType:'application/pdf'})]},[file('b','damage_photo'),file('c','repair_progress_photo'),file('d','repair_parts_photo'),file('e','repair_completed_photo')]);
-  assert.deepEqual(Object.fromEntries(Object.entries(result).map(([key,value])=>[key,value.map(f=>f.id)])),{reception:['a','b'],repair:['c','d'],completed:['e']});
+  assert.deepEqual(Object.fromEntries(Object.entries(result).map(([key,value])=>[key,value.map(f=>f.id)])),{reception:['a','b'],repair:['c','d','e']});
 });
 test('invalid and empty categories are rejected',()=>{
-  for(const categories of [[],['unknown'],['repair','repair'],['toString'],['__proto__'],null])assert.throws(()=>validatePhotoCategories({categories}),error=>error.status===400);
-  assert.deepEqual(validatePhotoCategories({categories:['completed','reception']}),['completed','reception']);
+  for(const categories of [[],['completed'],['unknown'],['repair','repair'],['toString'],['__proto__'],null])assert.throws(()=>validatePhotoCategories({categories}),error=>error.status===400);
+  assert.deepEqual(validatePhotoCategories({categories:['repair','reception']}),['repair','reception']);
 });
 test('overview checks role and shop before reading full details',async()=>{
   const database={query:async()=>({rows:[{shop_id:'shop-a'}]})};

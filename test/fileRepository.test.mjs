@@ -86,3 +86,29 @@ test('warehouse reads only signed same-shop parts photos and cannot modify files
  file.status='维修中';file.shop_id='other';await assert.rejects(()=>assertFileReadAccess('parts',user,database),e=>e.status===403);
  file.shop_id='shop-hq';await assert.rejects(()=>assertFileAccess('parts',user,database),e=>e.status===403);
 });
+
+test('nameplate images are shared with assigned coworkers and same-shop warehouse only',async()=>{
+ const file={kind:'vehicle_nameplate_photo',status:'维修中',shop_id:'s',technician_ids:['a','b'],uploaded_by:'a'};
+ const database={query:async()=>({rows:[file]})};
+ for(const user of [{id:'b',role:'technician'},{id:'w',role:'warehouse'}]) {
+  await assertFileReadAccess('nameplate',{...user,active:true,shopId:'s'},database);
+  await assert.rejects(()=>assertFileReadAccess('nameplate',{...user,active:true,shopId:'other'},database),e=>e.status===403);
+ }
+ await assert.rejects(()=>assertFileReadAccess('nameplate',{id:'stranger',role:'technician',active:true,shopId:'s'},database),e=>e.status===403);
+});
+
+test('warehouse may read order photos only when the related order is accessible for parts work',async()=>{
+ const user={id:'w',role:'warehouse',active:true,shopId:'s'};
+ for(const kind of ['vehicle_license','repair_order_photo','damage_photo','other','repair_progress_photo','repair_completed_photo']) {
+  const file={kind,order_id:'o',shop_id:'s',status:'维修中'};
+  const order={order_id:'o',shop_id:'s',order_status:'维修中',repair_items:[],data:{partsRequirement:{mode:'list',items:[]}}};
+  const db={query:async sql=>({rows:[sql.includes('from files f')?file:order]})};
+  await assertFileReadAccess('photo',user,db);
+  await assert.rejects(()=>assertFileAccess('photo',user,db),e=>e.status===403);
+  for(const patch of [{shop_id:'other'},{order_status:'草稿'},{order_status:'待客户签字'},{data:{}}]) {
+   const blocked={query:async sql=>({rows:[sql.includes('from files f')?file:{...order,...patch}]})};
+   await assert.rejects(()=>assertFileReadAccess('photo',user,blocked),e=>e.status===403);
+  }
+  await assert.rejects(()=>assertFileReadAccess('photo',{...user,active:false},db),e=>e.status===403);
+ }
+});

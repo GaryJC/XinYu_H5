@@ -85,13 +85,13 @@
 .warehouse-sort{display:flex;align-items:center;gap:12px;color:#657085;font-size:13px}
 .warehouse-sort .ant-select{flex:1;max-width:240px;min-width:0}
 
-.parts-preparation-dialog.ant-modal{top:16px;padding-bottom:0}
-.parts-preparation-dialog .ant-modal-container{display:flex;flex-direction:column;max-height:calc(100dvh - 32px)}
-.parts-preparation-dialog .ant-modal-body{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.parts-preparation-dialog.ant-modal{top:16px;padding-bottom:16px}
+.parts-preparation-dialog .ant-modal-container{max-height:none}
+.parts-preparation-dialog .ant-modal-body{overflow:visible}
 .parts-preparation-meta{margin:0 0 8px;color:#657085;font-size:12px;overflow-wrap:anywhere}
 .parts-preparation-hint{margin:0 0 12px;color:#657085;line-height:1.6;font-size:13px}
 .parts-preparation-select-all{padding:12px 0;border-bottom:1px solid #e8ecf1}
-.parts-preparation-list{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.parts-preparation-list{overflow:visible}
 .parts-preparation-group{padding:16px 0}
 .parts-preparation-group+.parts-preparation-group{border-top:1px solid #e8ecf1}
 .parts-preparation-group-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px}
@@ -107,3 +107,5 @@
 .parts-preparation-footer>div{display:flex;justify-content:flex-end;gap:8px}
 .parts-preparation-footer>div>.ant-btn+.ant-btn{margin:0}
 @media(max-width:575px){.parts-preparation-footer>div>.ant-btn-primary{flex:1;min-width:0}.parts-preparation-footer .ant-btn{height:44px}}
+
+.warehouse-open-order{margin-top:16px}

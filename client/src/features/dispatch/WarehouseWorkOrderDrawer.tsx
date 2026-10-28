@@ -1,3 +1,4 @@
+import {WarehouseWorkOrderPhotos} from './WarehouseWorkOrderPhotos';
 import {Alert,Button,Descriptions,Drawer,Spin,Table} from 'antd';
 import {WorkOrderPrintButton} from '../work-order-print/WorkOrderPrintButton';
 import {useWarehouseWorkOrder} from './useWarehouseWorkOrder';
@@ -29,6 +30,7 @@ export function WarehouseWorkOrderDrawer({orderId,onClose}:{orderId?:string;onCl
       <Table size="small" pagination={false} rowKey="id" dataSource={order.repairItems} scroll={{x:440}} columns={[
         {title:'项目',dataIndex:'name'}, {title:'主修人',dataIndex:'owner'}, {title:'状态',dataIndex:'status'}, {title:'工费',dataIndex:'laborFee'}
       ]}/>
+      <WarehouseWorkOrderPhotos order={order}/>
     </>:null}
   </Drawer>;
 }

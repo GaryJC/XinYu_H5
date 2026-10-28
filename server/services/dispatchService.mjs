@@ -10,7 +10,7 @@ import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import {actionParts,individualRepair} from '../domain/individualRepair.mjs';
 import {enqueueRepairWriteback} from '../repositories/repairWritebackRepository.mjs';
 import {wakeRepairWriteback} from '../workers/repairWritebackWorker.mjs';
-import { assertPartsPhotos } from '../repositories/partsRequirementRepository.mjs';
+import { assertPartsPhotos, assertVehicleNameplate } from '../repositories/partsRequirementRepository.mjs';
 import { repairCatalog,saveRepairRound } from '../repositories/repairRoundRepository.mjs';
 import { hasActiveRepairRound } from '../domain/repairRounds.mjs';
 import { markDispatchPlan } from '../repositories/dispatchPlanRepository.mjs';
@@ -125,6 +125,8 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
     const parts=actionParts(next,input,actor);
     const preparationGroups=input.preparationGroups?.map(group=>({...group,partsRequirement:actionParts(next,{partsOwnerId:group.partsOwnerId},actor)}));
     const preparedForRecipient=recipient=>preparationGroups?.map(group=>({...group,items:group.items.filter(item=>item.recipientId===recipient)})).filter(group=>group.items.length);
+    // Reacceptance preserves an existing request; only new/edited applications require a nameplate.
+    if(input.action==='record-parts'||input.action==='accept'&&!actionParts(task,input,actor))await assertVehicleNameplate(client,task,parts);
     if(['accept','record-parts','edit-parts'].includes(input.action))await assertPartsPhotos(client,task,parts,input.action==='edit-parts'?undefined:actor.id);
     if(input.action!=='update-technicians') await saveRepairRound(client,task,next,currentActor,input.action);
     await saveDispatchTask(client,next,{metadataOnly:input.action==='update-due',techniciansOnly:input.action==='update-technicians'});

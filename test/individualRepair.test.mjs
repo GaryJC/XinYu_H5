@@ -257,3 +257,21 @@ test('removing remaining pending parts completes preparation without forging war
  assert.equal(result.preparedBy,w.id);assert.equal(result.preparedAt,saved.items[0].preparedAt);
  assert.equal(result.issuedAt,undefined);assert.equal(edited.items[0].status,'维修中');assert.equal(edited.items[1].status,'待开工');
 });
+
+test('photo supplements create a new personal batch without resetting peers or original start',()=>{
+ let task=act(base(),a,'record-parts',{partsRequirement:{mode:'photo',items:[],photoIds:['first-photo']}});
+ task=act(task,b,'record-parts',{partsRequirement:parts('乙的配件')});
+ task=act(task,w,'confirm-parts',{partsOwnerId:'a'});
+ const before=structuredClone(task),previous=task.partsRequests.find(p=>p.ownerId==='a');
+ const next=act(task,a,'record-parts',{partsRequirement:{mode:'photo',items:[],photoIds:['supplement-photo']}});
+ const supplement=next.partsRequests.find(p=>p.ownerId==='a');
+ assert.equal(supplement.batch,previous.batch+1);assert.equal(supplement.preparedAt,undefined);assert.equal(supplement.preparedBy,undefined);
+ assert.deepEqual(supplement.photoIds,['supplement-photo']);assert.equal(supplement.ownerId,'a');
+ assert.deepEqual(next.partsRequests.find(p=>p.ownerId==='b'),before.partsRequests.find(p=>p.ownerId==='b'));
+ assert.deepEqual(next.items,before.items);assert.equal(next.firstStartedAt,before.firstStartedAt);
+ assert.deepEqual(task,before);assert.ok(previous.preparedAt);
+ assert.throws(()=>act(next,a,'submit-order'),/确认配件备齐/);
+ const prepared=act(next,w,'confirm-parts',{partsOwnerId:'a'});
+ assert.equal(act(prepared,a,'submit-order').items[0].status,'待检验');
+ assert.equal(prepared.partsRequests.find(p=>p.ownerId==='b').preparedAt,undefined);
+});

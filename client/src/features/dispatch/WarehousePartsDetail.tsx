@@ -1,3 +1,4 @@
+import {VehicleNameplatePhotos} from './VehicleNameplatePhotos';
 import {PartsReferencePhotos} from './PartsReferencePhotos';
 import {partsHistoryEvents} from './partsHistory';
 import {partsController,warehouseRequests} from './individualRepair';
@@ -56,7 +57,8 @@ export function WarehousePartsDetail({detail,controller,onOpenOrder}:{detail:Dis
     <section className="warehouse-order" aria-label="申请工单信息">
       <div className="warehouse-order-heading"><h2>车辆信息</h2><Tag color={parts?.issuedAt||parts?.preparedAt?'green':parts && parts.mode!=='none'?'gold':'default'}>{partsStatus(parts)}</Tag><RepairContext task={task}/></div>
       <WarehouseVehicleInfo task={task}/>
-      {onOpenOrder?<Button block onClick={onOpenOrder}>查看委托单</Button>:null}
+      <VehicleNameplatePhotos currentId={task.vehicleNameplateFileId} files={detail.files}/>
+      {onOpenOrder?<Button className="warehouse-open-order" block onClick={onOpenOrder}>查看委托单</Button>:null}
     </section>
     <WarehouseRepairItems task={task} disabled={controller?.busy} onRefresh={controller?()=>Promise.all([controller.refresh(),controller.refreshDetail()]):undefined}/>
     <section className="warehouse-parts-applications" aria-label="所需配件"><h3>所需配件</h3>
