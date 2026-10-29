@@ -142,3 +142,12 @@
  .workbench-detail-group h3 { margin-bottom: 18px; }
  .archive-detail-modal .archive-detail-section { padding: 16px; }
 }
+
+button.workbench-metric { text-align: left; color: inherit; font: inherit; cursor: pointer; transition: border-color .15s, background .15s; }
+button.workbench-metric:hover { border-color: #87add9; background: #f5f9ff; }
+button.workbench-metric:active { background: #eaf2ff; }
+button.workbench-metric:focus-visible { outline: 3px solid #366fbb; outline-offset: 3px; }
+.metric-arrow { margin-left: auto; font-size: 22px; }
+.dispatch-task-heading { scroll-margin-top: 20px; }
+
+.archive-filter-anchor { scroll-margin-top: 20px; }

@@ -1,3 +1,5 @@
+import {dispatchApi} from '../dispatch/dispatchApi';
+import {defaultArchiveFilters} from './archiveFilters';
 import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import {useVehicleLicenseHistory} from '../vehicle-license-history/useVehicleLicenseHistory';
 import {isUnsignedOrderEditable} from '../../../../shared/workOrderEditPolicy.mjs';
@@ -93,14 +95,33 @@ export function useWorkbenchController() {
   const setSearchTerm = (search: string) => archive.setFilters({ ...archive.filters, search });
   const searchedOrders = archive.filteredOrders;
 
-  const counters = useMemo(() => {
-    return [
-      { label: "待客户签字", value: orders.filter((item) => item.status === "待客户签字").length },
-      { label: "待派工", value: orders.filter((item) => workOrderDisplayStatus(item) === "待派工").length },
-      { label: "维修中", value: orders.filter((item) => workOrderDisplayStatus(item) === "维修中").length },
-      { label: "待检验", value: orders.filter((item) => workOrderDisplayStatus(item) === "待检验").length }
-    ];
-  }, [orders]);
+  const [todoCounts,setTodoCounts]=useState<Record<string,number>>({});
+  const [todoError,setTodoError]=useState('');
+  const [todoEntry,setTodoEntry]=useState<{stage:string;nav:string;key:number}>();
+  const homeScroll=useRef(0);
+  useEffect(()=>{setTodoEntry(undefined);setTodoCounts({});setTodoError('');},[currentUser?.id]);
+  useEffect(()=>{
+    if(activeNav!=='工作台'||!currentUser||!hasAnyRole(currentUser,['manager','advisor'])||!dispatchEnabled)return;
+    let active=true;setTodoCounts({});setTodoError('');
+    void Promise.all(['待派工','维修中','待检验'].map(async stage=>[stage,(await dispatchApi.tasks({stage})).length] as const))
+      .then(rows=>{if(active)setTodoCounts(Object.fromEntries(rows));})
+      .catch(()=>{if(active)setTodoError('待办数量加载失败，请刷新页面重试');});
+    return()=>{active=false;};
+  },[currentUser?.id,activeNav,orders]);
+  const counters=['待客户签字','待派工','维修中','待检验'].map(label=>({label,value:label==='待客户签字'?orders.filter(item=>item.status==='待客户签字').length:dispatchEnabled?todoCounts[label]:orders.filter(item=>workOrderDisplayStatus(item)===label).length}));
+  function openTodo(stage:string) {
+    homeScroll.current=window.scrollY;
+    const nav=stage==='待客户签字'||!dispatchEnabled?'工单全览':stage==='待检验'&&hasAnyRole(currentUser,['manager','inspector'])?'检验任务':'派工台';
+    const url=new URL(location.href);for(const key of ['dispatchOrder','workOrder','paperOrder'])url.searchParams.delete(key);history.replaceState(null,'',url);
+    setLinkedOrderDetail(undefined);
+    if(nav==='工单全览')archive.setFilters({...defaultArchiveFilters(),statuses:[stage]});
+    setTodoEntry({stage,nav,key:Date.now()});setActiveNav(nav);window.scrollTo(0,0);
+  }
+  function returnFromTodo() {
+    setTodoEntry(undefined);setActiveNav('工作台');
+    requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo(0,homeScroll.current)));
+  }
+
 
   useEffect(() => {
     void bootstrapAuth().finally(() => setAuthLoading(false));
@@ -495,7 +516,7 @@ export function useWorkbenchController() {
     refreshWorkbench: async () => { await Promise.all([loadOrders(), loadDashboard()]); },
     openDispatch,
     activeNav,
-    setActiveNav,
+    setActiveNav:(nav:string)=>{setTodoEntry(undefined);setActiveNav(nav);},
     role,
     setRole,
     orders,
@@ -535,7 +556,7 @@ export function useWorkbenchController() {
     inspectorOptions,
     searchedOrders,
     archive,
-    counters,
+    counters, todoEntry, todoError, openTodo, returnFromTodo,
     loginForDevelopment,
     selectOrder,
     startNewOrder,

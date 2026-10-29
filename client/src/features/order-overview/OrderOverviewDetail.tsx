@@ -1,6 +1,7 @@
+import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { OrderSupportingRecords } from "./OrderSupportingRecords";
 import { useState } from 'react';
-import { Alert, Button, Checkbox, Collapse, Descriptions, Empty, Grid, Image, Space, Spin, Table, Timeline } from 'antd';
+import { Alert, Button, Checkbox, Collapse, Descriptions, Empty, Grid, Image, Space, Spin, Table } from 'antd';
 import type { OrderPhotoCategory } from '../../../../shared/types';
 import { collectOrderPhotoAlbums, photoAlbumLabels } from '../../../../shared/orderPhotoAlbums.mjs';
 import { OrderDetail } from '../workbench/OrderDetail';
@@ -60,6 +61,6 @@ export function OrderOverviewDetail({id}:{id:string}) {
     {(task.partsRequests?.length?task.partsRequests:[task.partsRequirement]).map((value,index)=><PartsRequirementSummary key={index} value={value}/>)}
     <RepairRoundHistory detail={dispatch}/>
     <h3>流程记录</h3>
-    {dispatch.events.length?<Timeline items={dispatch.events.map(event=>({content:<><strong>{dispatchEventLabel(event)}</strong><p>{displayTime(event.at)} · {event.actorName} · {event.detail.stage}</p><p>{[event.detail.reason,event.detail.note,event.detail.pauseReason].filter(Boolean).join('；')}</p>{event.detail.technicianName&&<p>维修人员：{event.detail.technicianName}</p>}</>}))}/>:<p>暂无维修流程记录，开单与签字记录见操作留痕。</p>}
+    <ActionHistory title="维修流程记录" emptyText="暂无维修流程记录，开单与签字记录见操作留痕。" items={dispatch.events.map(event=>({key:event.id,title:dispatchEventLabel(event),actor:event.actorName,time:displayTime(event.at),detail:<><p>{event.detail.stage}</p><p>{[event.detail.reason,event.detail.note,event.detail.pauseReason].filter(Boolean).join('；')}</p>{event.detail.technicianName?<p>维修人员：{event.detail.technicianName}</p>:null}</>}))}/>
   </div>;
 }

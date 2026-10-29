@@ -1,3 +1,4 @@
+import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { LoadingState } from "../../shared/ui/LoadingState";
 import {hasPendingInspection,hasUnpreparedParts} from '../../../../shared/repairProgress.mjs';
 import {TaskTechniciansEditor} from './TaskTechniciansEditor';
@@ -20,7 +21,7 @@ import { PartsRequirementSummary } from './PartsRequirementSummary';
 import { RepairRoundHistory } from './RepairRoundHistory';
 import { executionLabels,executionTextFields,executionTimeFields } from './DispatchExecutionFields';
 import { useState } from 'react';
-import { Alert,Button,Card,Collapse,Descriptions,Empty,Space,Tag,Timeline } from 'antd';
+import { Alert,Button,Card,Collapse,Descriptions,Space,Tag } from 'antd';
 import type { DispatchActionName,UserProfile } from '../../../../shared/types';
 import { AuthenticatedImage } from '../../shared/ui/AuthenticatedImage';
 import {useElementHeight} from '../../shared/ui/useElementHeight';
@@ -135,15 +136,8 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     <Collapse items={[{key:"sheet",label:"完整派工单与接车照片",children:<DispatchSheetSummary task={task} files={files}/>}]} />
     <RepairRoundHistory detail={detail}/>
     <Collapse items={[{key:"history",label:"通知与操作记录",children:<>
-    <h3>通知记录</h3>
-    <p className="dispatch-muted">消息发送成功不代表维修工已接单。结果未知时不会自动重发。</p>
-    {!notifications.length?<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无通知记录"/>:notifications.map(n=><div className="dispatch-notification" key={n.id}>
-      <strong>{n.kind} · {n.recipientName}</strong><Tag color={n.status==='failed'?'red':n.status==='sent'?'green':'default'}>{notificationLabels[n.status]}</Tag>
-      <span>{displayTime(n.createdAt)} · 尝试 {n.attempts} 次</span>{n.error?<span role="status">{n.error}</span>:null}
-      {controller.manager&&n.status==='failed'?<Button size="small" loading={controller.busy} disabled={controller.busy} onClick={()=>void controller.act({action:'retry-notification',notificationId:n.id})}>重试通知</Button>:null}
-    </div>)}
-    <h3>操作与交接记录</h3>
-    <Timeline items={events.map(event=>({children:<div><strong>{event.action==='due-reminder'?'即将到期提醒':dispatchEventLabel(event)} · {event.actorName}</strong><p>{displayTime(event.at)} · {event.detail.stage}{event.detail.repairRound?` · ${event.detail.roundKind==='additional'?'追加维修第':'返工第'} ${event.detail.repairRound} 轮`:""}</p>
+    <ActionHistory title="通知记录" emptyText="暂无通知记录" items={notifications.map(n=>({key:n.id,title:n.kind,actor:n.recipientName,time:displayTime(n.createdAt),detail:<><Tag color={n.status==='failed'?'red':n.status==='sent'?'green':'default'}>{notificationLabels[n.status]}</Tag><p>尝试 {n.attempts} 次</p>{n.error?<p role="status">{n.error}</p>:null}{controller.manager&&n.status==='failed'?<Button size="small" loading={controller.busy} disabled={controller.busy} onClick={()=>void controller.act({action:'retry-notification',notificationId:n.id})}>重试通知</Button>:null}</>}))}><p>消息发送成功不代表维修工已接单。结果未知时不会自动重发。</p></ActionHistory>
+    <ActionHistory title="操作与交接记录" items={events.map(event=>({key:event.id,title:event.action==='due-reminder'?'即将到期提醒':dispatchEventLabel(event),actor:event.actorName,time:displayTime(event.at),detail:<><p>{event.detail.stage}{event.detail.repairRound?` · ${event.detail.roundKind==='additional'?'追加维修第':'返工第'} ${event.detail.repairRound} 轮`:""}</p>
       {event.detail.previousTechnicianName&&event.detail.previousTechnicianName!==event.detail.technicianName?<p>{event.detail.previousTechnicianName} → {event.detail.technicianName||'待派工'}</p>:null}
       {['accept','record-parts','edit-parts','confirm-parts','issue-parts'].includes(event.action)&&event.detail.partsRequirement?<PartsRequirementSummary value={event.detail.partsRequirement}/>:null}
       {['record-hours','inspect'].includes(event.action)&&event.detail.workHours!==undefined?<p>实际工时：{event.detail.previousWorkHours!==undefined?`${event.detail.previousWorkHours} → `:''}{event.detail.workHours} 小时</p>:null}
@@ -154,7 +148,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
       {event.detail.rejectedItemIds?.length?<p>退回项目：{event.detail.rejectedItemIds.map(id=>task.items.find(i=>i.id===id)?.name||id).join('、')}</p>:null}
       {event.detail.dueAt?<p>预计完工：{event.action==='update-due'?`${displayTime(event.detail.previousDueAt)} → `:''}{displayTime(event.detail.dueAt)}{event.detail.urgent?' · 加急':''}</p>:null}
       {event.detail.pauseReason?<p>{event.detail.pauseReason}</p>:null}
-      {event.detail.reason?<p>{event.detail.reason}</p>:null}{event.detail.note?<p>{event.detail.note}</p>:null}</div>}))}/>
+      {event.detail.reason?<p>{event.detail.reason}</p>:null}{event.detail.note?<p>{event.detail.note}</p>:null}</>}))}/>
     </>}]} />
     {actions.length?<div ref={setActionBar} className="task-detail-actions"><div ref={setProjectActionsTarget} className="project-actions-slot"/><Space wrap>{actions.map(action=><Button key={action} danger={action==='reopen-repair'} type={['assign','accept','submit','inspect','claim-inspection'].includes(action)?'primary':'default'} loading={controller.busy} disabled={controller.busy||photoBlocked||action==='inspect'&&!inspectionDraft.complete} onClick={()=>{
       if(action==='inspect'){if(!inspectionDraft.complete){controller.setError('请先为每个待检项目选择通过、退回或待定');return;}setInspectionReview({version:task.version,choices:{...inspectionDraft.choices}});setDialog(action);}

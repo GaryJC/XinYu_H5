@@ -86,3 +86,13 @@ test('tender photos allow one nameplate and ten distinct supporting images',()=>
   assert.throws(()=>tenderInput({...input,otherPhotoIds:ids},Date.parse(date)),e=>e.status===400);
  assert.deepEqual(tenderInput(input,Date.parse(date)).data.otherPhotoIds,[]);
 });
+
+test('payment requirements may be empty and removed unit defaults without altering legacy values',()=>{
+  const input={...terms,requestId:randomUUID(),supplierIds:[randomUUID()],deadline:null};
+  delete input.unit;delete input.paymentTerms;delete input.qualityRequirements;
+  const next=tenderInput(input,Date.parse(date));
+  assert.equal(next.data.unit,'件');assert.equal(next.data.paymentTerms,'');assert.equal(next.data.qualityRequirements,'');
+  assert.equal(tenderInput({...input,paymentTerms:'  '},Date.parse(date)).data.paymentTerms,'');
+  assert.equal(tenderInput({...input,unit:'套',qualityRequirements:'原厂'},Date.parse(date)).data.unit,'套');
+  assert.throws(()=>tenderInput({...input,paymentTerms:'a'.repeat(501)},Date.parse(date)),e=>e.status===400);
+});

@@ -58,13 +58,6 @@
 .trip-upload > span { font-size: 12px; color: #8190a2; }
 .trip-upload:focus-within { outline: 2px solid #1677ff; outline-offset: 2px; }
 .trip-upload input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.trip-history { list-style: none; padding: 0; margin: 0; }
-.trip-history li { position: relative; border-left: 1px solid #e1e8f0; margin-left: 5px; padding: 0 0 22px 22px; }
-.trip-history li:last-child { border-left-color: transparent; padding-bottom: 0; }
-.trip-history li::before { content: ''; position: absolute; left: -4px; top: 6px; width: 7px; height: 7px; border-radius: 50%; background: #8ba6c2; }
-.trip-history li > div { display: flex; gap: 12px; justify-content: space-between; font-size: 13px; line-height: 1.6; }
-.trip-history li span { color: #6b7c91; }
-.trip-history time { display: block; font-size: 12px; color: #8895a6; margin-top: 5px; }
 .trip-reject-modal .ant-modal-container { padding: 28px; border-radius: 18px; }
 .trip-reject-modal .ant-modal-header { margin-bottom: 12px; }
 .trip-reject-title { display: flex; align-items: center; gap: 12px; font-size: 20px; padding-right: 24px; }

@@ -30,3 +30,9 @@ export function localDateTime(date:Date) {const p=(n:number)=>String(n).padStart
 
 const notificationLabels:Record<string,string>={pending:'等待发送',ready:'已排队',accepted:'平台已受理',sent:'已发送',failed:'发送失败',unknown:'待核实'};
 export const notificationLabel=(status:string)=>notificationLabels[status]||status;
+
+// Older audit records store action codes; keep their presentation readable.
+export function procurementAuditLabel(action:string) {
+  const labels:Record<string,string>={close:'结束报价收集',settle:'确认结标',cancel:'取消询价',update:'修改询价',invalidate:'处理报价有效性','reissue-link':'重发邀请链接','revoke-link':'撤销邀请链接'};
+  return labels[action]||action;
+}

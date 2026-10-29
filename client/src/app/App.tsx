@@ -1,6 +1,7 @@
 import { lazy,Suspense } from "react";
 import { usePageZoomLock } from "../shared/ui/usePageZoomLock";
 import { WorkbenchPage } from "../features/workbench/WorkbenchPage";
+import { AppUpdateNotice } from '../shared/app-update/AppUpdateNotice';
 
 const SupplierPortalPage=lazy(()=>import("../features/procurement/SupplierPortalPage").then(m=>({default:m.SupplierPortalPage})));
 
@@ -8,8 +9,8 @@ const CustomerSignaturePage = lazy(() => import("../features/signature/CustomerS
 
 export function App() {
   usePageZoomLock();
-  if (location.pathname === "/customer-signature") return <Suspense fallback={<div role="status">正在加载签字页面…</div>}><CustomerSignaturePage /></Suspense>;
-  return location.pathname === "/supplier"
+  const page=location.pathname === "/customer-signature" ? <Suspense fallback={<div role="status">正在加载签字页面…</div>}><CustomerSignaturePage /></Suspense> : location.pathname === "/supplier"
     ? <Suspense fallback={<div role="status">正在加载供应商页面…</div>}><SupplierPortalPage /></Suspense>
     : <WorkbenchPage />;
+  return <><AppUpdateNotice/>{page}</>;
 }

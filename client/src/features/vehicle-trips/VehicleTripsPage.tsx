@@ -1,3 +1,4 @@
+import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { LoadingState } from "../../shared/ui/LoadingState";
 import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { useState } from 'react';
@@ -104,7 +105,7 @@ export function VehicleTripsPage({ user }: { user: UserProfile }) {
           <Button type="primary" loading={state.pending === 'depart' || state.pending === 'return'} disabled={state.busy || !photoIds.length} onClick={() => void state.act(stage === 'departure' ? 'depart' : 'return', { fileIds: photoIds })}>{stage === 'departure' ? '确认出车' : '确认还车'}</Button>
         </section>}
         {mine && ['待审批', '待出车'].includes(detail.status) && <Button danger loading={state.pending === 'cancel'} disabled={state.busy} onClick={() => void state.act('cancel')}>取消申请</Button>}
-        <section className="trip-section"><h3 className="trip-section-heading"><Clock3 size={18} />操作记录</h3><ol className="trip-history">{detail.history.map((entry, index) => <li key={index}><div><strong>{actions[entry.action] || entry.action}</strong><span>{entry.actorName}</span></div><time>{time(entry.at)}</time></li>)}</ol></section>
+        <ActionHistory title="操作记录" items={detail.history.map((entry,index)=>({key:index,title:actions[entry.action]||entry.action,actor:entry.actorName,time:time(entry.at)}))}/>
       </>}
     </Drawer>
     <Modal className="trip-reject-modal" centered width={480} title={<span className="trip-reject-title"><span><CircleAlert size={22} /></span>驳回申请</span>} open={rejectOpen && Boolean(detail) && detail?.status === '待审批'}

@@ -12,13 +12,14 @@ import { useDispatchController } from './useDispatchController';
 import { DispatchTaskDetail } from './DispatchTaskDetail';
 import { displayTime,metrics,statusFilters,taskStatusLabel,personDisplayName } from './dispatchLabels';
 import './dispatch.css';
-export function DispatchPage({user,view}:{user:UserProfile;view:string}) {
-  const c=useDispatchController(user,view), mobile=!Grid.useBreakpoint().md;
+export function DispatchPage({user,view,initialStage}:{user:UserProfile;view:string;initialStage?:string}) {
+  const c=useDispatchController(user,view,undefined,initialStage), mobile=!Grid.useBreakpoint().md;
   const update=(key:string,value:string|undefined)=>c.setFilters(f=>({...f,[key]:value}));
   const taskHeading=useRef<HTMLHeadingElement>(null);
   const inspection=view==='检验任务';
   const [page,setPage]=useState(1);
   useEffect(()=>{setPage(1);},[c.filters]);
+  useEffect(()=>{if(initialStage&&!c.loading)taskHeading.current?.scrollIntoView({block:'start'});},[initialStage,c.loading]);
   const chosen=c.summaries.find(s=>s.id===c.filters.technicianId);
   function badges(t:DispatchTask) {return <Space className="dispatch-badges" size={[8,8]} wrap><Tag>{executionLabels[t.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(t)}</Tag>{!!t.inspectionDeferredCount&&<Tag color="orange">待定 × {t.inspectionDeferredCount}</Tag>}{t.pendingRepairCount?<Tag color="orange">存在待客户确认项目</Tag>:null}{t.urgent?<Tag color="red">加急</Tag>:null}{t.overdue?<Tag color="red">超期</Tag>:null}{t.repairRound?<Tag color="orange">{t.roundKind==='additional'?'追加维修第':'返工第'} {t.repairRound} 轮</Tag>:t.rework?<Tag color="orange">返工</Tag>:null}{t.feedback?<Tag color="orange">无法接单</Tag>:null}{t.needsReview?<Tag>待核对</Tag>:null}</Space>;}
   if(view==='配件申请' && hasRole(user, 'warehouse')) return <WarehousePartsPage controller={c}/>;

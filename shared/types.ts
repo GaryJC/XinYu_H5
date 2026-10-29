@@ -553,8 +553,9 @@ export type ProcurementTerms = {
   vehicleModel?: string; vin?: string; nameplatePhotoIds?: string[]; otherPhotoIds?: string[]; partName: string; category: string; specification: string; brand: string; quantity: number; unit: string;
   deliveryBy: string; paymentTerms: string; qualityRequirements: string; imageUrls: string[];
 };
-export type ProcurementCreateInput = ProcurementTerms & { supplierIds: string[]; deadline: string | null; requestId: string };
-export type ProcurementUpdateInput = ProcurementTerms & { deadline: string | null; expectedVersion: number; reopen?: boolean };
+type ProcurementTermsInput = Omit<ProcurementTerms, 'unit' | 'qualityRequirements' | 'paymentTerms'> & Partial<Pick<ProcurementTerms, 'unit' | 'qualityRequirements' | 'paymentTerms'>>;
+export type ProcurementCreateInput = ProcurementTermsInput & { supplierIds: string[]; deadline: string | null; requestId: string };
+export type ProcurementUpdateInput = ProcurementTermsInput & { deadline: string | null; expectedVersion: number; reopen?: boolean };
 export type ProcurementQuoteInput = {
   termsVersion?: number;
   requestId: string; unitPriceFen?: number; freightFen?: number; deliveryAt?: string; meetsRequirements?: boolean;
@@ -655,3 +656,4 @@ export type VehicleTripDetail = VehicleTrip & {
 export type VehicleTripCreateInput = { requestId: string; vehicleId: string; reason: string; note: string };
 export type VehicleTripActionInput = { requestId: string; fileIds?: string[]; reason?: string };
 export type VehicleTripUploadInput = { requestId: string; stage: Exclude<VehicleTripStage, "signature">; imageBase64: string };
+export interface AppVersionResponse { version: string }

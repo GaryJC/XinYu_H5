@@ -206,6 +206,13 @@ test('procurement PostgreSQL, supplier isolation, concurrency, reports and notif
       const own=await fetch(`${root}/api/supplier-portal/me`,{headers:{cookie:verified.headers.get('set-cookie').split(';')[0]}});assert.equal(own.status,200);assert.equal(own.headers.get('cache-control'),'no-store');
       let limited=false;for(let n=0;n<25;n++){const response=await req({});if(response.status===429){limited=true;break;}}assert.ok(limited);
     });
+    await t.test('simplified inquiry can publish with omitted unit, quality and payment requirements',async()=>{
+      const input=body();delete input.unit;delete input.qualityRequirements;delete input.paymentTerms;
+      const result=await s.publishTender(manager,input);
+      assert.equal(result.tender.data.unit,'件');assert.equal(result.tender.data.paymentTerms,'');assert.equal(result.tender.data.qualityRequirements,'');
+      const detail=await s.tenderDetail(manager,result.tender.id);
+      assert.equal(detail.tender.data.paymentTerms,'');
+    });
   } finally {
     if(uploadRoot)await fs.rm(uploadRoot,{recursive:true,force:true});
     if(server){server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}

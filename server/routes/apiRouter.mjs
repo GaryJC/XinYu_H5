@@ -55,6 +55,7 @@ import { assertOcrRecordAccess, assertWorkOrderAccess } from "../repositories/ac
 import { confirmOcrRecord, createOcrRecord } from "../repositories/ocrRecordRepository.mjs";
 
 export async function handleApiRequest(req, res, url) {
+  if (await handleAppVersion(req, res, url)) return true;
   if (handleOrderPhotoDownload(req,res,url)) return true;
   if (handlePrintPdfDownload(req, res, url)) return true;
   if (await handleCustomerSignature(req, res, url)) return true;
@@ -419,3 +420,4 @@ export async function handleApiRequest(req, res, url) {
 function requireManager(user) {
   requireAnyRole(user, ["manager"], "仅门店管理员可以配置钉钉组织映射");
 }
+import { handleAppVersion } from './appVersionRouter.mjs';

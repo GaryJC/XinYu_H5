@@ -275,11 +275,28 @@ server {
         proxy_set_header X-Forwarded-Proto https;
     }
 
+    location = /index.html {
+        add_header Cache-Control "no-store" always;
+    }
+
     location / {
+        add_header Cache-Control "no-store" always;
         try_files $uri $uri/ /index.html;
     }
 }
 ```
+
+### 已打开页面的版本提醒
+
+每次 Vite 构建会将同一个唯一版本号嵌入前端和 `dist/app-version.json`。
+`GET /api/app-version` 无需登录，从当前 `STATIC_DIR` 读取版本并返回 `Cache-Control: no-store`；
+不要单独覆盖版本文件，需随整个 `dist` 一起发布。代理层不得缓存此接口或入口 HTML；
+Node 静态服务已对入口禁用缓存，Nginx 直接提供静态文件时使用上面的入口配置。
+
+生产页面首次打开、返回前台以及可见期间每三分钟检查版本。版本不同时显示常驻通知，
+请用户保存当前内容后关闭应用再进入，不自动刷新或代替用户保存。同一标签页会话对每个
+新版本只提醒一次；检查失败保持安静，后续继续检查。开发页面不检查版本。
+首次上线此功能前已打开的旧页面没有检测代码，需要用户先重新进入一次。
 
 启用：
 

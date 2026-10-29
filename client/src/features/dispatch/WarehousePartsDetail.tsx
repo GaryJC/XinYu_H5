@@ -1,3 +1,4 @@
+import { ActionHistory } from "../../shared/ui/ActionHistory";
 import {VehicleNameplatePhotos} from './VehicleNameplatePhotos';
 import {PartsReferencePhotos} from './PartsReferencePhotos';
 import {partsHistoryEvents} from './partsHistory';
@@ -79,11 +80,9 @@ export function WarehousePartsDetail({detail,controller,onOpenOrder}:{detail:Dis
     </Card>:null}
     {canProcessParts(task)&&partsStatus(parts)==='待备料'?<WarehouseStockSearch key={`stock-${task.orderId}`} orderId={task.orderId} requirement={parts}/>:null}
     <Collapse key={task.orderId} className="warehouse-history" items={[{key:'history',label:'申请与备料记录',extra:<span className="warehouse-muted">{events.length} 条</span>,children:
-      <div className="warehouse-events">{events.map(event=><article key={event.id} className="warehouse-event">
-        <div className="warehouse-event-heading"><strong>{dispatchEventLabel(event)}</strong><span>{event.detail.repairRound?`返工第 ${event.detail.repairRound} 轮`:'首次维修'}</span></div>
-        <div className="warehouse-event-meta"><span>{event.actorName}</span><time>{displayTime(event.at)}</time></div>
-        <PartsTable value={(event.detail.partsIssue||event.detail.partsPreparation)&&event.detail.partsRequirement?{...event.detail.partsRequirement,items:(event.detail.partsIssue||event.detail.partsPreparation)!.map(row=>event.detail.partsRequirement!.items[row.index]).filter(Boolean)}:event.detail.partsRequirement}/>
-      </article>)}{!events.length?<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无记录"/>:null}</div>
+      <ActionHistory items={events.map(event=>({key:event.id,title:dispatchEventLabel(event),actor:event.actorName,time:displayTime(event.at),detail:<><p>{event.detail.repairRound?`返工第 ${event.detail.repairRound} 轮`:'首次维修'}</p>
+        <PartsTable value={(event.detail.partsIssue||event.detail.partsPreparation)&&event.detail.partsRequirement?{...event.detail.partsRequirement,items:(event.detail.partsIssue||event.detail.partsPreparation)!.map(row=>event.detail.partsRequirement!.items[row.index]).filter(Boolean)}:event.detail.partsRequirement}/></>}))}/>
+
     }]}/>
   </div>;
 }

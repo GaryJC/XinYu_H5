@@ -16,7 +16,7 @@ import {isCurrentVehicleLicenseException} from '../work-orders/domain/vehicleLic
 import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
 import { QuickDispatchDialog } from "../dispatch/QuickDispatchDialog";
 import { dispatchEnabled } from "../dispatch/dispatchAvailability";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Alert, Button, Card, Empty, Grid, Input, Modal, Popconfirm, Spin, Table, Tag } from "antd";
 import { ChevronRight, PencilLine, Trash2, RefreshCw } from "lucide-react";
 import { WorkOrder } from "../../../../shared/types";
@@ -30,6 +30,17 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
     searchTerm, setSearchTerm, searchedOrders, selectedId, selectOrder, setActiveNav,
     role, currentUser, deleteDraft, actionLoading, ordersLoading
   } = controller;
+  const filterAnchor = useRef<HTMLDivElement>(null);
+  const scrolledEntry = useRef<number | undefined>(undefined);
+  const entryKey = overview && controller.todoEntry?.nav === '工单全览' ? controller.todoEntry.key : undefined;
+  useEffect(() => {
+    if (entryKey === undefined || ordersLoading || scrolledEntry.current === entryKey) return;
+    const frame = requestAnimationFrame(() => {
+      filterAnchor.current?.scrollIntoView({ block: 'start' });
+      scrolledEntry.current = entryKey;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [entryKey, ordersLoading]);
   const signature = useArchiveSignature(currentUser, controller.acceptRefreshedOrder, controller.refreshArchiveSummary);
   const [detailOrderId, setLocalDetailOrderId] = useState<string | undefined>(()=>new URLSearchParams(location.search).get("paperOrder") || undefined);
   const setDetailOrderId=(id?:string)=>{setLocalDetailOrderId(id);if(!id)controller.clearLinkedOrder();};
@@ -104,7 +115,7 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
       </div>
       {["advisor", "manager"].includes(role) && <p className="workbench-archive-help">更新全部已同步且有权限的委托单，不受搜索和分页影响；保留签名、照片和维修进度。更新期间请保持页面打开。</p>}
       {refreshReport}
-      <ArchiveFilterBar key={currentUser?.id} archive={controller.archive} isMobile={isMobile} />
+      <div ref={filterAnchor} className="archive-filter-anchor"><ArchiveFilterBar key={currentUser?.id} archive={controller.archive} isMobile={isMobile} /></div>
 
       {isMobile ? (
         <Spin spinning={ordersLoading} description="正在加载委托单…">

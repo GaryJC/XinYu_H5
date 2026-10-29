@@ -110,3 +110,25 @@ test('failed detail load stops its loader and exposes the failure',async()=>{
  const render=hook('../client/src/features/dispatch/useDispatchController.ts','useDispatchController',{detail:async()=>{throw new Error('任务加载失败');}},[user,'派工台','A']);
  await render().refreshDetail();assert.equal(render().detailLoading,false);assert.equal(render().detail,undefined);assert.equal(render().error,'任务加载失败');
 });
+
+test('procurement keeps loading until all parallel foreground requests finish',async()=>{
+ const a=deferred(),b=deferred();
+ const render=hook('../client/src/features/procurement/useProcurement.ts','useProcurement',{});
+ const first=render().run(()=>a.promise),second=render().run(()=>b.promise);
+ a.resolve();await first;assert.equal(render().busy,true);
+ b.resolve();await second;assert.equal(render().busy,false);
+});
+test('procurement prevents duplicate mutations while the first action is pending',async()=>{
+ const gate=deferred();let calls=0;
+ const api={detail:async()=>({id:'A'}),action:()=>{calls++;return gate.promise;},suppliers:async()=>[],tenders:async()=>[],reports:async()=>[]};
+ const render=hook('../client/src/features/procurement/useProcurement.ts','useProcurement',api);
+ await render().openTender('A');const first=render().action({action:'close'});
+ await render().action({action:'close'});assert.equal(calls,1);
+ gate.resolve({id:'A'});await first;assert.equal(render().busy,false);
+});
+test('an older procurement list response cannot replace a newer refresh',async()=>{
+ const gate=deferred();let calls=0;
+ const render=hook('../client/src/features/procurement/useProcurement.ts','useProcurement',{suppliers:async()=>[],reports:async()=>[],tenders:()=>++calls===1?gate.promise:Promise.resolve([{id:'new'}])});
+ const old=render().load();await render().load();gate.resolve([{id:'old'}]);await old;
+ assert.equal(render().tenders[0].id,'new');
+});

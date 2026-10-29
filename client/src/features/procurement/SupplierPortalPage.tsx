@@ -1,8 +1,8 @@
+import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { LoadingState } from "../../shared/ui/LoadingState";
 import { procurementTotalFen } from "../../../../shared/procurementMoney.mjs";
 import { useEffect,useState } from 'react';
-import { Alert,Button,Card,Checkbox,Form,Input,InputNumber,Modal,Space,Table } from 'antd';
-import type { ProcurementQuote } from '../../../../shared/types';
+import { Alert,Button,Card,Checkbox,Form,Input,InputNumber,Modal,Space } from 'antd';
 import { useSupplierPortal } from './useSupplierPortal';
 import { ProcurementTermsView } from './ProcurementTenderDetail';
 import { ProcurementReportView } from './ProcurementReportView';
@@ -29,18 +29,18 @@ export function SupplierPortalPage() {
         {data.quotes[0]&&data.quotes[0].termsVersion!==data.termsVersion?<Alert type="warning" showIcon title="采购要求已修改，请核对最新信息并重新提交报价。原报价暂不参与比价。"/>:null}
         <ProcurementTermsView terms={data.terms} portal/>
       </Card>
-      {open?<Card title={data.quotes.length?'修改并重新提交报价':'提交报价'}><Form form={form} layout="vertical" initialValues={{unitPrice:data.quotes[0]?.unitPriceFen?data.quotes[0].unitPriceFen/100:undefined,freight:(data.quotes[0]?.freightFen||0)/100,
+      {open?<Card title={data.quotes.length?'修改并重新提交报价':'提交报价'}><Form form={form} disabled={p.busy} layout="vertical" initialValues={{unitPrice:data.quotes[0]?.unitPriceFen?data.quotes[0].unitPriceFen/100:undefined,freight:(data.quotes[0]?.freightFen||0)/100,
         deliveryAt:localDateTime(new Date(data.quotes[0]?.deliveryAt||data.terms.deliveryBy)),note:data.quotes[0]?.note||'',meetsRequirements:false}}
         onFinish={v=>Modal.confirm({title:'确认提交此次报价？',content:`含税含运费总价：${money(procurementTotalFen(Math.round(v.unitPrice*100),data.terms.quantity,Math.round(v.freight*100)))}。截止前可以修改。`,onOk:()=>p.submit({requestId:crypto.randomUUID(),declined:false,unitPriceFen:Math.round(v.unitPrice*100),freightFen:Math.round(v.freight*100),deliveryAt:new Date(v.deliveryAt).toISOString(),meetsRequirements:v.meetsRequirements,note:v.note||''})})}>
         <div className="procurement-form-grid"><Form.Item label="含税单价（元）" name="unitPrice" rules={[{required:true}]}><InputNumber min={0.01} max={100000000} precision={2} style={{width:'100%'}}/></Form.Item>
           <Form.Item label="运费（元）" name="freight" rules={[{required:true}]}><InputNumber min={0} max={100000000} precision={2} style={{width:'100%'}}/></Form.Item>
-          <Form.Item label="承诺交货时间（本地时间）" name="deliveryAt" rules={[{required:true}]}><input type="datetime-local"/></Form.Item>
+          <Form.Item label="承诺交货时间（本地时间）" name="deliveryAt" rules={[{required:true}]}><input type="datetime-local" disabled={p.busy}/></Form.Item>
           <Form.Item label="报价备注" name="note"><Input.TextArea maxLength={1000}/></Form.Item></div>
         <div className="procurement-stat">含税含运费总价<strong>{money(procurementTotalFen(Math.round(unitPrice*100),data.terms.quantity,Math.round(freight*100)))}</strong></div>
-        <Form.Item name="meetsRequirements" valuePropName="checked" rules={[{validator:(_,v)=>v?Promise.resolve():Promise.reject(new Error('请确认满足采购要求'))}]}><Checkbox>确认满足本次配件规格、品牌、数量、质量及发票付款要求</Checkbox></Form.Item>
+        <Form.Item name="meetsRequirements" valuePropName="checked" rules={[{validator:(_,v)=>v?Promise.resolve():Promise.reject(new Error('请确认满足采购要求'))}]}><Checkbox>确认满足本次配件规格、品牌、数量及已填写的发票付款要求</Checkbox></Form.Item>
         <Space wrap><Button type="primary" htmlType="submit" loading={p.busy}>确认提交报价</Button><Button danger disabled={p.busy} onClick={()=>Modal.confirm({title:'确认放弃本次报价？',content:'结束收集前可以重新报价。',onOk:()=>p.submit({requestId:crypto.randomUUID(),declined:true,note:'主动放弃'})})}>放弃报价</Button></Space>
       </Form></Card>:<Alert type="info" title="报价收集已结束，不能新增或修改报价。"/>}
-      <Card title="我的报价记录"><Table<ProcurementQuote> rowKey="id" scroll={{x:550}} dataSource={data.quotes} pagination={false} columns={[{title:'提交时间',dataIndex:'submittedAt',render:dateTime},{title:'报价',render:(_,q)=>q.declined?'主动放弃':money(q.totalFen)},{title:'交货时间',dataIndex:'deliveryAt',render:dateTime},{title:'备注',dataIndex:'note'}]}/></Card>
+      <ActionHistory title="我的报价记录" emptyText="暂无报价记录" items={data.quotes.map(q=>({key:q.id,title:q.declined?'主动放弃':`提交报价 · ${money(q.totalFen)}`,actor:data.supplierName,time:dateTime(q.submittedAt),detail:<>{!q.declined?<p>承诺交货：{dateTime(q.deliveryAt)}</p>:null}{q.note?<p>{q.note}</p>:null}</>}))}/>
     </>}
   </div></main>;
 }

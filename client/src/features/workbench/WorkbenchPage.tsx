@@ -3,7 +3,7 @@ import { userRoles } from "../../../../shared/roles.mjs";
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import { EmployeeBindingGate } from "../employee-binding/EmployeeBindingGate";
 import { lazy, Suspense, useState } from "react";
-import { ArrowUp, ClipboardCheck, LockKeyhole, Menu, RefreshCcw, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowUp, ClipboardCheck, LockKeyhole, Menu, RefreshCcw, UserRound } from "lucide-react";
 import { Alert, Button, Drawer, FloatButton, Grid, Layout, Select, Space } from "antd";
 import { DevelopmentPersonaKey } from "../../../../shared/types";
 import "./workbench.css";
@@ -129,13 +129,15 @@ export function WorkbenchPage() {
 
         {!dispatchEnabled && ["technician", "inspector", "warehouse"].includes(role) ? <Alert type="info" showIcon title="维修与检验功能暂未开放" /> : null}
 
+        {controller.todoEntry?.nav===activeNav?<Button icon={<ArrowLeft size={16} aria-hidden="true" />} onClick={controller.returnFromTodo}>返回工作台</Button>:null}
         {!bindingRequired && activeNav === "工作台" && (dispatchEnabled || !["technician", "inspector", "warehouse"].includes(role)) ? (
           <>
             <div className="workbench-section-heading"><h2>待办概览</h2><span>当前可见委托单</span></div>
+            {controller.todoError?<Alert type="warning" title={controller.todoError}/>:null}
             <section className="workbench-metrics" aria-label="全部待办统计">
-              {counters.map((counter, index) => <div className={`workbench-metric metric-tone-${index}`} key={counter.label}>
-                <span className="workbench-metric-label"><i aria-hidden="true" />{counter.label}</span><strong>{counter.value}<small>单</small></strong>
-              </div>)}
+              {counters.map((counter, index) => <button type="button" className={`workbench-metric metric-tone-${index}`} key={counter.label} aria-label={`查看${counter.label}事项`} onClick={()=>controller.openTodo(counter.label)}>
+                <span className="workbench-metric-label"><i aria-hidden="true" />{counter.label}<span className="metric-arrow" aria-hidden="true">›</span></span><strong>{counter.value ?? "—"}<small>单</small></strong>
+              </button>)}
             </section>
             <section className="workbench-shortcuts" aria-label="快捷入口">
               <div className="workbench-section-heading"><h2>快捷入口</h2><span>常用业务</span></div>
@@ -163,7 +165,7 @@ export function WorkbenchPage() {
 
         {!bindingRequired && dispatchEnabled && currentUser && isDispatchNavigation(activeNav) ? (
           <Suspense fallback={<LoadingState label="正在加载派工模块…" />}>
-            <DispatchPage key={`${currentUser.id}-${activeNav}`} user={currentUser} view={activeNav}/>
+            <DispatchPage key={`${currentUser.id}-${activeNav}-${controller.todoEntry?.key||0}`} user={currentUser} view={activeNav} initialStage={controller.todoEntry?.nav===activeNav?controller.todoEntry.stage:undefined}/>
           </Suspense>
         ) : null}
 

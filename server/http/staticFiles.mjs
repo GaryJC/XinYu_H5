@@ -23,7 +23,7 @@ async function sendFile(res, target) {
     res.statusCode = 200;
     res.setHeader("Content-Type", contentType(target));
     res.setHeader("Content-Length", body.byteLength);
-    res.setHeader("Cache-Control", target.includes(`${path.sep}assets${path.sep}`) ? "public, max-age=31536000, immutable" : "no-cache");
+    res.setHeader("Cache-Control", target.includes(`${path.sep}assets${path.sep}`) ? "public, max-age=31536000, immutable" : "no-store");
     res.end(body);
     return true;
   } catch {

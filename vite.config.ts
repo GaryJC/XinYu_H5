@@ -1,5 +1,8 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { randomUUID } from "node:crypto";
+
+const appVersion = randomUUID();
 
 const apiProxyTarget = process.env.API_PROXY_TARGET || `http://localhost:${process.env.API_PORT || "8787"}`;
 const devPort = Number(process.env.VITE_PORT || 5173);
@@ -11,7 +14,13 @@ if (isProductionBuild && !process.env.VITE_DINGTALK_CLIENT_ID?.trim()) {
 
 export default defineConfig({
   root: "client",
-  plugins: [react()],
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
+  plugins: [react(), {
+    name: "app-version-manifest",
+    generateBundle() {
+      this.emitFile({ type: "asset", fileName: "app-version.json", source: JSON.stringify({ version: appVersion }) });
+    }
+  }],
   build: {
     // Keep max-width media queries: Vite's modern defaults rewrite them to
     // range syntax (width <= ...), which older DingTalk WebViews ignore.

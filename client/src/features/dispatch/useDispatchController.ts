@@ -5,11 +5,11 @@ import { useCallback,useEffect,useRef,useState } from 'react';
 import type { RepairTaskCounts,DispatchActionRequest,DispatchDetail,DispatchPeople,DispatchTask,TechnicianSummary,UserProfile } from '../../../../shared/types';
 import { dispatchApi,type DispatchFilters } from './dispatchApi';
 export type ActionInput=Omit<DispatchActionRequest,'expectedVersion'|'requestId'>;
-export function useDispatchController(user:UserProfile,view:string,initialOrderId?:string) {
+export function useDispatchController(user:UserProfile,view:string,initialOrderId?:string,initialStage?:string) {
   const feedback = useActionFeedback();
   const manager=hasAnyRole(user, ['manager','advisor']);
   const inspectionLead=manager || view==='检验任务' && hasRole(user, 'inspector');
-  const [filters,setFilters]=useState<DispatchFilters>({stage:view==='检验任务'?'待检验':view==='我的维修'?'进行中':undefined});
+  const [filters,setFilters]=useState<DispatchFilters>({stage:initialStage ?? (view==='检验任务'?'待检验':view==='我的维修'?'进行中':undefined)});
   const [taskCounts,setTaskCounts]=useState<RepairTaskCounts>();
   const [tasks,setTasks]=useState<DispatchTask[]>([]);
   const [people,setPeople]=useState<DispatchPeople>({technicians:[],inspectors:[],contractors:[]});
