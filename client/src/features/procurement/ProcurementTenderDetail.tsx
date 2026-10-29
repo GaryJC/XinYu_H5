@@ -1,10 +1,11 @@
+import {ProcurementPurchaseApproval} from './ProcurementPurchaseApproval';
 import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { LoadingState } from "../../shared/ui/LoadingState";
 import {ProcurementPhoto} from './ProcurementNameplatePhotos';
 import { TenderForm } from "./ProcurementForms";
 import { useState } from 'react';
 import { Alert,Button,Card,Drawer,Grid,Input,Modal,Select,Space,Table,Tag } from 'antd';
-import type { ProcurementInvitation,ProcurementTerms,ProcurementTender } from '../../../../shared/types';
+import type { ProcurementInvitation,ProcurementTerms,ProcurementTender,UserProfile } from '../../../../shared/types';
 import type { ProcurementController } from './useProcurement';
 import { money,dateTime,notificationLabel,procurementAuditLabel,statusLabels } from './procurementApi';
 export function ProcurementTermsView({terms,portal=false}:{terms:ProcurementTerms;portal?:boolean}) {
@@ -13,7 +14,7 @@ export function ProcurementTermsView({terms,portal=false}:{terms:ProcurementTerm
     ['最晚交货',dateTime(terms.deliveryBy)],['发票及付款',terms.paymentTerms||'未指定'],...(terms.qualityRequirements?[['历史质量要求',terms.qualityRequirements]]:[]),
   ].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>{terms.nameplatePhotoIds?.length?<section><h3>铭牌号照片</h3><Space wrap>{terms.nameplatePhotoIds.map(id=><ProcurementPhoto key={id} id={id} portal={portal}/>)}</Space></section>:null}{terms.otherPhotoIds?.length?<section><h3>其他照片</h3><Space wrap>{terms.otherPhotoIds.map(id=><ProcurementPhoto key={id} id={id} portal={portal} label="其他照片"/>)}</Space></section>:null}{terms.imageUrls.length?<div className="procurement-images">{terms.imageUrls.map(u=><a key={u} href={u} target="_blank" rel="noreferrer"><img src={u} alt="配件参考图片" referrerPolicy="no-referrer"/></a>)}</div>:null}</>;
 }
-export function ProcurementTenderDetail({controller:c}:{controller:ProcurementController}) {
+export function ProcurementTenderDetail({controller:c,user}:{controller:ProcurementController;user:UserProfile}) {
   const desktop=Grid.useBreakpoint().md;
   const [editing,setEditing]=useState<ProcurementTender>();
   const [reason,setReason]=useState(''),[winnerId,setWinnerId]=useState<string>(),[invalidating,setInvalidating]=useState<ProcurementInvitation>(),[invalidReason,setInvalidReason]=useState('');
@@ -53,6 +54,7 @@ export function ProcurementTenderDetail({controller:c}:{controller:ProcurementCo
         <Button danger disabled={!reason.trim()} loading={c.busy} onClick={()=>Modal.confirm({title:'取消本次询价？',content:reason,onOk:()=>c.action({action:'cancel',reason})})}>取消询价</Button>
       </Space>
     </Space></Card>:<Alert type={t.status==='awarded'?'success':'info'} title={statusLabels[t.status]} description={t.reason||'按最终最低有效报价确认'}/>}
+    <ProcurementPurchaseApproval key={`${t.id}-${t.purchaseApproval?.submittedAt||'new'}`} tender={t} user={user} controller={c}/>
     <ActionHistory title="通知状态" items={d.notifications.map(n=>({key:n.id,title:notificationLabel(n.status),actor:n.recipientName,detail:n.error?<p>{n.error}</p>:undefined}))}><p>通知未启用时保持排队；结果不确定时查询平台记录，避免盲目重复发送。</p></ActionHistory>
     <ActionHistory title="操作记录" items={d.audit.map(a=>({key:a.id,title:procurementAuditLabel(a.action),actor:a.actor,time:dateTime(a.at),detail:a.detail.reason?<p>{String(a.detail.reason)}</p>:undefined}))}/>
     <Drawer className="procurement-drawer" title="编辑询价信息与截止时间" size={760} open={!!editing} destroyOnHidden onClose={()=>setEditing(undefined)}>

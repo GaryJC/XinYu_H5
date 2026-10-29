@@ -568,7 +568,13 @@ export type ProcurementStatus = 'open' | 'closed' | 'awarded' | 'failed' | 'canc
 export type ProcurementInvitation = {
   id: string; supplierId: string; supplierName: string; quotes: ProcurementQuote[]; invalidReason: string;
 };
+export type ProcurementPurchaseApproval = {
+ status:'pending'|'approved'|'rejected';submittedBy:string;submittedName:string;submittedAt:string;
+ reviewedBy?:string;reviewedName?:string;reviewedAt?:string;reason?:string;
+ snapshot:{paymentMethod:string;purchaseDate:string;supplierName:string;contactName:string;phone:string;handlerPhone:string;invoice:string;recipientUnit:string;note:string;partName:string;specification:string;quantity:number;unit:string;unitPriceFen:number;freightFen:number;totalFen:number;customerAmountFen?:number};
+};
 export type ProcurementTender = {
+  purchaseApproval?:ProcurementPurchaseApproval;
   id: string; version: number; termsVersion: number; data: ProcurementTerms; status: ProcurementStatus; deadline: string | null;
   closedAt: string | null; createdAt: string; winnerId: string | null; reason: string;
   invitations: ProcurementInvitation[];

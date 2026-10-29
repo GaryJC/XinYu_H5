@@ -1,3 +1,4 @@
+import {purchaseApproval} from '../domain/procurementApproval.mjs';
 import {assertProcurementPhotos} from '../repositories/procurementPhotoRepository.mjs';
 import { isDeepStrictEqual } from "node:util";
 import { createHash,randomBytes,randomUUID } from 'node:crypto';
@@ -40,7 +41,16 @@ export async function publishTender(user,body) {
 }
 export async function tenderAction(user,id,body) {
   procurementAccess(user);
-  return transaction(async db=>{await actor(user,db);const tender=await ownedTender(user,id,db);
+  return transaction(async db=>{const fresh=await actor(user,db);const tender=await ownedTender(user,id,db);
+    if(['submit-approval','approve-purchase','reject-purchase'].includes(body.action)) {
+      const approval=purchaseApproval(tender,fresh,body);
+      await repo.savePurchaseApproval(db,id,approval);
+      const label={'submit-approval':'采购提报审批','approve-purchase':'采购审批通过','reject-purchase':'采购审批驳回'}[body.action];
+      await repo.audit(db,{shopId:user.shopId,tenderId:id,actor:fresh.name,action:label,detail:{approval,previousApproval:tender.purchaseApproval||null}});
+      await repo.notificationFanout(db,{shopId:user.shopId,tenderId:id,title:`${label}：${tender.data.partName}`,summary:approval.reason||'请打开询价详情查看采购审批单'});
+      return repo.detail(user.shopId,id,db);
+    }
+
     if(body.action==='close') {
       if(tender.status==='closed')return repo.detail(user.shopId,id,db);
       if(tender.status!=='open')throw new HttpError(409,'询价已结束');

@@ -100,6 +100,27 @@ test('procurement PostgreSQL, supplier isolation, concurrency, reports and notif
       assert.equal((await s.tenderDetail(manager,created.tender.id)).tender.winnerId,sessions[0].supplier.id);
       assert.match((await s.portal(sessions[0].session)).result,/已中标/);assert.match((await s.portal(sessions[1].session)).result,/未中标/);
     });
+    await t.test('purchase approval persists frozen pricing, rejects unauthorized review, handles concurrent review and resubmission',async()=>{
+      const id=created.tender.id;
+      let tender=(await s.tenderDetail(warehouse,id)).tender;
+      const request={action:'submit-approval',expectedVersion:tender.version,paymentMethod:'银行转账',recipientUnit:'门店',contactName:'联系人',phone:'13800000000',handlerPhone:'13900000000',invoice:'增值税专票',note:'测试',totalFen:1};
+      await assert.rejects(()=>s.tenderAction(manager,id,request),e=>e.status===403);
+      await assert.rejects(()=>s.tenderAction(outside,id,request),e=>e.status===404);
+      tender=(await s.tenderAction(warehouse,id,request)).tender;
+      assert.equal(tender.purchaseApproval.status,'pending');
+      const winner=tender.invitations.find(i=>i.supplierId===tender.winnerId);
+      assert.equal(tender.purchaseApproval.snapshot.totalFen,winner.quotes[0].totalFen);
+      await assert.rejects(()=>s.tenderAction(warehouse,id,request),e=>e.status===409);
+      await assert.rejects(()=>s.tenderAction(warehouse,id,{action:'approve-purchase',expectedVersion:tender.version}),e=>e.status===403);
+      tender=(await s.tenderAction(manager,id,{action:'reject-purchase',expectedVersion:tender.version,reason:'核对发票'})).tender;
+      tender=(await s.tenderAction(warehouse,id,{...request,expectedVersion:tender.version,invoice:'确认专票'})).tender;
+      const results=await Promise.allSettled([s.tenderAction(manager,id,{action:'approve-purchase',expectedVersion:tender.version}),s.tenderAction(manager,id,{action:'reject-purchase',expectedVersion:tender.version,reason:'重复审批'})]);
+      assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+      const detail=await s.tenderDetail(manager,id);
+      assert.equal(detail.audit.filter(a=>a.action==='采购提报审批').length,2);
+      assert.ok(detail.audit.some(a=>a.detail.previousApproval?.status==='rejected'));
+      assert.equal(detail.tender.purchaseApproval.snapshot.invoice,'确认专票');
+    });
     await t.test('deadline rejects late quotes before worker runs; early completion is allowed; missed and failed counts',async()=>{
       const timed=await s.publishTender(warehouse,{...body(),deadline:future(1),requestId:randomUUID()});
       const early=await s.publishTender(manager,{...body(),deadline:future(1)});

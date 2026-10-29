@@ -1,0 +1,16 @@
+.purchase-sheet-preview { overflow-x:auto; margin:16px 0; }
+.purchase-approval-sheet { color:#111; background:#fff; font-size:12px; padding:16px; }
+.purchase-approval-sheet h2 { text-align:center; }
+.purchase-approval-sheet table { width:100%; min-width:1000px; border-collapse:collapse; table-layout:fixed; }
+.purchase-approval-sheet th,.purchase-approval-sheet td { border:1px solid #222; padding:8px 4px; overflow-wrap:anywhere; vertical-align:middle; }
+.purchase-signatures { display:flex; justify-content:space-between; margin:28px 0; }
+.procurement-approval-print { display:none; }
+@media print {
+ @page { size:A4 landscape; margin:12mm; }
+ body:has(>.procurement-approval-print)>*:not(.procurement-approval-print) { display:none!important; }
+ body:has(>.procurement-approval-print) { overflow:visible!important; height:auto!important; }
+ .procurement-approval-print { display:block!important; }
+ .procurement-approval-print table { min-width:0; }
+ .purchase-approval-sheet { padding:0; }
+ .purchase-approval-sheet tr { break-inside:avoid; }
+}

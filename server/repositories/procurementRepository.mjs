@@ -9,7 +9,7 @@ export async function saveSupplier(shopId,id,data,db) {
     where procurement_suppliers.shop_id=excluded.shop_id returning *`,[id,shopId,data.name,data.contactName,data.phone,data.categories,data.note,data.active])).rows[0]);
 }
 export async function supplierById(shopId,id,db) {return (await db.query('select * from procurement_suppliers where id=$1 and shop_id=$2',[id,shopId])).rows[0];}
-export async function currentActor(user,db) {return (await db.query('select id,active,role,shop_id as "shopId",name from users where id=$1 for share',[user.id])).rows[0];}
+export async function currentActor(user,db) {return (await db.query('select id,active,role,roles,shop_id as "shopId",name from users where id=$1 for share',[user.id])).rows[0];}
 export async function audit(db,{shopId,tenderId=null,supplierId=null,actor,action,detail={}}) {
   await db.query('insert into procurement_audit(shop_id,tender_id,supplier_id,actor,action,detail) values($1,$2,$3,$4,$5,$6)',[shopId,tenderId,supplierId,actor,action,JSON.stringify(detail)]);
 }
@@ -60,7 +60,7 @@ export async function readTenders(shopId,{id,from,to}={},db=pool) {
   const {rows:invitations}=await db.query(`select i.*,v.reason as invalid_reason from procurement_invitations i left join procurement_invalidations v on v.invitation_id=i.id where i.tender_id=any($1::uuid[]) order by i.id`,[ids]);
   const {rows:quotes}=await db.query(`select q.* from procurement_quotes q join procurement_invitations i on i.id=q.invitation_id where i.tender_id=any($1::uuid[]) order by q.submitted_at desc,q.id desc`,[ids]);
   return rows.map(r=>({id:r.id,version:r.version,termsVersion:r.terms_version,data:r.data,status:effectiveStatus(r),deadline:iso(r.deadline),closedAt:iso(r.closed_at||(r.status==='open'&&r.deadline&&Date.parse(r.deadline)<=Date.now()?r.deadline:null)),
-    createdAt:iso(r.created_at),winnerId:r.winner_id,reason:r.reason,invitations:invitations.filter(i=>i.tender_id===r.id).map(i=>({id:i.id,supplierId:i.supplier_id,supplierName:i.supplier_snapshot.name,invalidReason:i.invalid_reason||'',
+    purchaseApproval:r.purchase_approval||undefined,createdAt:iso(r.created_at),winnerId:r.winner_id,reason:r.reason,invitations:invitations.filter(i=>i.tender_id===r.id).map(i=>({id:i.id,supplierId:i.supplier_id,supplierName:i.supplier_snapshot.name,invalidReason:i.invalid_reason||'',
       quotes:quotes.filter(q=>q.invitation_id===i.id).map(q=>({...q.data,id:q.id,termsVersion:q.terms_version,submittedAt:iso(q.submitted_at)}))}))}));
 }
 export async function detail(shopId,id,db=pool) {
@@ -108,4 +108,8 @@ export async function amendTender(db,id,{data,deadline,termsChanged,reopen}) {
     status=case when $5 then 'open' else status end,closed_at=case when $5 then null else closed_at end where id=$1`,
     [id,JSON.stringify(data),deadline,termsChanged,reopen]);
   if(termsChanged)await db.query('delete from procurement_invalidations where invitation_id in (select id from procurement_invitations where tender_id=$1)',[id]);
+}
+
+export async function savePurchaseApproval(db,id,approval) {
+ await db.query('update procurement_tenders set purchase_approval=$2,version=version+1 where id=$1',[id,JSON.stringify(approval)]);
 }
