@@ -1,3 +1,4 @@
+import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { useSignatureMode } from "./useSignatureMode";
 import { SignatureShare } from "./SignatureShare";
 import { useEffect, useState } from "react";
@@ -19,6 +20,7 @@ type Props = {
 };
 
 export function WorkOrderSignatureDialog({ session, completeSignature, onClose, onOrderUpdated }: Props) {
+  const feedback = useActionFeedback();
   const [signatureSession, setSignatureSession] = useState(session);
   const [signatureImage, setSignatureImage] = useState("");
   const [signatureSubmitting, setSignatureSubmitting] = useState(false);
@@ -46,9 +48,11 @@ export function WorkOrderSignatureDialog({ session, completeSignature, onClose, 
     setSignatureSubmitting(true);
     try {
       await completeSignature(signatureSession.order, signatureSession.token, signatureImage);
+      feedback.success("签字已保存并确认");
       setSignatureCompleted(true);
       setSignatureResult(supplemental ? "现场补充签名已保存并确认。" : "现场签字已确认，已提交润丰同步及后续流程。");
     } catch (error) {
+      feedback.error(error);
       setSignatureResult(error instanceof Error ? error.message : "签字保存失败");
     } finally {
       setSignatureSubmitting(false);
@@ -95,7 +99,8 @@ export function WorkOrderSignatureDialog({ session, completeSignature, onClose, 
                 {!signatureCompleted && (supplemental || remote) && <SignatureShare session={signatureSession} onRenew={setSignatureSession} onUpdated={order => {
                   onOrderUpdated(order);
                   if (order.customerSignatureFileId) {
-                    setSignatureCompleted(true);
+                    feedback.success("签字已保存并确认");
+      setSignatureCompleted(true);
                     setSignatureResult("客户已完成签字，需确认用户签字。请关闭弹窗后核对并确认。");
                   }
                 }} />}

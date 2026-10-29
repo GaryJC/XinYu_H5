@@ -18,7 +18,7 @@ export function useInlineDispatch(task:DispatchTask,onEdit:()=>void) {
   const changeNote=(note:string)=>change({note});
   const validTime=Boolean(dueAt)&&Number.isFinite(Date.parse(`${dueAt}:00+08:00`));
   const mode=execution.executionMode||'internal';
-  const validExecution=mode==='field'?Boolean(execution.serviceUnit?.trim()&&execution.serviceAddress?.trim()):mode==='outsourced'?Boolean(execution.contractorId):true;
+  const validExecution=mode==='field'?Boolean(execution.serviceUnit?.trim()&&execution.serviceAddress?.trim()):mode==='outsourced'?Boolean(execution.contractor?.trim()&&execution.outsourcingMode):true;
   function request(rows:RepairItemEdit[]):ActionInput {
     const input:ActionInput={...execution,action:'assign',technicianIds:mode==='outsourced'?[]:[...new Set(rows.map(row=>row.responsibleId).filter((id):id is string=>Boolean(id)))],repairItems:rows.map(row=>({id:row.id,name:row.name,...(mode!=='outsourced'?{responsibleId:row.responsibleId}:{})})),dueAt:new Date(`${dueAt}:00+08:00`).toISOString(),urgent,note};
     if(task.repairRound)delete input.agreedFee;

@@ -301,7 +301,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       const {handleApiRequest}=await import('../server/routes/apiRouter.mjs');
       const {createTokenForUser}=await import('../server/auth.mjs');
       const {createAuthSession}=await import('../server/repositories/userRepository.mjs');
-      server=createServer((req,res)=>{const work=(async()=>{try{const handled=await handleApiRequest(req,res,new URL(req.url,'http://localhost'));if(!handled) await serveStatic(res,new URL(req.url,'http://localhost').pathname,path.resolve('dist'));}catch(e){res.statusCode=e.status||500;res.setHeader('content-type','application/json');res.end(JSON.stringify({error:e.message}));}})();inFlight.add(work);void work.finally(()=>inFlight.delete(work));});
+      server=createServer((req,res)=>{const work=(async()=>{try{const handled=await handleApiRequest(req,res,new URL(req.url,'http://localhost'));if(!handled) await serveStatic(res,new URL(req.url,'http://localhost').pathname,path.resolve(process.env.DISPATCH_TEST_DIST_DIR||'dist'));}catch(e){res.statusCode=e.status||500;res.setHeader('content-type','application/json');res.end(JSON.stringify({error:e.message}));}})();inFlight.add(work);void work.finally(()=>inFlight.delete(work));});
       await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const base=`http://127.0.0.1:${server.address().port}`;
       const token=createTokenForUser(manager.id);await createAuthSession({token,userId:manager.id,expiresAt:new Date(Date.now()+3600000)});
       const call=(path,body)=>fetch(base+path,{method:body?'POST':'GET',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
@@ -446,7 +446,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
     await t.test('draft team and outsourced plans round-trip and activate without a fictional technician',async()=>{
       const {saveDispatchPlan,readDispatchPlans}=await import('../server/repositories/dispatchPlanRepository.mjs');
       const {activateDispatchPlan}=await import('../server/services/dispatchPlanService.mjs');
-      for(const [id,fields] of [['draft-team',{executionMode:'field',technicianIds:[tech.id,tech2.id],serviceUnit:'客户车队',serviceAddress:'客户停车场'}],['draft-outsourced',{executionMode:'outsourced',contractorId:'external',contractor:'测试外包单位',outsourcingMode:'offsite',agreedFee:500,handedOverAt:new Date().toISOString()}]]) {
+      for(const [id,fields] of [['draft-team',{executionMode:'field',technicianIds:[tech.id,tech2.id],serviceUnit:'客户车队',serviceAddress:'客户停车场'}],['draft-outsourced',{executionMode:'outsourced',contractor:'手填承包方',outsourcingMode:'offsite',agreedFee:500,handedOverAt:new Date().toISOString()}]]) {
         await seed(id);
         await database.transaction(async client=>{
           await saveDispatchPlan(client,{id,shop:{id:'shop-hq'}},advisor,{...fields,dueAt});
@@ -455,13 +455,81 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
           await activateDispatchPlan(client,{id,shop:{id:'shop-hq'},repairItems:[{id:1,name:'项目1'},{id:2,name:'项目2'}]});
         });
         const task=(await service.dispatchDetail(advisor,id)).task;
-        assert.equal(task.executionMode,fields.executionMode);assert.equal(task.stage,'待接单');
+        assert.equal(task.executionMode,fields.executionMode);assert.equal(task.stage,fields.executionMode==='outsourced'?'待开工':'待接单');
         if(fields.executionMode==='outsourced') {
-          assert.equal(task.technicianId,'external');assert.equal(task.agreedFee,500);
-          assert.equal((await pool.query('select technician_id from work_order_dispatch_plans where order_id=$1',[id])).rows[0].technician_id,'external');
+          assert.equal(task.technicianId,undefined);assert.equal(task.contractor,'手填承包方');assert.equal(task.agreedFee,500);
+          assert.equal((await pool.query('select technician_id from work_order_dispatch_plans where order_id=$1',[id])).rows[0].technician_id,null);
           assert.ok((await pool.query('select recipient_id from dispatch_notifications where order_id=$1',[id])).rows.every(r=>![tech.id,tech2.id].includes(r.recipient_id)));
         } else assert.deepEqual(task.technicianIds,[tech.id,tech2.id]);
       }
+    });
+    await t.test('outsourced parts belong to the dispatcher and direct completion persists settlement without inspection',async()=>{
+      const id='outsourced-direct-completion';await seed(id);
+      const warehouse={id:'warehouse',name:'仓管',role:'warehouse',shopId:'shop-hq',active:true};
+      let current=(await service.dispatchDetail(advisor,id)).task;
+      const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+      await run(advisor,'assign',{executionMode:'outsourced',outsourcingMode:'onsite',contractor:'未注册的王师傅',dueAt});
+      assert.deepEqual(current.technicianIds,[]);assert.equal(current.stage,'待开工');
+      const partsRequirement={mode:'list',items:[{name:'机油',quantity:1,unit:'桶'}]};
+      await assert.rejects(run(manager,'record-parts',{partsRequirement}),e=>e.status===403);
+      await run(advisor,'record-parts',{partsRequirement});
+      const parts=await pool.query("select recipient_id from dispatch_notifications where order_id=$1 and kind='配件申请'",[id]);
+      assert.ok(parts.rows.some(row=>row.recipient_id===warehouse.id));
+      await run(warehouse,'confirm-parts',{preparationGroups:[{items:[{index:0,recipientId:advisor.id}]}]});
+      const pickup=(await pool.query("select * from dispatch_notifications where order_id=$1 and kind='配件可领取'",[id])).rows;
+      assert.equal(pickup.length,1);assert.equal(pickup[0].recipient_id,advisor.id);
+      const {validatePartsPickupNotification}=await import('../server/repositories/partsRequirementRepository.mjs');
+      assert.equal(await validatePartsPickupNotification(pickup[0],advisor,pool),true);
+      const request={action:'complete-outsourced',expectedVersion:current.version,requestId:randomUUID()};
+      await assert.rejects(service.executeDispatchAction(advisor,id,request),/维修照片/);
+      await progressPhoto(id);
+      current=(await service.executeDispatchAction(advisor,id,request)).task;
+      await service.executeDispatchAction(advisor,id,request);
+      assert.equal(current.stage,'维修完成');assert.equal(current.orderStatus,'待结算');assert.equal(current.inspectorId,undefined);
+      assert.ok(current.items.every(item=>item.status==='已完工'&&!item.inspectedAt));
+      assert.equal((await pool.query("select count(*) from dispatch_events where order_id=$1 and action='complete-outsourced'",[id])).rows[0].count,'1');
+      assert.equal((await pool.query('select count(*) from dispatch_inspection_notifications where order_id=$1',[id])).rows[0].count,'0');
+      assert.equal((await pool.query('select status from repair_writebacks where order_id=$1',[id])).rows[0].status,'manual');
+    });
+    await t.test('team-to-outsourced conversion validates new photos and preserves inherited warehouse fulfillment',async()=>{
+      const id='team-converted-outsourced';await seed(id);
+      const warehouse={id:'warehouse',name:'仓管',role:'warehouse',shopId:'shop-hq',active:true};
+      let current=(await service.dispatchDetail(advisor,id)).task;
+      const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+      const partsRequirement={mode:'list',items:[{name:'旧申请机油',quantity:1,unit:'桶'}]};
+      await run(advisor,'assign',{technicianIds:[tech.id,tech2.id],dueAt,repairItems:[{id:1,name:'项目1',responsibleId:tech.id},{id:2,name:'项目2',responsibleId:tech2.id}]});
+      await run(tech,'accept',{partsRequirement});
+      await run(tech2,'record-parts',{partsRequirement});
+      await run(advisor,'reassign',{executionMode:'outsourced',outsourcingMode:'onsite',contractor:'临时师傅',dueAt,reason:'整单外包'});
+      assert.equal(current.partsRequests.length,2);
+      const version=current.version;
+      await pool.query("delete from files where order_id=$1 and kind='vehicle_nameplate_photo'",[id]);
+      await assert.rejects(run(advisor,'record-parts',{partsRequirement}),/铭牌/);
+      await progressPhoto(id,0,'vehicle_nameplate_photo');
+      await assert.rejects(run(advisor,'record-parts',{partsRequirement:{mode:'photo',photoIds:['nonexistent-photo']}}),/手写清单/);
+      await assert.rejects(run(advisor,'record-parts',{partsOwnerId:tech.id,partsRequirement}),e=>e.status===400);
+      assert.equal((await service.dispatchDetail(advisor,id)).task.version,version);
+      await run(advisor,'record-parts',{partsRequirement});
+      const notices=(await pool.query("select * from dispatch_notifications where order_id=$1 and kind='配件申请' and payload->>'partsOwnerId' is null",[id])).rows;
+      assert.equal(notices.length,1);assert.equal(notices[0].recipient_id,warehouse.id);
+      const {validatePartsPickupNotification}=await import('../server/repositories/partsRequirementRepository.mjs');
+      assert.equal(await validatePartsPickupNotification(notices[0],warehouse,pool),true);
+      await run(warehouse,'confirm-parts',{partsPreparation:[{index:0,recipientId:advisor.id}]});
+      assert.equal(current.stage,'待开工');assert.equal(current.firstStartedAt,undefined);
+      await assert.rejects(run(advisor,'start-order'),/备齐/);
+      for(const owner of [tech,tech2]) {
+        await run(warehouse,'confirm-parts',{partsOwnerId:owner.id});
+        const pickup=(await pool.query("select * from dispatch_notifications where order_id=$1 and kind='配件可领取' and payload->>'partsOwnerId'=$2",[id,owner.id])).rows;
+        assert.equal(pickup.length,1);assert.equal(pickup[0].recipient_id,advisor.id);
+        assert.equal(await validatePartsPickupNotification(pickup[0],advisor,pool),true);
+      }
+      assert.equal(current.stage,'维修中');assert.ok(current.items.every(item=>item.startedBy===advisor.id));
+      await run(warehouse,'issue-parts',{partsOwnerId:tech.id});
+      assert.deepEqual(current.partsRequests.find(parts=>parts.ownerId===tech.id).recipientIds,[advisor.id]);
+      await assert.rejects(run(advisor,'complete-outsourced'),/维修照片/);
+      await progressPhoto(id);
+      await run(advisor,'complete-outsourced');
+      assert.equal(current.stage,'维修完成');
     });
     await t.test('scheduler project edits and selective reassignment persist owners, audit and affected notifications atomically',async()=>{
       const id='scheduler-project-dispatch';await seed(id);
@@ -1278,7 +1346,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         for(const [index,ownerId] of [[1,'tech'],[2,'tech2']]) {
           await dialog.getByRole('combobox',{name:`维修项目 ${index} 负责人`,exact:true}).click();
           await managerPage.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText(`同名技师（账号 ${ownerId}）`,{exact:true}).click();
-          await managerPage.locator('.ant-select-dropdown:visible').waitFor({state:'hidden'});
+          await managerPage.waitForFunction(()=>[...document.querySelectorAll('.ant-select-dropdown')].every(element=>getComputedStyle(element).display==='none'||element.getBoundingClientRect().height===0));
         }
         await dialog.getByRole('button',{name:'确认派工并通知',exact:true}).click();
         await dialog.locator('.inline-dispatch-form').waitFor({state:'hidden'});
@@ -1308,9 +1376,11 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await managerDrawer.getByLabel('维修项目 2 名称',{exact:true}).waitFor();
         assert.equal(await managerDrawer.getByLabel('维修项目 1 名称',{exact:true}).count(),0);
         await managerPage.screenshot({path:'output/playwright/dispatch-qa/multi-partial-inspection.png',fullPage:true,animations:'disabled'});
-        const secondWorker=await pageFor(tech2,true);
+        const secondUiTech=people.find(p=>p.id===ui.items[1].responsibleId);
+        assert.notEqual(secondUiTech.id,uiTech.id);
+        const secondWorker=await pageFor(secondUiTech,true);
         const secondDetail=secondWorker.locator('.technician-detail');
-        await secondDetail.getByRole('button',{name:'向仓库申请领料',exact:true}).click();
+        await secondDetail.getByRole('button',{name:/向仓库申请领料$/}).click();
         const secondParts=secondWorker.getByRole('dialog',{name:'向仓库申请领料',exact:true});
         await secondParts.getByText('无需配件',{exact:true}).click();
         await secondParts.getByRole('button',{name:'发送仓库',exact:true}).click();
@@ -1435,21 +1505,20 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
           assert.equal(current.workerPauses?.[tech2.id],undefined);
           await run(tech2,'submit-order');assert.equal(current.stage,'待检验');
         }
-        // Historical external contractors have no employee login; the advisor must be able to resubmit review.
+        // Historical external tasks complete internally without a new inspection.
         {
           const id='ui-legacy-contractor-review';await seed(id);
           let current=(await service.dispatchDetail(advisor,id)).task;
           Object.assign(current,{executionMode:'outsourced',contractor:'历史承包方',outsourcingMode:'offsite',stage:'待检验',technicianIds:[],technicianId:undefined,acceptedAt:new Date().toISOString()});
           current.items.forEach(item=>{item.status='待检验';delete item.responsibleId;});
           await repo.saveDispatchTask(pool,current);await progressPhoto(id);
-          await service.executeDispatchAction(inspector,id,{action:'send-review',expectedVersion:current.version,requestId:randomUUID()});
           const page=await pageFor(advisor,true,id);
           const form=page.locator('.dispatch-detail');
-          await form.getByRole('button',{name:'提交回审',exact:true}).click();
-          const modal=page.getByRole('dialog',{name:'提交回审',exact:true});
+          await form.getByRole('button',{name:'登记外包完工',exact:true}).click();
+          const modal=page.getByRole('dialog',{name:'登记外包完工',exact:true});
           await modal.getByRole('button',{name:/^确\s*认$/}).click();await modal.waitFor({state:'hidden'});
           current=(await service.dispatchDetail(advisor,id)).task;
-          assert.equal(current.stage,'待检验');assert.ok(current.items.every(item=>item.finishedBy===advisor.id));
+          assert.equal(current.stage,'维修完成');assert.ok(current.items.every(item=>item.finishedBy===advisor.id));
           await assertActionBarLayout(page);
         }
         for(const outsourcingMode of ['onsite','offsite']) {
@@ -1464,8 +1533,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
             await form.getByLabel('交车时间',{exact:true}).fill('2026-09-14T10:00');
             await form.getByLabel('收车时间',{exact:true}).fill('2026-09-15T10:00');
           }
-          await form.getByRole('combobox',{name:'承包方',exact:true}).click();
-          await page.getByText('测试外包单位',{exact:true}).last().click();
+          await form.getByRole('textbox',{name:'承包方',exact:true}).fill('手填张师傅');
           await form.getByLabel('约定费用',{exact:true}).fill('500');
           await form.getByLabel('预计完工时间',{exact:true}).fill('2026-12-31T18:00');
           await page.screenshot({path:`output/playwright/dispatch-qa/${outsourcingMode}-form-mobile.png`});
@@ -1473,10 +1541,10 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
           const task=(await service.dispatchDetail(advisor,id)).task;
           assert.equal(task.executionMode,'outsourced');assert.equal(task.outsourcingMode,outsourcingMode);assert.equal(task.agreedFee,500);
           assert.equal(await page.locator('.dispatch-detail').getByRole('button',{name:/^改\s*派$/}).count(),0);
-          await page.locator('.dispatch-detail').getByRole('button',{name:'确认接单',exact:true}).click();
-          const acceptForm=page.getByRole('dialog',{name:'确认接单 · 登记所需配件',exact:true});
+          await form.getByRole('button',{name:'补充／修改配件需求',exact:true}).click();
+          const acceptForm=page.getByRole('dialog',{name:'向仓库申请领料',exact:true});
           await acceptForm.getByText('无需配件',{exact:true}).click();
-          await acceptForm.getByRole('button',{name:'接单并开始维修',exact:true}).click();
+          await acceptForm.getByRole('button',{name:'发送仓库',exact:true}).click();
           await acceptForm.waitFor({state:'hidden'});
           assert.equal((await service.dispatchDetail(advisor,id)).task.stage,'维修中');
           // Outsourced progress must remain available inside the project editor.
@@ -1489,18 +1557,17 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
             const finish=form.getByRole('button',{name:`项目完成：${name}`,exact:true});
             await finish.click();await finish.waitFor({state:'hidden'});
             if(name==='项目1') {
-              await form.getByRole('heading',{name:'待检项目 · 1 项',exact:true}).waitFor();
+              assert.equal(await form.getByRole('heading',{name:'待检项目 · 1 项',exact:true}).count(),0);
               await form.getByRole('button',{name:'项目完成：项目2',exact:true}).waitFor();
             }
           }
           await form.getByLabel('维修记录从相册选择').setInputFiles({name:'外包维修记录.png',mimeType:'image/png',buffer:photo});
           await form.getByText(/已保存/).first().waitFor();
-          await form.getByRole('button',{name:'提报检验',exact:true}).click();
-          const submit=page.getByRole('dialog',{name:'提报检验',exact:true});
-          await submit.getByRole('combobox',{name:'指定检验员',exact:true}).click();
-          await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').getByText(inspector.name,{exact:true}).click();
+          assert.equal(await form.getByRole('button',{name:'提报检验',exact:true}).count(),0);
+          await form.getByRole('button',{name:'登记外包完工',exact:true}).click();
+          const submit=page.getByRole('dialog',{name:'登记外包完工',exact:true});
           await submit.getByRole('button',{name:/^确\s*认$/}).click();await submit.waitFor({state:'hidden'});
-          assert.equal((await service.dispatchDetail(advisor,id)).task.stage,'待检验');
+          assert.equal((await service.dispatchDetail(advisor,id)).task.stage,'维修完成');
           await page.screenshot({path:`output/playwright/dispatch-qa/${outsourcingMode}-mobile.png`});
           assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
         }

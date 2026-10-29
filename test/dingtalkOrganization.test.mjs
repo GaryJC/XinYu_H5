@@ -35,17 +35,17 @@ test("old ID and department rules cannot deny or override a named role", () => {
   assert.equal(result.shopId, "shop-hq");
   assert.equal(resolve(profile(["自定义员工"]), {
     roleMappings: [{ dingtalkRoleId: "1", appRole: "manager", enabled: true }]
-  }), undefined);
+  }).role, "employee");
 });
 
-test("missing roles, job titles and role group names do not grant access", () => {
-  assert.equal(resolve(profile([])), undefined);
-  assert.equal(resolve(profile(["普通员工"])), undefined);
+test("missing roles, job titles and role group names grant only basic employee access", () => {
+  assert.equal(resolve(profile([])).role, "employee");
+  assert.deepEqual(resolve(profile(["普通员工"])).roles, ["employee"]);
   const user = normalizeDingTalkUserProfile({
     title: "门店管理员",
     role_list: [{ id: 1, group_name: "门店管理员" }]
   }, "employee");
-  assert.equal(resolve(user), undefined);
+  assert.equal(resolve(user).role, "employee");
 });
 
 test("preserves existing store ownership regardless of department or role changes", () => {
@@ -65,5 +65,5 @@ test("multiple roles resolve by explicit priority independent of response order"
 test("only service advisor and store manager names grant scheduling roles",()=>{
   assert.equal(resolve(profile(["服务顾问"])).role,"advisor");
   assert.equal(resolve(profile(["门店管理员"])).role,"manager");
-  for(const name of ["派单员","调度员"]) assert.equal(resolve(profile([name])),undefined);
+  for(const name of ["派单员","调度员"]) assert.equal(resolve(profile([name])).role,"employee");
 });

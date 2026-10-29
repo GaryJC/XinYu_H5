@@ -1,8 +1,10 @@
+import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { useEffect, useRef, useState } from 'react';
 import type { CustomerSignatureSession } from '../../../../shared/types';
 import { customerSignatureApi } from './customerSignatureApi';
 
 export function useCustomerSignature() {
+  const feedback = useActionFeedback();
   const [token] = useState(() => { try { return decodeURIComponent(location.hash.slice(1)); } catch { return ''; } });
   const [session, setSession] = useState<CustomerSignatureSession>();
   const [image, setImage] = useState('');
@@ -29,11 +31,12 @@ export function useCustomerSignature() {
   async function submit() {
     if (running.current || !image || !confirmed || session?.state !== 'pending') return;
     running.current = true; setBusy(true); setError('');
-    try { setSession(await customerSignatureApi.sign({ token, imageBase64: image, confirmed })); }
+    try { setSession(await customerSignatureApi.sign({ token, imageBase64: image, confirmed })); feedback.success("签字已提交"); }
     catch (reason) {
       setError(reason instanceof Error ? reason.message : '签字提交失败，请重试');
       // Recover a successful commit whose response was lost, or another device's signature.
-      try { const current = await customerSignatureApi.session(token); if (current.state === 'signed') setSession(current); } catch { /* Keep the original actionable error. */ }
+      try { const current = await customerSignatureApi.session(token); if (current.state === 'signed') { setSession(current); setError(''); feedback.success('签字已提交'); return; } } catch { /* Keep the original actionable error. */ }
+      feedback.error(reason);
     } finally { running.current = false; setBusy(false); }
   }
   return { session, image, setImage, confirmed, setConfirmed, busy, loading, error, landscape, setLandscape, submit };

@@ -152,7 +152,8 @@ test('outsourced start keeps the scheduling owner after warehouse transcription'
  assert.equal(edited.items[0].startedBy,'advisor');assert.ok(!edited.participantIds.includes('w'));
  const ready=applyDispatchAction(task,request(task,'confirm-parts'),warehouse,[]);
  assert.throws(()=>applyDispatchAction(ready,request(ready,'issue-parts'),warehouse,[]),/领料人必须/);
- const issued=applyDispatchAction({...ready,technicianId:'t',technicianIds:['t']},request(ready,'issue-parts'),warehouse,[tech]);
+ const issued=applyDispatchAction({...ready,technicianId:'t',technicianIds:['t']},request(ready,'issue-parts'),warehouse,[tech,{id:'advisor',name:'派工人',role:'advisor',active:true,shopId:task.shopId}]);
+ assert.deepEqual(issued.partsRequirement.recipientIds,['advisor']);
  assert.equal(issued.items[0].startedBy,'advisor');assert.ok(!issued.participantIds.includes('w'));
 });
 

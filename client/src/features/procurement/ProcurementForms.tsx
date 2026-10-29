@@ -4,13 +4,13 @@ import { Button,Checkbox,Form,Input,InputNumber,Select,Space } from 'antd';
 import type { ProcurementSupplier,ProcurementSupplierInput,ProcurementCreateInput,ProcurementTender } from '../../../../shared/types';
 import { localDateTime } from './procurementApi';
 export function SupplierForm({supplier,busy,onSave,onCancel}:{supplier?:ProcurementSupplier;busy:boolean;onSave:(body:ProcurementSupplierInput)=>Promise<void>;onCancel:()=>void}) {
-  return <Form layout="vertical" initialValues={supplier||{active:true,categories:'',note:''}} onFinish={onSave}>
+  return <Form disabled={busy} layout="vertical" initialValues={supplier||{active:true,categories:'',note:''}} onFinish={onSave}>
     <Form.Item name="name" label="供应商名称" rules={[{required:true,max:100}]}><Input autoComplete="organization"/></Form.Item>
     <Form.Item name="contactName" label="联系人姓名" rules={[{required:true,max:100}]}><Input autoComplete="name"/></Form.Item>
     <Form.Item name="phone" label="预留手机号" rules={[{required:true,pattern:/^1\d{10}$/,message:'请输入11位手机号'}]}><Input inputMode="tel" autoComplete="tel"/></Form.Item>
     <Form.Item name="categories" label="主营配件"><Input maxLength={200}/></Form.Item><Form.Item name="note" label="内部备注"><Input.TextArea maxLength={1000}/></Form.Item>
     <Form.Item name="active" valuePropName="checked"><Checkbox>启用供应商</Checkbox></Form.Item>
-    <Space><Button type="primary" htmlType="submit" loading={busy}>保存供应商</Button><Button onClick={onCancel}>取消</Button></Space>
+    <Space><Button type="primary" htmlType="submit" loading={busy}>保存供应商</Button><Button disabled={busy} onClick={onCancel}>取消</Button></Space>
   </Form>;
 }
 export function TenderForm({suppliers,busy,onSave,onCancel,tender}:{suppliers:ProcurementSupplier[];tender?:ProcurementTender;busy:boolean;onSave:(body:ProcurementCreateInput)=>Promise<void>;onCancel:()=>void}) {
@@ -44,6 +44,6 @@ export function TenderForm({suppliers,busy,onSave,onCancel,tender}:{suppliers:Pr
       {hasDeadline?<Form.Item name="deadline" label="报价截止时间（本地时间）" rules={[{required:true}]}><input type="datetime-local"/></Form.Item>:<p className="procurement-muted">无截止时间，由管理员或仓管手动结束报价。</p>}
     </div>
     <p className="procurement-muted">每次只询价一种配件，邀请名单发布后固定。截止时间可调整；修改采购要求后，供应商须按新要求重新确认报价。</p>
-    <Space><Button type="primary" htmlType="submit" loading={busy} disabled={photoBusy}>{tender?'保存修改':'发布询价并生成链接'}</Button><Button disabled={photoBusy} onClick={onCancel}>取消</Button></Space>
+    <Space><Button type="primary" htmlType="submit" loading={busy} disabled={photoBusy}>{tender?'保存修改':'发布询价并生成链接'}</Button><Button disabled={busy||photoBusy} onClick={onCancel}>取消</Button></Space>
   </Form>;
 }

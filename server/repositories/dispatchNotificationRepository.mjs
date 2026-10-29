@@ -50,8 +50,7 @@ export async function validateAddedRepairRecipient(row,user,database=pool) {
   const data=task.data;
   const ids=data.technicianIds??(data.technicianId?[data.technicianId]:[]);
   const allowed=data.executionMode==='outsourced'
-    ? ids.length ? ids.includes(user.id)&&(hasAnyRole(user,['outsourcing'])||Boolean(user.outsourcingRoleMember))
-      : hasAnyRole(user,['manager','advisor'])
+    ? user.id===data.assignedBy&&hasAnyRole(user,['manager','advisor','inspector'])
     : ids.includes(user.id)&&hasAnyRole(user,['technician']);
   return allowed && row.payload.itemIds.every(id=>data.items?.some(item=>item.id===id
     && !['待检验','已完工'].includes(item.status) && (!item.responsibleId || item.responsibleId===user.id)));

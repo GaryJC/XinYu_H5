@@ -1,8 +1,10 @@
+import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { useEffect, useRef, useState } from "react";
 import type { EmployeeBindingStatus, UserProfile } from "../../../../shared/types";
 import { employeeBindingApi } from "./employeeBindingApi";
 
 export function useEmployeeBinding(user: UserProfile, onBound: (user: UserProfile) => void) {
+  const feedback = useActionFeedback();
   const [status, setStatus] = useState<EmployeeBindingStatus>();
   const [selected, setSelected] = useState<string>();
   const [loading, setLoading] = useState(false);
@@ -16,10 +18,11 @@ export function useEmployeeBinding(user: UserProfile, onBound: (user: UserProfil
     try {
       const next = code ? await employeeBindingApi.confirm(code) : await employeeBindingApi.status();
       if (requestGeneration !== generation.current) return;
+      if (code) feedback.success('员工编码绑定成功');
       setStatus(next); setSelected(undefined);
       if (!next.required && next.employeeCode) callback.current({ ...user, legacyEmployeeCode: next.employeeCode });
     } catch (e) {
-      if (requestGeneration === generation.current) setError(e instanceof Error ? e.message : "员工匹配失败，请重试");
+      if (requestGeneration === generation.current) { if (code) feedback.error(e); setError(e instanceof Error ? e.message : "员工匹配失败，请重试"); }
     } finally {
       if (requestGeneration === generation.current) setLoading(false);
     }

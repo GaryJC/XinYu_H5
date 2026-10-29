@@ -1,3 +1,4 @@
+import { handleVehicleTrips } from "./vehicleTripRouter.mjs";
 import { handleOrderOverview, handleOrderPhotoDownload } from './orderOverviewRouter.mjs';
 import {handleVehicleLicenseHistory} from './vehicleLicenseHistoryRouter.mjs';
 import { handlePendingRepairs } from './pendingRepairsRouter.mjs';
@@ -78,12 +79,16 @@ export async function handleApiRequest(req, res, url) {
 
   if (!url.pathname.startsWith("/api/")) return false;
   const currentUser = requireAuthenticatedUser(await authenticateRequest(req));
-  if(await handleVehicleLicenseHistory(req,res,url,currentUser))return true;
+
 
   if (req.method === "GET" && url.pathname === "/api/auth/me") {
     sendJson(res, 200, currentUser);
     return true;
   }
+
+  if (await handleVehicleTrips(req, res, url, currentUser)) return true;
+  requireAnyRole(currentUser, ["advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"]);
+  if(await handleVehicleLicenseHistory(req,res,url,currentUser))return true;
 
   if (req.method === "GET" && url.pathname === "/api/auth/employee-binding") {
     sendJson(res, 200, await employeeBindingService.status(currentUser));
@@ -198,6 +203,7 @@ export async function handleApiRequest(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/files") {
     requireAnyRole(currentUser, ["advisor", "manager"]);
     const body = await readJson(req);
+    if (String(body.kind).startsWith("trip_")) throw new HttpError(400, "出车附件请通过出车申请上传");
     if (["repair_completed_photo", "repair_parts_photo", "repair_progress_photo"].includes(body.kind)) throw new HttpError(400, "维修照片请通过维修任务上传");
     if (body.orderId) await assertWorkOrderAccess(body.orderId, currentUser);
     sendJson(res, 201, await saveUploadedFile({ ...body, uploadedBy: currentUser.id }));

@@ -2,7 +2,7 @@ import { hasRole } from "../../shared/roles.mjs";
 import {HttpError} from '../http/HttpError.mjs';
 // Names are resolved from authenticated shop personnel, never from request labels.
 export function resolveRepairResponsibilities(task,people,{required=false,rejectInvalid=false}={}) {
- if(task.executionMode==='outsourced'&&!task.contractorId)return task;
+ if(task.executionMode==='outsourced')return task;
  const ids=task.technicianIds??(task.technicianId?[task.technicianId]:[]);
  for(const item of task.items) {
   const locked=['待检验','已完工'].includes(item.status);

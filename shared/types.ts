@@ -1,4 +1,4 @@
-export type RoleKey = "outsourcing" | "warehouse" | "advisor" | "technician" | "inspector" | "manager";
+export type RoleKey = "employee" | "outsourcing" | "warehouse" | "advisor" | "technician" | "inspector" | "manager";
 export type DevelopmentPersonaKey = RoleKey | "unassigned" | "disabled";
 
 export type WorkOrderStatus =
@@ -176,7 +176,7 @@ export type UserProfile = {
   shopId?: string;
   phone?: string;
   lastLoginAt?: string;
-  homeRoute?: "workbench" | "order-create";
+  homeRoute?: "workbench" | "order-create" | "vehicle-trips";
 };
 
 export type DingTalkRoleMapping = {
@@ -184,7 +184,7 @@ export type DingTalkRoleMapping = {
   dingtalkRoleName: string;
   appRole: RoleKey;
   shopId?: string;
-  homeRoute: "workbench" | "order-create";
+  homeRoute: "workbench" | "order-create" | "vehicle-trips";
   enabled: boolean;
 };
 
@@ -471,7 +471,7 @@ export type DispatchTask = DispatchExecution & {
 };
 export type RepairItemEdit = {id?:number;name:string;responsibleId?:string;responsibleName?:string};
 export type PartsPreparationGroup = {partsOwnerId?:string;items:Array<{index:number;recipientId:string}>};
-export type DispatchActionName = "update-technicians" | "update-due" | "send-review" | "submit-review" | "edit-repair-items" | "edit-parts" | "issue-parts" | "confirm-parts" | "record-parts" | "reopen-repair" | "retry-scheduler-notifications" | "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
+export type DispatchActionName = "complete-outsourced" | "update-technicians" | "update-due" | "send-review" | "submit-review" | "edit-repair-items" | "edit-parts" | "issue-parts" | "confirm-parts" | "record-parts" | "reopen-repair" | "retry-scheduler-notifications" | "start-order" | "submit-order" | "claim-inspection" | "reassign-inspection" | "retry-inspection-notifications" | "record-hours" | "assign" | "reassign" | "reoffer" | "cancel" | "accept" | "decline" | "start" | "finish" | "pick" | "pause" | "resume" | "submit" | "inspect" | "update" | "remind" | "retry-notification" | "reconcile";
 export type DispatchActionRequest = DispatchExecution & {
   deferredItemIds?:number[]; deferredReason?:string;
   preparationGroups?:PartsPreparationGroup[];
@@ -512,7 +512,7 @@ export type DispatchDetail = {
   task: DispatchTask; events: DispatchEvent[]; notifications: DispatchNotification[];
   files: Array<Pick<StoredFile,"id"|"orderId"|"kind"|"originalName"|"mimeType"|"sizeBytes"|"createdAt"|"uploadedBy"|"uploadedName"|"repairRound">>;
 };
-export type DispatchPeople = { technicians: UserProfile[]; inspectors: UserProfile[]; contractors: UserProfile[] };
+export type DispatchPeople = { dispatchers?: UserProfile[]; technicians: UserProfile[]; inspectors: UserProfile[]; contractors: UserProfile[] };
 
 
 export type WorkOrderPhotoDelete = { fileIds: string[] };
@@ -632,3 +632,26 @@ export type OrderPhotoCategory = 'reception' | 'repair';
 export type OrderOverview = { order: WorkOrder; dispatch: DispatchDetail };
 export type OrderPhotoExportRequest = { categories: OrderPhotoCategory[] };
 export type OrderPhotoExportDownload = { path: string; fileName: string; expiresAt: string; photoCount: number };
+
+export type CompanyVehicle = {
+  id: string; shopId: string; plate: string; brand: string; model: string; active: boolean;
+};
+export type CompanyVehicleInput = Pick<CompanyVehicle, "plate" | "brand" | "model" | "active">;
+export type VehicleTripStatus = "待审批" | "待出车" | "用车中" | "已还车" | "已驳回" | "已取消";
+export type VehicleTripStage = "departure" | "return" | "signature";
+export type VehicleTripAction = "approve" | "reject" | "cancel" | "depart" | "return";
+export type VehicleTripAttachment = { fileId: string; stage: VehicleTripStage; confirmed: boolean };
+export type VehicleTrip = {
+  id: string; shopId: string; applicantId: string; applicantName: string; vehicleId: string;
+  vehicle: Pick<CompanyVehicle, "plate" | "brand" | "model">;
+  reason: string; note: string; status: VehicleTripStatus; createdAt: string;
+  approvedBy?: string; approvedName?: string; approvedAt?: string;
+  departureAt?: string; returnAt?: string; rejectionReason?: string;
+};
+export type VehicleTripDetail = VehicleTrip & {
+  attachments: VehicleTripAttachment[];
+  history: Array<{ action: string; actorName: string; at: string }>;
+};
+export type VehicleTripCreateInput = { requestId: string; vehicleId: string; reason: string; note: string };
+export type VehicleTripActionInput = { requestId: string; fileIds?: string[]; reason?: string };
+export type VehicleTripUploadInput = { requestId: string; stage: Exclude<VehicleTripStage, "signature">; imageBase64: string };

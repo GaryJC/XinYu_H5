@@ -1,3 +1,4 @@
+import {hasUnpreparedParts} from '../../shared/repairProgress.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 export function validatePartsRequirement(value) {
   if(!value || !['none','list','photo'].includes(value.mode)) throw new HttpError(400,'请登记所需配件，或选择无需配件');
@@ -9,6 +10,7 @@ export function validatePartsRequirement(value) {
   return {mode:value.mode,items:items.map(i=>({name:i.name.trim(),quantity:i.quantity,unit:i.unit.trim()})),photoIds,...(referencePhotoIds.length?{referencePhotoIds:[...referencePhotoIds]}:{})};
 }
 export function beginPendingItems(next,actor,now) {
+  if(next.executionMode==='outsourced'&&hasUnpreparedParts(next))return;
   if(!actor?.id)throw new HttpError(409,'维修负责人未明确，请联系服务顾问核对后再开工');
   for(const item of next.items) if(['待开工','待派工','待领料'].includes(item.status)) {
     item.status='维修中';item.startAt ||= now;item.startedBy=actor.id;delete item.finishAt;
@@ -20,7 +22,7 @@ export function beginPendingItems(next,actor,now) {
 
 // Preserve legacy tasks; current requests must be issued before starting or completing.
 export function assertPartsIssued(task) {
-  if(task.partsRequirement && task.partsRequirement.mode!=='none' && !task.partsRequirement.issuedAt && !task.partsRequirement.preparedAt)
+  if(hasUnpreparedParts(task))
     throw new HttpError(409,'请等待仓管确认配件备齐后再开工或提交完工');
 }
 

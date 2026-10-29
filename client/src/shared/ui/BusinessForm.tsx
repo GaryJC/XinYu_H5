@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type PropsWithChildren, type ReactNode } from "react";
-import { Card, ConfigProvider, Grid, Modal, type ModalProps } from "antd";
+import { App as AntApp, Card, ConfigProvider, Grid, Modal, type ModalProps } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import "./business-form.css";
 
@@ -15,10 +15,11 @@ export function BusinessThemeProvider({ children }: PropsWithChildren) {
       fontSize: mobile ? 16 : 14,
     },
     components: {
+      Message: { zIndexPopup: 4000 },
       Card: { borderRadiusLG: 12 },
       Form: { itemMarginBottom: 16, verticalLabelPadding: "0 0 8px" },
     },
-  }}>{children}</ConfigProvider>;
+  }}><AntApp message={{ maxCount: 3, top: mobile ? 20 : 32 }}>{children}</AntApp></ConfigProvider>;
 }
 
 export function FormSurface({ children, className = "" }: PropsWithChildren<{ className?: string }>) {

@@ -77,3 +77,21 @@
 
 .repair-pending-choice{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:8px;font-size:14px;color:#657085}
 .repair-pending-choice .ant-checkbox-wrapper{min-height:36px;align-items:center}
+
+/* Give project descriptions room to grow without crowding their controls. */
+.form-panel .repair-items-editor { overflow: visible; }
+.form-panel .repair-items-editor .repair-row:not(.repair-head) { align-items: start; border: 1px solid #e7edf5; border-radius: 10px; margin-top: 10px; padding: 14px; background: #f7f9fc; }
+.form-panel .repair-items-editor .repair-head { border: 0; color: #76859a; font-size: 12px; }
+.form-panel .repair-items-editor .repair-head > span { border: 0; }
+.form-panel .repair-items-editor .repair-item-content { display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 0; border: 0; }
+.form-panel .repair-items-editor .repair-item-name { width: 100%; margin-bottom: 24px; }
+.form-panel .repair-items-editor .repair-item-name textarea { padding: 10px 12px; line-height: 1.7; border-radius: 8px; resize: none; }
+.form-panel .repair-items-editor .ant-input-data-count { bottom: -22px; color: #8391a4; font-size: 12px; line-height: 20px; }
+.form-panel .repair-items-editor .repair-pending-choice { margin-top: 4px; }
+.form-panel .repair-items-editor .repair-row > div:last-child { border: 0; justify-content: center; padding: 0; align-self: end; }
+.form-panel .repair-items-editor .repair-row > div:last-child .ant-btn { min-width: 44px; min-height: 44px; }
+@media (max-width: 767px) {
+  .form-panel .repair-items-editor .repair-row:not(.repair-head) { padding: 12px; }
+  .form-panel .repair-items-editor .repair-item-content::before { margin-bottom: 8px; font-weight: 500; }
+  .form-panel .repair-items-editor .repair-item-name textarea { font-size: 16px; }
+}

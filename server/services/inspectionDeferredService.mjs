@@ -43,23 +43,24 @@ export async function processInspectionDeferred(client,actor,id,input,row) {
   if(!['维修完成','维修中','待开工','暂停','待接单','回审'].includes(task.stage))throw new HttpError(409,'当前阶段不能安排待定维修');
   if(typeof input.dueAt!=='string'||!input.dueAt||!Number.isFinite(Date.parse(input.dueAt))||Date.parse(input.dueAt)<=Date.now())throw new HttpError(400,'请填写晚于当前时间的预计完工时间');
   const mode=task.stage==='维修完成'?(input.executionMode||'internal'):(task.executionMode||'internal');
-  const workerId=mode==='outsourced'?(input.contractorId||task.contractorId):input.technicianId;
-  const worker=people.find(p=>p.id===workerId&&p.active&&p.shopId===task.shopId&&(mode==='outsourced'?(hasRole(p,'outsourcing')||p.outsourcingRoleMember):hasRole(p,'technician')));
-  if(mode==='outsourced'&&task.stage!=='维修完成'&&workerId!==task.contractorId)throw new HttpError(409,'本轮外包待定项目须交给当前承包方；更换承包方请先结束本轮');
-  if(!worker)throw new HttpError(400,'请选择本店有效维修工');
+  const worker=mode==='outsourced'?undefined:people.find(p=>p.id===input.technicianId&&p.active&&p.shopId===task.shopId&&hasRole(p,'technician'));
+  if(mode==='outsourced'&&task.stage!=='维修完成'&&input.contractor!==undefined&&(typeof input.contractor!=='string'||input.contractor.trim()!==task.contractor))throw new HttpError(409,'本轮外包待定项目须交给当前承包方；更换承包方请先结束本轮');
+  if(mode!=='outsourced'&&!worker)throw new HttpError(400,'请选择本店有效维修工');
   if(task.items.some(i=>i.id===entry.itemId))throw new HttpError(409,'待定项目已在维修流程中');
   if(task.stage==='维修完成') {
    task.repairCatalog=await repairCatalog(client,task);
-   next=applyDispatchAction(task,validateDispatchRequest({...input,action:'reopen-repair',requestId:input.requestId,expectedVersion:task.version,additionalItems:[entry.name],reason:entry.reason,dueAt:input.dueAt,technicianIds:mode==='outsourced'?[]:[worker.id],contractorId:mode==='outsourced'?worker.id:undefined,executionMode:mode}),current,people,now);
+   next=applyDispatchAction(task,validateDispatchRequest({...input,action:'reopen-repair',requestId:input.requestId,expectedVersion:task.version,additionalItems:[entry.name],reason:entry.reason,dueAt:input.dueAt,technicianIds:mode==='outsourced'?[]:[worker.id],executionMode:mode}),current,people,now);
    next.items[0].id=entry.itemId;next.roundKind='additional';next.rework=false;
   } else {
    next=structuredClone(task);next.version++;
-   next.items.push({id:entry.itemId,name:entry.name,status:'待开工',responsibleId:worker.id,responsibleName:worker.name});
-   next.technicianIds=[...new Set([...(task.technicianIds||[task.technicianId]).filter(Boolean),worker.id])];
-   next.technicianName=next.technicianIds.map(id=>people.find(p=>p.id===id)?.name||id).join('、');
-   next.dueAt=new Date(Math.max(Date.parse(task.dueAt)||0,Date.parse(input.dueAt))).toISOString();
-   if(next.workerSubmissions)delete next.workerSubmissions[worker.id];
+   next.items.push({id:entry.itemId,name:entry.name,status:'待开工',...(worker?{responsibleId:worker.id,responsibleName:worker.name}:{})});
+   if(worker) {
+    next.technicianIds=[...new Set([...(task.technicianIds||[task.technicianId]).filter(Boolean),worker.id])];
+    next.technicianName=next.technicianIds.map(id=>people.find(p=>p.id===id)?.name||id).join('、');
+    if(next.workerSubmissions)delete next.workerSubmissions[worker.id];
+   }
   }
+  next.dueAt=new Date(Math.max(Date.parse(next.dueAt)||0,Date.parse(input.dueAt))).toISOString();
   next.deferredItems=(next.deferredItems||[]).filter(i=>i.id!==entry.itemId);
   entry.state='approved';entry.scheduled=true;entry.inspectionState='scheduled';operation='schedule';
  } else if(['decline','cancel'].includes(input.action)) {

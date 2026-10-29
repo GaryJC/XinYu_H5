@@ -62,7 +62,8 @@ function developmentPersona(persona) {
     technician: { id: "u_dev_technician", name: "李富强", role: "technician", active: true, shopId: "shop-hq", homeRoute: "workbench" },
     warehouse: { id: "u_dev_warehouse", name: "仓管（测试）", role: "warehouse", active: true, shopId: "shop-hq", homeRoute: "workbench" },
     inspector: { id: "u_dev_inspector", name: "检验员（测试）", role: "inspector", active: true, shopId: "shop-hq", homeRoute: "workbench" },
-    unassigned: { deniedReason: "当前钉钉账号未分配有效应用角色（服务顾问、维修工 / 维修技师、检验员、仓管、外包、门店管理员），请联系钉钉管理员" },
+    employee: { id: "u_dev_employee", name: "普通员工（测试）", role: "employee", active: true, shopId: "shop-hq", homeRoute: "vehicle-trips" },
+    unassigned: { id: "u_dev_unassigned", name: "未分配岗位员工（测试）", role: "employee", active: true, shopId: "shop-hq", homeRoute: "vehicle-trips" },
     disabled: { id: "u_dev_disabled", name: "停用员工（测试）", role: "advisor", active: false, shopId: "shop-hq", homeRoute: "order-create" }
   };
   const definition = definitions[persona];
@@ -98,7 +99,7 @@ async function createSessionForUser(user, context, homeRoute) {
 }
 
 function defaultHomeRoute(role) {
-  return role === "advisor" ? "order-create" : "workbench";
+  return role === "employee" ? "vehicle-trips" : role === "advisor" ? "order-create" : "workbench";
 }
 
 export async function authenticateRequest(req) {

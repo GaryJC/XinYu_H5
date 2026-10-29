@@ -9,8 +9,8 @@ export function PartsPreparationDialog({controller:c,onClose}:{controller:Dispat
  const task=c.detail!.task;
  const [version]=useState(task.version);
  const groups=warehouseRequests([task]);
- const ids=task.technicianIds??(task.technicianId?[task.technicianId]:[]);
- const people=[...c.people.technicians,...c.people.contractors].filter((p,index,all)=>p.active&&ids.includes(p.id)&&all.findIndex(o=>o.id===p.id)===index);
+ const ids=task.executionMode==='outsourced'?[task.assignedBy].filter((id):id is string=>Boolean(id)):task.technicianIds??(task.technicianId?[task.technicianId]:[]);
+ const people=[...c.people.technicians,...(c.people.dispatchers||[])].filter((p,index,all)=>p.active&&ids.includes(p.id)&&all.findIndex(o=>o.id===p.id)===index);
  const key=(owner:string|undefined,index:number)=>JSON.stringify([owner||'',index]);
  const [recipients,setRecipients]=useState<Record<string,string>>(()=>Object.fromEntries(groups.flatMap(group=>{
   const parts=group.partsRequirement!,applicant=parts.ownerId||parts.applicantId||parts.recordedBy;
@@ -33,7 +33,7 @@ export function PartsPreparationDialog({controller:c,onClose}:{controller:Dispat
   }}>备料完成并通知（{selected.length} 项）</Button>:null}</div>
  </div>}>
   <p className="parts-preparation-meta">{task.plate} · {task.dispatchNo||task.orderId}</p>
-  <p className="parts-preparation-hint">明细配件可逐项勾选；照片清单核对全部照片后，按申请整份确认。系统通知对应维修工领取。</p>
+  <p className="parts-preparation-hint">明细配件可逐项勾选；照片清单核对全部照片后，按申请整份确认。系统通知对应领料人领取。</p>
   {stale?<Alert type="warning" showIcon title="申请已更新，请关闭后重新核对备料"/>:null}
   {pending.length?<div className="parts-preparation-select-all"><Checkbox disabled={disabled} checked={pending.every(row=>selected.includes(row))} indeterminate={selected.length>0&&selected.length<pending.length} onChange={e=>toggle(pending,e.target.checked)}>全选待备料配件（{pending.length} 项）</Checkbox></div>:null}
   <div className="parts-preparation-list">{groups.map(group=>{

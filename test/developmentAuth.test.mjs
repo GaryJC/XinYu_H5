@@ -21,15 +21,15 @@ test("development login is unavailable unless both server guards are enabled", {
   }
 });
 
-test("unassigned development persona is denied before a session is created", { concurrency: false }, async () => {
+test("unknown development persona is denied before a session is created", { concurrency: false }, async () => {
   const previousAppEnv = process.env.APP_ENV;
   const previousEnabled = process.env.ENABLE_DEV_AUTH;
   process.env.APP_ENV = "development";
   process.env.ENABLE_DEV_AUTH = "true";
   try {
     await assert.rejects(
-      () => loginForDevelopment("unassigned"),
-      (error) => error instanceof HttpError && error.status === 403 && error.message.includes("未分配")
+      () => loginForDevelopment("unknown"),
+      (error) => error instanceof HttpError && error.status === 400 && error.message.includes("未知")
     );
   } finally {
     restoreEnv("APP_ENV", previousAppEnv);

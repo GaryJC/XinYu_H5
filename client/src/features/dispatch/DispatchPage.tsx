@@ -1,3 +1,4 @@
+import { LoadingState } from "../../shared/ui/LoadingState";
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import {DispatchFilterBar} from './DispatchFilterBar';
 import { WarehousePartsPage } from './WarehousePartsPage';
@@ -31,6 +32,7 @@ export function DispatchPage({user,view}:{user:UserProfile;view:string}) {
       if(mobile) taskHeading.current?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
     }}/>:null}
     <div className="dispatch-heading"><h3 ref={taskHeading} className="dispatch-task-heading">{chosen?`${personDisplayName(chosen,c.summaries)} · `:''}{c.filters.metric?(c.filters.metric==='current'?'当前任务':metrics[c.filters.metric as DispatchMetric]):(inspection&&c.filters.stage==='维修完成'?'已检验':statusFilters.find(option=>option.value===(c.filters.stage||''))?.label||'维修任务')}（{c.tasks.length}）</h3>{c.filters.metric?<Button onClick={()=>update('metric',undefined)}>清除数量筛选</Button>:null}</div>
+    {mobile && c.loading && <LoadingState label="正在加载维修任务…" />}
     {!c.loading&&!c.tasks.length?<Empty description="没有符合条件的维修任务"/>:mobile?<div className="dispatch-task-cards">{c.tasks.map(t=><Card key={t.orderId} className="dispatch-task-card" size="small" title={t.plate||'未填写车牌'} role="button" tabIndex={0} aria-label={`查看维修任务 ${t.plate||t.dispatchNo||t.orderId}`}
       onClick={()=>c.select(t.orderId)}
       onKeyDown={event=>{if(event.target===event.currentTarget&&(event.key==='Enter'||event.key===' ')){event.preventDefault();c.select(t.orderId);}}}>

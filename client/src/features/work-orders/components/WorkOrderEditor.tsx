@@ -54,7 +54,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
   const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "编码", "选择已有"].some((phrase) => error.includes(phrase)));
   const canResumeSignature = Boolean(selectedOrder?.status === "待客户签字" && !selectedOrder.signatures.customer);
-  const signatureDisabled = Boolean(controller.preRepairPhotos.uploading) || !canResumeSignature && (!canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder)));
+  const signatureDisabled = Boolean(actionLoading) || Boolean(controller.preRepairPhotos.uploading) || !canResumeSignature && (!canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder)));
   const signatureDisabledReason = selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) ? `当前状态“${selectedOrder.status}”不能再次发起签字` : "";
   const signatureUploaded = Boolean(selectedOrder?.signatures.customer);
   const signatureUploadDescription = selectedOrder?.status === "待客户签字" ? "客户签名已保存，等待服务顾问确认；确认后才进入润丰拉取队列。" : selectedOrder?.legacySyncStatus === "synced"
@@ -82,14 +82,14 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
 
   return (
 <FormSurface className="panel form-panel">
-          <Form layout="vertical" requiredMark>
+          <Form layout="vertical" requiredMark disabled={Boolean(actionLoading)}>
             <div className="panel-header">
               <div>
                 <h2>{selectedOrder ? "委托开单" : "新建委托开单"}</h2>
                 <p>{paperOnly ? "上传纸质委托书照片，创建后选择开单方式。" : "先识别车辆，再完善接车与维修信息。"}</p>
               </div>
               <div className="button-row">
-                <Button className="new-order-button" color="primary" variant="outlined" icon={<Plus size={16} />} onClick={startNewOrder} disabled={!canCreateOrder(role)}>新建委托</Button>
+                <Button className="new-order-button" color="primary" variant="outlined" icon={<Plus size={16} />} onClick={startNewOrder} disabled={!canCreateOrder(role) || Boolean(actionLoading)}>新建委托</Button>
               </div>
             </div>
 
@@ -352,7 +352,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             <FormSection title="维修项目">
             <div className="section-title-row">
               <Form.Item className="section-title-form-item" label="维修项目明细" required validateStatus={fieldError("维修项目") ? "error" : undefined} help={fieldError("维修项目")}>
-                <span>填写本次需要维修的项目</span>
+                <span>每项单独填写；需客户确认的项目可勾选“待定”</span>
               </Form.Item>
               <Button
                 type="link"
@@ -369,15 +369,15 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               </Button>
             </div>
 
-            <div className="repair-table" role="table" aria-label="维修项目明细">
+            <div className="repair-table repair-items-editor" role="table" aria-label="维修项目明细">
               <div className="repair-row repair-head" role="row">
                 <span>项目</span>
                 <span>操作</span>
               </div>
               {confirmationRows.rows.map((item,index) => (
                 <div className="repair-row" role="row" key={item.key}>
-                  <div data-label="项目">
-                    <Input required aria-required="true" maxLength={200} showCount status={fieldError("维修项目") && (!item.name.trim() || item.name.length > 200) ? "error" : undefined} disabled={!canEditForm} aria-label="项目名称" value={item.name} onChange={event=>confirmationRows.changeName(item,event.target.value)} />
+                  <div className="repair-item-content" data-label={`项目 ${index + 1}`}>
+                    <Input.TextArea className="repair-item-name" autoSize={{ minRows: 2 }} placeholder="例如：检查发动机异响，更换磨损皮带" required aria-required="true" maxLength={200} showCount status={fieldError("维修项目") && (!item.name.trim() || item.name.length > 200) ? "error" : undefined} disabled={!canEditForm} aria-label="项目名称" value={item.name} onChange={event=>confirmationRows.changeName(item,event.target.value)} />
                     <div className="repair-pending-choice"><Checkbox aria-label={`项目 ${index+1} 待定`} disabled={!canEditForm} checked={item.pending} onChange={event=>confirmationRows.toggle(item,event.target.checked)}>待定</Checkbox></div>
                   </div>
                   <div data-label="操作"><Button type="text" danger disabled={!canEditForm} aria-label="删除维修项目" onClick={()=>confirmationRows.remove(item)}><Trash2 size={15}/></Button></div>
@@ -422,9 +422,9 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               </div>
             </div>}
               <FormActionBar label="委托开单操作">
-                {(!paperOnly || !draft.paperOrder) && <Button size="large" icon={<Save size={16} />} onClick={saveDraft} loading={actionLoading === "save"} disabled={!canEditForm || Boolean(controller.preRepairPhotos.uploading)}>{selectedOrder?.status==="待客户签字"?"保存修改":"保存草稿"}</Button>}
+                {(!paperOnly || !draft.paperOrder) && <Button size="large" icon={<Save size={16} />} onClick={saveDraft} loading={actionLoading === "save"} disabled={!canEditForm || Boolean(actionLoading) || Boolean(controller.preRepairPhotos.uploading)}>{selectedOrder?.status==="待客户签字"?"保存修改":"保存草稿"}</Button>}
                 {draft.paperOrder ? <Button className={paperOnly ? "paper-order-create-action" : undefined} size="large" type="primary" loading={actionLoading==="save"}
-                  disabled={!canEditForm || controller.paperPhotos.uploading || Boolean(controller.preRepairPhotos.uploading)} onClick={()=>void controller.submitPaperOrder()}>
+                  disabled={!canEditForm || Boolean(actionLoading) || controller.paperPhotos.uploading || Boolean(controller.preRepairPhotos.uploading)} onClick={()=>void controller.submitPaperOrder()}>
                   {paperDingTalk ? "提交委托单（免签字）" : "创建纸质委托书"}</Button> : <Tooltip title={signatureDisabledReason}>
                   <span><Button size="large" color="blue" variant="solid" icon={<Send size={17} />} onClick={handleSendSignature} loading={actionLoading === "signature"} disabled={signatureDisabled}>{canResumeSignature ? "继续签字" : "发起签字"}</Button></span>
                 </Tooltip>}

@@ -15,11 +15,12 @@ export async function removeRepairPhotos(client, actor, orderId, fileIds) {
     throw new HttpError(400, '请选择要删除的维修照片（每次最多 100 张）');
   const task = await getDispatchTask(client, orderId, actor, true);
   const { rows: users } = await client.query('select role,active,shop_id from users where id=$1', [actor.id]);
-  const owner = (hasAnyRole(actor, ['technician','outsourcing']) || actor.outsourcingRoleMember) && technicianIds(task).includes(actor.id)
-    || task.executionMode === 'outsourced' && hasAnyRole(actor, ['manager','advisor']);
+  const owner = task.executionMode==='outsourced'
+    ? hasAnyRole(actor,['manager','advisor'])||actor.id===task.assignedBy&&hasAnyRole(actor,['inspector'])
+    : hasAnyRole(actor,['technician'])&&technicianIds(task).includes(actor.id);
   if (!users[0]?.active || users[0].role !== actor.role || users[0].shop_id !== task.shopId || !owner || task.needsReview)
     throw new HttpError(403, '仅当前维修工可删除维修照片');
-  if (!['待开工','维修中','暂停','回审'].includes(task.stage)) throw new HttpError(409, '当前状态不能删除维修照片');
+  if (!['待开工','维修中','暂停','回审',...(task.executionMode==='outsourced'?['待检验']:[])].includes(task.stage)) throw new HttpError(409, '当前状态不能删除维修照片');
   if(hasSubmittedPersonalWork(task,actor.id))throw new HttpError(409,'本人项目已提交，不能删除维修照片');
   const params = [fileIds, orderId, task.repairRound || 0, individualRepair(task) ? actor.id : null];
   const condition = "id=any($1::text[]) and order_id=$2 and kind in ('repair_progress_photo','repair_completed_photo') and coalesce(repair_round,0)=$3 and ($4::text is null or uploaded_by=$4)";

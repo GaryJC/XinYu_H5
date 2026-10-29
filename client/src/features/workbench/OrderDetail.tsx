@@ -1,3 +1,5 @@
+import './workbench.css';
+import { CarFront, ClipboardList, Users, Wallet } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { Collapse, Descriptions, Empty, Table, Tag } from 'antd';
 import type { WorkOrder, UserProfile } from '../../../../shared/types';
@@ -37,21 +39,34 @@ export function OrderDetail({ order, isMobile, user, onUpdated }: { order: WorkO
     { key: "customer", label: "车主名称/所属单位", children: order.customer.name || "-" },
     { key: "contact", label: "联系人", children: order.customer.contact || "-" },
     { key: "phone", label: "联系电话", children: order.customer.phone || "-" },
-    { key: "address", label: "车辆地址", children: order.customer.address || "-", span: isMobile ? 1 : 3 },
-    { key: "fault", label: "故障描述", children: order.faultDescription || "-", span: isMobile ? 1 : 3 },
+    { key: "address", label: "车辆地址", children: order.customer.address || "-", span: isMobile ? 2 : 3 },
+    { key: "fault", label: "故障描述", children: order.faultDescription || "-", span: isMobile ? 2 : 3 },
     { key: "belongings", label: "随车物品", children: order.inspection.belongings.join("、") || "-" },
     { key: "exterior", label: "外观状况", children: order.inspection.exteriorIssues.join("、") || "-" },
     { key: "fuel", label: "燃油存量", children: order.inspection.fuelLevel },
     { key: "estimated", label: "预计修理费", children: `¥${order.estimatedFee || 0}` },
     { key: "settlement", label: "结算金额", children: `¥${order.settlementAmount || 0}` },
     { key: "oldParts", label: "旧件处置", children: order.oldPartsHandling },
-    { key: "feeNote", label: "费用备注", children: order.feeNote || "-", span: isMobile ? 1 : 3 },
-    { key: "signatures", label: "签字记录", children: signatures, span: isMobile ? 1 : 3 }
+    { key: "feeNote", label: "费用备注", children: order.feeNote || "-", span: isMobile ? 2 : 3 },
+    { key: "signatures", label: "签字记录", children: signatures, span: isMobile ? 2 : 3 }
   ];
 
   return (
     <>
-      <Descriptions className="archive-descriptions" bordered size="small" column={isMobile ? 1 : 3} items={descriptions} />
+      <div className="workbench-order-summary">
+        <span className="workbench-order-icon"><CarFront size={28} /></span>
+        <div><span className="workbench-detail-eyebrow">车辆档案</span><h2>{order.vehicle.plate || '未登记车牌'}</h2><p>{order.vehicle.model || '车型待补充'}</p></div>
+        <div className="workbench-order-status"><StatusChip status={workOrderDisplayStatus(order)} /><OrderLegacySyncStatus order={order} /></div>
+      </div>
+      {[
+        { title: '委托与进度', icon: ClipboardList, keys: ['id','advisor','dispatch','arrival','delivery','updated','shop','shopPhone','platform'] },
+        { title: '车辆与客户', icon: Users, keys: ['vin','mileage','purchase','customer','contact','phone','address'] },
+        { title: '故障与检查', icon: CarFront, keys: ['fault','belongings','exterior','fuel'] },
+        { title: '费用与签字', icon: Wallet, keys: ['estimated','settlement','oldParts','feeNote','signatures'] }
+      ].map(group => <section className="workbench-detail-group" key={group.title}>
+        <h3><group.icon size={18} />{group.title}</h3>
+        <Descriptions className="archive-descriptions" layout="vertical" size="small" column={isMobile ? 2 : 3} items={descriptions.filter(item => group.keys.includes(item.key))} />
+      </section>)}
       <SubmittedOrderPhotos order={order} user={user} onUpdated={onUpdated}/>
       <CustomerSignatureSection order={order} user={user} onUpdated={onUpdated}/>
       {isMobile ? <MobileOrderRecords order={order} /> : <DesktopOrderRecords order={order} />}

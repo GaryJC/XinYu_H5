@@ -1,3 +1,4 @@
+import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import {useVehicleLicenseHistory} from '../vehicle-license-history/useVehicleLicenseHistory';
 import {isUnsignedOrderEditable} from '../../../../shared/workOrderEditPolicy.mjs';
 import { useArchiveFilters } from "./useArchiveFilters";
@@ -31,6 +32,7 @@ import { navItems } from "./workbenchConfig";
 import { dispatchEnabled, isDispatchNavigation } from "../dispatch/dispatchAvailability";
 
 export function useWorkbenchController() {
+  const feedback = useActionFeedback();
   const [linkedOrderDetail,setLinkedOrderDetail]=useState<WorkOrder>();
   const exceptionRequest=useRef<{key:string;requestId:string}|undefined>(undefined);
   const [activeNav, setActiveNav] = useState("工作台");
@@ -108,7 +110,7 @@ export function useWorkbenchController() {
     const generation = ++sessionGeneration.current;
     preRepairPhotos.reset();
     paperPhotos.reset();
-    if (!currentUser || (hasRole(currentUser, 'technician') && !currentUser.legacyEmployeeCode)) {
+    if (!currentUser || currentUser.role === 'employee' || (hasRole(currentUser, 'technician') && !currentUser.legacyEmployeeCode)) {
       setOrdersLoading(false);
       setOrders([]);
       setDashboard(undefined);
@@ -268,7 +270,7 @@ export function useWorkbenchController() {
     const params=new URLSearchParams(location.search);
     const paperLink=params.has('paperOrder'),orderLink=params.has('workOrder'),dispatchLink=params.has('dispatchOrder');
     const procurementLink=params.has('procurementTender')||params.has('procurementReport');
-    const landing=procurementLink&&['manager','warehouse'].includes(nextRole)?'配件竞价':(paperLink||orderLink)&&['advisor','manager'].includes(nextRole)?'工作台':nextRole==='warehouse'?'配件申请':nextRole==='technician'?'我的维修':nextRole==='inspector'?'检验任务':dispatchLink&&['advisor','manager'].includes(nextRole)?'派工台':user.homeRoute==='order-create'?'委托开单':'工作台';
+    const landing=params.has('vehicleTrip')?'出车申请':nextRole==='employee'||(hasRole(user,'technician')&&!user.legacyEmployeeCode)?'出车申请':procurementLink&&['manager','warehouse'].includes(nextRole)?'配件竞价':(paperLink||orderLink)&&['advisor','manager'].includes(nextRole)?'工作台':nextRole==='warehouse'?'配件申请':nextRole==='technician'?'我的维修':nextRole==='inspector'?'检验任务':dispatchLink&&['advisor','manager'].includes(nextRole)?'派工台':user.homeRoute==='order-create'?'委托开单':'工作台';
     setActiveNav(!dispatchEnabled && isDispatchNavigation(landing) ? "工作台" : landing);
     setDraft((current) => ({ ...current, advisor: user.name }));
   }
@@ -315,27 +317,35 @@ export function useWorkbenchController() {
     resetVehicleIdentityRecognition();
   }
 
+  function showFormErrors(errors: string[]) {
+    setFormErrors(errors);
+    if (errors.length) feedback.warning(errors[0]);
+  }
+
   async function saveDraft() {
-    if (licenseHistory.busy || preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
+    if (licenseHistory.busy || preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading()) { showFormErrors(["照片正在上传，请等待上传完成"]); return; }
     if (!canCreateOrder(role)) {
-      setFormErrors(["当前角色不能创建或编辑委托单"]);
+      showFormErrors(["当前角色不能创建或编辑委托单"]);
       return;
     }
 
     setActionLoading("save");
-    setFormErrors([]);
+    showFormErrors([]);
     try {
       const cleanedDraft = { ...draft, inspection: {...draft.inspection, vehicleLicenseFileId:draft.inspection.vehicleLicenseFileId || vehicleLicenseFileId},
         repairItems: filterEmptyRepairItems(draft.repairItems) };
       if (selectedOrder) {
         const updated = await workOrderApi.update({ ...selectedOrder, ...cleanedDraft }, actor, "保存委托单");
+        feedback.success("委托单已保存");
         await loadOrders(role, updated.id);
         return;
       }
 
       const created = await workOrderApi.create(cleanedDraft, actor);
+      feedback.success("草稿已保存");
       await loadOrders(role, created.id);
     } catch (error) {
+      feedback.error(error);
       setFormErrors([actionError(error, "保存草稿失败")]);
     } finally {
       setActionLoading("");
@@ -346,7 +356,7 @@ export function useWorkbenchController() {
     if(!draft.vehicle.plate.trim()||!/^[A-Z0-9]{17}$/i.test(draft.vehicle.vin.trim()))return '请先填写车牌和17位 VIN，再办理行驶证缺失备案';
     if(!canEditForm)return '当前委托单不可编辑，无法办理行驶证缺失备案';
     if(licenseHistory.busy || preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading())return '照片正在上传或复用，请等待完成后再办理备案';
-    setActionLoading('save');setFormErrors([]);
+    setActionLoading('save');showFormErrors([]);
     try {
       const cleaned={...draft,repairItems:filterEmptyRepairItems(draft.repairItems)};
       const order=selectedOrder?await workOrderApi.update({...selectedOrder,...cleaned},actor,'保存行驶证缺失备案前草稿'):await workOrderApi.create(cleaned,actor);
@@ -356,9 +366,9 @@ export function useWorkbenchController() {
       const key=JSON.stringify({orderId:order.id,...input});
       if(exceptionRequest.current?.key!==key)exceptionRequest.current={key,requestId:createRequestId()};
       await workOrderApi.reportLicenseException(order.id,{...input,requestId:exceptionRequest.current.requestId});
-      exceptionRequest.current=undefined;
+      exceptionRequest.current=undefined;feedback.success("行驶证缺失备案已保存");
       await loadOrders(role,order.id);return true;
-    } catch(error){return actionError(error,'行驶证缺失备案失败');}
+    } catch(error){feedback.error(error);return actionError(error,'行驶证缺失备案失败');}
     finally{setActionLoading('');}
   }
 
@@ -368,6 +378,7 @@ export function useWorkbenchController() {
     setActionLoading("delete");
     try {
       await workOrderApi.deleteDraft(order.id);
+      feedback.success("草稿已删除");
       setSelectedId(null);
       preRepairPhotos.reset();
       paperPhotos.reset();
@@ -376,6 +387,7 @@ export function useWorkbenchController() {
       await loadDashboard(role);
       return undefined;
     } catch (error) {
+      feedback.error(error, "删除草稿失败");
       return actionError(error, "删除草稿失败");
     } finally {
       setActionLoading("");
@@ -384,32 +396,34 @@ export function useWorkbenchController() {
 
   async function sendSignature() {
     if (selectedOrder?.status === "待客户签字" && !canEditForm) {
-      setActionLoading("signature");setFormErrors([]);
+      setActionLoading("signature");showFormErrors([]);
       try {
         const order = await workOrderApi.createSignatureToken(selectedOrder.id, actor);
         await loadOrders(role, order.id);
         return { token: order.signatureToken!, order };
-      } catch (error) { setFormErrors([actionError(error, "恢复客户签字失败")]);return undefined; }
+      } catch (error) { feedback.error(error); setFormErrors([actionError(error, "恢复客户签字失败")]);return undefined; }
       finally { setActionLoading(""); }
     }
-    if (licenseHistory.busy || preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading()) { setFormErrors(["照片正在上传，请等待上传完成"]); return; }
+    if (licenseHistory.busy || preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading()) { showFormErrors(["照片正在上传，请等待上传完成"]); return; }
     const errors = validateBeforeSignature();
     if (errors.length) {
-      setFormErrors(errors);
+      showFormErrors(errors);
       return;
     }
 
     setActionLoading("signature");
-    setFormErrors([]);
+    showFormErrors([]);
     try {
       const cleanedDraft = { ...draft, inspection: {...draft.inspection, vehicleLicenseFileId:draft.inspection.vehicleLicenseFileId || vehicleLicenseFileId},
         repairItems: filterEmptyRepairItems(draft.repairItems) };
       const order = selectedOrder ?? (await workOrderApi.create(cleanedDraft, actor));
       if (selectedOrder) await workOrderApi.update({ ...selectedOrder, ...cleanedDraft }, actor, "保存签字前委托单");
       const withToken = await workOrderApi.createSignatureToken(order.id, actor);
+      feedback.success("签字流程已发起");
       await loadOrders(role, withToken.id);
       return { token: withToken.signatureToken!, order: withToken };
     } catch (error) {
+      feedback.error(error);
       setFormErrors([actionError(error, "发起签字失败")]);
       return undefined;
     } finally {
@@ -418,21 +432,22 @@ export function useWorkbenchController() {
   }
 
   async function submitPaperOrder() {
-    if (paperPhotos.isUploading() || preRepairPhotos.isUploading() || isVehicleLicenseUploading()) {setFormErrors(["照片正在上传，请等待上传完成"]);return;}
-    if (!draft.paperOrder?.photoIds.length) {setFormErrors(["请上传纸质委托书照片"]);return;}
+    if (paperPhotos.isUploading() || preRepairPhotos.isUploading() || isVehicleLicenseUploading()) {showFormErrors(["照片正在上传，请等待上传完成"]);return;}
+    if (!draft.paperOrder?.photoIds.length) {showFormErrors(["请上传纸质委托书照片"]);return;}
     const completing=draft.paperOrder.mode==="dingtalk";
     if(completing) {
       const errors=validateBeforeSignature();
-      if(errors.length) {setFormErrors(errors);return;}
+      if(errors.length) {showFormErrors(errors);return;}
     }
-    setActionLoading("save");setFormErrors([]);
+    setActionLoading("save");showFormErrors([]);
     try {
       const cleaned={...draft,repairItems:filterEmptyRepairItems(draft.repairItems)};
       const saved=selectedOrder ? await workOrderApi.update({...selectedOrder,...cleaned},actor,"保存纸质委托单") : await workOrderApi.create(cleaned,actor);
       const updated=completing ? await workOrderApi.submitPaperOrder(saved.id) : saved;
+      feedback.success(completing ? "纸质委托单已提交" : "纸质委托书已创建");
       await loadOrders(role,updated.id);
       await loadDashboard();
-    } catch(error) {setFormErrors([actionError(error,"纸质委托书提交失败")]);}
+    } catch(error) {feedback.error(error);setFormErrors([actionError(error,"纸质委托书提交失败")]);}
     finally {setActionLoading("");}
   }
 

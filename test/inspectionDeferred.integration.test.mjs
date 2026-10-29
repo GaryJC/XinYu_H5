@@ -79,5 +79,27 @@ test('inspection deferred lifecycle persists atomically, dispatches directly and
   assert.equal(passedSnapshot.items.filter(i=>i.id===1).length,1);assert.equal(passedSnapshot.items.find(i=>i.id===1).name,'待定项目');
   await assert.rejects(()=>pendingRepairCommand(inspector,second,{...cancel,id:pending.items[0].id,expectedVersion:pending.version,requestId:randomUUID()}),/状态已变化/);
 
+  // A deferred project can reopen with a free-text contractor and finish without inspection.
+  const third='deferred-outsourced';
+  await pool.query("insert into work_orders(id,status,advisor,technician,inspector,shop_id,old_parts_handling,vehicle_plate,arrival_date) values($1,'维修中','顾问','维修工','检验员','shop-hq','客户带走','沪CTEST','2026-10-27')",[third]);
+  task={orderId:third,shopId:'shop-hq',orderStatus:'维修中',stage:'待检验',plate:'沪CTEST',version:1,technicianIds:[tech.id],technicianId:tech.id,inspectorId:inspector.id,acceptedAt:'2026-10-27T00:00:00Z',items:[{id:1,name:'转外包项目',status:'待检验',responsibleId:tech.id}]};
+  await saveDispatchTask(pool,task);
+  await transaction(c=>executeDispatchActionInTransaction(c,inspector,third,{...inspect,requestId:randomUUID()}));
+  pending=await pendingRepairList(inspector,third);
+  pending=await pendingRepairCommand(inspector,third,{action:'schedule',id:pending.items[0].id,expectedVersion:pending.version,requestId:randomUUID(),executionMode:'outsourced',outsourcingMode:'onsite',contractor:'无账号承包方',dueAt:new Date(Date.now()+86400000).toISOString()});
+  task=await getDispatchTask(pool,third,inspector);
+  assert.equal(task.stage,'待开工');assert.equal(task.assignedBy,inspector.id);assert.deepEqual(task.technicianIds,[]);
+  const externalNotice=(await pool.query("select * from dispatch_notifications where order_id=$1 and kind='待定项目派工'",[third])).rows;
+  assert.equal(externalNotice.length,1);assert.equal(externalNotice[0].recipient_id,inspector.id);
+  assert.equal(await validateDeferredNotification(externalNotice[0],inspector,pool),true);
+  await transaction(c=>executeDispatchActionInTransaction(c,inspector,third,{action:'record-parts',expectedVersion:task.version,requestId:randomUUID(),partsRequirement:{mode:'none'}}));
+  task=await getDispatchTask(pool,third,inspector);assert.equal(task.stage,'维修中');
+  await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by,repair_round) values($1,$2,'repair_progress_photo','local','','fixture','image/png',8,$3,$4)",[randomUUID(),third,inspector.id,task.repairRound]);
+  await transaction(c=>executeDispatchActionInTransaction(c,manager,third,{action:'complete-outsourced',expectedVersion:task.version,requestId:randomUUID()}));
+  pending=await pendingRepairList(inspector,third);
+  assert.equal(pending.items[0].inspectionState,'completed');assert.equal(pending.items[0].history.at(-1).action,'外包完工');
+  task=await getDispatchTask(pool,third,manager);assert.equal(task.stage,'维修完成');assert.equal(task.inspectionDeferredCount,0);
+  assert.equal(await validateDeferredNotification(externalNotice[0],inspector,pool),false);
+
  } finally {await pool?.end();await admin.query(`drop database if exists "${dbName}" with (force)`);await admin.end();}
 });

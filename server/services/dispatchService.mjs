@@ -102,7 +102,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
       if(pending.items.some(p=>p.source==='inspection'&&p.inspectionState!=='completed'&&input.reworkItemIds.includes(p.itemId)))throw new HttpError(409,'待定或已撤销项目不能通过普通返工恢复，请使用待定项目入口');
     }
     const next=applyDispatchAction(task,input,currentActor,people);
-    if(input.action==='inspect') {
+    if(['inspect','complete-outsourced'].includes(input.action)) {
       const pending=await readPendingRepairs(client,id,true);
       const updated=reconcileInspectionDeferred(pending.items,task,next,input,currentActor,new Date().toISOString());
       if(JSON.stringify(updated)!==JSON.stringify(pending.items))await writePendingRepairs(client,id,updated);
@@ -121,7 +121,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
       next.repairItemIdFloor=Math.min(next.repairItemIdFloor||0,added.id);
     }
 
-    if(['submit-review','submit-order','submit'].includes(input.action)) await assertRepairPhotoRecorded(client,task,individualRepair(task)?actor.id:undefined);
+    if(['complete-outsourced','submit-review','submit-order','submit'].includes(input.action)) await assertRepairPhotoRecorded(client,task,task.executionMode!=='outsourced'&&individualRepair(task)?actor.id:undefined);
     const parts=actionParts(next,input,actor);
     const preparationGroups=input.preparationGroups?.map(group=>({...group,partsRequirement:actionParts(next,{partsOwnerId:group.partsOwnerId},actor)}));
     const preparedForRecipient=recipient=>preparationGroups?.map(group=>({...group,items:group.items.filter(item=>item.recipientId===recipient)})).filter(group=>group.items.length);
@@ -135,7 +135,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
       technicianName:next.technicianName,previousTechnicianName:task.technicianName,inspectorName:next.inspectorName,dueAt:next.dueAt,urgent:next.urgent,previousDueAt:task.dueAt};
     const {rows:[event]}=await client.query(`insert into dispatch_events(order_id,actor_id,actor_name,request_id,request_body,action,detail) values($1,$2,$3,$4,$5,$6,$7) returning id`,[id,actor.id,actor.name,input.requestId,JSON.stringify(input),input.action,JSON.stringify(detail)]);
     if(input.deferredItemIds?.length)await enqueueDeferredNotifications(client,task,next,event.id,currentActor,'deferred',input.deferredItemIds,input.deferredReason,people,input.requestId);
-    if(input.action==='inspect'&&next.stage==='维修完成')await enqueueRepairWriteback(client,next,event.id);
+    if(['inspect','complete-outsourced'].includes(input.action)&&next.stage==='维修完成')await enqueueRepairWriteback(client,next,event.id);
     await client.query('insert into audit_logs(order_id,actor,action) values($1,$2,$3)',[id,actor.name,`派工：${input.action}${input.reason?` · ${input.reason}`:''}`]);
     if(input.action==='retry-scheduler-notifications') {
       if(!input.notificationJobId) throw new HttpError(400,'请选择派工通知任务');
@@ -157,7 +157,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
     }
     const recipients=[];
     const add=(recipient,kind)=>{ if(recipient) recipients.push({recipient,kind}); };
-    const handlers=t=>t.executionMode==='outsourced' && !technicianIds(t).length ? people.filter(p=>p.active && hasAnyRole(p, ['manager','advisor'])).map(p=>p.id) : technicianIds(t);
+    const handlers=t=>t.executionMode==='outsourced' ? people.filter(p=>p.active && p.id===t.assignedBy).map(p=>p.id) : technicianIds(t);
     const addHandlers=(t,kind)=>handlers(t).forEach(id=>add(id,kind));
     const removedProjects=input.repairItems?task.items.filter(item=>!next.items.some(current=>current.id===item.id)):[];
     const removedFor=recipient=>removedProjects.filter(item=>item.responsibleId?item.responsibleId===recipient:technicianIds(task).includes(recipient));
@@ -190,7 +190,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
       await client.query(`insert into dispatch_inspection_notifications(event_id,order_id) values($1,$2) on conflict do nothing`,[event.id,id]);
     }
     recipients.push(...partsSubmissionNotifications(task,next,input,actor,people));
-    const addPartsHandlers=kind=>parts?.ownerId?add(parts.ownerId,kind):addHandlers(next,kind);
+    const addPartsHandlers=kind=>next.executionMode!=='outsourced'&&parts?.ownerId?add(parts.ownerId,kind):addHandlers(next,kind);
     if(input.action==='edit-parts') addPartsHandlers('配件需求已调整');
     if(input.action==='accept'&&parts?.preparedAt&&!parts?.issuedAt) addPartsHandlers('配件可领取');
     if(input.action==='confirm-parts') {if(input.preparationGroups)[...new Set(input.preparationGroups.flatMap(group=>group.items.map(row=>row.recipientId)))].forEach(id=>add(id,'配件可领取'));else if(input.partsPreparation)[...new Set(input.partsPreparation.map(row=>row.recipientId))].forEach(id=>add(id,'配件可领取'));else addPartsHandlers('配件可领取');}

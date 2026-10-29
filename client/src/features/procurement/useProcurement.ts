@@ -1,10 +1,12 @@
+import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { useCallback,useEffect,useRef,useState } from 'react';
 import type { ProcurementSupplier,ProcurementTender,ProcurementDetail,ProcurementLink,ProcurementAnalytics,ProcurementReportRecord,ProcurementAudit } from '../../../../shared/types';
 import { procurementApi } from './procurementApi';
 export function useProcurement() {
+  const feedback = useActionFeedback();
   const [suppliers,setSuppliers]=useState<ProcurementSupplier[]>([]),[tenders,setTenders]=useState<ProcurementTender[]>([]);
   const [detail,setDetail]=useState<ProcurementDetail>(),[selectedId,setSelectedId]=useState<string>();
-  const [links,setLinks]=useState<ProcurementLink[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[refreshAt,setRefreshAt]=useState('');
+  const [links,setLinks]=useState<ProcurementLink[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(true),[refreshAt,setRefreshAt]=useState('');
   const [analysis,setAnalysis]=useState<ProcurementAnalytics>(),[reports,setReports]=useState<ProcurementReportRecord[]>([]);
   const [report,setReport]=useState<ProcurementReportRecord&{activity?:ProcurementAudit[]}>();
   const alive=useRef(true),selection=useRef<string|undefined>(undefined);
@@ -19,9 +21,9 @@ export function useProcurement() {
     selection.current=id;setSelectedId(id);setDetail(undefined);
     const d=await procurementApi.detail(id);if(alive.current&&selection.current===id&&generation===detailGeneration.current)setDetail(d);
   },[]);
-  const run=useCallback(async<T,>(task:()=>Promise<T>):Promise<T|undefined>=>{
-    setBusy(true);setError('');try{return await task();}catch(e){if(alive.current)setError(e instanceof Error?e.message:'操作失败');return undefined;}finally{if(alive.current)setBusy(false);}
-  },[]);
+  const run=useCallback(async<T,>(task:()=>Promise<T>,success?:string):Promise<T|undefined>=>{
+    setBusy(true);setError('');try{const result=await task();if(success)feedback.success(success);return result;}catch(e){feedback.error(e);if(alive.current)setError(e instanceof Error?e.message:'操作失败');return undefined;}finally{if(alive.current)setBusy(false);}
+  },[feedback]);
   useEffect(()=>{
     void run(load);
     const params=new URLSearchParams(location.search),id=params.get('procurementTender'),reportId=params.get('procurementReport');
@@ -42,6 +44,7 @@ export function useProcurement() {
     return run(async()=>{
       const d=await procurementApi.action(id,body);
       if(alive.current&&selection.current===id){detailGeneration.current++;setDetail(d);if(d.link)setLinks([d.link]);}
+      feedback.success('询价操作成功');
       await load();return d;
     });
   }

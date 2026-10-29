@@ -79,6 +79,7 @@ export async function assertFileReadAccess(fileId, user, database = pool) {
     const notification = await database.query("select 1 from dispatch_notifications where order_id=$1 and recipient_id=$2 and kind='纸质委托书已创建' limit 1", [file.order_id, user.id]);
     if (notification.rows.length) return;
   }
+  if (String(file.kind).startsWith("trip_")) throw new HttpError(403, "出车附件只能通过出车申请访问");
   if (!user.shopId || file.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店文件");
   if (hasRole(user, 'manager')) return;
   if (hasRole(user, 'advisor') && (file.uploaded_by === user.id || file.advisor)) return;
@@ -96,6 +97,7 @@ export async function assertFileReadAccess(fileId, user, database = pool) {
 
 export async function assertFileAccess(fileId, user, database = pool) {
   const file = await findFileAccess(fileId, database);
+  if (String(file.kind).startsWith("trip_")) throw new HttpError(403, "出车附件只能通过出车申请访问");
   if (!user.shopId || file.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店文件");
   if (hasRole(user, 'manager')) return;
   if (hasRole(user, 'advisor') && (file.uploaded_by === user.id || file.advisor === user.name)) return;

@@ -160,9 +160,9 @@ test('additional repair notices cancel after reassignment, shop transfer, comple
  assert.equal(await validate(row,user,{query:async()=>({rows:[{...task,stage:'维修完成'}]})}),false);
  const contractor={...user,role:'outsourcing'};
  const outsourced={...task,data:{...task.data,executionMode:'outsourced'}};
- assert.equal(await validate(row,contractor,{query:async()=>({rows:[outsourced]})}),true);
+ assert.equal(await validate(row,contractor,{query:async()=>({rows:[outsourced]})}),false);
  assert.equal(await validate(row,user,{query:async()=>({rows:[outsourced]})}),false);
- const legacyOutsourced={...task,data:{...task.data,executionMode:'outsourced',technicianIds:[],items:[{id:1000000000,status:'待开工'}]}};
+ const legacyOutsourced={...task,data:{...task.data,executionMode:'outsourced',assignedBy:user.id,technicianIds:[],items:[{id:1000000000,status:'待开工'}]}};
  assert.equal(await validate(row,{...user,role:'manager'},{query:async()=>({rows:[legacyOutsourced]})}),true);
  for(const kind of ['新增维修项目','追加维修派工']) {
   let sent=0,finished;

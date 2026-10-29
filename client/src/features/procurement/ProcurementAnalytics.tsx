@@ -25,7 +25,7 @@ export function ProcurementAnalytics({controller:c}:{controller:ProcurementContr
       </Card>
       <Card title="月度询价趋势"><div className="procurement-chart" role="img" aria-label="各月询价次数">{a.months.map(m=><div className="procurement-chart-column" key={m.month}><span>{m.total}</span><div className="procurement-chart-bar" style={{height:`${m.total/Math.max(1,...a.months.map(x=>x.total))*120}px`}}/><span>{m.month}</span></div>)}</div><Table rowKey="month" dataSource={a.months} pagination={false} columns={[{title:'月份',dataIndex:'month'},{title:'结束收集',dataIndex:'total'},{title:'中标',dataIndex:'awarded'},{title:'流标',dataIndex:'failed'}]}/></Card>
     </>:<p className="procurement-muted">选择统计周期后查询。按报价收集结束时间归属期间，取消询价不纳入统计。</p>}
-    <Card title="生成供应商表现报告"><Form layout="vertical" onFinish={()=>void c.run(async()=>{const r=await procurementApi.createReport({supplierId:supplierId!,...range(),note});c.setReport(r);await c.load();})}>
+    <Card title="生成供应商表现报告"><Form layout="vertical" onFinish={()=>void c.run(async()=>{const r=await procurementApi.createReport({supplierId:supplierId!,...range(),note});c.setReport(r);await c.load();},'报告预览已生成')}>
       <Form.Item label="报告供应商" required><Select aria-label="报告供应商" placeholder="选择供应商" value={supplierId} onChange={setSupplierId} options={c.suppliers.map(s=>({value:s.id,label:s.name}))}/></Form.Item>
       <Form.Item label="合作建议"><Input.TextArea value={note} onChange={e=>setNote(e.target.value)} maxLength={1000} rows={3}/></Form.Item>
       <Button type="primary" htmlType="submit" disabled={!supplierId||!from||!to} loading={c.busy}>生成预览</Button><p className="procurement-muted">使用上方统计周期，先生成固定快照；预览确认后发布分享链接。</p>

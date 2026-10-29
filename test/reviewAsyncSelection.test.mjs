@@ -16,6 +16,7 @@ function hook(file,name,api,props=[]) {
  };
  vm.runInNewContext(compiled,{exports,Error,URL,URLSearchParams,location:{href:'https://example.com/',search:''},history:{replaceState(){}},require(id){
   if(id==='react')return react;
+  if(id.endsWith('useActionFeedback'))return {useActionFeedback:()=>({success(){},error(){},warning(){}})};
   if(id.endsWith('roles.mjs'))return {hasAnyRole,hasRole};
   if(id.endsWith('requestId'))return {createRequestId:()=> 'review-request'};
   if(id.endsWith('dispatchApi'))return {dispatchApi:api};
@@ -44,9 +45,9 @@ test('closing a task while its request is pending leaves no stale detail',async(
  const gate=deferred();
  const api={detail:()=>gate.promise};
  const render=hook('../client/src/features/dispatch/useDispatchController.ts','useDispatchController',api,[user,'派工台','A']);
- const loading=render().refreshDetail();render().select();
+ const loading=render().refreshDetail();assert.equal(render().detailLoading,true);render().select();
  gate.resolve({task:{orderId:'A',version:1}});await loading;
- assert.equal(render().selectedId,undefined);assert.equal(render().detail,undefined);
+ assert.equal(render().selectedId,undefined);assert.equal(render().detail,undefined);assert.equal(render().detailLoading,false);
 });
 
 test('late procurement action cannot overwrite the newly opened tender or its links',async()=>{
@@ -102,5 +103,10 @@ test('late plate OCR cannot start a lookup or modify a reset draft',async()=>{
 
 test('selecting the already opened task keeps its loaded detail',async()=>{
  const render=hook('../client/src/features/dispatch/useDispatchController.ts','useDispatchController',{detail:async id=>({task:{orderId:id,version:1}})},[user,'派工台','A']);
- await render().refreshDetail();render().select('A');assert.equal(render().detail.task.orderId,'A');
+ await render().refreshDetail();render().select('A');assert.equal(render().detail.task.orderId,'A');assert.equal(render().detailLoading,false);
+});
+
+test('failed detail load stops its loader and exposes the failure',async()=>{
+ const render=hook('../client/src/features/dispatch/useDispatchController.ts','useDispatchController',{detail:async()=>{throw new Error('任务加载失败');}},[user,'派工台','A']);
+ await render().refreshDetail();assert.equal(render().detailLoading,false);assert.equal(render().detail,undefined);assert.equal(render().error,'任务加载失败');
 });

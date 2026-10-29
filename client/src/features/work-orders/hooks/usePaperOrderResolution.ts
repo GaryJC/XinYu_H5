@@ -1,3 +1,4 @@
+import { useActionFeedback } from "../../../shared/ui/useActionFeedback";
 import { hasRole, hasAnyRole } from "../../../../../shared/roles.mjs";
 import { useEffect, useRef, useState } from "react";
 import type { WorkOrder, UserProfile } from "../../../../../shared/types";
@@ -5,6 +6,7 @@ import { workOrderApi } from "../api/workOrderApi";
 
 export function usePaperOrderResolution(order: WorkOrder, user: UserProfile | undefined,
   onUpdated: (order: WorkOrder) => void, onEdit: (order: WorkOrder) => void) {
+  const feedback = useActionFeedback();
   const [mode, setMode] = useState<"runfeng" | "dingtalk">("runfeng");
   const [dispatchNo, setDispatchNo] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,6 +27,7 @@ export function usePaperOrderResolution(order: WorkOrder, user: UserProfile | un
     if (isDingTalkDraft && mode === "dingtalk") { onEdit(order); return; }
     const number = dispatchNo.trim().toUpperCase();
     if (mode === "runfeng" && !/^[ABFJ][0-9]+$/.test(number)) {
+      feedback.warning("请填写完整润丰派工号，例如 A66329");
       setError("请填写完整润丰派工号，例如 A66329"); return;
     }
     const session = generation.current;
@@ -32,10 +35,11 @@ export function usePaperOrderResolution(order: WorkOrder, user: UserProfile | un
     try {
       const updated = await workOrderApi.resolvePaperOrder(order.id, mode === "runfeng" ? { mode, dispatchNo: number } : { mode });
       if (session !== generation.current) return;
+      feedback.success(mode === "runfeng" ? "润丰派工单已关联" : "已选择钉钉开单，请继续补全信息");
       onUpdated(updated);
       if (mode === "dingtalk") onEdit(updated);
     } catch (cause) {
-      if (session === generation.current) setError(cause instanceof Error ? cause.message : "处理失败，请重试");
+      if (session === generation.current) { feedback.error(cause); setError(cause instanceof Error ? cause.message : "处理失败，请重试"); }
     } finally {
       running.current = false;
       if (session === generation.current) setBusy(false);

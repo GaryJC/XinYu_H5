@@ -1,3 +1,4 @@
+import { LoadingState } from "../../shared/ui/LoadingState";
 import {personalTask,individualRepair} from './individualRepair';
 import { RepairStatusTag } from './RepairStatusTag';
 import { useEffect, useState } from 'react';
@@ -18,6 +19,7 @@ export function TechnicianRepairPage({controller:c,user}:{controller:DispatchCon
     <Segmented className="repair-task-tabs" block options={categories.map(category=>({value:category.value,className:(c.filters.stage||'进行中')===category.value?'repair-tab-active':undefined,label:`${category.label}（${c.taskCounts?.[category.key]??'—'}）`}))} value={c.filters.stage||'进行中'} onChange={stage=>c.setFilters({...c.filters,stage})} aria-label="维修任务分类"/>
     {c.filters.stage==='维修完成'?<p className="dispatch-muted">显示本月完成的维修任务</p>:null}
     {c.error?<Alert type="error" title={c.error} closable onClose={()=>c.setError('')}/>:null}
+    {c.loading && <LoadingState label="正在加载维修任务…" />}
     {!c.loading&&!c.tasks.length?<Empty description="暂无此类维修任务"/>:null}
     <div className="technician-task-list">{c.tasks.map(task=><Card key={task.orderId} className="technician-task-card">
       <div className="dispatch-heading"><h3>{task.plate||'未填写车牌'}</h3><RepairStatusTag status={taskStatusLabel(task)}/></div>
@@ -28,7 +30,7 @@ export function TechnicianRepairPage({controller:c,user}:{controller:DispatchCon
       <Button type="primary" block onClick={()=>c.select(task.orderId)}>{task.stage==='待接单'?'查看并接单':task.stage==='待检验'?'查看检验进度':task.stage==='维修完成'?'查看维修记录':'进入维修'}</Button>
     </Card>)}</div>
     <Drawer className="repair-task-drawer" title={c.detail?.task.plate||'维修任务'} open={Boolean(c.selectedId)} size={mobile?'100%':640} mask={{closable:!c.busy&&!photoBlocked}} closable={!c.busy&&!photoBlocked} onClose={()=>{if(!c.busy&&!photoBlocked)c.select(undefined);}} destroyOnHidden>
-      {c.detail?<TechnicianTaskDetail key={c.detail.task.orderId} controller={c} user={user} onPhotoBlocked={setPhotoBlocked}/>:<Empty description="正在加载维修任务"/>}
+      {c.detail?<TechnicianTaskDetail key={c.detail.task.orderId} controller={c} user={user} onPhotoBlocked={setPhotoBlocked}/>:<>{c.detailLoading?<LoadingState label="正在加载维修任务…" />:c.error?<Alert type="error" title={c.error}/>:null}</>}
     </Drawer>
   </section>;
 }

@@ -1,0 +1,22 @@
+.company-vehicles-page { max-width: 1120px; margin: 0 auto; }
+.company-vehicles-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+.company-vehicles-heading h2 { margin: 0 0 8px; font-size: 25px; }
+.company-vehicles-heading p { margin: 0; font-size: 13px; color: #738196; }
+.company-vehicle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px; margin: 16px 0; }
+.company-vehicle-grid .ant-card { border-radius: 14px; border-color: #e4eaf1; }
+.company-vehicle-grid .ant-card-head { border-bottom-color: #eef1f5; min-height: 64px; }
+.company-vehicle-grid .ant-card-head-title { font-size: 20px; letter-spacing: .5px; }
+.company-vehicle-grid .ant-card-body { padding: 20px 24px; }
+.company-vehicle-grid p { margin: 0 0 24px; color: #6d7e94; }
+.company-vehicles-page .ant-btn { min-height: 40px; border-radius: 8px; }
+.company-vehicle-modal .ant-modal-container { padding: 26px; border-radius: 16px; }
+.company-vehicle-modal .ant-modal-header { margin-bottom: 24px; }
+.company-vehicle-modal .ant-form-item { margin-bottom: 20px; }
+.company-vehicle-modal .ant-input { padding: 10px 12px; border-radius: 8px; }
+.company-vehicle-modal .ant-modal-footer { border-top: 1px solid #edf0f4; padding-top: 18px; margin-top: 24px; }
+.company-vehicle-modal .ant-modal-footer .ant-btn { min-height: 42px; padding-inline: 20px; border-radius: 8px; }
+@media (max-width: 600px) {
+ .company-vehicle-modal .ant-modal-container { padding: 22px 20px; }
+ .company-vehicle-modal .ant-modal-footer { display: flex; gap: 12px; }
+ .company-vehicle-modal .ant-modal-footer .ant-btn { flex: 1; margin-inline-start: 0; }
+}

@@ -1,3 +1,4 @@
+import { LoadingState } from "../../shared/ui/LoadingState";
 import {PartsPreparationDialog} from './PartsPreparationDialog';
 import {CopyTextButton} from '../../shared/ui/CopyTextButton';
 import {displayTime} from './dispatchLabels';
@@ -42,6 +43,7 @@ export function WarehousePartsPage({controller:source}:{controller:DispatchContr
       </label>
       <Segmented className="repair-task-tabs" block aria-label="配件申请状态" value={status} onChange={setStatus} options={['待备料','部分备齐','备料完成'].map(value=>({value,label:value})).map(option=>({...option,className:status===option.value?'repair-tab-active':undefined,label:`${option.label}（${requests.filter(task=>matchesStatus(task,option.value)).length}）`}))}/>
     </div>
+    {c.loading && <LoadingState label="正在加载配件申请…" />}
     {!c.loading && !tasks.length?<Empty description="暂无配件申请"/>:null}
     {tasks.map(task=><Card key={`${task.orderId}-${task.partsRequirement?.ownerId||'legacy'}`} className="warehouse-request-card" size="small" title="配件申请" role="button" tabIndex={0} aria-label={`查看配件申请 ${task.plate||task.orderId} ${task.dispatchNo||task.orderId}`}
       onClick={event=>{if(event.target instanceof Element&&event.target.closest('button'))return;setSelectedOwner(task.partsRequirement?.ownerId||'');c.select(task.orderId);}}
@@ -58,7 +60,7 @@ export function WarehousePartsPage({controller:source}:{controller:DispatchContr
     <Drawer destroyOnHidden title="配件申请详情" className="warehouse-drawer" open={Boolean(c.selectedId)} onClose={()=>{if(!c.busy){setIssuing(false);c.select();}}} size={600} styles={{wrapper:{maxWidth:'100vw'}}}
       footer={detail?<div className="warehouse-footer"><p>{actionable?`${available.length} ${available.every(t=>t.partsRequirement?.ownerId)?'人':'份'}申请 · ${pendingItems} 项待备料${photoRequests?` · ${photoRequests} 份照片清单待备料`:''}`:allPrepared?'备料已完成':'当前申请暂不可处理'}</p>{actionable?<Button block size="large" type="primary" disabled={c.busy||(!pendingItems&&!photoRequests)} onClick={()=>setIssuing(true)}>确认备料</Button>:<Button block onClick={()=>c.select()}>关闭详情</Button>}</div>:null}>
       {c.error?<Alert type="error" showIcon title={c.error}/>:null}
-      {!detail?<p role="status">正在加载申请…</p>:<WarehousePartsDetail key={`${detail.task.orderId}-${owner||"legacy"}`} detail={detail} controller={source} onOpenOrder={()=>setWorkOrderId(detail.task.orderId)}/>}
+      {!detail?(c.detailLoading?<LoadingState label="正在加载申请详情…" />:null):<WarehousePartsDetail key={`${detail.task.orderId}-${owner||"legacy"}`} detail={detail} controller={source} onOpenOrder={()=>setWorkOrderId(detail.task.orderId)}/>}
     </Drawer>
     <WarehouseWorkOrderDrawer orderId={workOrderId} onClose={()=>setWorkOrderId(undefined)}/>
     {issuing&&detail?<PartsPreparationDialog key={detail.task.orderId} controller={source} onClose={()=>{if(!c.busy)setIssuing(false);}}/>:null}

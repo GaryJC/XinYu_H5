@@ -1,5 +1,5 @@
 // The primary role controls the landing page; authorization uses every membership.
-const validRoles = ['manager', 'advisor', 'inspector', 'warehouse', 'technician', 'outsourcing'];
+const validRoles = ['employee', 'manager', 'advisor', 'inspector', 'warehouse', 'technician', 'outsourcing'];
 export function userRoles(user) {
   if (!user) return [];
   const roles = Array.isArray(user.roles) && user.roles.length ? user.roles : [user.role];

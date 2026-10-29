@@ -45,7 +45,7 @@ export function resolveDingTalkOrganizationMapping(profile, { shopId = "shop-hq"
   });
   const selected = candidates.sort((a, b) => b.priority - a.priority
     || a.dingtalkRoleId.localeCompare(b.dingtalkRoleId))[0];
-  if (!selected) return undefined;
+  if (!selected) return { role: "employee", roles: ["employee"], shopId, homeRoute: "vehicle-trips" };
   return {
     role: selected.role,
     roles: [...new Set(candidates.map(candidate => candidate.role))],

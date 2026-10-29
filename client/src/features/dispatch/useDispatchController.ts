@@ -1,3 +1,4 @@
+import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { hasAnyRole, hasRole } from "../../../../shared/roles.mjs";
 import { createRequestId } from "../../shared/api/requestId";
 import { useCallback,useEffect,useRef,useState } from 'react';
@@ -5,6 +6,7 @@ import type { RepairTaskCounts,DispatchActionRequest,DispatchDetail,DispatchPeop
 import { dispatchApi,type DispatchFilters } from './dispatchApi';
 export type ActionInput=Omit<DispatchActionRequest,'expectedVersion'|'requestId'>;
 export function useDispatchController(user:UserProfile,view:string,initialOrderId?:string) {
+  const feedback = useActionFeedback();
   const manager=hasAnyRole(user, ['manager','advisor']);
   const inspectionLead=manager || view==='检验任务' && hasRole(user, 'inspector');
   const [filters,setFilters]=useState<DispatchFilters>({stage:view==='检验任务'?'待检验':view==='我的维修'?'进行中':undefined});
@@ -16,7 +18,8 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
   const selection=useRef(selectedId);
   const [detail,setDetail]=useState<DispatchDetail>();
   const [error,setError]=useState('');
-  const [loading,setLoading]=useState(false);
+  const [loading,setLoading]=useState(true);
+  const [detailLoading,setDetailLoading]=useState(Boolean(selectedId));
   const [busy,setBusy]=useState(false);
   const [updatedAt,setUpdatedAt]=useState('');
   const generation=useRef(0), detailGeneration=useRef(0), actionBusy=useRef(false);
@@ -38,9 +41,10 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
   latestRefresh.current=refresh;
   const refreshDetail=useCallback(async()=> {
     if(!selectedId || selection.current!==selectedId) return;
-    const current=++detailGeneration.current;
+    const current=++detailGeneration.current;setDetailLoading(true);
     try {const next=await dispatchApi.detail(selectedId);if(current===detailGeneration.current && selection.current===selectedId) setDetail(next);}
     catch(e) {if(current===detailGeneration.current && selection.current===selectedId){setDetail(undefined);setError(e instanceof Error?e.message:'任务加载失败');}}
+    finally {if(current===detailGeneration.current && selection.current===selectedId)setDetailLoading(false);}
   },[selectedId]);
   useEffect(()=>{void refresh();return()=>{generation.current++;};},[refresh]);
   useEffect(()=>{if(selectedId) setDetail(undefined);void refreshDetail();return()=>{detailGeneration.current++;};},[refreshDetail]);
@@ -53,7 +57,7 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
   function select(id?:string) {
     if(selection.current===id)return;
     selection.current=id;detailGeneration.current++;setDetail(undefined);
-    pending.current=undefined;setSelectedId(id);setError('');
+    pending.current=undefined;setDetailLoading(Boolean(id));setSelectedId(id);setError('');
     const url=new URL(location.href);if(id) url.searchParams.set('dispatchOrder',id);else url.searchParams.delete('dispatchOrder');
     history.replaceState(null,'',url);
   }
@@ -63,14 +67,28 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
     const id=detail.task.orderId,key=JSON.stringify({id,input});
     const body=pending.current?.key===key?pending.current.body:{...input,expectedVersion:detail.task.version,requestId:createRequestId()};
     pending.current={key,body};
-    try {await dispatchApi.action(id,body);pending.current=undefined;if(input.action==='reopen-repair'&&selection.current===id)setFilters({});await Promise.all([latestRefresh.current(),refreshDetail()]);return true;}
+    try {await dispatchApi.action(id,body);pending.current=undefined;feedback.success(dispatchActionSuccess(input.action));if(input.action==='reopen-repair'&&selection.current===id)setFilters({});await Promise.all([latestRefresh.current(),refreshDetail()]);return true;}
     catch(e) {
+      feedback.error(e);
       if(selection.current===id)setError(e instanceof Error?e.message:'操作失败');
       // A definite HTTP failure may be corrected; an ambiguous network failure retains the idempotency key.
       if(e instanceof Error && 'status' in e) pending.current=undefined;
       await refreshDetail();return false;
     } finally {actionBusy.current=false;setBusy(false);}
   }
-  return {manager,inspectionLead,taskCounts,filters,setFilters,tasks,people,summaries,selectedId,detail,error,setError,loading,busy,updatedAt,refresh,refreshDetail,select,act};
+  return {manager,inspectionLead,taskCounts,filters,setFilters,tasks,people,summaries,selectedId,detail,error,setError:(message:string)=>{setError(message);if(message)feedback.warning(message);},loading,detailLoading,busy,updatedAt,refresh,refreshDetail,select,act};
 }
 export type DispatchController=ReturnType<typeof useDispatchController>;
+
+function dispatchActionSuccess(action: ActionInput['action']) {
+  const labels: Partial<Record<ActionInput['action'], string>> = {
+    'record-parts': '配件申请已提交', 'edit-parts': '配件需求已保存', 'issue-parts': '出库已确认',
+    'confirm-parts': '领料已确认', assign: '派工成功', reassign: '改派成功', accept: '接单成功',
+    decline: '拒单已记录', 'start-order': '已登记开工', start: '已登记开工', pause: '已暂停维修', resume: '已恢复维修',
+    finish: '完工已提报', submit: '已提交检验', 'submit-order': '已提交检验', inspect: '检验结果已保存',
+    'complete-outsourced': '外包完工已登记', 'edit-repair-items': '维修项目已保存',
+    'record-hours': '工时已保存', 'update-due': '预计完工时间已更新', 'update-technicians': '维修人员已更新',
+    'reopen-repair': '已发起追加维修', cancel: '派工已取消', 'send-review': '已发起回审', 'submit-review': '已提交回审'
+  };
+  return labels[action] || '操作成功';
+}

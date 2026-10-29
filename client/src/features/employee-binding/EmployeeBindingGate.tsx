@@ -2,12 +2,13 @@ import { Alert, Button, Modal, Radio, Space, Spin } from "antd";
 import type { UserProfile } from "../../../../shared/types";
 import { useEmployeeBinding } from "./useEmployeeBinding";
 
-export function EmployeeBindingGate({ user, onBound }: { user: UserProfile; onBound: (user: UserProfile) => void }) {
+export function EmployeeBindingGate({ user, onBound, onDefer }: { user: UserProfile; onBound: (user: UserProfile) => void; onDefer?: () => void }) {
   const binding = useEmployeeBinding(user, onBound);
   const candidates = binding.status?.candidates || [];
   return <div className="app-shell">
     <Modal title="匹配润丰员工编码" open closable={false} maskClosable={false} keyboard={false}
       width={520} footer={<Space wrap>
+        {onDefer && <Button onClick={onDefer}>先使用出车申请</Button>}
         <Button loading={binding.loading} onClick={() => void binding.retry()}>重新匹配</Button>
         <Button type="primary" disabled={!binding.selected || binding.loading} loading={binding.loading}
           onClick={() => void binding.confirm()}>确认绑定并继续</Button>

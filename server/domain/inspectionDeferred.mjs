@@ -20,7 +20,7 @@ export function reconcileInspectionDeferred(pending,task,next,input,actor,now) {
  for(const entry of items) {
   if(entry.source==='inspection'&&entry.inspectionState==='scheduled'&&next.items.some(item=>item.id===entry.itemId&&item.status==='已完工')) {
    entry.inspectionState='completed';
-   entry.history.push({action:'检验通过',actor:actor.name,actorId:actor.id,at:now,note:''});
+   entry.history.push({action:input.action==='complete-outsourced'?'外包完工':'检验通过',actor:actor.name,actorId:actor.id,at:now,note:''});
   }
  }
  return items;
@@ -38,9 +38,14 @@ export function cancelInspectionDeferred(task,entry,actor,note,now) {
   next.participantIds=[...new Set([...(next.participantIds||[]),item.responsibleId,item.startedBy,item.finishedBy].filter(Boolean))];
   next.technicianIds=(next.technicianIds||[next.technicianId]).filter(id=>id&&next.items.some(item=>item.responsibleId===id));
   next.technicianId=next.technicianIds[0];
-  next.technicianName=[...new Set(next.items.map(i=>i.responsibleName).filter(Boolean))].join('、');
+  next.technicianName=next.executionMode==='outsourced'?next.contractor:[...new Set(next.items.map(i=>i.responsibleName).filter(Boolean))].join('、');
  }
  if(next.rejectedItemIds)next.rejectedItemIds=next.rejectedItemIds.filter(id=>id!==entry.itemId);
+ // External item completion still needs the separate whole-order completion checks.
+ if(next.executionMode==='outsourced'&&next.items.length) {
+  next.version=task.version+1;
+  return next;
+ }
  if(next.items.every(item=>item.status==='已完工'))Object.assign(next,{stage:'维修完成',completedAt:task.stage==='维修完成'?task.completedAt:now,rework:false});
  else if(next.items.every(item=>['待检验','已完工'].includes(item.status)))next.stage='待检验';
  else if(next.stage==='待检验')next.stage='维修中';

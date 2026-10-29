@@ -1,3 +1,4 @@
+import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Form, Input } from "antd";
 import { FormDialog } from "../../shared/ui/BusinessForm";
@@ -21,6 +22,7 @@ type CheckState = {
 };
 
 export function CreateVehicleReferenceButton({ kind, currentName, currentCode, disabled, openRequest, onCreate }: Props) {
+  const feedback = useActionFeedback();
   const label = kind === "model" ? "车型" : "所属单位";
   const maxLength = kind === "model" ? 10 : 50;
   const [open, setOpen] = useState(false);
@@ -91,9 +93,11 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
     setSubmitting(true);
     try {
       const result = await workOrderApi.createVehicleReference(kind, normalizedName, code);
+      feedback.success(`${label}已保存并选用`);
       onCreate(result);
       setOpen(false);
     } catch (error) {
+      feedback.error(error);
       setCheck({ status: "error", message: error instanceof Error ? error.message : "编码查询失败" });
     } finally {
       setSubmitting(false);

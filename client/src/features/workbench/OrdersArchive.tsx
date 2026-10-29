@@ -86,13 +86,13 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
   }
 
   return (
-    <Card className="panel lower-panel">
+    <Card className="panel lower-panel workbench-archive">
       <div className="panel-header archive-header">
         <div>
           <h2>{overview ? "工单全览" : "归档查询"}</h2>
           <p>{overview ? "查看本店全部工单资料、维修流程，按分类下载照片 Word。" : "点击任一委托单可查看完整归档内容。"}</p>
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minWidth: 0, maxWidth: "100%" }}>
+        <div className="workbench-archive-actions">
         {["advisor","manager"].includes(role)&&<PendingRepairFollowups user={controller.currentUser||undefined}/>}
         <Button loading={ordersLoading} onClick={() => void controller.refreshWorkbench()}>刷新列表</Button>
         {["advisor", "manager"].includes(role) && <Button icon={<RefreshCw size={16}/>} loading={Boolean(legacyRefresh.progress)}
@@ -102,7 +102,7 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
         <Input.Search className="search-box" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="搜索车牌 / VIN / 工单号 / 派工号" allowClear />
         </div>
       </div>
-      {["advisor", "manager"].includes(role) && <p style={{ color: "#657085", fontSize: 13 }}>更新全部已同步且有权限的委托单，不受搜索和分页影响；保留签名、照片和维修进度。更新期间请保持页面打开。</p>}
+      {["advisor", "manager"].includes(role) && <p className="workbench-archive-help">更新全部已同步且有权限的委托单，不受搜索和分页影响；保留签名、照片和维修进度。更新期间请保持页面打开。</p>}
       {refreshReport}
       <ArchiveFilterBar key={currentUser?.id} archive={controller.archive} isMobile={isMobile} />
 
@@ -143,7 +143,10 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
           pagination={{ pageSize: 8, showSizeChanger: false, current: controller.archive.page, onChange: controller.archive.setPage }}
           locale={{ emptyText: ordersLoading ? <div style={{ minHeight: 140 }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无符合条件的委托单"><Button onClick={controller.archive.reset}>清空筛选</Button></Empty> }}
           rowClassName={(order) => order.id === selectedId ? "selected" : ""}
-          onRow={(order) => ({ onClick: () => openDetail(order) })}
+          onRow={(order) => ({ onClick: () => openDetail(order), tabIndex: 0, 'aria-label': `查看委托单 ${order.vehicle.plate || order.id}`, onKeyDown: event => {
+            if (event.target !== event.currentTarget) return;
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDetail(order); }
+          } })}
           dataSource={listedOrders}
           columns={[
             { title: "派工号", render: (_, order) => order.dispatchNo || "暂无派工号", width: 160 },
@@ -163,8 +166,8 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
       <Modal
         rootClassName="archive-detail-modal"
         open={Boolean(detailOrder)}
-        title={isMobile ? "委托单详情" : detailOrder ? `委托单详情 · ${detailOrder.id}` : "委托单详情"}
-        width={isMobile ? "calc(100vw - 16px)" : 980}
+        title="委托单详情"
+        width={isMobile ? "calc(100vw - 16px)" : 1080}
         style={isMobile ? { top: 8, paddingBottom: 8 } : undefined}
         onCancel={() => setDetailOrderId(undefined)}
         footer={overview ? <Button onClick={() => setDetailOrderId(undefined)}>关闭</Button> : (
@@ -199,7 +202,7 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
             <Button onClick={() => setDetailOrderId(undefined)}>关闭</Button>
           </div>
         )}
-        styles={{ body: { maxHeight: isMobile ? "calc(100vh - 220px)" : "72vh", overflowY: "auto" } }}
+        styles={{ body: { overflowY: "auto" } }}
       >
         {overview && detailOrder ? <Suspense fallback={<Spin/>}><OrderOverviewDetail key={detailOrder.id} id={detailOrder.id}/></Suspense> : <>
         {detailOrder && <PaperOrderResolution key={`paper-${detailOrder.id}`} order={detailOrder} user={currentUser} onUpdated={controller.acceptRefreshedOrder} onEdit={resumeDraft}/>}

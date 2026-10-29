@@ -59,3 +59,15 @@ test('deleting an unresolved deferred item preserves an already completed round 
  const active={...original,stage:'维修中',items:[{id:1,status:'维修中'}]};
  assert.equal(cancelInspectionDeferred(active,{itemId:1,inspectionState:'scheduled'},inspector,'不再维修','now').completedAt,'now');
 });
+
+
+test('cancelling an outsourced deferred project preserves contractor and cannot bypass direct completion',()=>{
+ for(const status of ['已完工','待检验']) {
+  const original={...task(),executionMode:'outsourced',contractor:'张师傅',technicianName:'张师傅',technicianIds:[],technicianId:undefined,stage:'维修中',items:[{id:1,name:'撤销项目',status:'待开工'},{id:2,name:'保留项目',status}]};
+  const next=cancelInspectionDeferred(original,{itemId:1,inspectionState:'scheduled'},inspector,'不再维修','now');
+  assert.equal(next.stage,'维修中');assert.equal(next.completedAt,undefined);assert.equal(next.technicianName,'张师傅');
+  assert.deepEqual(next.items,[original.items[1]]);
+  const empty=cancelInspectionDeferred({...original,items:[original.items[0]]},{itemId:1,inspectionState:'scheduled'},inspector,'不再维修','now');
+  assert.equal(empty.stage,'维修完成');
+ }
+});

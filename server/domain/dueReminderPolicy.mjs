@@ -3,7 +3,7 @@ import { technicianIds } from './dispatchPolicy.mjs';
 export const dueReminderStages=['待接单','待开工','维修中','暂停'];
 // Only the currently applicable window is sent. Missed windows are never backfilled in a burst.
 export function dueReminderWindow(task,now=Date.now()) {
-  if(task.needsReview || task.feedback || task.executionMode==='outsourced'&&!task.contractorId || !dueReminderStages.includes(task.stage) || ['草稿','待客户签字'].includes(task.orderStatus) || !task.repairRound && ['待结算','完成'].includes(task.orderStatus)) return undefined;
+  if(task.needsReview || task.feedback || task.executionMode==='outsourced' || !dueReminderStages.includes(task.stage) || ['草稿','待客户签字'].includes(task.orderStatus) || !task.repairRound && ['待结算','完成'].includes(task.orderStatus)) return undefined;
   const remaining=Date.parse(task.dueAt)-Number(now);
   if(!Number.isFinite(remaining) || remaining<=0 || remaining>48*3600000) return undefined;
   return remaining<=3600000?60:remaining<=24*3600000?1440:2880;

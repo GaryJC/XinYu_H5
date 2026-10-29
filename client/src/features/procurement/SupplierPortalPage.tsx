@@ -1,3 +1,4 @@
+import { LoadingState } from "../../shared/ui/LoadingState";
 import { procurementTotalFen } from "../../../../shared/procurementMoney.mjs";
 import { useEffect,useState } from 'react';
 import { Alert,Button,Card,Checkbox,Form,Input,InputNumber,Modal,Space,Table } from 'antd';
@@ -16,7 +17,7 @@ export function SupplierPortalPage() {
   return <main className="procurement-portal"><div className="procurement">
     <header className="procurement-heading"><div><h1>供应商协作</h1><p className="procurement-muted">配件询价与合作表现</p></div>{data?<Button onClick={p.switchIdentity}>重新核对信息</Button>:null}</header>
     {p.error?<Alert type="error" showIcon role="alert" title={p.error}/>:null}{p.notice?<Alert type="success" showIcon role="status" title={p.notice}/>:null}
-    {!data?<Card title="填写供应商信息"><Form layout="vertical" onFinish={v=>p.verify(v.phone,v.identity)}>
+    {p.resuming?<LoadingState label="正在加载供应商信息…" />:!data?<Card title="填写供应商信息"><Form layout="vertical" disabled={p.busy} onFinish={v=>p.verify(v.phone,v.identity)}>
       <Form.Item label="预留手机号" name="phone" rules={[{required:true,pattern:/^1\d{10}$/,message:'请输入预留的11位手机号'}]}><Input inputMode="tel" autoComplete="tel"/></Form.Item>
       <Form.Item label="联系人姓名或供应商名称" name="identity" rules={[{required:true,max:100}]}><Input autoComplete="organization"/></Form.Item>
       <Button type="primary" htmlType="submit" loading={p.busy} disabled={!p.token}>进入</Button>

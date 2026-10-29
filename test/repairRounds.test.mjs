@@ -26,5 +26,5 @@ test('reopening enforces permissions, version, mandatory reason, projects and fu
  assert.equal(applyDispatchAction(completed(),input(),inspector,people,now).stage,'待接单');
  for(const actor of [tech,{...manager,active:false},{...manager,shopId:'other'}]) assert.throws(()=>applyDispatchAction(completed(),input(),actor,people,now));
  for(const execution of [{executionMode:'field'},{executionMode:'outsourced'}]) assert.throws(()=>applyDispatchAction(completed(),{...input(),...execution},manager,people,now));
- const task=applyDispatchAction(completed(),{...input(),executionMode:'outsourced',contractorId:'external',outsourcingMode:'onsite',technicianIds:[]},manager,people,now);assert.equal(task.executionMode,'outsourced');assert.equal(task.stage,'待接单');
+ const task=applyDispatchAction(completed(),{...input(),executionMode:'outsourced',contractor:'张师傅',outsourcingMode:'onsite',technicianIds:[]},manager,people,now);assert.equal(task.executionMode,'outsourced');assert.equal(task.stage,'待开工');
 });

@@ -1,9 +1,11 @@
+import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import { useEffect, useRef, useState } from "react";
 import type { UserProfile, WorkOrder, WorkOrderCustomerVehicleUpdate } from "../../../../shared/types";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
 
 export function useCustomerVehicleEditor(order: WorkOrder, user: UserProfile | undefined, onUpdated: (order: WorkOrder) => void) {
+  const feedback = useActionFeedback();
   const [change, setChange] = useState<WorkOrderCustomerVehicleUpdate>();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -47,10 +49,11 @@ export function useCustomerVehicleEditor(order: WorkOrder, user: UserProfile | u
     try {
       const updated = await workOrderApi.updateCustomerVehicle(order.id, change);
       if (current !== generation.current) return;
+      feedback.success("客户及车辆信息已保存");
       onUpdated(updated);
       setChange(undefined);
     } catch (error) {
-      if (current === generation.current) setError(error instanceof Error ? error.message : "保存失败，请重试");
+      if (current === generation.current) { feedback.error(error); setError(error instanceof Error ? error.message : "保存失败，请重试"); }
     } finally {
       running.current = false;
       if (current === generation.current) setSaving(false);

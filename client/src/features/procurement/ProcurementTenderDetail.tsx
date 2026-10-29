@@ -1,3 +1,4 @@
+import { LoadingState } from "../../shared/ui/LoadingState";
 import {ProcurementPhoto} from './ProcurementNameplatePhotos';
 import { TenderForm } from "./ProcurementForms";
 import { useState } from 'react';
@@ -14,7 +15,7 @@ export function ProcurementTermsView({terms,portal=false}:{terms:ProcurementTerm
 export function ProcurementTenderDetail({controller:c}:{controller:ProcurementController}) {
   const [editing,setEditing]=useState<ProcurementTender>();
   const [reason,setReason]=useState(''),[winnerId,setWinnerId]=useState<string>(),[invalidating,setInvalidating]=useState<ProcurementInvitation>(),[invalidReason,setInvalidReason]=useState('');
-  const d=c.detail;if(!d)return <p role="status">正在加载询价…</p>;
+  const d=c.detail;if(!d)return c.busy?<LoadingState label="正在加载询价详情…" />:null;
   const t=d.tender,final=['awarded','failed','cancelled'].includes(t.status);
   const valid=t.invitations.filter(i=>{const q=i.quotes[0];return q&&q.termsVersion===t.termsVersion&&!q.declined&&!i.invalidReason&&q.meetsRequirements&&Date.parse(q.deliveryAt!)<=Date.parse(t.data.deliveryBy);});
   const minimum=valid.length?Math.min(...valid.map(i=>i.quotes[0].totalFen!)):undefined;
@@ -48,7 +49,7 @@ export function ProcurementTenderDetail({controller:c}:{controller:ProcurementCo
     <Drawer title="编辑询价信息与截止时间" size={760} open={!!editing} destroyOnHidden onClose={()=>setEditing(undefined)}>
       {editing?<div className="procurement">{c.error?<Alert type="error" title={c.error}/>:null}<TenderForm key={`${editing.id}-${editing.version}`} tender={editing} suppliers={c.suppliers} busy={c.busy} onCancel={()=>setEditing(undefined)} onSave={async body=>{Modal.confirm({title:'确认保存询价修改？',content:`只修改截止时间，原报价继续有效；修改采购要求，原报价需由供应商重新确认。${editing.status==='closed'?'本次报价已停止，保存后将重新开放报价。':''}`,onOk:async()=>{const saved=await c.action({...body,action:'update',expectedVersion:editing.version,reopen:editing.status==='closed'});if(saved)setEditing(undefined);}});}}/></div>:null}
     </Drawer>
-    <Modal title={`报价是否符合要求：${invalidating?.supplierName||''}`} open={!!invalidating} onCancel={()=>setInvalidating(undefined)} footer={<Space><Button onClick={()=>{void c.action({action:'invalidate',invitationId:invalidating?.id,reason:''}).then(r=>{if(r)setInvalidating(undefined);});}}>恢复报价资格</Button><Button type="primary" disabled={!invalidReason.trim()} loading={c.busy} onClick={()=>{void c.action({action:'invalidate',invitationId:invalidating?.id,reason:invalidReason}).then(r=>{if(r)setInvalidating(undefined);});}}>确认不参与比价</Button></Space>}>
+    <Modal title={`报价是否符合要求：${invalidating?.supplierName||''}`} open={!!invalidating} onCancel={()=>setInvalidating(undefined)} footer={<Space><Button loading={c.busy} disabled={c.busy} onClick={()=>{void c.action({action:'invalidate',invitationId:invalidating?.id,reason:''}).then(r=>{if(r)setInvalidating(undefined);});}}>恢复报价资格</Button><Button type="primary" disabled={!invalidReason.trim()} loading={c.busy} onClick={()=>{void c.action({action:'invalidate',invitationId:invalidating?.id,reason:invalidReason}).then(r=>{if(r)setInvalidating(undefined);});}}>确认不参与比价</Button></Space>}>
       <p>例如规格不符、无法按约供货时，将这份报价排除在最低价评选之外，必须填写原因。报价及修改记录仍保留，也可以恢复资格。</p><Input.TextArea aria-label="报价无效原因" value={invalidReason} onChange={e=>setInvalidReason(e.target.value)} maxLength={1000}/>
     </Modal>
   </div>;

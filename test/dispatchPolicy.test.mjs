@@ -144,27 +144,28 @@ test('field work means employees leave for a service unit and retains shared pro
   task=act(task,'update',advisor,{returnedAt:due});assert.equal(task.returnedAt,due);
 });
 
-for(const outsourcingMode of ['onsite','offsite']) test(`outsourced ${outsourcingMode} lifecycle is tracked internally and independently inspected`,()=>{
-  let task=act(initial(),'assign',advisor,{executionMode:'outsourced',contractorId:'external',contractor:'伪造名称',outsourcingMode,agreedFee:123.45,dueAt:due});
-  assert.deepEqual(task.technicianIds,['external']);assert.equal(task.technicianId,'external');assert.equal(task.contractor,'外包维修厂');
-  assert.throws(()=>assertDispatchAccess(task,technician),e=>e.status===403);
-  task=act(task,'accept',contractor);
-  for(const itemId of [1,2]) {task=act(task,'finish',contractor,{itemId});}
-  assert.throws(()=>act(task,'submit',contractor,{inspectorId:'external'}),e=>e.status===400);
-  task=act(task,'submit',advisor,{inspectorId:'i'});
-  assert.throws(()=>act(task,'inspect',contractor),e=>e.status===403);
-  task=act(task,'inspect',inspector,{rejectedItemIds:[1],reason:'返工'});
-  task=act(task,'start',advisor,{itemId:1});task=act(task,'finish',advisor,{itemId:1});
-  task=act(task,'submit',advisor,{inspectorId:'i'});task=act(task,'inspect',inspector);
-  assert.equal(task.stage,'维修完成');assert.equal(task.agreedFee,123.45);
+for(const outsourcingMode of ['onsite','offsite']) test(`outsourced ${outsourcingMode} uses a free-text name and completes without inspection`,()=>{
+  let task=act(initial(),'assign',advisor,{executionMode:'outsourced',contractorId:'external',contractor:'  张师傅  ',outsourcingMode,agreedFee:123.45,dueAt:due});
+  assert.deepEqual(task.technicianIds,[]);assert.equal(task.technicianId,undefined);assert.equal(task.contractorId,undefined);assert.equal(task.contractor,'张师傅');
+  assert.equal(task.stage,'待开工');assert.equal(task.acceptedAt,now);
+  for(const actor of [technician,contractor])assert.throws(()=>assertDispatchAccess(task,actor),e=>e.status===403);
+  assert.throws(()=>act(task,'record-parts',manager,{partsRequirement:{mode:'none'}}),/仅限本单派工人/);
+  task=act(task,'record-parts',advisor,{partsRequirement:{mode:'none'}});
+  assert.equal(task.partsRequirement.applicantId,advisor.id);
+  for(const itemId of [1,2]) task=act(task,'finish',advisor,{itemId});
+  assert.ok(task.items.every(item=>item.status==='已完工'&&!item.inspectedAt));
+  for(const action of ['submit','submit-order','inspect','send-review'])assert.throws(()=>act(task,action,advisor),/外包无需提检/);
+  task=act(task,'complete-outsourced',advisor);
+  assert.equal(task.stage,'维修完成');assert.equal(task.agreedFee,123.45);assert.equal(task.completedBy,advisor.id);assert.equal(task.inspectorId,undefined);
+  assert.throws(()=>act(task,'complete-outsourced',advisor),e=>e.status===409);
 });
 
 test('execution validation rejects malformed costs, timestamps and silent mode changes',()=>{
   for(const fields of [{executionMode:'unknown'},{agreedFee:-1},{agreedFee:'100'},{agreedFee:1.001},{departureAt:'2026-09-11T01:00:00'},{outsourcingMode:'unknown'}]) assert.throws(()=>act(initial(),'assign',advisor,{technicianIds:['t'],dueAt:due,...fields}),e=>e.status===400);
   assert.throws(()=>act(assigned(),'update',advisor,{executionMode:'outsourced',contractor:'单位',outsourcingMode:'onsite'}),e=>e.status===400);
   let task=act(initial(),'assign',advisor,{executionMode:'field',technicianIds:['t'],serviceUnit:'客户车队',serviceAddress:'停车场',dueAt:due});
-  task=act(task,'reassign',advisor,{executionMode:'outsourced',outsourcingMode:'onsite',contractorId:'external',dueAt:due,reason:'转外包'});
-  assert.equal(task.serviceUnit,undefined);assert.deepEqual(task.technicianIds,['external']);
+  task=act(task,'reassign',advisor,{executionMode:'outsourced',outsourcingMode:'onsite',contractor:'张师傅',dueAt:due,reason:'转外包'});
+  assert.equal(task.serviceUnit,undefined);assert.deepEqual(task.technicianIds,[]);
   task=act(task,'update',advisor,{agreedFee:100});
   task=act(task,'update',advisor,{agreedFee:null});assert.equal(task.agreedFee,null);
 });

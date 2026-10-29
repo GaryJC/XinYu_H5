@@ -37,5 +37,7 @@
 .repair-items-summary{display:flex;align-items:center;flex-wrap:wrap;gap:12px}
 
 .repair-item-name-row{display:flex;align-items:flex-start;gap:6px}
-.repair-item-name-row>.ant-input,.repair-item-name-row>.repair-item-title{flex:1;min-width:0}
+.repair-item-name-row>.ant-input,.repair-item-name-row>.repair-item-name-field,.repair-item-name-row>.repair-item-title{flex:1;min-width:0}
+.repair-item-name-row>.repair-item-name-field{display:flex;flex-direction:column;gap:4px}
+.repair-item-name-count{align-self:flex-end;white-space:nowrap;font-size:12px;line-height:18px;color:#778399}
 .repair-item-name-row>.ant-btn{flex:none;min-height:36px;height:36px;width:28px;padding:0}

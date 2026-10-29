@@ -79,10 +79,11 @@ export function DispatchActionDialog({action,task,controller,onClose,inspectionR
         {additionalItems.map((name,index)=><div className="reopen-extra-item" key={index}><Input aria-label={`补充项目 ${index+1}`} value={name} maxLength={200} placeholder="填写补充维修项目名称" onChange={e=>setAdditionalItems(items=>items.map((v,i)=>i===index?e.target.value:v))}/><Button aria-label={`移除补充项目 ${index+1}`} onClick={()=>setAdditionalItems(items=>items.filter((_,i)=>i!==index))}>移除</Button></div>)}
         <Button disabled={additionalItems.length>=50} onClick={()=>setAdditionalItems(items=>[...items,''])}>添加补充项目</Button>
       </FormSection>:null}
+      {action==='complete-outsourced'?<Alert type="info" showIcon title="确认本单外包维修项目均已完成" description="登记后本轮维修完成，无需提检。"/>:null}
       {action==='send-review'?<Alert type="info" showIcon title="发送后维修单进入回审，维修工可重新编辑维修项目" description="维修工提交回审后，工单重新进入待检验。原检验结果保留在操作记录中。"/>:null}
       {action==='record-hours'?<><Alert type="info" title="检验通过时填写本轮维修的实际工时，并一并保存。"/><Form.Item label="实际工时（小时）" required><InputNumber aria-label="实际工时" min={0.01} max={10000} precision={2} value={workHours} onChange={value=>{setWorkHours(value);setError('');}}/></Form.Item></>:null}
       {error||controller.error?<Alert type="error" showIcon title={error||controller.error}/>:null}
-      {(assign&&!historical)||action==='update'?<FormSection title="执行方式"><DispatchExecutionFields contractors={controller.people.contractors} value={execution} onChange={setExecution} allowModeChange={assign} hideFee={reopening||Boolean(task.repairRound)}/></FormSection>:null}
+      {(assign&&!historical)||action==='update'?<FormSection title="执行方式"><DispatchExecutionFields value={execution} onChange={setExecution} allowModeChange={assign} hideFee={reopening||Boolean(task.repairRound)}/></FormSection>:null}
       {assign && (action!=='assign'||execution.executionMode==='outsourced') && <FormSection title="人员安排与说明">
       {assign&&execution.executionMode!=='outsourced'?<Form.Item label="维修员工（可多选，平级协作）" required><Select mode="multiple" aria-label="维修工" value={technicianIds} onChange={ids=>{setTechnicianIds(ids);projectDraft.changeTeam(ids);}} placeholder="选择同店维修员工" options={controller.people.technicians.map(p=>({value:p.id,label:`${personDisplayName(p,controller.people.technicians)} · 当前 ${controller.summaries.find(s=>s.id===p.id)?.current||0} 单`}))}/></Form.Item>:null}
       {assign&&execution.executionMode!=='outsourced'&&!controller.people.technicians.length?<Alert type="info" title="暂无可派维修工，请配置钉钉角色并让员工登录一次。"/>:null}
@@ -91,7 +92,7 @@ export function DispatchActionDialog({action,task,controller,onClose,inspectionR
         <p>待检验项目保留原维修责任：{task.items.filter(i=>i.status==='待检验').map(i=>`${i.name}（${i.responsibleName||'原负责人'}）`).join('、')||'无'}。</p>
         <p>已通过项目保留负责人和检验结果，原维修参与人员不能自检。</p>
       </>}/>:null}
-      {assign?<Alert type="info" title={execution.executionMode==='outsourced'?'外包人员可接单并维护维修进度，完工后需独立检验。':'所选员工共同维护工单进度，任一人确认即代表工单接单；每次操作均记录实际操作人。'}/>:null}
+      {assign?<Alert type="info" title={execution.executionMode==='outsourced'?'直接填写承包方姓名，由内部人员维护进度并登记完工，无需提检；配件由本单派工人申请。':'所选员工共同维护工单进度，任一人确认即代表工单接单；每次操作均记录实际操作人。'}/>:null}
       </FormSection>}
       {action==='assign'?<FormSection title="维修项目与负责人"><RepairItemsEditor items={task.items} rows={assignmentRows} onChange={projectDraft.change} editing disabled={controller.busy} showResponsibilities={execution.executionMode!=='outsourced'} technicians={controller.people.technicians}/>{execution.executionMode!=='outsourced'&&!controller.people.technicians.length?<Alert type="info" title="暂无可派维修工，请配置钉钉角色并让员工登录一次。"/>:null}{projectDraft.stale?<Alert type="warning" title="工单已更新，请关闭窗口重新派工"/>:null}</FormSection>:null}
       <FormSection className={action==='inspect'?'inspection-notes':undefined} title={scheduling ? "时间与备注" : action==='inspect'?'备注':"操作说明"}>

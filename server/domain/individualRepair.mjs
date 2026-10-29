@@ -1,5 +1,6 @@
 import {hasPendingInspection,allWorkersHaveItems,isIndividualRepair} from '../../shared/repairProgress.mjs';
 import { hasAnyRole } from "../../shared/roles.mjs";
+import {beginPendingItems} from './partsRequirement.mjs';
 import {HttpError} from '../http/HttpError.mjs';
 const workers=task=>task.technicianIds??(task.technicianId?[task.technicianId]:[]);
 export const individualRepair=isIndividualRepair;
@@ -43,6 +44,16 @@ export function applyIndividualAction(task,input,actor,people,now,apply,{persona
   if(scopedParts&&input.action==='accept'&&task.stage!=='待接单')throw new HttpError(409,'任务已接单，请登记本人配件');
   if(scopedRepair&&input.action==='submit-order'&&own.every(i=>['待检验','已完工'].includes(i.status))&&(task.workerSubmissions?.[ownerId]||own.every(i=>i.status==='已完工')))throw new HttpError(409,'本人项目已提交，请勿重复操作');
   const changed=apply(scoped,{...input,partsOwnerId:undefined,repairItems:input.repairItems?.map(row=>({...row,responsibleId:ownerId}))},actor,people,now,warehouse?workers(task):undefined);
+  if(task.executionMode==='outsourced'&&warehouse) {
+    const merged=structuredClone(task);
+    merged.version=changed.version;
+    merged.partsRequests=(task.partsRequests||[]).map(parts=>parts.ownerId===ownerId?{...changed.partsRequirement,ownerId,ownerName:parts.ownerName}:parts);
+    if(task.stage==='待开工'||task.stage==='暂停'&&task.resumeStage==='待开工') {
+      beginPendingItems(merged,{id:task.assignedBy},now);
+      if(task.stage==='暂停'){if(merged.stage==='维修中')merged.resumeStage='维修中';merged.stage='暂停';}
+    }
+    return merged;
+  }
   const next={...task,version:changed.version,items:task.items.map(i=>own.some(o=>o.id===i.id)?changed.items.find(c=>c.id===i.id)||i:i)};
   next.items.push(...changed.items.filter(i=>!own.some(o=>o.id===i.id)));
   if(['pause','resume'].includes(input.action)||task.workerPauses?.[ownerId]){
