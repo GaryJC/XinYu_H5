@@ -110,6 +110,7 @@ export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecord
     signatureToken: row.signature_token || undefined,
     signatureTokenUsed: row.signature_token_used ?? undefined,
     platformOrderNo: row.platform_order_no || undefined,
+    legacyApproved: row.legacy_approved === true,
     legacySyncStatus: row.legacy_sync_status || "not_applicable",
     legacySyncRevision: Number(row.legacy_sync_revision || 0),
     legacySyncedAt: row.legacy_synced_at ? formatDate(row.legacy_synced_at) : undefined,

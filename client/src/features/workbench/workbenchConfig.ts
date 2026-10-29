@@ -38,7 +38,7 @@ export const roleFocus: Record<RoleKey, { title: string; dataScope: string; prim
   },
   inspector: {
     title: "检验员工作区",
-    dataScope: "只显示维修中和待结算工单",
+    dataScope: "查看待检验、进行中及维修完成工单",
     primary: "执行完工检验、签署检验结果、退回返修占位",
     blocked: ["不能开单", "不能派工", "不能确认结算"]
   },

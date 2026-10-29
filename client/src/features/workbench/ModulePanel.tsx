@@ -1,3 +1,4 @@
+import {repairCategory} from '../../../../shared/repairCompletion.mjs';
 import { AccessSettingsPage } from "../access/AccessSettingsPage";
 import { DashboardSummary, UserProfile, WorkOrder } from "../../../../shared/types";
 import { Card } from "antd";
@@ -32,7 +33,7 @@ function DashboardPanel({ dashboard }: { dashboard?: DashboardSummary }) {
         </div>
       </div>
       <div className="dashboard-grid">
-        <ChartBlock title="单据状态" data={dashboard.statusCounts} />
+        <ChartBlock title="单据状态" data={Object.entries(dashboard.statusCounts).reduce<Record<string,number>>((result,[status,count])=>{const category=repairCategory(status);result[category]=(result[category]||0)+count;return result;},{})} />
         <ChartBlock title="维修项目占比" data={dashboard.repairItemCounts} />
         <ChartBlock title="进厂里程区间" data={dashboard.mileageBuckets} />
         <ChartBlock title="员工接单量" data={dashboard.employeeRanking} />

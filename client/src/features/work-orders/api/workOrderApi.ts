@@ -100,7 +100,7 @@ export const workOrderApi: WorkOrderApi = {
     if (!dispatchEnabled) return request<WorkOrder[]>("/api/work-orders");
     const [orders, tasks] = await Promise.all([
       request<WorkOrder[]>("/api/work-orders"),
-      request<DispatchTask[]>("/api/dispatch/tasks")
+      request<DispatchTask[]>("/api/dispatch/tasks?includeCompleted=true")
     ]);
     const stages = new Map(tasks.map(task => [task.orderId, task.stage]));
     return orders.map(order => ({ ...order, dispatchStage: stages.get(order.id) }));

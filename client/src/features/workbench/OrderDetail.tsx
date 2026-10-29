@@ -60,14 +60,15 @@ export function OrderDetail({ order, isMobile, user, onUpdated }: { order: WorkO
         <div className="workbench-order-status"><StatusChip status={workOrderDisplayStatus(order)} /><OrderLegacySyncStatus order={order} /></div>
       </div>
       {[
-        { title: '委托与进度', icon: ClipboardList, keys: ['id','advisor','dispatch','arrival','delivery','updated','shop','shopPhone','platform'] },
+        { title: '委托与进度', icon: ClipboardList, keys: ['dispatch','advisor','arrival','delivery','updated','shop','shopPhone','id','platform'] },
         { title: '车辆与客户', icon: Users, keys: ['vin','mileage','purchase','customer','contact','phone','address'] },
         { title: '故障与检查', icon: CarFront, keys: ['fault','belongings','exterior','fuel'] },
         { title: '费用与签字', icon: Wallet, keys: ['estimated','settlement','oldParts','feeNote','signatures'] }
       ].map(group => <section className="workbench-detail-group" key={group.title}>
         <h3><group.icon size={18} />{group.title}</h3>
-        <Descriptions className="archive-descriptions" layout="vertical" size="small" column={isMobile ? 2 : 3} items={descriptions.filter(item => group.keys.includes(item.key))} />
+        <Descriptions className="archive-descriptions" layout="vertical" size="small" column={isMobile ? 2 : 3} items={group.keys.flatMap(key => descriptions.filter(item => item.key === key))} />
       </section>)}
+      <OrderRepairRecords order={order} isMobile={isMobile}/>
       <SubmittedOrderPhotos order={order} user={user} onUpdated={onUpdated}/>
       <CustomerSignatureSection order={order} user={user} onUpdated={onUpdated}/>
       {isMobile ? <MobileOrderRecords order={order} /> : <DesktopOrderRecords order={order} />}
@@ -80,11 +81,21 @@ export function OrderLegacySyncStatus({ order }: { order: WorkOrder }) {
   return <><LegacySyncStatusChip status={order.legacySyncStatus} /><CustomerVehicleUpdateTag order={order} /></>;
 }
 
-function MobileOrderRecords({ order }: { order: WorkOrder }) {
-  return <Collapse className="archive-mobile-collapse" defaultActiveKey={["repairs"]} items={[
+function OrderRepairRecords({order,isMobile}:{order:WorkOrder;isMobile:boolean}) {
+  if(isMobile) return <Collapse className="archive-mobile-collapse" defaultActiveKey={["repairs"]} items={[
     { key: "repairs", label: `维修项目（${order.repairItems.length}）`, children: <MobileRecords rows={order.repairItems.map((item) => [
       ["项目", item.name || "-"], ["工费", `¥${item.laborFee}`], ["主修人", item.owner], ["状态", item.status], ["开工", item.startAt || "-"], ["完工", item.finishAt || "-"], ["检查人", item.inspector]
-    ])} /> },
+    ])} /> }
+  ]}/>;
+  return <DetailTable title="维修项目" rowKey="id" dataSource={order.repairItems} columns={[
+      { title: "项目", dataIndex: "name" }, { title: "工费", dataIndex: "laborFee", render: (value: number) => `¥${value}` },
+      { title: "主修人", dataIndex: "owner" }, { title: "状态", dataIndex: "status" }, { title: "开工", dataIndex: "startAt" },
+      { title: "完工", dataIndex: "finishAt" }, { title: "检查人", dataIndex: "inspector" }
+    ]} />;
+}
+
+function MobileOrderRecords({ order }: { order: WorkOrder }) {
+  return <Collapse className="archive-mobile-collapse" items={[
     { key: "ocr", label: `OCR 记录（${order.ocrRecords.length}）`, children: <OrderEventHistory order={order} kind="ocr" /> },
     { key: "sync", label: `平台同步（${order.platformSyncRecords.length}）`, children: <OrderEventHistory order={order} kind="sync" /> },
     { key: "outbound", label: `出库单（${order.outboundOrders.length}）`, children: <MobileRecords rows={order.outboundOrders.map((item) => [["出库单号", item.id], ["派工号", item.dispatchNo], ["技师", item.technician], ["状态", item.status], ["物料项目数", String(item.items.length)]])} /> },
@@ -104,11 +115,6 @@ function MobileRecords({ rows }: { rows: Array<Array<[string, ReactNode]>> }) {
 
 function DesktopOrderRecords({ order }: { order: WorkOrder }) {
   return <>
-    <DetailTable title="维修项目" rowKey="id" dataSource={order.repairItems} columns={[
-      { title: "项目", dataIndex: "name" }, { title: "工费", dataIndex: "laborFee", render: (value: number) => `¥${value}` },
-      { title: "主修人", dataIndex: "owner" }, { title: "状态", dataIndex: "status" }, { title: "开工", dataIndex: "startAt" },
-      { title: "完工", dataIndex: "finishAt" }, { title: "检查人", dataIndex: "inspector" }
-    ]} />
     <OrderEventHistory order={order} kind="ocr" title="OCR 记录" />
     <OrderEventHistory order={order} kind="sync" title="平台同步记录" />
     <DetailTable title="出库单" rowKey="id" dataSource={order.outboundOrders} columns={[

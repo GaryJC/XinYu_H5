@@ -1,3 +1,4 @@
+import {repairStatusLabel} from '../../../../../shared/repairCompletion.mjs';
 import { RepairItem, RoleKey, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "../../../../../shared/types";
 import { dispatchEnabled } from "../../dispatch/dispatchAvailability";
 import { filterEmptyRepairItems } from "./repairItems";
@@ -106,7 +107,7 @@ export function validateWorkOrderDraft(draft: WorkOrderDraft) {
 
 export function workOrderDisplayStatus(order: WorkOrder) {
   if (order.customerSignatureReview?.state === "pending" && !order.customerSignatureReview.supplemental) return "需确认用户签字";
-  if (!dispatchEnabled) return order.status;
-  if (["草稿", "待客户签字", "待处理纸质委托书", "待结算", "完成"].includes(order.status)) return order.status;
-  return order.dispatchStage || (order.status === "已委托" ? "待派工" : order.status);
+  if (!dispatchEnabled) return repairStatusLabel(undefined,order.status);
+  if (["草稿", "待客户签字", "待处理纸质委托书"].includes(order.status)) return order.status;
+  return repairStatusLabel(order.dispatchStage,order.status === "已委托" ? "待派工" : order.status);
 }

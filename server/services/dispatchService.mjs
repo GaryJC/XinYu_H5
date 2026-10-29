@@ -1,3 +1,4 @@
+import {filterDispatchTasks} from '../domain/dispatchTaskFilters.mjs';
 import {reconcileInspectionDeferred} from '../domain/inspectionDeferred.mjs';
 import {writePendingRepairs} from '../repositories/pendingRepairsRepository.mjs';
 import {enqueueDeferredNotifications} from '../repositories/inspectionDeferredRepository.mjs';
@@ -22,31 +23,7 @@ import { getDispatchTask, saveDispatchTask, dispatchPeople, dispatchDetail, list
 export { dispatchPeople, dispatchDetail };
 export const metricKeys=['pendingAccept','unstarted','working','paused','inspection','completed','overdue','rework'];
 export async function queryDispatchTasks(actor, query={}) {
-  const range=completionRange(query.from,query.to);
-  const executionModes=query.executionMode?query.executionMode.split(','):[];
-  if(executionModes.some(mode=>!['internal','field','outsourced'].includes(mode))) throw new HttpError(400,'执行方式筛选无效');
-  const tasks=await listDispatchTasks(actor);
-  return tasks.filter(t=> {
-    if(query.technicianId && !technicianIds(t).includes(query.technicianId)) return false;
-    if(executionModes.length && !executionModes.includes(t.executionMode||'internal')) return false;
-    if(query.stage==='进行中' && !['待开工','维修中','暂停'].includes(t.stage)) return false;
-    if(query.stage==='完成') { if(t.orderStatus!=='完成' || hasActiveRepairRound(t)) return false; }
-    else if(query.stage==='待结算') { if(t.orderStatus!=='待结算' || hasActiveRepairRound(t)) return false; }
-    else if(query.stage==='待定') {if(!t.inspectionDeferredCount)return false;}
-    else if(query.stage==='待客户确认') {if(!t.pendingRepairCount) return false;}
-    else if(query.stage==='待检验') {if(!hasPendingInspection(t))return false;}
-    else if(query.stage && query.stage!=='进行中' && t.stage!==query.stage) return false;
-    if(query.urgent==='true' && !t.urgent) return false;
-    if(query.overdue==='true' && !t.overdue) return false;
-    if(query.search && ![t.orderId,t.dispatchNo,t.plate].some(v=>v.toLowerCase().includes(query.search.toLowerCase()))) return false;
-    if(hasRole(actor, 'warehouse')) return true;
-    if(t.orderStatus==='完成' && !hasActiveRepairRound(t) && !['完成','维修完成','待客户确认','待定'].includes(query.stage) && query.metric!=='completed') return false;
-    if(query.metric) return dispatchMetric(t,query.metric,range.from,range.to);
-    // Only an explicit historical view includes closed orders. Unsettled repairs
-    // stay visible regardless of completion date, including undated legacy orders.
-    if(['完成','维修完成'].includes(query.stage)) return !t.completedAt || dispatchMetric(t,'completed',range.from,range.to);
-    return ['待客户确认','待定'].includes(query.stage) || t.orderStatus!=='完成' || hasActiveRepairRound(t);
-  });
+  return filterDispatchTasks(await listDispatchTasks(actor),actor,query);
 }
 export async function myRepairCounts(actor) {
   if(!hasAnyRole(actor, ['technician','outsourcing'])&&!actor.outsourcingRoleMember) throw new HttpError(403,'仅维修工可查看本人任务数量');

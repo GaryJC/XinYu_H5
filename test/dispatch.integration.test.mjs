@@ -616,15 +616,17 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.deepEqual((await ids({executionMode:'internal,field,outsourced'})).sort(),[...all].sort());
       assert.deepEqual((await ids({executionMode:'field,outsourced',search:'draft-'})).sort(),[...new Set([...field,...outsourced])].filter(id=>id.includes('draft-')).sort());
       await assert.rejects(()=>ids({executionMode:'field,invalid'}),e=>e.status===400);
-      for(const id of ['board-draft','board-signature','board-unassigned','board-unsettled']) assert.ok(all.includes(id),id);
-      assert.ok(!all.includes('board-closed'));
+      for(const id of ['board-draft','board-signature','board-unassigned']) assert.ok(all.includes(id),id);
+      assert.ok(!all.includes('board-closed'));assert.ok(!all.includes('board-unsettled'));
+      assert.deepEqual((await ids({stage:'已完成'})).filter(id=>id.startsWith('board-')).sort(),['board-closed','board-unsettled']);
       assert.deepEqual((await ids({stage:'草稿'})).filter(id=>id.startsWith('board-')),['board-draft']);
       assert.deepEqual((await ids({stage:'待客户签字'})).filter(id=>id.startsWith('board-')),['board-signature']);
       assert.deepEqual((await ids({stage:'待派工'})).filter(id=>id.startsWith('board-')),['board-unassigned']);
       assert.deepEqual((await ids({stage:'待结算',from:'2000-01-01',to:'2000-01-02'})).filter(id=>id.startsWith('board-')),['board-unsettled']);
       assert.deepEqual((await ids({stage:'完成'})).filter(id=>id.startsWith('board-')),['board-closed']);
       await pool.query("update dispatch_tasks set data=jsonb_set(data,'{completedAt}','\"2000-01-01T00:00:00Z\"'::jsonb) where order_id='team'");
-      assert.ok((await ids({})).includes('team'),'old completed repair still awaiting settlement stays visible');
+      assert.ok(!(await ids({})).includes('team'),'completed repair is excluded from unfinished');
+      assert.ok((await ids({stage:'已完成'})).includes('team'),'completed category includes old repairs without a default monthly limit');
       for(const id of ['board-draft','board-signature']) {
         const detail=await service.dispatchDetail(advisor,id);
         assert.ok(['草稿','待客户签字'].includes(detail.task.stage));
@@ -1324,7 +1326,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         const selectStatus=async label=>{await managerPage.getByRole('tab',{name:label,exact:true}).click();};
         await selectStatus('未派工');
         await managerPage.locator('.dispatch-page .ant-table').last().getByText('ui-filter-unassigned',{exact:true}).waitFor();
-        await selectStatus('待结算');
+        await selectStatus('已完成');
         await managerPage.locator('.dispatch-page .ant-table').last().getByText('board-unsettled',{exact:true}).waitFor();
         await selectStatus('草稿');
         const draftRow=managerPage.locator('.dispatch-page .ant-table').last().locator('tr').filter({hasText:'board-draft'});

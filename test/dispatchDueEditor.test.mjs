@@ -1,3 +1,4 @@
+import * as repairCompletion from '../shared/repairCompletion.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -7,7 +8,7 @@ import ts from 'typescript';
 import {canEditDispatchDue} from '../shared/dispatchDuePolicy.mjs';
 const require=createRequire(import.meta.url);
 const compile=file=>ts.transpileModule(readFileSync(new URL(file,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;
-const labels={};vm.runInNewContext(compile('../client/src/features/dispatch/dispatchLabels.ts'),{exports:labels,require,Date});
+const labels={};vm.runInNewContext(compile('../client/src/features/dispatch/dispatchLabels.ts'),{exports:labels,require:name=>name.endsWith("repairCompletion.mjs")?repairCompletion:require(name),Date});
 const code=compile('../client/src/features/dispatch/TaskDueDateEditor.tsx');
 function setup(role='advisor') {
   let index=0;const slots=[],calls=[];

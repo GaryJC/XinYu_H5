@@ -36,7 +36,8 @@ export function MetricCard({ label, value }: { label: string; value: number }) {
 }
 
 export function StatusChip({ status }: { status: WorkOrderStatus | DispatchStage | "需确认用户签字" }) {
-  return <Tag color={statusColor[status]}>{status}</Tag>;
+  const label=status === "待结算" || status === "完成" ? "维修完成" : status;
+  return <Tag color={statusColor[label]}>{label}</Tag>;
 }
 
 export function LegacySyncStatusChip({ status = "not_applicable" }: { status?: LegacySyncStatus }) {

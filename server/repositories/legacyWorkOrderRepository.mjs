@@ -2,7 +2,7 @@ import { executeSqlServerTransaction } from "../database/sqlServerPool.mjs";
 import { HttpError } from "../http/HttpError.mjs";
 
 const LEGACY_ORDER_HEADER = `select top 2 reid, dh, wd, pgd, bzxx, ch, cx, lc, jcrq, jhrq,
-  sxr, lxr, lxdh, ssdw, wxnr, fyhj, bm,
+  sxr, lxr, lxdh, ssdw, wxnr, fyhj, bm, shbz,
   (select top 1 RTRIM(d.mc) from dbo.bmxxb d where RTRIM(d.bm)=RTRIM(qxwxb.bm)) as department_name from dbo.qxwxb`;
 export const LEGACY_ORDER_QUERY = `${LEGACY_ORDER_HEADER}
   where (@reid is not null and reid=@reid and dh=@dh)

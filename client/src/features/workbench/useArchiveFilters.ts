@@ -1,3 +1,4 @@
+import {repairCategory} from '../../../../shared/repairCompletion.mjs';
 import { useEffect, useMemo, useState } from 'react';
 import type { WorkOrder } from '../../../../shared/types';
 import { workOrderDisplayStatus } from '../work-orders/domain/workOrderDomain';
@@ -20,7 +21,7 @@ export function useArchiveFilters(orders: WorkOrder[], userId?: string) {
   const options = useMemo(() => {
     const unique = (values: string[]) => [...new Set(values)].sort((a, b) => a.localeCompare(b, 'zh-CN')).map(value => ({ value, label: value }));
     return {
-      statuses: unique(orders.map(workOrderDisplayStatus)),
+      statuses: unique(orders.map(order=>repairCategory(workOrderDisplayStatus(order)))),
       advisors: unique(['未分配', ...orders.map(order => archivePerson(order.advisor))]),
       technicians: unique(['未分配', ...orders.flatMap(order => archiveTechnicians(order.technician))])
     };

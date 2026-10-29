@@ -1,3 +1,4 @@
+import * as repairCompletion from '../shared/repairCompletion.mjs';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -19,7 +20,8 @@ function loadModule(relativePath, dependencies) {
 
 const { roles } = loadModule("../client/src/features/work-orders/domain/workOrderDomain.ts", {
   "../../dispatch/dispatchAvailability": { dispatchEnabled: false },
-  "./repairItems": {}
+  "./repairItems": {},
+  "../../../../../shared/repairCompletion.mjs": repairCompletion
 });
 
 function setup(response) {
@@ -65,4 +67,15 @@ test("supported logins still save their token and return the authenticated user"
     assert.equal(await api[method]("test"), response);
     assert.deepEqual(savedTokens, ["test-token"]);
   }
+});
+
+test('work order cards prioritize active repair stages over legacy settlement labels',()=>{
+ const {workOrderDisplayStatus}=loadModule('../client/src/features/work-orders/domain/workOrderDomain.ts',{
+  '../../dispatch/dispatchAvailability':{dispatchEnabled:true},'./repairItems':{},'../../../../../shared/repairCompletion.mjs':repairCompletion
+ });
+ for(const status of ['待结算','完成']){
+  assert.equal(workOrderDisplayStatus({status}),'维修完成');
+  assert.equal(workOrderDisplayStatus({status,dispatchStage:'回审'}),'回审');
+  assert.equal(workOrderDisplayStatus({status,dispatchStage:'维修中'}),'维修中');
+ }
 });

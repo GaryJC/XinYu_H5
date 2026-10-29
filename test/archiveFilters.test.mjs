@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { rowToWorkOrder } from '../server/domain/workOrderModel.mjs';
 const source = readFileSync(new URL('../client/src/features/workbench/archiveFilters.ts', import.meta.url), 'utf8');
-const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace("from '../../../../shared/repairCompletion.mjs'",`from '${new URL('../shared/repairCompletion.mjs',import.meta.url).href}'`);
 const { defaultArchiveFilters, archiveTimestamp, archiveBounds, archiveDateError, filterArchiveOrders, archivePerson } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const now = Date.parse('2026-10-22T04:00:00Z');
 const filter = patch => ({ ...defaultArchiveFilters(), ...patch });
@@ -69,4 +69,9 @@ test('Baiyuan filter excludes unmarked legacy orders and combines with existing 
   assert.deepEqual(results(orders,{baiyuanOnly:true}),['a','c']);
   assert.deepEqual(results(orders,{baiyuanOnly:true,advisors:['张三']}),['a']);
   assert.deepEqual(results(orders,{}),['a','b','c']);
+});
+
+test('completed archive category includes both legacy statuses, excluding active repair display',()=>{
+ const orders=[order('unsettled','2026-10-22',{status:'待结算'}),order('closed','2026-10-22',{status:'完成'}),order('rework','2026-10-22',{status:'待结算',displayStatus:'维修中'})];
+ assert.deepEqual(results(orders,{statuses:['已完成']}),['closed','unsettled']);
 });

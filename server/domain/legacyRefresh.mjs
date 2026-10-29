@@ -44,6 +44,7 @@ export function buildLegacyRefresh(snapshot, existingItems, hasExecution) {
     throw new HttpError(409, "润丰项目清单已增删或首次匹配不明确，且本单已有派工/领料记录；请先核对项目，避免覆盖维修进度");
   }
   return { fields: {
+    legacy_approved: text(h.shbz) === '1',
     dispatch_no: text(h.pgd), arrival_date: legacyDate(h.jcrq), estimated_delivery_at: legacyDate(h.jhrq),
     vehicle_plate: text(h.ch), vehicle_mileage: text(h.lc),
     ...(v ? { vehicle_vin: text(v.sbdm) } : {}),

@@ -1,3 +1,4 @@
+import {repairCategory} from '../../../../shared/repairCompletion.mjs';
 import type { WorkOrder } from '../../../../shared/types';
 
 export type ArchiveFilters = {
@@ -58,7 +59,7 @@ export function filterArchiveOrders(orders: WorkOrder[], filters: ArchiveFilters
     return (!bounds || (created >= bounds[0] && created < bounds[1]))
       && (!term || [order.id, order.dispatchNo, order.vehicle.plate, order.vehicle.vin, order.vehicle.model, order.customer.name].some(value => value?.toLowerCase().includes(term)))
       && (!filters.baiyuanOnly || order.isBaiyuanOrder === true)
-      && matches(filters.statuses, displayStatus(order))
+      && matches(filters.statuses.map(repairCategory), repairCategory(displayStatus(order)))
       && matches(filters.advisors, archivePerson(order.advisor))
       && (!filters.technicians.length || archiveTechnicians(order.technician).some(name => filters.technicians.includes(name))); 
   }).sort((a, b) => {

@@ -5,7 +5,7 @@ import ts from 'typescript';
 async function sourceModule(name) {
  const source=readFileSync(new URL(`../client/src/features/dispatch/${name}.ts`,import.meta.url),'utf8');
  const {outputText}=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}});
- return import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
+ return import(`data:text/javascript;base64,${Buffer.from(outputText.replace("from '../../../../shared/repairCompletion.mjs'",`from '${new URL('../shared/repairCompletion.mjs',import.meta.url).href}'`)).toString('base64')}`);
 }
 const {createVehiclePartsHistoryCache}=await sourceModule('vehiclePartsHistoryCache');
 const {dispatchEventLabel}=await sourceModule('dispatchLabels');

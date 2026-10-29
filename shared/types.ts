@@ -394,6 +394,8 @@ export type WorkOrder = {
   signatureToken?: string;
   signatureTokenUsed?: boolean;
   platformOrderNo?: string;
+  /** Latest approval flag fetched from Runfeng (shbz=1). */
+  legacyApproved?: boolean;
   legacySyncStatus?: LegacySyncStatus;
   legacySyncRevision?: number;
   legacySyncedAt?: string;

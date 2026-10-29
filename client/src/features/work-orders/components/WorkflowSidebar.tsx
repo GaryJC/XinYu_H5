@@ -1,6 +1,6 @@
 import { CheckCircle2, Gauge, ShieldCheck } from "lucide-react";
 import { Card, Tag } from "antd";
-import { roles, workflow } from "../domain/workOrderDomain";
+import { roles, workflow, workOrderDisplayStatus } from "../domain/workOrderDomain";
 import { WorkbenchController } from "../../workbench/useWorkbenchController";
 import { ActionPanel, SettlementPanel } from "./WorkflowPanels";
 
@@ -15,7 +15,7 @@ export function WorkflowSidebar({ controller }: { controller: WorkbenchControlle
             <div className="panel-header compact">
               <div>
                 <h2>流程状态</h2>
-                <p>当前：{selectedOrder?.status ?? "新建草稿"}</p>
+                <p>当前：{selectedOrder ? workOrderDisplayStatus(selectedOrder) : "新建草稿"}</p>
               </div>
               <Gauge size={20} />
             </div>
@@ -26,7 +26,7 @@ export function WorkflowSidebar({ controller }: { controller: WorkbenchControlle
                 return (
                   <div className={index <= activeIndex ? "timeline-step done" : "timeline-step"} key={step}>
                     <span>{index < activeIndex ? <CheckCircle2 size={14} /> : index + 1}</span>
-                    <strong>{step}</strong>
+                    <strong>{step === "待结算" ? "维修完成" : step === "完成" ? "业务完结" : step}</strong>
                   </div>
                 );
               })}

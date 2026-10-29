@@ -104,3 +104,14 @@ test("paper dispatch lookup selects the internal account and reads its matching 
   assert.equal(queries[1].inputs.dh, source.header.dh);
   assert.equal(queries[1].inputs.wd, "");
 });
+
+test("Runfeng approval flag is imported independently of repair status and clears on unapproval", () => {
+  assert.match(LEGACY_ORDER_QUERY, /\bshbz\b/);
+  assert.match(LEGACY_DISPATCH_ORDER_QUERY, /\bshbz\b/);
+  for (const [flag, expected] of [['1', true], ['1 ', true], ['', false], ['0', false], [null, false], [undefined, false]]) {
+    const source = snapshot(); source.header.shbz = flag;
+    const change = buildLegacyRefresh(source, [item], true);
+    assert.equal(change.fields.legacy_approved, expected);
+    assert.ok(!('status' in change.fields));
+  }
+});

@@ -5,7 +5,7 @@ import {executionLabels} from './DispatchExecutionFields';
 import {personDisplayName,statusFilters} from './dispatchLabels';
 import {activeFilterCount,advancedFilterCount,useDispatchFilterDraft} from './useDispatchFilterDraft';
 import './dispatch-filter-bar.css';
-const inspectionStatuses=[{value:'',label:'全部未完结'},{value:'待检验',label:'待检验'},{value:'待定',label:'待定'},{value:'回审',label:'回审'},{value:'维修完成',label:'已检验'},{value:'完成',label:'已完结'}];
+const inspectionStatuses=[{value:'',label:'全部未完成'},{value:'待检验',label:'待检验'},{value:'待定',label:'待定'},{value:'回审',label:'回审'},{value:'已完成',label:'已完成'}];
 export function DispatchFilterBar({controller:c,inspection}:{controller:DispatchController;inspection:boolean}) {
  const {token}=theme.useToken(),f=useDispatchFilterDraft(c.filters,c.setFilters);
  const advanced=advancedFilterCount(c.filters),active=activeFilterCount(c.filters);
@@ -29,10 +29,10 @@ export function DispatchFilterBar({controller:c,inspection}:{controller:Dispatch
     <fieldset><legend>统计日期范围</legend><div className="dispatch-filter-dates">
      <label>开始日期<Input aria-label="完成记录起始日期" type="date" value={f.draft.from||''} max={f.draft.to||undefined} onChange={e=>patch('from',e.target.value||undefined)}/></label>
      <label>结束日期<Input aria-label="完成记录结束日期" type="date" value={f.draft.to||''} min={f.draft.from||undefined} onChange={e=>patch('to',e.target.value||undefined)}/></label>
-    </div><p>用于已完结记录、个人完成量和退回项目统计；退回按检验发生日期计算，未填写时默认本月。</p></fieldset>
+    </div><p>用于已完成记录、个人完成量和退回项目统计；已完成列表未选日期时显示全部，个人统计默认本月。</p></fieldset>
     {c.inspectionLead?<label className="dispatch-filter-worker">维修工<Select aria-label="筛选维修工" allowClear placeholder="全部维修工" value={f.draft.technicianId} onChange={value=>patch('technicianId',value)} options={c.summaries.map(person=>({value:person.id,label:`${personDisplayName(person,c.summaries)}${person.active?'':'（停用）'}`}))}/></label>:null}
     {f.error?<Alert type="error" showIcon title={f.error}/>:null}
-    <p className="dispatch-filter-note">全部未完结包含待结算工单。</p>
+    <p className="dispatch-filter-note">维修结束的工单统一在“已完成”中查看；返工、回审中的工单仍列为未完成。</p>
    </div>
   </Drawer>
  </>;

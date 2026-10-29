@@ -1,3 +1,4 @@
+import {isRepairCompleted} from '../../../../shared/repairCompletion.mjs';
 import type { DispatchActionName,DispatchMetric,DispatchStage,DispatchTask,DispatchEvent } from '../../../../shared/types';
 export const stages:DispatchStage[]=['待派工','待接单','待开工','维修中','暂停','待检验','回审','维修完成'];
 export const metrics:Record<DispatchMetric,string>={pendingAccept:'待接单',unstarted:'尚未开工',working:'正在维修',paused:'暂停',inspection:'待检验',completed:'已完成',overdue:'超期',rework:'返工'};
@@ -12,18 +13,19 @@ export function personDisplayName(person:{id:string;name:string},people:Array<{i
 }
 
 export const statusFilters = [
-  {value:'',label:'全部未完结'}, {value:'待派工',label:'未派工'}, {value:'待客户确认',label:'待客户确认'},
+  {value:'',label:'全部未完成'}, {value:'待派工',label:'未派工'}, {value:'待客户确认',label:'待客户确认'},
   {value:'待定',label:'待定'}, {value:'待接单',label:'未接单'}, {value:'待开工',label:'待开工'},
   {value:'维修中',label:'正在维修'}, {value:'暂停',label:'暂停'},
-  {value:'待检验',label:'待检验'}, {value:'回审',label:'回审'}, {value:'待结算',label:'待结算'},
+  {value:'待检验',label:'待检验'}, {value:'回审',label:'回审'},
   {value:'草稿',label:'草稿'}, {value:'待客户签字',label:'待客户签字'},
-  {value:'完成',label:'已完结'}
+  {value:'已完成',label:'已完成'}
 ];
 export function taskStatusLabel(task:DispatchTask) {
+  if(isRepairCompleted(task.stage,task.orderStatus))return '维修完成';
   if(task.executionMode==='outsourced'&&task.stage==='待检验')return '待登记完工';
   if(task.stage==='回审') return '回审';
   if(task.repairRound && task.stage!=='维修完成') return statusFilters.find(option=>option.value===task.stage)?.label||task.stage;
-  const value=task.orderStatus==='完成'?'完成':task.orderStatus==='待结算'?'待结算':task.stage;
+  const value=task.stage;
   return statusFilters.find(option=>option.value===value)?.label||value;
 }
 
