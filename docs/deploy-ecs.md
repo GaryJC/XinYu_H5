@@ -199,7 +199,16 @@ PM2 工具位于 `<AppPath>/.deploy-tools`，进程空间固定在 `<AppPath>/.p
 并保留上一版本的哈希静态资源供已打开页面加载。`STATIC_DIR` 在版本运行配置中固定为该版本的 `dist`。
 
 云效不得向生产根目录解压或清理文件；`.releases`、`.deploy-tools`、`.pm2`、`.npm-cache`、`.env.production` 和 `server/data` 均保留。
-版本目录及原静态目录备份不自动删除，清理时避开正在运行及需要回退的版本。
+部署成功、健康检查及 PM2 保存均完成后，自动清理 `.releases` 中同一应用的更早版本，
+保留本次当前版本及切换前实际运行的上一版本（按 PM2 记录确定，不按目录时间猜测）。
+之前准备完整但未成功发布的版本，也在下一次成功发布后清理。
+清理会保护所有 PM2 进程使用的路径、静态服务当前目标及共享上传目录；目录联接只移除联接本身。
+缺少有效 `release.json` 或属于其他应用的目录会保留并提示，便于人工核对。
+当前版只继承上一版自身构建的哈希资源，避免兼容资源跨版本无限累积；跨越两代以上的旧页面可能需要刷新。
+首次从根目录旧部署迁移时，保留原根目录及其静态备份用于上一版回退；后续发布会移除不再需要的静态备份。
+根目录遗留源码及依赖、PM2 日志和 npm 缓存不在版本清理范围内。
+清理失败只打印警告，不回退已健康上线的版本；应检查警告，解除文件锁后于下次成功发布重试。
+发布失败及回退过程中不执行清理。
 部署锁阻止同一目录内两个部署脚本并发切换，但不保护云效外层的并发解压；流水线应禁止并发部署同一环境。
 使用上述临时目录流程首次从根目录旧部署过渡时，也不会覆盖旧源码和依赖。
 此前覆盖部署已改写的文件无法通过此流程自动恢复；需另行使用已知正常版本恢复。
@@ -319,7 +328,7 @@ Windows 部署在安装依赖前运行 `scripts/clean-obsolete-deployment-files.
 
 ### Windows 部署慢或覆盖部署检查失败
 
-`deploy-windows.ps1` 会打印每个步骤的开始时间和耗时。依赖安装使用固定的 `<AppPath>\.npm-cache` 缓存并优先复用缓存，仍按锁文件执行 `npm ci`；首次填充缓存仍需下载。可用 `-NpmCachePath` 指定已有缓存目录。不要在不同部署间清理该目录。安装输出 HTTP/缓存命中日志，完整 npm 日志在缓存目录的 `_logs` 下，便于判断下载、重试和缓存情况。检查命令合并 stdout/stderr，避免云效漏掉测试或构建错误。
+`deploy-windows.ps1` 会打印每个步骤的开始时间和耗时。依赖安装使用固定的 `<AppPath>\.npm-cache` 缓存并优先复用缓存，仍按锁文件执行 `npm ci`；首次填充缓存仍需下载。可用 `-NpmCachePath` 指定已有缓存目录。日常部署保留该缓存以减少下载；磁盘不足时可清理缓存，下次安装会重新下载。安装只输出警告和错误，npm 调试日志最多保留 5 份，位于缓存目录的 `_logs` 下。检查命令合并 stdout/stderr，避免云效漏掉测试或构建错误。
 
 部署包采用覆盖解压时，Git 已删除的文件可能残留。脚本会清理明确列出的旧文件，包括已退役的 `test/legacyWorkOrderRepository.test.mjs`；它引用已移除的 `ALLOCATE_LEGACY_WORK_ORDER_NUMBERS_QUERY`，残留时会导致检查失败。该清理不触碰配置、上传文件、PM2 数据或当前测试。
 
@@ -338,3 +347,34 @@ Windows 部署在安装依赖前运行 `scripts/clean-obsolete-deployment-files.
 不要重用旧制品，不要使用 `taskkill /IM node.exe /F` 清理整台服务器的 Node 进程。
 本机隔离 PM2 切换及回退验证：
 `DEPLOYMENT_PM2_TEST=true node --test test/deploymentRelease.integration.test.mjs`。
+
+
+### Windows 部署提示“磁盘空间不足”
+
+若 `npm ci` 期间出现 `out-lineoutput ... IOException`，错误内容为“磁盘空间不足”，
+需要检查应用目录、npm 缓存及临时目录所在磁盘；这不是编译错误。
+新脚本在准备版本前检查这三个位置，默认各需至少 4 GiB 可用空间，
+不足则提前停止并显示路径和剩余空间。可通过 `-MinimumFreeSpaceGB` 调整预留量；
+4 GiB 是预检下限，实际需求取决于依赖大小、日志和同时进行的其他任务。
+成功后才会清理旧版本，因此发布期间仍需要容纳当前版、上一版及待发布版；已满的磁盘须先人工释放空间。
+
+在服务器 PowerShell 中检查：
+
+```powershell
+Get-PSDrive -PSProvider FileSystem | Select-Object Name, Used, Free
+```
+
+优先扩容或清理确认不再需要的部署下载包、历史日志、失败版本中的 `node_modules`。
+清理版本前，在相同 `PM2_HOME` 下用 PM2 核对当前运行目录，并保留需要回退的版本。
+版本内 `server/data` 是共享上传目录联接，**不要递归清理整个版本目录或该联接**。
+`.env.production`、`server/data`、`.pm2` 和当前运行版本需要保留。
+不要用 `pm2 flush` 清日志而不留排障记录，也不要把 npm 缓存清理视作日常部署步骤。
+
+磁盘紧张时，可在没有部署正在安装依赖的情况下清理可重建的 npm 下载缓存：
+
+```powershell
+npm.cmd cache clean --force --cache "C:\apps\XinYu_H5\.npm-cache"
+```
+
+释放空间后，重新构建包含新预检脚本的 `package.tgz`，上传制品并重新运行流水线。
+新版本准备成功并通过健康检查后，才会切换应用。

@@ -1,4 +1,6 @@
-import { access, cp, lstat, readFile, rename, rm, symlink } from "node:fs/promises";
+import { cleanupDeploymentReleases } from "./cleanup-deployment-releases.mjs";
+import { preserveDeploymentAssets } from "./preserve-deployment-assets.mjs";
+import { lstat, readFile, rename, rm, symlink } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -60,12 +62,9 @@ export async function publishStaticRoot(root, releasePath, releaseId) {
 
 export async function activateDeploymentRelease(pm2, release, {
   healthy = waitForRelease, alive = isAlive, pause = delay, publish = publishStaticRoot,
-  preserveAssets = async previous => {
-    const source = path.join(previous.pm2_env.pm_cwd, "dist", "assets");
-    try { await access(source); }
-    catch (error) { if (error.code === "ENOENT") return; throw error; }
-    await cp(source, path.join(release.releasePath, "dist", "assets"), { recursive: true, force: false, errorOnExist: false });
-  }
+  preserveAssets = previous => preserveDeploymentAssets(previous, release),
+  cleanup = cleanupDeploymentReleases,
+  warn = message => console.warn(message)
 } = {}) {
   let previous, changed = false, undoStatic;
   try {
@@ -87,7 +86,12 @@ export async function activateDeploymentRelease(pm2, release, {
     await healthy(release.port, release.releaseId);
     undoStatic = await publish(release.root, release.releasePath, release.releaseId);
     await call(pm2, "dump", true);
-    return { releaseId: release.releaseId };
+    let cleanupResult;
+    // A cleanup failure must never roll back an already healthy, persisted release.
+    try {
+      cleanupResult = await cleanup(release, previous, await call(pm2, "list"));
+    } catch (error) { warn(`Deployment succeeded; old release cleanup incomplete: ${error.message}`); }
+    return { releaseId: release.releaseId, cleanup: cleanupResult };
   } catch (error) {
     if (!changed) throw error;
     try {
@@ -124,6 +128,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     const release = JSON.parse(await readFile(path.join(releasePath, "release.json"), "utf8"));
     const require = createRequire(import.meta.url);
     const result = await activateDeploymentRelease(require(path.resolve(pm2Path)), release);
+    if (result.cleanup) {
+      console.log(`Release cleanup: removed ${result.cleanup.removed.length} entries; retained current and previous application.`);
+      if (result.cleanup.skipped.length) console.warn(`Unrecognized release entries retained: ${result.cleanup.skipped.join(', ')}`);
+    }
     process.stdout.write(`Deployment succeeded: release ${result.releaseId}\n`, () => process.exit(0));
   } catch (error) { process.stderr.write(`${error.message}\n`, () => process.exit(1)); }
 }

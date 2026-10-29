@@ -4,6 +4,8 @@ param(
     [int]$Port = 8787,
     [string]$NpmCachePath = "",
     [string]$SourcePath = "",
+    [ValidateRange(1, 1024)]
+    [int]$MinimumFreeSpaceGB = 4,
     [switch]$SkipSqlServerCheck
 )
 
@@ -47,6 +49,9 @@ function Invoke-Native {
 $deploymentLock = $null
 try {
     $deploymentLock = [System.IO.File]::Open((Join-Path $AppPath ".deployment.lock"), [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+    Invoke-Native {
+        node.exe (Join-Path $SourcePath "scripts/check-deployment-space.mjs") "$MinimumFreeSpaceGB" "$AppPath" "$NpmCachePath" ([System.IO.Path]::GetTempPath())
+    } "Deployment disk space preflight failed"
     $preparedJson = & node.exe (Join-Path $SourcePath "scripts/prepare-deployment-release.mjs") "$AppPath" "$ProcessName" "$Port" "$SourcePath"
     if ($LASTEXITCODE -ne 0) { throw "Release preparation failed; previous application remains running" }
     $prepared = $preparedJson | ConvertFrom-Json
@@ -57,13 +62,13 @@ try {
 
     $deploymentToolsPath = Join-Path $AppPath ".deploy-tools"
     Invoke-Native {
-        npm.cmd install --prefix "$deploymentToolsPath" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund --prefer-offline --cache "$NpmCachePath" "pm2@$pm2Version"
+        npm.cmd install --prefix "$deploymentToolsPath" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund --prefer-offline --cache "$NpmCachePath" --loglevel=warn --no-progress --logs-max=5 "pm2@$pm2Version"
     } "Deployment PM2 preparation failed"
 
     Push-Location $releasePath
     try {
         Invoke-Native { node.exe scripts/clean-obsolete-deployment-files.mjs } "Obsolete deployment file cleanup failed"
-        Invoke-Native { npm.cmd ci --include=dev --no-audit --no-fund --prefer-offline --cache "$NpmCachePath" --loglevel=http } "npm ci failed"
+        Invoke-Native { npm.cmd ci --include=dev --no-audit --no-fund --prefer-offline --cache "$NpmCachePath" --loglevel=warn --no-progress --logs-max=5 } "npm ci failed"
         Invoke-Native { cmd.exe /d /c "npm.cmd run check 2>&1" } "Application check or build failed"
         # Migrations must be compatible with the still-running previous version.
         Invoke-Native { npm.cmd run migrate } "PostgreSQL migration failed"

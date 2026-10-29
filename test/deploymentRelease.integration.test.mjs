@@ -31,17 +31,19 @@ test("real isolated PM2 switches releases and restores the old process after an 
   };
   const run = directory => spawnSync(process.execPath, [activate, directory, pm2Path], { env: environment, encoding: "utf8", timeout: 45000 });
   try {
-    for (const id of ["old", "next"]) {
+    for (const id of ["old", "next", "final"]) {
       const result = run(await fixture(id));
       assert.equal(result.status, 0, result.stderr || result.error?.message);
       assert.equal(await readFile(path.join(root, "dist/index.html"), "utf8"), id);
     }
+    await assert.rejects(readFile(path.join(root, ".releases/old/release.json")), { code: "ENOENT" });
+    await readFile(path.join(root, ".releases/next/release.json"));
     const failed = run(await fixture("broken", false));
     assert.equal(failed.status, 1, failed.stderr || failed.error?.message);
     assert.match(failed.stderr, /previous application restored/);
     const response = await fetch(`http://127.0.0.1:${port}/api/health`);
-    assert.equal(response.headers.get("x-deployment-release"), "next");
-    assert.equal(await readFile(path.join(root, "dist/index.html"), "utf8"), "next");
+    assert.equal(response.headers.get("x-deployment-release"), "final");
+    assert.equal(await readFile(path.join(root, "dist/index.html"), "utf8"), "final");
   } finally {
     const cleanup = spawnSync(process.execPath, [path.join(pm2Path, "bin/pm2"), "kill"], { env: environment, encoding: "utf8", timeout: 10000 });
     assert.equal(cleanup.status, 0, cleanup.stderr);

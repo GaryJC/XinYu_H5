@@ -146,3 +146,31 @@ test("fixed static root can be switched and restored without deleting either ver
     assert.equal(await readFile(path.join(candidate, "dist/index.html"), "utf8"), "new");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('cleanup starts only after successful health, publication and PM2 persistence', async () => {
+  const pm2 = fake(); let cleaned = false;
+  const result = await activateDeploymentRelease(pm2, release, { ...deps,
+    cleanup: async (current, previous, processes) => {
+      cleaned = true; assert.equal(pm2.calls.at(-1)[0], 'dump');
+      assert.equal(current.releaseId, 'new'); assert.equal(previous.pm_id, old.pm_id);
+      assert.equal(processes[0].pm2_env.pm_cwd, release.releasePath);
+      return { removed: ['retired'], skipped: [] };
+    }
+  });
+  assert.equal(cleaned, true); assert.deepEqual(result.cleanup.removed, ['retired']);
+  let attempted = false;
+  await assert.rejects(activateDeploymentRelease(fake(), release, { ...deps,
+    healthy: async (_port, id) => { if (id === 'new') throw new Error('unhealthy'); },
+    cleanup: async () => { attempted = true; }
+  }), /previous application restored/);
+  assert.equal(attempted, false);
+});
+
+test('cleanup failures warn without rolling back a healthy release', async () => {
+  const pm2 = fake(), warnings = [];
+  const result = await activateDeploymentRelease(pm2, release, { ...deps,
+    cleanup: async () => { throw new Error('file locked'); }, warn: text => warnings.push(text)
+  });
+  assert.equal(result.releaseId, 'new'); assert.match(warnings[0], /cleanup incomplete.*file locked/);
+  assert.deepEqual(pm2.calls.map(item => item[0]), ['delete', 'start', 'dump']);
+});
