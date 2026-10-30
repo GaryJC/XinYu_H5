@@ -25,8 +25,12 @@ function imageAsPng(source: string): Promise<Blob> {
   });
 }
 
+export function canCopyImage(): boolean {
+  return window.isSecureContext && !!navigator.clipboard?.write && typeof ClipboardItem !== "undefined";
+}
+
 export async function copyImage(source: string): Promise<void> {
-  if (!window.isSecureContext || !navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+  if (!canCopyImage()) {
     throw new Error("当前客户端不支持复制图片，请使用“发送到 / 保存图片”，保存后插入聊天或 Word；也可在新版浏览器中打开。");
   }
   // Pass the conversion promise directly: clipboard.write must start inside
@@ -34,7 +38,14 @@ export async function copyImage(source: string): Promise<void> {
   const png = imageAsPng(source);
   void png.catch(() => {}); // A denied write may never consume the image promise.
   try {
-    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+    } catch (error) {
+      // Older Chromium clients may accept a Blob but reject promise-valued data.
+      // Keep the immediate promise write above for Safari's click activation.
+      if (!(error instanceof Error) || error.name !== "TypeError") throw error;
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": await png })]);
+    }
   } catch (error) {
     if (error instanceof Error && ["NotAllowedError", "SecurityError"].includes(error.name)) {
       throw new Error("钉钉或浏览器未允许写入剪贴板。请保持窗口在前台后重试，或保存图片后插入聊天 / Word。");

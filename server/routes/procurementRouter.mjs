@@ -41,7 +41,7 @@ export async function handleProcurement(req,res,url,user) {
   if(suffix==='suppliers'&&method==='GET')result=await service.listSuppliers(user);
   else if(suffix==='suppliers'&&method==='POST')result=await service.updateSupplier(user,null,await readInput(req));
   else if(/^suppliers\/[^/]+$/.test(suffix)&&method==='PUT')result=await service.updateSupplier(user,suffix.split('/')[1],await readInput(req));
-  else if(suffix==='tenders'&&method==='GET')result=await service.listTenders(user);
+  else if(suffix==='tenders'&&method==='GET')result=await service.listTenders(user,Object.fromEntries(url.searchParams));
   else if(suffix==='tenders'&&method==='POST')result=await service.publishTender(user,await readInput(req));
   else if(/^tenders\/[^/]+$/.test(suffix)&&method==='GET')result=await service.tenderDetail(user,suffix.split('/')[1]);
   else if(/^tenders\/[^/]+\/actions$/.test(suffix)&&method==='POST')result=await service.tenderAction(user,suffix.split('/')[1],await readInput(req));

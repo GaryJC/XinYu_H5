@@ -84,7 +84,7 @@ export function WorkbenchPage() {
             <div>
               <span className="workbench-breadcrumb">门店工作空间</span>
               <h1>{activeNav}</h1>
-              <p>{currentUser?.name ? `${currentUser.name} · ` : ''}{currentUser ? userRoles(currentUser).map(item => roles[item].name).join(' / ') : '请先登录'}{activeNav === '工作台' ? ` · ${orders.length} 张委托单` : ''}</p>
+              <p>{currentUser?.name ? `${currentUser.name} · ` : ''}{currentUser ? userRoles(currentUser).map(item => roles[item].name).join(' / ') : '请先登录'}{activeNav === '工作台' ? ` · ${dashboard?.total ?? '—'} 张委托单` : ''}</p>
             </div>
           </div>
           <div className="topbar-actions">

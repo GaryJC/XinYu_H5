@@ -23,7 +23,7 @@ export function ProcurementPage({user}:{user:UserProfile}) {
     <div className="procurement-heading"><div><h2>配件竞价</h2><span className="procurement-muted">本店仓管与管理员共同管理 · 最新刷新 {c.refreshAt||'加载中'}</span></div><Space><Button icon={<ReloadOutlined/>} loading={c.busy} onClick={()=>void c.run(c.load)}>刷新</Button><Button type="primary" icon={<PlusOutlined/>} disabled={c.busy} onClick={()=>setCreateOpen(true)}>新建配件询价</Button></Space></div>
     {c.error?<Alert role="alert" type="error" showIcon title={c.error}/>:null}
     <Tabs activeKey={tab} onChange={setTab} items={[
-      {key:'tenders',label:'询价记录',children:<Card className="procurement-list-card"><TenderList items={c.tenders} busy={c.busy} onOpen={id=>void c.run(()=>c.openTender(id))}/></Card>},
+      {key:'tenders',label:'询价记录',children:<Card className="procurement-list-card"><TenderList controller={c} onOpen={id=>void c.run(()=>c.openTender(id))}/></Card>},
       {key:'suppliers',label:'供应商',children:<Card className="procurement-list-card" title="供应商档案" extra={<Button type="primary" icon={<PlusOutlined/>} onClick={()=>setSupplierEditor('new')}>新增供应商</Button>}><SupplierList items={c.suppliers} busy={c.busy} onEdit={setSupplierEditor}/><p className="procurement-access-note">供应商通过专属链接和预留信息查看询价，仅能看到自己的报价。</p></Card>},
       {key:'analytics',label:'分析报告',children:<ProcurementAnalytics controller={{...c,setReport:r=>{c.setReport(r);setReportVisible(!!r);}}}/>},
     ]}/>

@@ -1,3 +1,4 @@
+import { ListPagination } from '../../shared/ui/ListPagination';
 import { OrderDetail, OrderLegacySyncStatus } from "./OrderDetail";
 
 import { isUnsignedOrderEditable } from "../../../../shared/workOrderEditPolicy.mjs";
@@ -44,12 +45,9 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
   const signature = useArchiveSignature(currentUser, controller.acceptRefreshedOrder, controller.refreshArchiveSummary);
   const [detailOrderId, setLocalDetailOrderId] = useState<string | undefined>(()=>new URLSearchParams(location.search).get("paperOrder") || undefined);
   const setDetailOrderId=(id?:string)=>{setLocalDetailOrderId(id);if(!id)controller.clearLinkedOrder();};
-  const detailOrder = controller.orders.find(order => order.id === detailOrderId) || (!detailOrderId ? controller.linkedOrderDetail : undefined);
+  const detailOrder = controller.orders.find(order => order.id === detailOrderId) || (controller.selectedOrder?.id === detailOrderId ? controller.selectedOrder : undefined) || ((!detailOrderId || controller.linkedOrderDetail?.id === detailOrderId) ? controller.linkedOrderDetail : undefined);
   const legacyRefresh = useArchiveLegacyRefresh(currentUser, controller.acceptRefreshedOrder, controller.refreshArchiveSummary);
-  // The archive API returns the full authorized list; search and table pagination
-  // must not narrow the all-orders refresh operation.
   const listedOrders = searchedOrders.filter(order => !overview || order.shop.id === currentUser?.shopId);
-  const refreshTargets = controller.orders.filter(legacyRefresh.canRefresh);
   const refreshReport = legacyRefresh.report ? <Alert style={{ marginBottom: 12 }} showIcon
     type={legacyRefresh.report.failures.length ? "warning" : "success"}
     title={`润丰更新完成：成功 ${legacyRefresh.report.succeeded} 单，失败 ${legacyRefresh.report.failures.length} 单`}
@@ -107,8 +105,8 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
         {["advisor","manager"].includes(role)&&<PendingRepairFollowups user={controller.currentUser||undefined}/>}
         <Button loading={ordersLoading} onClick={() => void controller.refreshWorkbench()}>刷新列表</Button>
         {["advisor", "manager"].includes(role) && <Button icon={<RefreshCw size={16}/>} loading={Boolean(legacyRefresh.progress)}
-          disabled={!refreshTargets.length || Boolean(legacyRefresh.progress)} onClick={() => void legacyRefresh.refresh(refreshTargets)}>
-          {legacyRefresh.progress ? `正在更新 ${legacyRefresh.progress.done}/${legacyRefresh.progress.total}` : `全部从润丰更新（${refreshTargets.length}）`}
+          disabled={Boolean(legacyRefresh.progress)} onClick={() => void legacyRefresh.refreshAll()}>
+          {legacyRefresh.progress ? `正在更新 ${legacyRefresh.progress.done}/${legacyRefresh.progress.total}` : "全部从润丰更新"}
         </Button>}
         <Input.Search className="search-box" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="搜索车牌 / VIN / 工单号 / 派工号" allowClear />
         </div>
@@ -151,7 +149,7 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
           size="small"
           rowKey="id"
           scroll={{ x: "max-content" }}
-          pagination={{ pageSize: 8, showSizeChanger: false, current: controller.archive.page, onChange: controller.archive.setPage }}
+          pagination={false}
           locale={{ emptyText: ordersLoading ? <div style={{ minHeight: 140 }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无符合条件的委托单"><Button onClick={controller.archive.reset}>清空筛选</Button></Empty> }}
           rowClassName={(order) => order.id === selectedId ? "selected" : ""}
           onRow={(order) => ({ onClick: () => openDetail(order), tabIndex: 0, 'aria-label': `查看委托单 ${order.vehicle.plate || order.id}`, onKeyDown: event => {
@@ -173,6 +171,8 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
           ]}
         />
       )}
+
+      <ListPagination mobile={isMobile} page={controller.archive.page} total={controller.archive.total} loaded={listedOrders.length} loading={ordersLoading} onPage={controller.archive.setPage} onMore={controller.archive.loadMore}/>
 
       <Modal
         rootClassName="archive-detail-modal"

@@ -1,3 +1,4 @@
+import { ListPagination } from '../../shared/ui/ListPagination';
 import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { LoadingState } from "../../shared/ui/LoadingState";
 import { useActionFeedback } from "../../shared/ui/useActionFeedback";
@@ -16,7 +17,7 @@ export function VehicleTripsPage({ user }: { user: UserProfile }) {
   const feedback = useActionFeedback();
   const state = useVehicleTrips();
   const [form] = Form.useForm();
-  const [scope, setScope] = useState('all');
+  const {scope,setScope}=state;
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectForm] = Form.useForm<{ reason: string }>();
   const rejectReason = Form.useWatch('reason', rejectForm) || '';
@@ -49,18 +50,19 @@ export function VehicleTripsPage({ user }: { user: UserProfile }) {
         <Button type="primary" htmlType="submit" loading={state.pending === 'create'} disabled={state.busy || !state.vehicles.length}>提交出车申请</Button>
       </Form>
     </Card>
-    <div className="trip-list-heading"><div><h3>{manager ? '本店申请记录' : '我的申请记录'}</h3><span className="trip-muted">共 {state.trips.length} 条申请</span></div>
+    <div className="trip-list-heading"><div><h3>{manager ? '本店申请记录' : '我的申请记录'}</h3><span className="trip-muted">共 {state.list.total} 条申请</span></div>
       <Select aria-label="筛选出车申请" value={scope} onChange={setScope} style={{ width: 140 }} options={[{ value: 'all', label: '全部记录' }, { value: 'mine', label: '我的申请' }, { value: 'pending', label: '待审批' }, { value: 'using', label: '用车中' }]} />
     </div>
     {!state.busy && !state.trips.length && <Empty description="暂无出车申请" />}
     {state.pending === 'list' && <LoadingState label="正在加载出车申请…" />}
-    <div className="trip-card-grid">{state.trips.filter(t => scope === 'all' || (scope === 'mine' ? t.applicantId === user.id : scope === 'pending' ? t.status === '待审批' : t.status === '用车中')).map(t => <Card className="trip-record-card" role="button" tabIndex={state.busy ? -1 : 0} aria-label={`查看申请：${t.vehicle.plate}，${t.applicantName}，${t.status}`} aria-disabled={state.busy}
+    <div className="trip-card-grid">{state.trips.map(t => <Card className="trip-record-card" role="button" tabIndex={state.busy ? -1 : 0} aria-label={`查看申请：${t.vehicle.plate}，${t.applicantName}，${t.status}`} aria-disabled={state.busy}
       onClick={() => { if (!state.busy) open(t.id); }} onKeyDown={event => {
         if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (!state.busy) open(t.id); }
       }} key={t.id} title={t.vehicle.plate} extra={<Tag color={t.status === '待审批' ? 'orange' : t.status === '用车中' ? 'blue' : t.status === '已还车' ? 'green' : 'default'}>{t.status}</Tag>}>
       <p className="trip-muted">{t.vehicle.brand} {t.vehicle.model} · {t.applicantName}</p><p className="trip-record-reason">{t.reason}</p>
       <div className="trip-record-footer"><span><Clock3 size={14} />{time(t.createdAt)}</span></div>
     </Card>)}</div>
+    <ListPagination mobile={state.mobile} page={state.list.page} total={state.list.total} loaded={state.trips.length} loading={state.busy} onPage={state.list.setPage} onMore={state.list.loadMore}/>
     <Drawer className="trip-detail" title="出车申请详情" open={Boolean(state.selectedId)} size="large" onClose={() => !state.busy && state.select()}>
       {state.error && <Alert type="error" showIcon title={state.error} />}
       {state.pending === 'detail' && <LoadingState label="正在加载申请详情…" />}

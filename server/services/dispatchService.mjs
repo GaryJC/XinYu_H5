@@ -1,3 +1,5 @@
+import { warehouseRequests, matchesPartsStatus, sortWarehouseRequests } from '../../shared/warehouseRequests.mjs';
+import { pageResult } from '../domain/pagination.mjs';
 import {filterDispatchTasks} from '../domain/dispatchTaskFilters.mjs';
 import {reconcileInspectionDeferred} from '../domain/inspectionDeferred.mjs';
 import {writePendingRepairs} from '../repositories/pendingRepairsRepository.mjs';
@@ -23,7 +25,18 @@ import { getDispatchTask, saveDispatchTask, dispatchPeople, dispatchDetail, list
 export { dispatchPeople, dispatchDetail };
 export const metricKeys=['pendingAccept','unstarted','working','paused','inspection','completed','overdue','rework'];
 export async function queryDispatchTasks(actor, query={}) {
-  return filterDispatchTasks(await listDispatchTasks(actor),actor,query);
+  const tasks = await listDispatchTasks(actor);
+  if(query.counts==='true') return Object.fromEntries(['待派工','维修中','待检验'].map(stage=>[stage,filterDispatchTasks(tasks,actor,{stage}).length]));
+  const filtered = filterDispatchTasks(tasks,actor,query);
+  if(query.partsStatus) {
+    if(!['待备料','部分备齐','备料完成'].includes(query.partsStatus))throw new HttpError(400,'配件状态无效');
+    const requests=warehouseRequests(filtered);
+    const counts=Object.fromEntries(['待备料','部分备齐','备料完成'].map(status=>[status,requests.filter(task=>matchesPartsStatus(task,status)).length]));
+    const items=sortWarehouseRequests(requests.filter(task=>matchesPartsStatus(task,query.partsStatus)),query.partsSort==='oldest'?'oldest':'newest')
+      .map(task=>({...task,partsRequests:undefined}));
+    return {...pageResult(items,query),counts};
+  }
+  return query.page === undefined ? filtered : pageResult(filtered,query);
 }
 export async function myRepairCounts(actor) {
   if(!hasAnyRole(actor, ['technician','outsourcing'])&&!actor.outsourcingRoleMember) throw new HttpError(403,'仅维修工可查看本人任务数量');

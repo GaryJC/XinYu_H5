@@ -1,3 +1,4 @@
+import type { PageResult } from '../../../../shared/types';
 import { request } from '../../shared/api/httpClient';
 import type { ProcurementSupplier,ProcurementSupplierInput,ProcurementTender,ProcurementCreateInput,ProcurementDetail,ProcurementLink,ProcurementAnalytics,ProcurementReportRecord,ProcurementAudit,ProcurementPortal,ProcurementQuoteInput } from '../../../../shared/types';
 const root='/api/procurement';
@@ -5,6 +6,7 @@ export const procurementApi={
   uploadPhoto:(body:{imageBase64:string;mimeType:string;fileName?:string;requestId:string})=>request<{id:string}>(`${root}/photos`,{method:'POST',body}),
   suppliers:()=>request<ProcurementSupplier[]>(`${root}/suppliers`),
   saveSupplier:(input:ProcurementSupplierInput,id?:string)=>request<ProcurementSupplier>(`${root}/suppliers${id?`/${id}`:''}`,{method:id?'PUT':'POST',body:input}),
+  tenderPage:(page:number,search:string)=>request<PageResult<ProcurementTender>>(`${root}/tenders?${new URLSearchParams({page:String(page),pageSize:'20',search})}`),
   tenders:()=>request<ProcurementTender[]>(`${root}/tenders`),
   create:(input:ProcurementCreateInput)=>request<{tender:ProcurementTender;links:ProcurementLink[];sharedLink?:ProcurementLink}>(`${root}/tenders`,{method:'POST',body:input}),
   detail:(id:string)=>request<ProcurementDetail>(`${root}/tenders/${id}`),

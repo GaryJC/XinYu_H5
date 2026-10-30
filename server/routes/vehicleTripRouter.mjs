@@ -39,7 +39,7 @@ export async function handleVehicleTrips(req, res, url, user) {
     return true;
   }
   if (url.pathname === '/api/vehicle-trip-requests') {
-    if (req.method === 'GET') sendJson(res, 200, await service.list(user));
+    if (req.method === 'GET') sendJson(res, 200, await service.list(user, Object.fromEntries(url.searchParams)));
     else if (req.method === 'POST') sendJson(res, 201, await service.create(user, await readInput(req)));
     else throw new HttpError(405, '不支持的请求方法');
     return true;

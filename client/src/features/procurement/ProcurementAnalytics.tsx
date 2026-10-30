@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button,Card,Form,Grid,Input,Select,Space,Table } from 'antd';
 import type { ProcurementMetric } from '../../../../shared/types';
 import type { ProcurementController } from './useProcurement';
 import { procurementApi,money,localDateTime } from './procurementApi';
 export function ProcurementAnalytics({controller:c}:{controller:ProcurementController}) {
   const desktop=Grid.useBreakpoint().md;
+  useEffect(()=>{void c.run(c.loadAnalytics);},[c.run,c.loadAnalytics]);
   const [from,setFrom]=useState(localDateTime(new Date(Date.now()-30*86400000))),[to,setTo]=useState(localDateTime(new Date()));
   const [supplierId,setSupplierId]=useState<string>(),[note,setNote]=useState(''),[category,setCategory]=useState<string>();
   const a=c.analysis;

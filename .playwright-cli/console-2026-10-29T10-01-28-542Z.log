@@ -2,3 +2,51 @@
 [53775864ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5174/@vite/client:992
 [53776604ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=6b8b1e33:14335
 [53776696ms] [ERROR] Warning: [antd: Drawer] `height` is deprecated. Please use `size` instead. @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/es-BiDARMsy.js?v=6b8b1e33:166
+[69835090ms] [ERROR] React has detected a change in the order of Hooks called by %s. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: https://react.dev/link/rules-of-hooks
+
+   Previous render            Next render
+   ------------------------------------------------------
+%s   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ WorkbenchPage 1. useRef                     useRef
+2. useReducer                 useReducer
+3. useContext                 useContext
+4. useContext                 useContext
+5. useContext                 useContext
+6. useContext                 useContext
+7. useMemo                    useMemo
+8. useInsertionEffect         useInsertionEffect
+9. useMemo                    useMemo
+10. useRef                    useRef
+11. useLayoutEffect           useLayoutEffect
+12. useLayoutEffect           useLayoutEffect
+13. useState                  useState
+14. useState                  useState
+15. useContext                useContext
+16. useMemo                   useMemo
+17. useState                  useState
+18. useRef                    useRef
+19. useState                  useState
+20. useState                  useState
+21. useState                  useState
+22. useState                  useState
+23. useState                  useState
+24. useRef                    useState
+ @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=6b8b1e33:4179
+[69835096ms] Error: Should have a queue. You are likely calling Hooks conditionally, which is not allowed. (https://react.dev/link/invalid-hook-call)
+    at updateReducerImpl (http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=6b8b1e33:4422:30)
+    at updateReducer (http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=6b8b1e33:4418:11)
+    at Object.useState (http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=6b8b1e33:13301:13)
+    at exports.useState (http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/react.js?v=3a24cb6b:748:31)
+    at useWorkOrderDraft (http://localhost:5174/src/features/work-orders/hooks/useWorkOrderDraft.ts?t=1793257424193:4:28)
+    at useWorkbenchController (http://localhost:5174/src/features/workbench/useWorkbenchController.ts?t=1793337923548:36:122)
+    at WorkbenchPage (http://localhost:5174/src/features/workbench/WorkbenchPage.tsx?t=1793337923548:36:21)
+    at Object.react_stack_bottom_frame (http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=6b8b1e33:12866:12)
+    at renderWithHooks (http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=6b8b1e33:4213:19)
+    at updateFunctionComponent (http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=6b8b1e33:5569:16)
+[69835096ms] [WARNING] %s
+
+%s
+ An error occurred in the <WorkbenchPage> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=6b8b1e33:5257
+[69913277ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5174/api/auth/me:0
+[69913307ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5174/api/auth/me:0

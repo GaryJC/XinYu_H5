@@ -1,3 +1,4 @@
+import { workOrderPageRows, archiveMetadata, refreshTargetIds } from './repositories/workOrderListRepository.mjs';
 import { saveDraftPendingRepairs } from './repositories/pendingRepairsRepository.mjs';
 import { userRoles, hasRole, hasAnyRole } from "../shared/roles.mjs";
 import { queueCustomerSignatureReview } from "./repositories/customerSignatureReviewRepository.mjs";
@@ -45,11 +46,19 @@ export async function healthCheck() {
   return { ok: true, database: "postgres" };
 }
 
-export async function listWorkOrders(role = "manager", user) {
+export async function listWorkOrders(role = "manager", user, query = {}) {
+  const scope = roleFilter(role, user);
+  if (query.refreshTargets === 'true') return refreshTargetIds(scope, user);
+  if (query.metadata === 'true') return archiveMetadata(scope);
+  if (query.page !== undefined) {
+    const { rows, ...result } = await workOrderPageRows(scope, query);
+    const orders = await hydrateOrders(rows);
+    return { ...result, items: sanitizeVisibleOrders(orders.map((order, index) => ({ ...order, dispatchStage: rows[index].dispatch_stage || undefined })), role, user) };
+  }
   const { where, params } = roleFilter(role, user);
   const { rows } = await pool.query(
     `
-      select wo.*, st.token as signature_token, st.used as signature_token_used
+      select wo.*, (select stage from dispatch_tasks where order_id=wo.id) as dispatch_stage, st.token as signature_token, st.used as signature_token_used
       from work_orders wo
       left join lateral (
         select token, used
@@ -221,7 +230,7 @@ export async function createSignatureTokenForOrder(id, actor, { renew = false, s
 export async function findWorkOrderByToken(token) {
   const { rows } = await pool.query(
     `
-      select wo.*, st.token as signature_token, st.used as signature_token_used, st.expires_at as signature_expires_at, st.purpose as signature_purpose
+      select wo.*, (select stage from dispatch_tasks where order_id=wo.id) as dispatch_stage, st.token as signature_token, st.used as signature_token_used, st.expires_at as signature_expires_at, st.purpose as signature_purpose
       from signature_tokens st
       join work_orders wo on wo.id = st.order_id
       where st.token = $1
@@ -394,7 +403,13 @@ export async function createSettlementForOrder(orderId, actor) {
 }
 
 export async function dashboardSummary(role = "manager", user) {
-  const orders = await listWorkOrders(role, user);
+  const { where, params } = roleFilter(role, user);
+  // Dashboard needs counts and labels, never photos, signatures, OCR or audit history.
+  const { rows } = await pool.query(`select wo.status,wo.technician,wo.vehicle_mileage,wo.arrival_date,wo.created_at,
+    coalesce((select jsonb_agg(jsonb_build_object('name',ri.name)) from repair_items ri where ri.order_id=wo.id),'[]'::jsonb) as items
+    from work_orders wo ${where}`, params);
+  const orders = rows.map(row => ({status:row.status,technician:row.technician,vehicle:{mileage:row.vehicle_mileage},
+    arrivalDate:row.arrival_date,createdAt:new Date(row.created_at).toLocaleString('zh-CN',{hour12:false}),repairItems:row.items}));
   const statusCounts = countBy(orders, (order) => order.status);
   const repairItemCounts = countBy(orders.flatMap((order) => order.repairItems), (item) => item.name || "未命名项目");
   const mileageBuckets = {
@@ -421,7 +436,7 @@ export async function dashboardSummary(role = "manager", user) {
 export async function findWorkOrderById(client, id, forUpdate = false) {
   const { rows } = await client.query(
     `
-      select wo.*, st.token as signature_token, st.used as signature_token_used
+      select wo.*, (select stage from dispatch_tasks where order_id=wo.id) as dispatch_stage, st.token as signature_token, st.used as signature_token_used
       from work_orders wo
       left join lateral (
         select token, used
@@ -545,6 +560,7 @@ async function hydrateOrders(rows, client = pool) {
       settlementByOrder.get(row.id) || [],
       filesByOrder.get(row.id) || []
     ),
+    dispatchStage: row.dispatch_stage || undefined,
     vehicleLicenseException: licenseExceptions.get(row.id),
     dispatchPlan: dispatchPlans.get(row.id)
   }));

@@ -25,7 +25,7 @@ export async function updateSupplier(user,id,body) {
     try {const saved=await repo.saveSupplier(user.shopId,supplierId,input,db);await repo.audit(db,{shopId:user.shopId,supplierId,actor:user.name,action:id?'更新供应商':'新增供应商'});return saved;}
     catch(error){if(error.code==='23505')throw new HttpError(409,'本门店已存在同名供应商');throw error;}});
 }
-export async function listTenders(user) {procurementAccess(user);return repo.readTenders(user.shopId);}
+export async function listTenders(user,query={}) {procurementAccess(user);return query.page===undefined?repo.readTenders(user.shopId):repo.readTenderPage(user.shopId,query);}
 export async function tenderDetail(user,id) {procurementAccess(user);const result=await repo.detail(user.shopId,uuid(id));if(!result)throw missing();return result;}
 export async function publishTender(user,body) {
   procurementAccess(user);const input=tenderInput(body);

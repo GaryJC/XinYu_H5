@@ -108,7 +108,7 @@ export async function handleApiRequest(req, res, url) {
   if (await handleDispatchRequest(req, res, url, currentUser)) return true;
 
   if (req.method === "GET" && url.pathname === "/api/work-orders") {
-    sendJson(res, 200, await listWorkOrders(currentUser.role, currentUser));
+    sendJson(res, 200, await listWorkOrders(currentUser.role, currentUser, Object.fromEntries(url.searchParams)));
     return true;
   }
 

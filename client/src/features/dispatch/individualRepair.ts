@@ -11,6 +11,4 @@ export function partsController(c:DispatchController,ownerId?:string):DispatchCo
  const task=c.detail.task;
  return {...c,detail:{...c.detail,task:{...task,partsRequirement:ownerId?task.partsRequests?.find(p=>p.ownerId===ownerId):task.partsRequirement}},act:input=>c.act({...input,...(ownerId?{partsOwnerId:ownerId}:{})})};
 }
-export function warehouseRequests(tasks:DispatchTask[]):DispatchTask[] {
- return tasks.flatMap(task=>[...(task.partsRequirement?[task]:[]),...(task.partsRequests||[]).map(parts=>({...task,partsRequirement:parts}))]);
-}
+export { warehouseRequests } from '../../../../shared/warehouseRequests.mjs';

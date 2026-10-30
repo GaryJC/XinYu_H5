@@ -39,10 +39,9 @@ export function useWorkbenchController() {
   const exceptionRequest=useRef<{key:string;requestId:string}|undefined>(undefined);
   const [activeNav, setActiveNav] = useState("工作台");
   const [role, setRole] = useState<RoleKey>("advisor");
-  const [orders, setOrders] = useState<WorkOrder[]>([]);
+  const [selectedRecord, setSelectedRecord] = useState<WorkOrder>();
   const [authLoading, setAuthLoading] = useState(true);
-  const [ordersLoading, setOrdersLoading] = useState(false);
-  const orderLoads = useRef({ generation: 0, pending: 0 });
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { draft, setDraft, resetDraft, updateDraft, updateVehicle, updateCustomer, updateRepairItem, toggleArrayField } = useWorkOrderDraft();
   const preRepairPhotos = usePreRepairPhotos(setDraft, draft.inspection.preRepairPhotos, draft.customer);
@@ -60,7 +59,9 @@ export function useWorkbenchController() {
   const [devLoginLoading, setDevLoginLoading] = useState(false);
   const sessionGeneration = useRef(0);
 
-  const selectedOrder = orders.find((order) => order.id === selectedId);
+  const archive = useArchiveFilters(currentUser, activeNav === '工单全览', ['工作台','工单全览'].includes(activeNav));
+  const orders = archive.items, setOrders = archive.setItems, ordersLoading = archive.loading;
+  const selectedOrder = (selectedRecord?.id===selectedId?selectedRecord:undefined) || orders.find(order=>order.id===selectedId);
   const actor = currentUser?.name || roles[role].name;
   const {
     identifierRecognition,
@@ -90,7 +91,6 @@ export function useWorkbenchController() {
   const technicianOptions = useMemo(() => users.filter((user) => user.active && hasRole(user, 'technician')).map((user) => user.name), [users]);
   const inspectorOptions = useMemo(() => users.filter((user) => user.active && hasRole(user, 'inspector')).map((user) => user.name), [users]);
 
-  const archive = useArchiveFilters(orders, currentUser?.id);
   const searchTerm = archive.filters.search;
   const setSearchTerm = (search: string) => archive.setFilters({ ...archive.filters, search });
   const searchedOrders = archive.filteredOrders;
@@ -103,12 +103,12 @@ export function useWorkbenchController() {
   useEffect(()=>{
     if(activeNav!=='工作台'||!currentUser||!hasAnyRole(currentUser,['manager','advisor'])||!dispatchEnabled)return;
     let active=true;setTodoCounts({});setTodoError('');
-    void Promise.all(['待派工','维修中','待检验'].map(async stage=>[stage,(await dispatchApi.tasks({stage})).length] as const))
-      .then(rows=>{if(active)setTodoCounts(Object.fromEntries(rows));})
+    void dispatchApi.counts()
+      .then(counts=>{if(active)setTodoCounts(counts);})
       .catch(()=>{if(active)setTodoError('待办数量加载失败，请刷新页面重试');});
     return()=>{active=false;};
-  },[currentUser?.id,activeNav,orders]);
-  const counters=['待客户签字','待派工','维修中','待检验'].map(label=>({label,value:label==='待客户签字'?orders.filter(item=>item.status==='待客户签字').length:dispatchEnabled?todoCounts[label]:orders.filter(item=>workOrderDisplayStatus(item)===label).length}));
+  },[currentUser?.id,activeNav,dashboard]);
+  const counters=['待客户签字','待派工','维修中','待检验'].map(label=>({label,value:label==='待客户签字'?dashboard?.statusCounts['待客户签字'] ?? 0:dispatchEnabled?todoCounts[label]:orders.filter(item=>workOrderDisplayStatus(item)===label).length}));
   function openTodo(stage:string) {
     homeScroll.current=window.scrollY;
     const nav=stage==='待客户签字'||!dispatchEnabled?'工单全览':stage==='待检验'&&hasAnyRole(currentUser,['manager','inspector'])?'检验任务':'派工台';
@@ -132,7 +132,6 @@ export function useWorkbenchController() {
     preRepairPhotos.reset();
     paperPhotos.reset();
     if (!currentUser || currentUser.role === 'employee' || (hasRole(currentUser, 'technician') && !currentUser.legacyEmployeeCode)) {
-      setOrdersLoading(false);
       setOrders([]);
       setDashboard(undefined);
       setUsers([]);
@@ -140,7 +139,6 @@ export function useWorkbenchController() {
       setDepartmentError("");
       return;
     }
-    void loadOrders(currentUser.role, selectedId, generation);
     void loadDashboard(currentUser.role, generation);
     void loadUsers(generation);
     if (hasAnyRole(currentUser, ["advisor", "manager"])) void loadDepartments(generation);
@@ -155,42 +153,14 @@ export function useWorkbenchController() {
     }
   }, [activeNav, visibleNavItems]);
 
-  async function loadOrders(nextRole = role, keepId = selectedId, generation = sessionGeneration.current) {
-    if (generation !== sessionGeneration.current) return;
-    if (orderLoads.current.generation !== generation) orderLoads.current = { generation, pending: 0 };
-    orderLoads.current.pending += 1;
-    setOrdersLoading(true);
-    try {
-      setApiError("");
-      const next = nextRole === "warehouse" ? [] : await workOrderApi.list(nextRole);
-      if (generation !== sessionGeneration.current) return;
-      const safeNext = Array.isArray(next) ? next : [];
-      setOrders(safeNext);
-      const nextSelected = safeNext.find((order) => order.id === keepId)
-        ?? (nextRole === "advisor"
-          ? safeNext.find((order) => order.advisor === currentUser?.name)
-          : safeNext[0]);
-      if (nextSelected) {
-        selectOrder(nextSelected);
-      } else {
-        setSelectedId(null);
-        preRepairPhotos.reset();
-        paperPhotos.reset();
-        resetDraft(undefined, currentUser?.name || "");
-      }
-    } catch (error) {
-      if (generation !== sessionGeneration.current) return;
-      setOrders([]);
-      setSelectedId(null);
-      preRepairPhotos.reset();
-      paperPhotos.reset();
-      resetDraft(undefined, currentUser?.name || "");
-      setApiError(error instanceof Error ? error.message : "后端 API 暂时不可用");
-    } finally {
-      if (orderLoads.current.generation === generation) {
-        orderLoads.current.pending -= 1;
-        if (generation === sessionGeneration.current && orderLoads.current.pending === 0) setOrdersLoading(false);
-      }
+  async function loadOrders(_nextRole = role, keepId = selectedId, generation = sessionGeneration.current) {
+    setApiError("");
+    await archive.refresh();
+    if (keepId && generation === sessionGeneration.current) {
+      try {
+        const order = await workOrderApi.get(keepId);
+        if(generation === sessionGeneration.current) selectOrder(order);
+      } catch(error) { if(generation === sessionGeneration.current) setApiError(actionError(error,'工单详情加载失败')); }
     }
   }
 
@@ -274,7 +244,7 @@ export function useWorkbenchController() {
 
   useEffect(()=>{
     setLinkedOrderDetail(undefined);
-    const id=new URLSearchParams(location.search).get('workOrder');
+    const id=new URLSearchParams(location.search).get('workOrder') || new URLSearchParams(location.search).get('paperOrder');
     if(!currentUser || !id || !hasAnyRole(currentUser, ['manager','advisor']))return;
     let active=true;
     void workOrderApi.get(id).then(order=>{if(active){setLinkedOrderDetail(order);setActiveNav('工作台');}}).catch(e=>{if(active)setApiError(e instanceof Error?e.message:'无法查看通知中的委托单');});
@@ -282,7 +252,7 @@ export function useWorkbenchController() {
   },[currentUser?.id]);
   function clearLinkedOrder() {
     setLinkedOrderDetail(undefined);
-    const url=new URL(location.href);url.searchParams.delete('workOrder');history.replaceState(null,'',url);
+    const url=new URL(location.href);url.searchParams.delete('workOrder');url.searchParams.delete('paperOrder');history.replaceState(null,'',url);
   }
 
   function applyAuthenticatedUser(user: UserProfile) {
@@ -319,6 +289,7 @@ export function useWorkbenchController() {
   }
 
   function selectOrder(order: WorkOrder) {
+    setSelectedRecord(order);
     setSelectedId(order.id);
     resetDraft(order);
     setFormErrors([]);
@@ -506,12 +477,13 @@ export function useWorkbenchController() {
   return {
     licenseHistory,
     acceptRefreshedOrder: (updated: WorkOrder) => {
+      setSelectedRecord(previous=>previous?.id===updated.id?updated:previous);
       setOrders(previous => previous.map(order => order.id === updated.id
         ? { ...updated, dispatchStage: updated.dispatchStage ?? order.dispatchStage } : order));
       setLinkedOrderDetail(previous=>previous?.id===updated.id?updated:previous);
       if (selectedId === updated.id) resetDraft(updated);
     },
-    refreshArchiveSummary: () => { void loadDashboard(); },
+    refreshArchiveSummary: () => { void loadDashboard(); void archive.refresh(); },
     linkedOrderDetail,clearLinkedOrder,reportMissingVehicleLicense,
     refreshWorkbench: async () => { await Promise.all([loadOrders(), loadDashboard()]); },
     openDispatch,
@@ -529,7 +501,7 @@ export function useWorkbenchController() {
     preRepairPhotos,
     paperPhotos,
     submitPaperOrder,
-    apiError,
+    apiError: apiError || archive.error,
     searchTerm,
     setSearchTerm,
     syncLabel,

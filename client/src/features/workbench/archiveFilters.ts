@@ -1,17 +1,8 @@
 import {repairCategory} from '../../../../shared/repairCompletion.mjs';
 import type { WorkOrder } from '../../../../shared/types';
 
-export type ArchiveFilters = {
-  search: string;
-  baiyuanOnly: boolean;
-  range: 'all' | 'today' | 'yesterday' | 'week' | 'custom';
-  from: string;
-  to: string;
-  statuses: string[];
-  advisors: string[];
-  technicians: string[];
-  sort: 'updated-desc' | 'updated-asc' | 'created-desc' | 'created-asc';
-};
+import type { ArchiveFilters } from '../../../../shared/types';
+export type { ArchiveFilters } from '../../../../shared/types';
 export const defaultArchiveFilters = (): ArchiveFilters => ({ search: '', baiyuanOnly: false, range: 'all', from: '', to: '', statuses: [], advisors: [], technicians: [], sort: 'updated-desc' });
 const DAY = 86400000;
 const OFFSET = 8 * 3600000;

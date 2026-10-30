@@ -20,28 +20,29 @@ export function useArchiveLegacyRefresh(user: UserProfile | undefined, onUpdated
       && (hasRole(user, 'manager') || order.advisor === user.name)
       && order.legacySyncStatus === "synced" && !["草稿", "待客户签字"].includes(order.status));
   }
-  async function refresh(orders: WorkOrder[]) {
+  async function refresh(orders?: WorkOrder[]) {
     if (running.current) return;
-    const targets = orders.filter(canRefresh);
-    if (!targets.length) return;
     running.current = true;
     const generation = session.current;
     const next: RefreshReport = { succeeded: 0, failures: [] };
     setReport(undefined);
-    setProgress({ done: 0, total: targets.length });
+    setProgress({ done: 0, total: 0 });
     try {
+      const targets = orders ? orders.filter(canRefresh).map(order=>order.id) : await workOrderApi.refreshTargets();
+      if(generation!==session.current)return;
+      setProgress({done:0,total:targets.length});
       // Each order commits independently, so one missing legacy record cannot
       // hide successful updates. Sequential requests bound SQL Server load.
-      for (const [index, order] of targets.entries()) {
+      for (const [index, id] of targets.entries()) {
         if (generation !== session.current) break;
         try {
-          const updated = await workOrderApi.refreshFromRunfeng(order.id);
+          const updated = await workOrderApi.refreshFromRunfeng(id);
           if (generation !== session.current) break;
           onUpdated(updated);
           next.succeeded += 1;
         } catch (error) {
           if (generation !== session.current) break;
-          next.failures.push({ id: order.id, message: error instanceof Error ? error.message : "更新失败，请重试" });
+          next.failures.push({ id, message: error instanceof Error ? error.message : "更新失败，请重试" });
         }
         setProgress({ done: index + 1, total: targets.length });
       }
@@ -49,10 +50,12 @@ export function useArchiveLegacyRefresh(user: UserProfile | undefined, onUpdated
         setReport(next);
         if (next.succeeded) onComplete?.();
       }
+    } catch(error) {
+      if(generation===session.current)setReport({succeeded:0,failures:[{id:"获取更新列表",message:error instanceof Error?error.message:"加载失败"}]});
     } finally {
       running.current = false;
       if (generation === session.current) setProgress(undefined);
     }
   }
-  return { canRefresh, refresh, progress, report, clearReport: () => setReport(undefined) };
+  return { canRefresh, refresh, refreshAll:()=>refresh(), progress, report, clearReport: () => setReport(undefined) };
 }

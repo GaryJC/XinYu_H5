@@ -1,7 +1,7 @@
 import { Alert, Button, Dropdown, Image, message } from "antd";
 import { useState, type ReactElement, type ReactNode } from "react";
 
-import { copyImage } from "../browser/copyImage";
+import { canCopyImage, copyImage } from "../browser/copyImage";
 
 export function PhotoPreviewActions({ source, children }: { source: string; children: ReactNode }) {
   const [busy, setBusy] = useState(false);
@@ -43,8 +43,9 @@ export function PhotoPreviewActions({ source, children }: { source: string; chil
 export function PhotoContextMenu({ source, children }: { source: string; children: ReactElement }) {
   const [messages, holder] = message.useMessage();
   const [busy, setBusy] = useState(false);
+  const [nativeMenu, setNativeMenu] = useState(false);
   const desktopDingTalk = /DingTalk/i.test(navigator.userAgent) && !/Android|iPhone|iPad|iPod|HarmonyOS/i.test(navigator.userAgent);
-  if (!desktopDingTalk) return children;
+  if (!desktopDingTalk || !canCopyImage() || nativeMenu) return <>{holder}{children}</>;
   async function copy() {
     if (busy || !source) return;
     setBusy(true);
@@ -56,8 +57,16 @@ export function PhotoContextMenu({ source, children }: { source: string; childre
     } finally { setBusy(false); }
   }
   return <>{holder}<Dropdown trigger={["contextMenu"]} styles={{ root: { zIndex: 2000 } }} menu={{
-    items: [{ key: "copy", label: busy ? "正在复制…" : "复制图片", disabled: busy || !source }],
-    onClick: () => { void copy(); }
+    items: [
+      { key: "copy", label: busy ? "正在复制…" : "复制图片", disabled: busy || !source },
+      { key: "native", label: "复制不成功？使用原生右键菜单", disabled: busy }
+    ],
+    onClick: ({ key }) => {
+      if (key === "native") {
+        setNativeMenu(true);
+        void messages.info("请再次右键点击照片；若菜单提供“复制图片”，请选择该项。没有该项时请使用“发送到 / 保存图片”。", 8);
+      } else { void copy(); }
+    }
   }}>{children}</Dropdown></>;
 }
 

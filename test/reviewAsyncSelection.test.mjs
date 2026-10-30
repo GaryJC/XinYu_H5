@@ -16,6 +16,8 @@ function hook(file,name,api,props=[]) {
  };
  vm.runInNewContext(compiled,{exports,Error,URL,URLSearchParams,location:{href:'https://example.com/',search:''},history:{replaceState(){}},require(id){
   if(id==='react')return react;
+  if(id==='antd')return {Grid:{useBreakpoint:()=>({md:true})}};
+  if(id.endsWith('usePagedList'))return {usePagedList:()=>({items:[],loading:false,error:'',refresh:async()=>{}})};
   if(id.endsWith('useActionFeedback'))return {useActionFeedback:()=>({success(){},error(){},warning(){}})};
   if(id.endsWith('roles.mjs'))return {hasAnyRole,hasRole};
   if(id.endsWith('requestId'))return {createRequestId:()=> 'review-request'};
@@ -129,6 +131,6 @@ test('procurement prevents duplicate mutations while the first action is pending
 test('an older procurement list response cannot replace a newer refresh',async()=>{
  const gate=deferred();let calls=0;
  const render=hook('../client/src/features/procurement/useProcurement.ts','useProcurement',{suppliers:async()=>[],reports:async()=>[],tenders:()=>++calls===1?gate.promise:Promise.resolve([{id:'new'}])});
- const old=render().load();await render().load();gate.resolve([{id:'old'}]);await old;
+ const old=render().loadAnalytics();await render().loadAnalytics();gate.resolve([{id:'old'}]);await old;
  assert.equal(render().tenders[0].id,'new');
 });

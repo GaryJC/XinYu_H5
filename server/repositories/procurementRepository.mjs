@@ -1,3 +1,4 @@
+import { pagination } from '../domain/pagination.mjs';
 import { randomUUID } from 'node:crypto';
 import { pool } from '../database/pool.mjs';
 import { effectiveStatus } from '../domain/procurement.mjs';
@@ -53,8 +54,8 @@ export async function accessAttempt(key,db=pool) {
   return row.count;
 }
 const iso=value=>value?new Date(value).toISOString():null;
-export async function readTenders(shopId,{id,from,to}={},db=pool) {
-  const {rows}=await db.query(`select * from procurement_tenders where shop_id=$1 ${id?'and id=$2':from?'and coalesce(closed_at,deadline)>=$2 and coalesce(closed_at,deadline)<$3 and (status<>\'open\' or deadline<=now())':''} order by created_at desc,id desc`,id?[shopId,id]:from?[shopId,from,to]:[shopId]);
+export async function readTenders(shopId,{id,from,to,ids: selectedIds}={},db=pool) {
+  const {rows}=await db.query(`select * from procurement_tenders where shop_id=$1 ${selectedIds?'and id=any($2::uuid[])':id?'and id=$2':from?'and coalesce(closed_at,deadline)>=$2 and coalesce(closed_at,deadline)<$3 and (status<>\'open\' or deadline<=now())':''} order by created_at desc,id desc`,selectedIds?[shopId,selectedIds]:id?[shopId,id]:from?[shopId,from,to]:[shopId]);
   if(!rows.length)return [];
   const ids=rows.map(r=>r.id);
   const {rows:invitations}=await db.query(`select i.*,v.reason as invalid_reason from procurement_invitations i left join procurement_invalidations v on v.invitation_id=i.id where i.tender_id=any($1::uuid[]) order by i.id`,[ids]);
@@ -62,6 +63,16 @@ export async function readTenders(shopId,{id,from,to}={},db=pool) {
   return rows.map(r=>({id:r.id,version:r.version,termsVersion:r.terms_version,data:r.data,status:effectiveStatus(r),deadline:iso(r.deadline),closedAt:iso(r.closed_at||(r.status==='open'&&r.deadline&&Date.parse(r.deadline)<=Date.now()?r.deadline:null)),
     purchaseApproval:r.purchase_approval||undefined,createdAt:iso(r.created_at),winnerId:r.winner_id,winnerIds:r.winner_ids||[],reason:r.reason,invitations:invitations.filter(i=>i.tender_id===r.id).map(i=>({id:i.id,supplierId:i.supplier_id,supplierName:i.supplier_snapshot.name,invalidReason:i.invalid_reason||'',
       quotes:quotes.filter(q=>q.invitation_id===i.id).map(q=>({...q.data,id:q.id,termsVersion:q.terms_version,submittedAt:iso(q.submitted_at)}))}))}));
+}
+export async function readTenderPage(shopId,query,db=pool) {
+  const {page:requested,pageSize}=pagination(query);
+  const params=[shopId,(query.search||'').trim().toLowerCase()];
+  const where="where shop_id=$1 and ($2='' or strpos(lower(concat_ws(' ',data->>'partName',data->>'specification',data->>'vehicleModel')),$2)>0)";
+  const {rows:[{total}]}=await db.query(`select count(*)::integer as total from procurement_tenders ${where}`,params);
+  const page=Math.min(requested,Math.max(1,Math.ceil(total/pageSize)));
+  const {rows}=await db.query(`select id from procurement_tenders ${where} order by created_at desc,id desc limit $3 offset $4`,[...params,pageSize,(page-1)*pageSize]);
+  const items=rows.length?await readTenders(shopId,{ids:rows.map(row=>row.id)},db):[];
+  return {items,total,page,pageSize};
 }
 export async function detail(shopId,id,db=pool) {
   const tender=(await readTenders(shopId,{id},db))[0];if(!tender)return null;

@@ -1,3 +1,5 @@
+import { ListPagination } from '../../shared/ui/ListPagination';
+import type { ProcurementController } from './useProcurement';
 import { useState } from 'react';
 import { Button, Empty, Grid, Input, Pagination, Table, Tag } from 'antd';
 import { ArrowRightOutlined, ClockCircleOutlined, EditOutlined, PhoneOutlined, UserOutlined } from '@ant-design/icons';
@@ -5,22 +7,23 @@ import type { ProcurementSupplier, ProcurementTender } from '../../../../shared/
 import { LoadingState } from '../../shared/ui/LoadingState';
 import { dateTime, statusLabels } from './procurementApi';
 
-export function TenderList({items,busy,onOpen}:{items:ProcurementTender[];busy:boolean;onOpen:(id:string)=>void}) {
+export function TenderList({controller:c,onOpen}:{controller:ProcurementController;onOpen:(id:string)=>void}) {
+  const {query,setQuery,busy}=c;
+  const items=c.tenderList.items;
   const desktop=Grid.useBreakpoint().md;
-  const [query,setQuery]=useState(''),[page,setPage]=useState(1);
-  const rows=items.filter(t=>`${t.data.partName} ${t.data.specification} ${t.data.vehicleModel}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const rows=items;
   const response=(t:ProcurementTender)=>`${t.invitations.filter(i=>i.quotes[0]?.termsVersion===t.termsVersion).length} / ${t.invitations.length}`;
   const status=(t:ProcurementTender)=><><Tag color={t.status==='open'?'blue':t.status==='awarded'?'green':'default'}>{statusLabels[t.status]}</Tag>{t.purchaseApproval?<Tag color={t.purchaseApproval.status==='pending'?'orange':t.purchaseApproval.status==='approved'?'green':'red'}>{{pending:'采购待审批',approved:'采购已批准',rejected:'采购已驳回'}[t.purchaseApproval.status]}</Tag>:null}</>;
-  return <><div className="procurement-list-toolbar"><div><h3>询价记录</h3><span className="procurement-muted">共 {rows.length} 条 · 点击查看报价进度</span></div><Input.Search allowClear aria-label="搜索询价" placeholder="搜索配件、规格或车型" value={query} onChange={e=>{setQuery(e.target.value);setPage(1);}}/></div>
-    {desktop?<Table loading={busy} rowKey="id" dataSource={rows} scroll={{x:700}} columns={[
+  return <><div className="procurement-list-toolbar"><div><h3>询价记录</h3><span className="procurement-muted">共 {c.tenderList.total} 条 · 点击查看报价进度</span></div><Input.Search allowClear aria-label="搜索询价" placeholder="搜索配件、规格或车型" value={query} onChange={e=>{setQuery(e.target.value);}}/></div>
+    {desktop?<Table pagination={false} loading={busy} rowKey="id" dataSource={rows} scroll={{x:700}} columns={[
       {title:'配件',render:(_,t)=><><strong>{t.data.partName}</strong><small>{t.data.specification||'未指定规格'} · 数量 {t.data.quantity}</small></>},
       {title:'状态',render:(_,t)=>status(t)},{title:'已响应 / 受邀',render:(_,t)=>response(t)},
       {title:'报价截止',dataIndex:'deadline',render:dateTime},{title:'操作',render:(_,t)=><Button type="link" onClick={()=>onOpen(t.id)}>查看报价 <ArrowRightOutlined/></Button>},
-    ]}/>:busy&&!items.length?<LoadingState label="正在加载询价…"/>:rows.length?<><div className="procurement-records">{rows.slice((page-1)*10,page*10).map(t=><button type="button" className="procurement-record procurement-record-button" key={t.id} onClick={()=>onOpen(t.id)} aria-label={`查看询价：${t.data.partName}`}>
+    ]}/>:busy&&!items.length?<LoadingState label="正在加载询价…"/>:rows.length?<><div className="procurement-records">{rows.map(t=><button type="button" className="procurement-record procurement-record-button" key={t.id} onClick={()=>onOpen(t.id)} aria-label={`查看询价：${t.data.partName}`}>
       <div className="procurement-record-title"><strong>{t.data.partName}</strong>{status(t)}</div><p>{t.data.specification||'未指定规格'} · 数量 {t.data.quantity}</p>
       <div className="procurement-record-metrics"><span>供应商响应<strong>{response(t)}</strong></span><span>车型<strong>{t.data.vehicleModel||'未填写'}</strong></span></div>
       <footer><span><ClockCircleOutlined/> {t.deadline?dateTime(t.deadline):'未设置截止时间'}</span><ArrowRightOutlined/></footer>
-    </button>)}</div><Pagination simple current={page} pageSize={10} total={rows.length} onChange={setPage} hideOnSinglePage/></>:<Empty description={query?'没有匹配的询价':'暂无询价，点击上方按钮发起'}/>}</>;
+    </button>)}</div></>:<Empty description={query?'没有匹配的询价':'暂无询价，点击上方按钮发起'}/>}<ListPagination mobile={!desktop} page={c.tenderList.page} total={c.tenderList.total} loaded={items.length} loading={busy} onPage={c.tenderList.setPage} onMore={c.tenderList.loadMore}/></>;
 }
 
 export function SupplierList({items,busy,onEdit}:{items:ProcurementSupplier[];busy:boolean;onEdit:(supplier:ProcurementSupplier)=>void}) {

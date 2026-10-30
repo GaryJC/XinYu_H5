@@ -1,3 +1,4 @@
+import { ListPagination } from '../../shared/ui/ListPagination';
 import { LoadingState } from "../../shared/ui/LoadingState";
 import {personalTask,individualRepair} from './individualRepair';
 import { RepairStatusTag } from './RepairStatusTag';
@@ -29,6 +30,7 @@ export function TechnicianRepairPage({controller:c,user}:{controller:DispatchCon
       <p className="dispatch-muted">预计完工：{displayTaskTime(task.dueAt)}</p>
       <Button type="primary" block onClick={()=>c.select(task.orderId)}>{task.stage==='待接单'?'查看并接单':task.stage==='待检验'?'查看检验进度':task.stage==='维修完成'?'查看维修记录':'进入维修'}</Button>
     </Card>)}</div>
+    <ListPagination mobile={mobile} page={c.list.page} total={c.list.total} loaded={c.tasks.length} loading={c.loading} onPage={c.list.setPage} onMore={c.list.loadMore}/>
     <Drawer className="repair-task-drawer" title={c.detail?.task.plate||'维修任务'} open={Boolean(c.selectedId)} size={mobile?'100%':640} mask={{closable:!c.busy&&!photoBlocked}} closable={!c.busy&&!photoBlocked} onClose={()=>{if(!c.busy&&!photoBlocked)c.select(undefined);}} destroyOnHidden>
       {c.detail?<TechnicianTaskDetail key={c.detail.task.orderId} controller={c} user={user} onPhotoBlocked={setPhotoBlocked}/>:<>{c.detailLoading?<LoadingState label="正在加载维修任务…" />:c.error?<Alert type="error" title={c.error}/>:null}</>}
     </Drawer>

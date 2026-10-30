@@ -53,7 +53,7 @@ export function ArchiveFilterBar({ archive, isMobile }: { archive: ArchiveFilter
     </div>}
     {!isMobile && fields(filters, setFilters)}
     <div className="archive-filter-summary" aria-live="polite">
-      <span>共 {archive.filteredOrders.length} 张</span>
+      <span>共 {archive.total} 张</span>
       {filters.range !== 'all' && <Tag closable onClose={() => update({ range: 'all', from: '', to: '' })}>创建日期：{filters.range === 'custom' ? `${filters.from} 至 ${filters.to}` : ranges.find(range => range.value === filters.range)?.label}</Tag>}
       {filters.baiyuanOnly && <Tag closable onClose={()=>update({baiyuanOnly:false})}>百援门店单</Tag>}
       {filters.search && <Tag closable onClose={() => update({ search: '' })}>搜索：{filters.search}</Tag>}

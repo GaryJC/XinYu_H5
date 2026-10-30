@@ -1,33 +1,32 @@
-import {repairCategory} from '../../../../shared/repairCompletion.mjs';
-import { useEffect, useMemo, useState } from 'react';
-import type { WorkOrder } from '../../../../shared/types';
-import { workOrderDisplayStatus } from '../work-orders/domain/workOrderDomain';
-import { archivePerson, archiveTechnicians, beijingDay, defaultArchiveFilters, filterArchiveOrders, type ArchiveFilters } from './archiveFilters';
+import { useEffect, useState } from 'react';
+import { Grid } from 'antd';
+import type { ArchiveOptions, UserProfile } from '../../../../shared/types';
+import { usePagedList } from '../../shared/hooks/usePagedList';
+import { workOrderApi } from '../work-orders/api/workOrderApi';
+import { archiveBounds, beijingDay, defaultArchiveFilters, type ArchiveFilters } from './archiveFilters';
 
-export function useArchiveFilters(orders: WorkOrder[], userId?: string) {
-  const [state, setState] = useState(() => ({ userId, filters: defaultArchiveFilters(), page: 1 }));
-  const [day, setDay] = useState(() => beijingDay());
-  useEffect(() => {
-    const update = () => setDay(beijingDay());
-    const timer = window.setInterval(update, 30000);
-    window.addEventListener('focus', update);
-    return () => { window.clearInterval(timer); window.removeEventListener('focus', update); };
-  }, []);
-  // Reset immediately when identities change, including before effects run.
-  if (state.userId !== userId) setState({ userId, filters: defaultArchiveFilters(), page: 1 });
-  const filters = state.userId === userId ? state.filters : defaultArchiveFilters();
-  const setFilters = (next: ArchiveFilters) => setState({ userId, filters: next, page: 1 });
-  const filteredOrders = useMemo(() => filterArchiveOrders(orders, filters, workOrderDisplayStatus), [orders, filters, day]);
-  const options = useMemo(() => {
-    const unique = (values: string[]) => [...new Set(values)].sort((a, b) => a.localeCompare(b, 'zh-CN')).map(value => ({ value, label: value }));
-    return {
-      statuses: unique(orders.map(order=>repairCategory(workOrderDisplayStatus(order)))),
-      advisors: unique(['未分配', ...orders.map(order => archivePerson(order.advisor))]),
-      technicians: unique(['未分配', ...orders.flatMap(order => archiveTechnicians(order.technician))])
-    };
-  }, [orders]);
-  return { filters, setFilters, filteredOrders, options, page: Math.min(state.page, Math.max(1, Math.ceil(filteredOrders.length / 8))),
-    setPage: (page: number) => setState(current => ({ ...current, page })),
-    reset: () => setFilters(defaultArchiveFilters()) };
+export function useArchiveFilters(user?: UserProfile, overview = false, enabled = true) {
+  const mobile = !Grid.useBreakpoint().md;
+  const userId=user?.id;
+  const [state,setState]=useState(()=>({userId,filters:defaultArchiveFilters()}));
+  const [metadata,setMetadata]=useState<{userId?:string;options:ArchiveOptions}>();
+  const [day,setDay]=useState(()=>beijingDay());
+  useEffect(()=>{const timer=window.setInterval(()=>setDay(beijingDay()),30000);return()=>clearInterval(timer);},[]);
+  if(state.userId!==userId)setState({userId,filters:defaultArchiveFilters()});
+  const filters=state.userId===userId?state.filters:defaultArchiveFilters();
+  const setFilters=(filters:ArchiveFilters)=>setState({userId,filters});
+  const key=JSON.stringify({userId,filters,overview,day});
+  const bounds=archiveBounds(filters);
+  const list=usePagedList(key,page=>workOrderApi.page({page,pageSize:20,search:filters.search,baiyuanOnly:String(filters.baiyuanOnly),
+    statuses:JSON.stringify(filters.statuses),advisors:JSON.stringify(filters.advisors),technicians:JSON.stringify(filters.technicians),sort:filters.sort,
+    ...(bounds?{from:new Date(bounds[0]).toISOString(),to:new Date(bounds[1]).toISOString()}:{}),...(overview?{shopId:user?.shopId}:{})}),mobile,enabled&&Boolean(user),order=>order.id);
+  useEffect(()=>{
+    if(!user||!enabled)return;
+    let active=true;
+    void workOrderApi.archiveOptions().then(options=>{if(active)setMetadata({userId,options});}).catch(()=>{});
+    return()=>{active=false;};
+  },[userId,enabled,list.total]);
+  const options=metadata && metadata.userId===userId?metadata.options:{statuses:[],advisors:[],technicians:[]};
+  return {...list,mobile,filters,setFilters,filteredOrders:list.items,options,reset:()=>setFilters(defaultArchiveFilters())};
 }
 export type ArchiveFilterController = ReturnType<typeof useArchiveFilters>;

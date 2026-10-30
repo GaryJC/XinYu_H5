@@ -11,8 +11,6 @@ import {VehicleLicenseExceptionNotice,VehicleLicenseAvailability} from './Vehicl
 import {isCurrentVehicleLicenseException} from '../domain/vehicleLicenseException';
 import "../work-order-form.css";
 import { PreRepairPhotos } from "../../pre-repair-photos/PreRepairPhotos";
-import { DraftDispatchFields } from "../../dispatch/DraftDispatchFields";
-import { dispatchEnabled } from "../../dispatch/dispatchAvailability";
 import { LockKeyhole, Plus, Save, Send, Trash2 } from "lucide-react";
 import { Alert, Button, Checkbox, DatePicker, Form, Grid, Input, Radio, Select, Tooltip } from "antd";
 import dayjs from "dayjs";
@@ -390,10 +388,6 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             </div>
 
             </FormSection>
-            {dispatchEnabled && <DraftDispatchFields plan={draft.dispatchPlan} users={controller.users} shopId={controller.currentUser?.shopId}
-              disabled={!canEditForm} signed={Boolean(selectedOrder && !["草稿","待客户签字"].includes(selectedOrder.status))}
-              technician={selectedOrder?.technician} onChange={dispatchPlan=>updateDraft({dispatchPlan})}
-              onOpen={()=>controller.openDispatch(selectedOrder!.id)}/>}
 
             </>}
             {selectedOrder && <SignatureReview order={selectedOrder} user={controller.currentUser} onUpdated={controller.acceptRefreshedOrder} />}

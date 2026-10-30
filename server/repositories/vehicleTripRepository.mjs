@@ -1,3 +1,4 @@
+import { pagination } from '../domain/pagination.mjs';
 import { pool, transaction } from '../database/pool.mjs';
 import { hasRole } from '../../shared/roles.mjs';
 
@@ -28,9 +29,17 @@ export class VehicleTripRepository {
       : 'insert into company_vehicles(id,shop_id,plate,brand,model,active) values($1,$2,$3,$4,$5,$6) returning *';
     return vehicle((await this.database.query(sql, values)).rows[0]);
   }
-  async listTrips(user) {
-    const { rows } = await this.database.query('select * from vehicle_trip_requests where shop_id=$1 and ($2 or applicant_id=$3) order by created_at desc', [user.shopId, hasRole(user, 'manager'), user.id]);
-    return rows.map(trip);
+  async listTrips(user, query = {}) {
+    const params=[user.shopId,hasRole(user,'manager'),user.id];
+    let where='where shop_id=$1 and ($2 or applicant_id=$3)';
+    if(query.scope==='mine')where+=' and applicant_id=$3';
+    if(query.scope==='pending'||query.scope==='using'){params.push(query.scope==='pending'?'待审批':'用车中');where+=' and status=$4';}
+    if(query.page===undefined)return (await this.database.query(`select * from vehicle_trip_requests ${where} order by created_at desc,id desc`,params)).rows.map(trip);
+    const {page:requested,pageSize}=pagination(query);
+    const {rows:[{total}]}=await this.database.query(`select count(*)::integer as total from vehicle_trip_requests ${where}`,params);
+    const page=Math.min(requested,Math.max(1,Math.ceil(total/pageSize)));
+    const {rows}=await this.database.query(`select * from vehicle_trip_requests ${where} order by created_at desc,id desc limit $${params.length+1} offset $${params.length+2}`,[...params,pageSize,(page-1)*pageSize]);
+    return {items:rows.map(trip),total,page,pageSize};
   }
   async getTrip(id, lock = false) {
     return trip((await this.database.query(`select * from vehicle_trip_requests where id=$1${lock ? ' for update' : ''}`, [id])).rows[0]);

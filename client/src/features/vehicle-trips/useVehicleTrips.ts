@@ -1,6 +1,8 @@
+import { Grid } from 'antd';
+import { usePagedList } from '../../shared/hooks/usePagedList';
 import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { useEffect, useRef, useState } from 'react';
-import type { CompanyVehicle, VehicleTrip, VehicleTripDetail, VehicleTripAction, VehicleTripStage } from '../../../../shared/types';
+import type { CompanyVehicle, VehicleTripDetail, VehicleTripAction, VehicleTripStage } from '../../../../shared/types';
 import { createRequestId } from '../../shared/api/requestId';
 import { prepareUploadPhoto } from '../../shared/images/prepareOcrImage';
 import { companyVehicleApi } from '../company-vehicles/companyVehicleApi';
@@ -9,7 +11,10 @@ import { vehicleTripApi } from './vehicleTripApi';
 export function useVehicleTrips() {
   const feedback = useActionFeedback();
   const [vehicles, setVehicles] = useState<CompanyVehicle[]>([]);
-  const [trips, setTrips] = useState<VehicleTrip[]>([]);
+  const [scope,setScope]=useState('all');
+  const mobile=!Grid.useBreakpoint().md;
+  const list=usePagedList(scope,page=>vehicleTripApi.page(page,scope),mobile,true,trip=>trip.id);
+  const trips=list.items;
   const [detail, setDetail] = useState<VehicleTripDetail>();
   const [busy, setBusy] = useState(true);
   const [pending, setPending] = useState('list');
@@ -31,10 +36,9 @@ export function useVehicleTrips() {
     finally { running.current = false; setBusy(false); setPending(''); }
   }
   async function refreshData() {
-    const [cars, items] = await Promise.all([companyVehicleApi.list(), vehicleTripApi.list()]);
-    setVehicles(cars); setTrips(items);
+    setVehicles(await companyVehicleApi.list());
   }
-  function upsert(item: VehicleTrip) { setTrips(items => [item, ...items.filter(t => t.id !== item.id)]); }
+
   function select(id?: string) {
     const url=new URL(location.href);
     if(id)url.searchParams.set('vehicleTrip',id);else url.searchParams.delete('vehicleTrip');
@@ -56,12 +60,12 @@ export function useVehicleTrips() {
     const key = JSON.stringify({ id, stage, imageBase64 });
     return vehicleTripApi.upload(id, { stage, imageBase64, requestId: requestId(key) });
   }
-  return { vehicles, trips, detail, selectedId, busy, pending, error, select,
-    refresh: () => run(async () => { await refreshData(); if (detail) setDetail(await vehicleTripApi.detail(detail.id)); }),
+  return { scope,setScope,list,mobile,vehicles, trips, detail, selectedId, busy:busy||list.loading, pending, error:error||list.error, select,
+    refresh: () => run(async () => { await Promise.all([refreshData(),list.refresh()]); if (detail) setDetail(await vehicleTripApi.detail(detail.id)); }),
     create: (values: { vehicleId: string; reason: string; note?: string }) => run(async () => {
       const input = { ...values, note: values.note || '' }; const key = JSON.stringify(input);
-      const item = await vehicleTripApi.create({ ...input, requestId: requestId(key) });
-      upsert(item); requests.current.delete(key);
+      await vehicleTripApi.create({ ...input, requestId: requestId(key) });
+      await list.refresh(); requests.current.delete(key);
     }, '出车申请已提交，等待审批', 'create'),
     upload: (file: File, stage: 'departure' | 'return') => run(async () => {
       if (!detail) return;
@@ -75,7 +79,7 @@ export function useVehicleTrips() {
       const input = { fileIds, reason: options.reason };
       const key = JSON.stringify({ id: detail.id, action, ...input });
       const item = await vehicleTripApi.act(detail.id, action, { ...input, requestId: requestId(key) });
-      upsert(item);
+      await list.refresh();
       setDetail(current => current && current.id === item.id ? { ...current, ...item } : current);
       feedback.success(({ approve: '申请已批准', reject: '申请已驳回', cancel: '申请已取消', depart: '出车登记成功，已记录出车时间', return: '还车登记成功，已记录收车时间' })[action]);
       setDetail(await vehicleTripApi.detail(item.id));

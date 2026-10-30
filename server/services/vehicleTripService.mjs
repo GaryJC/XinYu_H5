@@ -56,7 +56,7 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
         throw error;
       }
     },
-    async list(user) { requireTripUser(user); return repository.listTrips(user); },
+    async list(user, query) { requireTripUser(user); return repository.listTrips(user, query); },
     async detail(user, id) {
       const trip = await repository.getTrip(id);
       assertTripAccess(trip, user);

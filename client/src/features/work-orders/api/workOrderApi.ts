@@ -1,7 +1,7 @@
 import {
+  ArchiveOptions, PageResult, WorkOrderListQuery,
   AuthResult,
   CustomerSignatureMode,
-  DispatchTask,
   DashboardSummary,
   DevelopmentPersonaKey,
   DingTalkIdentitySnapshot,
@@ -30,7 +30,6 @@ import {
   WorkOrderStatus
 } from "../../../../../shared/types";
 import { request, setAuthToken } from "../../../shared/api/httpClient";
-import { dispatchEnabled } from "../../dispatch/dispatchAvailability";
 import { roles } from "../domain/workOrderDomain";
 
 function validateAuthenticatedUser(user: UserProfile) {
@@ -45,6 +44,9 @@ export type WorkOrderApi = {
   loginForDevelopment(persona: DevelopmentPersonaKey): Promise<AuthResult>;
   me(): Promise<UserProfile>;
   list(role: RoleKey): Promise<WorkOrder[]>;
+  page(query: WorkOrderListQuery): Promise<PageResult<WorkOrder>>;
+  archiveOptions(): Promise<ArchiveOptions>;
+  refreshTargets(): Promise<string[]>;
   get(id:string):Promise<WorkOrder>;
   reportLicenseException(id:string,input:{reason:string;requestId:string;vehiclePlate:string;vehicleVin:string}):Promise<VehicleLicenseException>;
   create(draft: WorkOrderDraft, actor: string): Promise<WorkOrder>;
@@ -96,15 +98,10 @@ export const workOrderApi: WorkOrderApi = {
   async me() {
     return validateAuthenticatedUser(await request<UserProfile>("/api/auth/me"));
   },
-  async list(_role) {
-    if (!dispatchEnabled) return request<WorkOrder[]>("/api/work-orders");
-    const [orders, tasks] = await Promise.all([
-      request<WorkOrder[]>("/api/work-orders"),
-      request<DispatchTask[]>("/api/dispatch/tasks?includeCompleted=true")
-    ]);
-    const stages = new Map(tasks.map(task => [task.orderId, task.stage]));
-    return orders.map(order => ({ ...order, dispatchStage: stages.get(order.id) }));
-  },
+  list: (_role) => request<WorkOrder[]>("/api/work-orders"),
+  page: query => request<PageResult<WorkOrder>>(`/api/work-orders?${new URLSearchParams(Object.entries(query).map(([key,value])=>[key,String(value)]))}`),
+  archiveOptions: () => request<ArchiveOptions>('/api/work-orders?metadata=true'),
+  refreshTargets: () => request<string[]>('/api/work-orders?refreshTargets=true'),
   deletePhotos(id, input) {
     return request(`/api/work-orders/${encodeURIComponent(id)}/photos`, {method:"DELETE", body:input});
   },

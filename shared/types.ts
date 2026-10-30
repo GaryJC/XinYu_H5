@@ -665,3 +665,18 @@ export type VehicleTripCreateInput = { requestId: string; vehicleId: string; rea
 export type VehicleTripActionInput = { requestId: string; fileIds?: string[]; reason?: string };
 export type VehicleTripUploadInput = { requestId: string; stage: Exclude<VehicleTripStage, "signature">; imageBase64: string };
 export interface AppVersionResponse { version: string }
+
+
+export interface PageResult<T> { counts?: Record<string,number>; items: T[]; total: number; page: number; pageSize: number; }
+export interface ArchiveFilters {
+  search: string; baiyuanOnly: boolean; range: 'all' | 'today' | 'yesterday' | 'week' | 'custom';
+  from: string; to: string; statuses: string[]; advisors: string[]; technicians: string[];
+  sort: 'updated-desc' | 'updated-asc' | 'created-desc' | 'created-asc';
+}
+export interface WorkOrderListQuery {
+  page: number; pageSize: number; search?: string; baiyuanOnly?: string; from?: string; to?: string;
+  statuses?: string; advisors?: string; technicians?: string; sort?: ArchiveFilters['sort']; shopId?: string;
+}
+export interface ArchiveOptions { statuses: Array<{value: string; label: string}>; advisors: Array<{value: string; label: string}>; technicians: Array<{value: string; label: string}>; }
+
+export type DispatchFilters = {partsStatus?:string;partsSort?:string;executionMode?:string;search?:string;technicianId?:string;stage?:string;metric?:string;urgent?:string;overdue?:string;from?:string;to?:string};

@@ -1,3 +1,5 @@
+import { Grid } from 'antd';
+import { usePagedList } from '../../shared/hooks/usePagedList';
 import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { hasAnyRole, hasRole } from "../../../../shared/roles.mjs";
 import { createRequestId } from "../../shared/api/requestId";
@@ -9,9 +11,12 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
   const feedback = useActionFeedback();
   const manager=hasAnyRole(user, ['manager','advisor']);
   const inspectionLead=manager || view==='检验任务' && hasRole(user, 'inspector');
-  const [filters,setFilters]=useState<DispatchFilters>({stage:initialStage ?? (view==='检验任务'?'待检验':view==='我的维修'?'进行中':undefined)});
+  const [filters,setFilters]=useState<DispatchFilters>({...(view==='配件申请'?{partsStatus:'待备料',partsSort:'newest'}:{}),stage:initialStage ?? (view==='检验任务'?'待检验':view==='我的维修'?'进行中':undefined)});
   const [taskCounts,setTaskCounts]=useState<RepairTaskCounts>();
-  const [tasks,setTasks]=useState<DispatchTask[]>([]);
+  const mobile=!Grid.useBreakpoint().md;
+  const list=usePagedList(JSON.stringify({user:user.id,view,filters}),page=>dispatchApi.page(view==='我的维修'?{...filters,technicianId:user.id}:filters,page),mobile,true,task=>`${task.orderId}-${task.partsRequirement?.ownerId||''}`);
+  const tasks=list.items;
+  const latestList=useRef(list);latestList.current=list;
   const [people,setPeople]=useState<DispatchPeople>({technicians:[],inspectors:[],contractors:[]});
   const [summaries,setSummaries]=useState<TechnicianSummary[]>([]);
   const [selectedId,setSelectedId]=useState<string|undefined>(()=>initialOrderId || new URLSearchParams(location.search).get('dispatchOrder') || undefined);
@@ -26,19 +31,19 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
   const pending=useRef<{key:string;body:DispatchActionRequest} | undefined>(undefined);
   const refresh=useCallback(async()=> {
     const current=++generation.current; setLoading(true);
-    const results=await Promise.allSettled([dispatchApi.tasks(view==='我的维修'?{...filters,technicianId:user.id}:filters),dispatchApi.people(),inspectionLead?dispatchApi.summaries(filters):Promise.resolve([]),view==='我的维修'&&(hasAnyRole(user, ['technician','outsourcing'])||user.outsourcingRoleMember)?dispatchApi.myCounts():Promise.resolve(undefined)]);
+    const results=await Promise.allSettled([dispatchApi.people(),inspectionLead?dispatchApi.summaries(filters):Promise.resolve([]),view==='我的维修'&&(hasAnyRole(user, ['technician','outsourcing'])||user.outsourcingRoleMember)?dispatchApi.myCounts():Promise.resolve(undefined)]);
     if(current!==generation.current) return;
-    if(results[0].status==='fulfilled') setTasks(results[0].value); else setTasks([]);
-    if(results[1].status==='fulfilled') setPeople(results[1].value); else setPeople({technicians:[],inspectors:[],contractors:[]});
-    if(results[2].status==='fulfilled') setSummaries(results[2].value); else setSummaries([]);
-    setTaskCounts(results[3].status==='fulfilled'?results[3].value:undefined);
+    if(results[0].status==='fulfilled') setPeople(results[0].value); else setPeople({technicians:[],inspectors:[],contractors:[]});
+    if(results[1].status==='fulfilled') setSummaries(results[1].value); else setSummaries([]);
+    setTaskCounts(results[2].status==='fulfilled'?results[2].value:undefined);
     const failed=results.find(r=>r.status==='rejected');
     if(failed?.status==='rejected') setError(failed.reason instanceof Error?failed.reason.message:'数据加载失败');
     else {setError('');setUpdatedAt(new Date().toLocaleTimeString('zh-CN',{timeZone:'Asia/Shanghai'}));}
     setLoading(false);
   },[filters,inspectionLead,view,user]);
-  const latestRefresh=useRef(refresh);
-  latestRefresh.current=refresh;
+  const refreshAll=async()=>{await Promise.all([refresh(),latestList.current.refresh()]);};
+  const latestRefresh=useRef(refreshAll);
+  latestRefresh.current=refreshAll;
   const refreshDetail=useCallback(async()=> {
     if(!selectedId || selection.current!==selectedId) return;
     const current=++detailGeneration.current;setDetailLoading(true);
@@ -49,7 +54,7 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
   useEffect(()=>{void refresh();return()=>{generation.current++;};},[refresh]);
   useEffect(()=>{if(selectedId) setDetail(undefined);void refreshDetail();return()=>{detailGeneration.current++;};},[refreshDetail]);
   useEffect(()=> {
-    const update=()=>{if(document.visibilityState==='visible' && !actionBusy.current){void refresh();void refreshDetail();}};
+    const update=()=>{if(document.visibilityState==='visible' && !actionBusy.current){void refresh();void latestList.current.refresh();void refreshDetail();}};
     const timer=window.setInterval(update,30000);
     document.addEventListener('visibilitychange',update);window.addEventListener('focus',update);
     return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',update);window.removeEventListener('focus',update);};
@@ -76,7 +81,7 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
       await refreshDetail();return false;
     } finally {actionBusy.current=false;setBusy(false);}
   }
-  return {manager,inspectionLead,taskCounts,filters,setFilters,tasks,people,summaries,selectedId,detail,error,setError:(message:string)=>{setError(message);if(message)feedback.warning(message);},loading,detailLoading,busy,updatedAt,refresh,refreshDetail,select,act};
+  return {list,manager,inspectionLead,taskCounts,filters,setFilters,tasks,people,summaries,selectedId,detail,error:error||list.error,setError:(message:string)=>{setError(message);if(message)feedback.warning(message);},loading:loading||list.loading,detailLoading,busy,updatedAt,refresh:refreshAll,refreshDetail,select,act};
 }
 export type DispatchController=ReturnType<typeof useDispatchController>;
 
