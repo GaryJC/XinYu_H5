@@ -576,12 +576,12 @@ export type ProcurementPurchaseApproval = {
 export type ProcurementTender = {
   purchaseApproval?:ProcurementPurchaseApproval;
   id: string; version: number; termsVersion: number; data: ProcurementTerms; status: ProcurementStatus; deadline: string | null;
-  closedAt: string | null; createdAt: string; winnerId: string | null; reason: string;
+  closedAt: string | null; createdAt: string; winnerId: string | null; winnerIds?: string[]; reason: string;
   invitations: ProcurementInvitation[];
 };
 export type ProcurementLink = { supplierName: string; token: string; expiresAt: string };
 export type ProcurementAudit = { id: string; actor: string; action: string; detail: Record<string, unknown>; at: string };
-export type ProcurementDelivery = { id: string; status: string; error: string; recipientName: string };
+export type ProcurementDelivery = { id: string; status: string; error: string; recipientName: string; batchId?: string; title?: string; createdAt?: string; simulated?: boolean };
 export type ProcurementDetail = { tender: ProcurementTender; audit: ProcurementAudit[]; notifications: ProcurementDelivery[] };
 export type ProcurementMetric = {
   supplierId: string; supplierName: string; invited: number; quoted: number; valid: number; awarded: number;

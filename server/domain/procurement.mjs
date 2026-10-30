@@ -69,9 +69,11 @@ export function settlement(tender,input) {
   if(!valid.length) return {status:'failed',winnerId:null,reason:reason||'没有有效报价'};
   const minimum=Math.min(...valid.map(i=>latestQuote(i).totalFen));
   const tied=valid.filter(i=>latestQuote(i).totalFen===minimum);
-  const selected=tied.length===1?tied[0]:tied.find(i=>i.supplierId===input.winnerId);
-  if(!selected||tied.length>1&&!reason) throw new HttpError(400,'请在并列最低价供应商中选择一家，并填写选择原因');
-  return {status:'awarded',winnerId:selected.supplierId,reason};
+  const supplied=input.winnerIds!==undefined?input.winnerIds:input.winnerId?[input.winnerId]:null;
+  const selected=supplied??(tied.length===1?[tied[0].supplierId]:[]);
+  if(!Array.isArray(selected)||!selected.length||selected.length>valid.length||new Set(selected).size!==selected.length||selected.some(id=>!valid.some(i=>i.supplierId===id)))throw new HttpError(400,'请选择一家或多家有效报价供应商');
+  if((selected.length>1||tied.length>1||selected[0]!==tied[0].supplierId)&&!reason)throw new HttpError(400,'手动定标请填写选择原因');
+  return {status:'awarded',winnerId:selected.length===1?selected[0]:null,winnerIds:selected,reason};
 }
 export function dateRange(from,to) {
   const end=to?instant(to,'结束时间'):new Date().toISOString();

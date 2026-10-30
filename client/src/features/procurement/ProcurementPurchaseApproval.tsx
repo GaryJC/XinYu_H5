@@ -1,3 +1,4 @@
+import {procurementWinnerIds} from '../../../../shared/procurementWinners.mjs';
 import {PurchaseApprovalSheet} from './PurchaseApprovalSheet';
 import {useState} from 'react';
 import {createPortal,flushSync} from 'react-dom';
@@ -12,6 +13,7 @@ export function ProcurementPurchaseApproval({tender:t,user,controller:c}:{tender
  const [form]=Form.useForm(),[reason,setReason]=useState(''),[printing,setPrinting]=useState(false);
  const a=t.purchaseApproval,s=a?.snapshot;
  if(t.status!=='awarded')return null;
+ if(procurementWinnerIds(t).length>1&&!a)return <Alert type="info" title="已记录多家中标，实际采购数量及金额线下确定" description="各家报价均基于整单询价数量，不能直接相加作为采购金额。本次不自动生成带金额的采购审批单。"/>;
  const warehouse=hasRole(user,'warehouse'),manager=hasRole(user,'manager');
  const status=a?{pending:'待管理员审批',approved:'已批准',rejected:'已驳回'}[a.status]:'尚未提报';
  const sheet=a?<PurchaseApprovalSheet approval={a} tenderId={t.id}/>:null;

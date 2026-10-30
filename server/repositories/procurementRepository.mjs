@@ -28,24 +28,24 @@ export async function addInvitation(db,tenderId,supplier) {
   const id=randomUUID();
   return (await db.query('insert into procurement_invitations(id,tender_id,supplier_id,supplier_snapshot) values($1,$2,$3,$4) returning *',[id,tenderId,supplier.id,JSON.stringify(mapSupplier(supplier))])).rows[0];
 }
-export async function saveLink(db,{id,invitationId=null,reportId=null,hash,expiresAt}) {
-  await db.query('insert into procurement_links(id,invitation_id,report_id,token_hash,expires_at) values($1,$2,$3,$4,$5)',[id,invitationId,reportId,hash,expiresAt]);
+export async function saveLink(db,{id,invitationId=null,reportId=null,tenderId=null,hash,expiresAt}) {
+  await db.query('insert into procurement_links(id,invitation_id,report_id,token_hash,expires_at,tender_id) values($1,$2,$3,$4,$5,$6)',[id,invitationId,reportId,hash,expiresAt,tenderId]);
 }
 export async function revokeLinks(db,{invitationId=null,reportId=null}) {
   await db.query(`update procurement_links set revoked_at=clock_timestamp() where revoked_at is null and ${invitationId?'invitation_id':'report_id'}=$1`,[invitationId||reportId]);
 }
 export async function findLink(db,hash) {
   return (await db.query(`select l.*,coalesce(i.supplier_id,r.supplier_id) as supplier_id,coalesce(t.shop_id,r.shop_id) as shop_id,t.id as tender_id
-    from procurement_links l left join procurement_invitations i on i.id=l.invitation_id left join procurement_tenders t on t.id=i.tender_id
+    from procurement_links l left join procurement_invitations i on i.id=l.invitation_id left join procurement_tenders t on t.id=coalesce(l.tender_id,i.tender_id)
     left join procurement_reports r on r.id=l.report_id where l.token_hash=$1 and l.revoked_at is null and l.expires_at>clock_timestamp() for share of l`,[hash])).rows[0];
 }
 export async function sessionLink(db,hash) {
-  return (await db.query(`select l.*,s.created_at as session_created_at,coalesce(i.supplier_id,r.supplier_id) as supplier_id,coalesce(t.shop_id,r.shop_id) as shop_id,t.id as tender_id
-    from procurement_sessions s join procurement_links l on l.id=s.link_id left join procurement_invitations i on i.id=l.invitation_id
-    left join procurement_tenders t on t.id=i.tender_id left join procurement_reports r on r.id=l.report_id
-    where s.token_hash=$1 and s.expires_at>clock_timestamp() and l.revoked_at is null and l.expires_at>clock_timestamp() for share of l`,[hash])).rows[0];
+  return (await db.query(`select l.*,i.id as invitation_id,s.created_at as session_created_at,coalesce(i.supplier_id,r.supplier_id) as supplier_id,coalesce(t.shop_id,r.shop_id) as shop_id,t.id as tender_id
+    from procurement_sessions s join procurement_links l on l.id=s.link_id left join procurement_invitations i on i.id=coalesce(l.invitation_id,s.invitation_id) and (l.tender_id is null or i.tender_id=l.tender_id)
+    left join procurement_tenders t on t.id=coalesce(l.tender_id,i.tender_id) left join procurement_reports r on r.id=l.report_id
+    where (l.tender_id is null or i.id is not null) and s.token_hash=$1 and s.expires_at>clock_timestamp() and l.revoked_at is null and l.expires_at>clock_timestamp() for share of l`,[hash])).rows[0];
 }
-export async function saveSession(db,hash,linkId,expiresAt) {await db.query('insert into procurement_sessions(token_hash,link_id,expires_at) values($1,$2,$3)',[hash,linkId,expiresAt]);}
+export async function saveSession(db,hash,linkId,expiresAt,invitationId=null) {await db.query('insert into procurement_sessions(token_hash,link_id,expires_at,invitation_id) values($1,$2,$3,$4)',[hash,linkId,expiresAt,invitationId]);}
 export async function accessAttempt(key,db=pool) {
   const {rows:[row]}=await db.query(`insert into procurement_access_attempts(key,expires_at) values($1,now()+interval '15 minutes')
     on conflict(key) do update set count=case when procurement_access_attempts.expires_at<=now() then 1 else procurement_access_attempts.count+1 end,
@@ -60,7 +60,7 @@ export async function readTenders(shopId,{id,from,to}={},db=pool) {
   const {rows:invitations}=await db.query(`select i.*,v.reason as invalid_reason from procurement_invitations i left join procurement_invalidations v on v.invitation_id=i.id where i.tender_id=any($1::uuid[]) order by i.id`,[ids]);
   const {rows:quotes}=await db.query(`select q.* from procurement_quotes q join procurement_invitations i on i.id=q.invitation_id where i.tender_id=any($1::uuid[]) order by q.submitted_at desc,q.id desc`,[ids]);
   return rows.map(r=>({id:r.id,version:r.version,termsVersion:r.terms_version,data:r.data,status:effectiveStatus(r),deadline:iso(r.deadline),closedAt:iso(r.closed_at||(r.status==='open'&&r.deadline&&Date.parse(r.deadline)<=Date.now()?r.deadline:null)),
-    purchaseApproval:r.purchase_approval||undefined,createdAt:iso(r.created_at),winnerId:r.winner_id,reason:r.reason,invitations:invitations.filter(i=>i.tender_id===r.id).map(i=>({id:i.id,supplierId:i.supplier_id,supplierName:i.supplier_snapshot.name,invalidReason:i.invalid_reason||'',
+    purchaseApproval:r.purchase_approval||undefined,createdAt:iso(r.created_at),winnerId:r.winner_id,winnerIds:r.winner_ids||[],reason:r.reason,invitations:invitations.filter(i=>i.tender_id===r.id).map(i=>({id:i.id,supplierId:i.supplier_id,supplierName:i.supplier_snapshot.name,invalidReason:i.invalid_reason||'',
       quotes:quotes.filter(q=>q.invitation_id===i.id).map(q=>({...q.data,id:q.id,termsVersion:q.terms_version,submittedAt:iso(q.submitted_at)}))}))}));
 }
 export async function detail(shopId,id,db=pool) {
@@ -70,17 +70,19 @@ export async function detail(shopId,id,db=pool) {
 }
 export async function deliveries(db,{tenderId=null,reportId=null}) {
   const column=tenderId?'tender_id':'report_id',id=tenderId||reportId;
-  return (await db.query(`select n.id,n.status,n.error,u.name as "recipientName",n.created_at from procurement_notifications n join users u on u.id=n.recipient_id where n.${column}=$1
-    union all select j.id,j.status,j.error,'通知接收人同步' as "recipientName",j.created_at from procurement_notification_jobs j where j.${column}=$1 and j.status<>'ready' order by created_at desc`,[id])).rows;
+  return (await db.query(`select n.id,n.status,n.error,u.name as "recipientName",n.created_at as "createdAt",
+    coalesce(n.payload->>'notificationBatchId',n.created_at::text||':'||n.payload::text) as "batchId",
+    n.payload->>'title' as title,coalesce(n.task_id like 'mock-%',false) as simulated from procurement_notifications n join users u on u.id=n.recipient_id where n.${column}=$1
+    union all select j.id,j.status,j.error,'通知接收人同步' as "recipientName",j.created_at as "createdAt",j.id::text as "batchId",j.payload->>'title' as title,false as simulated from procurement_notification_jobs j where j.${column}=$1 and j.status<>'ready' order by "createdAt" desc`,[id])).rows;
 }
-export async function notificationFanout(db,{shopId,tenderId=null,reportId=null,title,summary=''}) {
+export async function notificationFanout(db,{shopId,tenderId=null,reportId=null,title,summary='',recipientRole='warehouse'}) {
   await db.query('insert into procurement_notification_jobs(id,shop_id,tender_id,report_id,payload) values($1,$2,$3,$4,$5)',
-    [randomUUID(),shopId,tenderId,reportId,JSON.stringify({title,summary,tenderId,reportId})]);
+    [randomUUID(),shopId,tenderId,reportId,JSON.stringify({title,summary,tenderId,reportId,recipientRole})]);
 }
 export async function databaseClock(db) {return (await db.query('select clock_timestamp() as now')).rows[0].now;}
 export async function closeTender(db,id) {await db.query("update procurement_tenders set status='closed',closed_at=clock_timestamp(),version=version+1 where id=$1",[id]);}
 export async function settleTender(db,id,result) {
-  await db.query('update procurement_tenders set status=$2,version=version+1,winner_id=$3,reason=$4,closed_at=coalesce(closed_at,clock_timestamp()),settled_at=clock_timestamp() where id=$1',[id,result.status,result.winnerId,result.reason]);
+  await db.query('update procurement_tenders set status=$2,version=version+1,winner_id=$3,reason=$4,winner_ids=$5,closed_at=coalesce(closed_at,clock_timestamp()),settled_at=clock_timestamp() where id=$1',[id,result.status,result.winnerId,result.reason,result.winnerIds||[]]);
   await db.query(`update procurement_links set expires_at=least(expires_at,now()+interval '30 days') where invitation_id in (select id from procurement_invitations where tender_id=$1)`,[id]);
 }
 export async function invalidate(db,invitationId,reason,user) {await db.query(`insert into procurement_invalidations(invitation_id,reason,actor_id) values($1,$2,$3)
@@ -112,4 +114,28 @@ export async function amendTender(db,id,{data,deadline,termsChanged,reopen}) {
 
 export async function savePurchaseApproval(db,id,approval) {
  await db.query('update procurement_tenders set purchase_approval=$2,version=version+1 where id=$1',[id,JSON.stringify(approval)]);
+}
+
+export async function sharedInvitation(db,tenderId,phone,identity) {
+ const {rows}=await db.query(`select i.id,i.supplier_id from procurement_invitations i join procurement_suppliers s on s.id=i.supplier_id join procurement_tenders t on t.id=i.tender_id where i.tender_id=$1 and s.shop_id=t.shop_id and s.active and s.phone=$2 and (s.name=$3 or s.contact_name=$3)`,[tenderId,phone,identity]);
+ return rows.length===1?rows[0]:null;
+}
+export async function revokeSharedLinks(db,tenderId) {
+ await db.query('update procurement_links set revoked_at=clock_timestamp() where tender_id=$1 and revoked_at is null',[tenderId]);
+}
+
+// Called inside the quote transaction with its parent tender already locked.
+// The durable job is the receipt: later edits/retries must not repeat completion.
+export async function notifyQuoteCompletion(db,shopId,tenderId) {
+  const tender=(await readTenders(shopId,{id:tenderId},db))[0];
+  const quotes=tender.invitations.map(i=>i.quotes[0]);
+  if(!quotes.length||quotes.some(q=>!q||q.termsVersion!==tender.termsVersion))return;
+  const declined=quotes.filter(q=>q.declined).length;
+  const completionKey=`${tender.termsVersion}:${declined?'all-responded':'all-quoted'}`;
+  const prior=await db.query("select 1 from procurement_notification_jobs where tender_id=$1 and payload->>'completionKey'=$2 limit 1",[tenderId,completionKey]);
+  if(prior.rowCount)return;
+  await db.query('insert into procurement_notification_jobs(id,shop_id,tender_id,payload) values($1,$2,$3,$4)',[randomUUID(),shopId,tenderId,JSON.stringify({
+    tenderId,completionKey,recipientRole:'warehouse',title:`${declined?'全部供应商已响应':'供应商报价已收齐'}：${tender.data.partName}`,
+    summary:`共 ${quotes.length} 家受邀供应商，${quotes.length-declined} 家已报价，${declined} 家放弃报价。请查看交期及报价有效性，确认后可结束报价并选择中标供应商。`
+  })]);
 }

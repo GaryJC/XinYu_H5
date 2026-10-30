@@ -19,7 +19,10 @@ test('quote validation, money, deadline boundary and final effective lowest-pric
   assert.throws(()=>quoteInput({...q,unitPriceFen:1.2},terms),e=>e.status===400);
   assert.equal(effectiveStatus({status:'open',deadline:date},Date.parse(date)),'closed');
   const t=tender('x',[offer('a',100),offer('b',90),offer('c',80,{meetsRequirements:false})],{status:'closed'});
-  assert.equal(settlement(t,{action:'settle',winnerId:'a'}).winnerId,'b','cannot choose a higher valid quote');
+  assert.throws(()=>settlement(t,{action:'settle',winnerId:'a'}),e=>e.status===400);
+  assert.equal(settlement(t,{action:'settle',winnerId:'a',reason:'供货稳定'}).winnerId,'a');
+  assert.deepEqual(settlement(t,{action:'settle',winnerIds:['a','b'],reason:'分别采购'}).winnerIds,['a','b']);
+  for(const winnerIds of [['a','a'],['c'],[],['missing']])assert.throws(()=>settlement(t,{action:'settle',winnerIds,reason:'测试'}),e=>e.status===400);
   t.invitations[0].quotes[0].totalFen=90;
   assert.throws(()=>settlement(t,{action:'settle',winnerId:'b'}),e=>e.status===400);
   assert.equal(settlement(t,{action:'settle',winnerId:'b',reason:'交期更好'}).winnerId,'b');

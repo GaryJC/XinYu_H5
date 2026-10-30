@@ -1,3 +1,4 @@
+import {procurementWinnerIds} from '../../shared/procurementWinners.mjs';
 import {purchaseApproval} from '../domain/procurementApproval.mjs';
 import {assertProcurementPhotos} from '../repositories/procurementPhotoRepository.mjs';
 import { isDeepStrictEqual } from "node:util";
@@ -13,9 +14,9 @@ const missing=()=>new HttpError(404,'记录不存在或不属于本门店');
 const same=isDeepStrictEqual;
 async function actor(user,db) {const fresh=await repo.currentActor(user,db);procurementAccess(fresh);if(fresh.shopId!==user.shopId)throw new HttpError(403,'门店权限已变更，请重新登录');return fresh;}
 async function ownedTender(user,id,db) {const row=await repo.lockTender(uuid(id),db);if(!row||row.shop_id!==user.shopId)throw missing();await repo.freezeDue(db,id);return (await repo.readTenders(user.shopId,{id},db))[0];}
-async function newLink(db,{invitationId,reportId,supplierName,readOnly=false}) {
+async function newLink(db,{invitationId,reportId,tenderId,supplierName,readOnly=false}) {
   const token=randomBytes(32).toString('base64url'),expiresAt=new Date(Date.now()+(reportId||readOnly?30:90)*86400000).toISOString();
-  await repo.saveLink(db,{id:randomUUID(),invitationId,reportId,hash:hashToken(token),expiresAt});return {supplierName,token,expiresAt};
+  await repo.saveLink(db,{id:randomUUID(),invitationId,reportId,tenderId,hash:hashToken(token),expiresAt});return {supplierName,token,expiresAt};
 }
 export async function listSuppliers(user) {procurementAccess(user);return repo.suppliers(user.shopId);}
 export async function updateSupplier(user,id,body) {
@@ -37,7 +38,8 @@ export async function publishTender(user,body) {
     }
     await repo.audit(db,{shopId:user.shopId,tenderId:id,actor:user.name,action:'发布询价',detail:{supplierCount:links.length}});
     await repo.notificationFanout(db,{shopId:user.shopId,tenderId:id,title:`配件询价已发布：${input.data.partName}`});
-    return {tender:(await repo.readTenders(user.shopId,{id},db))[0],links};});
+    const sharedLink=await newLink(db,{tenderId:id,supplierName:'本次询价全部受邀供应商'});
+    return {tender:(await repo.readTenders(user.shopId,{id},db))[0],links,sharedLink};});
 }
 export async function tenderAction(user,id,body) {
   procurementAccess(user);
@@ -47,7 +49,7 @@ export async function tenderAction(user,id,body) {
       await repo.savePurchaseApproval(db,id,approval);
       const label={'submit-approval':'采购提报审批','approve-purchase':'采购审批通过','reject-purchase':'采购审批驳回'}[body.action];
       await repo.audit(db,{shopId:user.shopId,tenderId:id,actor:fresh.name,action:label,detail:{approval,previousApproval:tender.purchaseApproval||null}});
-      await repo.notificationFanout(db,{shopId:user.shopId,tenderId:id,title:`${label}：${tender.data.partName}`,summary:approval.reason||'请打开询价详情查看采购审批单'});
+      await repo.notificationFanout(db,{shopId:user.shopId,tenderId:id,title:`${label}：${tender.data.partName}`,recipientRole:body.action==='submit-approval'?'manager':'warehouse',summary:approval.reason||'请打开询价详情查看采购审批单'});
       return repo.detail(user.shopId,id,db);
     }
 
@@ -74,6 +76,12 @@ export async function tenderAction(user,id,body) {
       await repo.invalidate(db,inv.id,text(body.reason??'','报价失效原因',1000,false),user);
     } else if(['settle','cancel'].includes(body.action)) {
       const result=settlement(tender,body);await repo.settleTender(db,id,result);
+     } else if(['share-link','revoke-shared-link'].includes(body.action)) {
+      if(tender.status==='cancelled')throw new HttpError(409,'已取消询价不能分享');
+      await repo.revokeSharedLinks(db,id);
+      const link=body.action==='share-link'?await newLink(db,{tenderId:id,supplierName:'本次询价全部受邀供应商',readOnly:['awarded','failed'].includes(tender.status)}):null;
+      await repo.audit(db,{shopId:user.shopId,tenderId:id,actor:user.name,action:link?'生成统一询价链接':'停用统一询价链接'});
+      return {...await repo.detail(user.shopId,id,db),link};
     } else if(['reissue-link','revoke-link'].includes(body.action)) {
       const inv=tender.invitations.find(i=>i.id===body.invitationId);if(!inv)throw missing();
       await repo.revokeLinks(db,{invitationId:inv.id});
@@ -83,7 +91,7 @@ export async function tenderAction(user,id,body) {
       if(link)await repo.notificationFanout(db,{shopId:user.shopId,tenderId:id,title:`供应商邀请链接已重发：${tender.data.partName}`});
       return {...await repo.detail(user.shopId,id,db),link};
     } else throw new HttpError(400,'未知操作');
-    await repo.audit(db,{shopId:user.shopId,tenderId:id,actor:user.name,action:({close:'结束报价收集',invalidate:'处理报价有效性',settle:'确认结标',cancel:'取消询价'})[body.action],detail:{reason:body.reason||'',winnerId:body.winnerId||null,invitationId:body.invitationId||null}});
+    await repo.audit(db,{shopId:user.shopId,tenderId:id,actor:user.name,action:({close:'结束报价收集',invalidate:'处理报价有效性',settle:'确认结标',cancel:'取消询价'})[body.action],detail:{reason:body.reason||'',winnerId:body.winnerId||null,winnerIds:body.winnerIds||[],invitationId:body.invitationId||null}});
     return repo.detail(user.shopId,id,db);});
 }
 export async function analytics(user,from,to,category) {procurementAccess(user);const range=dateRange(from,to);const tenders=await repo.readTenders(user.shopId,range);return analyze(category?tenders.filter(t=>t.data.category===text(category,'配件类别',100)):tenders,range);}
@@ -113,7 +121,7 @@ export async function reportAction(user,id,body) {
 }
 export async function verifyPortal(body,ip) {
   const token=text(body.token,'链接凭证',100),phone=text(body.phone,'手机号',20).replace(/[\s-]/g,''),identity=text(body.identity,'姓名或供应商名称',100);
-  const ipKey=hashToken(`procurement-verify:${ip}`),linkKey=hashToken(`procurement-link:${token}`);
+  const ipKey=hashToken(`procurement-verify:${ip}`),linkKey=hashToken(`procurement-link:${token}:${phone}:${identity}`);
   if(await repo.accessAttempt(ipKey)>60||await repo.accessAttempt(linkKey)>20)throw new HttpError(429,'尝试次数过多，请15分钟后再试');
   const initial=await repo.findLink(pool,hashToken(token));
   if(!initial)throw new HttpError(403,'链接无效、已撤销或已过期');
@@ -121,10 +129,15 @@ export async function verifyPortal(body,ip) {
     // Invitation verification and reissue both lock parent before link, including audit FK checks.
     if(initial.tender_id)await repo.lockTender(initial.tender_id,db);
     const link=await repo.findLink(db,hashToken(token));if(!link)throw new HttpError(403,'链接无效、已撤销或已过期');
+    if(link.tender_id&&!link.invitation_id&&!link.report_id) {
+      const invitation=await repo.sharedInvitation(db,link.tender_id,phone,identity);
+      if(!invitation)throw new HttpError(403,'信息不匹配或未受邀，请联系采购员核实');
+      link.invitation_id=invitation.id;link.supplier_id=invitation.supplier_id;
+    }
     const supplier=await repo.supplierById(link.shop_id,link.supplier_id,db);
     if(!supplier?.active||supplier.phone!==phone||![supplier.name,supplier.contact_name].includes(identity))throw new HttpError(403,'信息不匹配，请联系采购员核实');
     const session=randomBytes(32).toString('base64url'),expiresAt=new Date(Math.min(Date.now()+7*86400000,Date.parse(link.expires_at)));
-    await repo.saveSession(db,hashToken(session),link.id,expiresAt);
+    await repo.saveSession(db,hashToken(session),link.id,expiresAt,link.invitation_id);
     await repo.audit(db,{shopId:link.shop_id,tenderId:link.tender_id,supplierId:link.supplier_id,actor:supplier.contact_name,action:'信息匹配后访问',detail:link.report_id?{reportId:link.report_id}:{}});
     return {session,maxAge:Math.floor((expiresAt-Date.now())/1000)};});
 }
@@ -138,7 +151,7 @@ export async function portal(session) {
   return transaction(async db=>{const {link,supplier}=await portalContext(db,session);
     if(link.report_id) {const record=await repo.reportById(db,link.shop_id,link.report_id);return {kind:'report',report:record.snapshot};}
     const tender=(await repo.readTenders(link.shop_id,{id:link.tender_id},db))[0],own=tender.invitations.find(i=>i.id===link.invitation_id);
-    const result=tender.status==='awarded'?(tender.winnerId===link.supplier_id?'您已中标，请联系采购员确认供货':'本次未中标'):tender.status==='failed'?'本次询价已流标':tender.status==='cancelled'?'本次询价已取消':'尚未确认中标结果';
+    const result=tender.status==='awarded'?(procurementWinnerIds(tender).includes(link.supplier_id)?(procurementWinnerIds(tender).length>1?'您已中标，实际采购数量请与采购员线下确认':'您已中标，请联系采购员确认供货'):'本次未中标'):tender.status==='failed'?'本次询价已流标':tender.status==='cancelled'?'本次询价已取消':'尚未确认中标结果';
     return {kind:'quote',supplierName:supplier.name,tenderId:tender.id,invitationId:own.id,termsVersion:tender.termsVersion,terms:tender.data,status:tender.status,deadline:tender.deadline,quotes:own.quotes,result};});
 }
 export async function quote(session,body) {
@@ -158,6 +171,7 @@ export async function quote(session,body) {
     await repo.notificationFanout(db,{shopId:link.shop_id,tenderId:link.tender_id,
       title:`${supplier.name}${input.declined?'已放弃报价':'已提交报价'}：${raw.data.partName}`,
       summary:input.declined?'供应商已明确放弃本次报价。':`含税含运费总价：¥${(input.totalFen/100).toFixed(2)}；请进入后台查看交期及报价记录。`});
+    await repo.notifyQuoteCompletion(db,link.shop_id,link.tender_id);
     return {ok:true};});
 }
 export async function feedback(session,body) {

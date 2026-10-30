@@ -6,7 +6,7 @@ export function ProcurementReportView({report}:{report:ProcurementReport}) {
   return <div className="procurement">
     <div><h2>{report.supplierName} · 报价表现报告</h2><p className="procurement-muted">{dateTime(report.from)} — {dateTime(report.to)}（不含结束时刻）<br/>生成时间：{dateTime(report.generatedAt)}</p></div>
     <section className="procurement-grid" aria-label="合作概况">{[
-      ['受邀次数',m.invited],['报价次数',m.quoted],['中标次数',m.awarded],['中标金额',money(m.awardAmountFen)],
+      ['受邀次数',m.invited],['报价次数',m.quoted],['中标次数',m.awarded],['单家中标报价金额',money(m.awardAmountFen)],
       ['报价响应率',m.responseRate===null?'暂无数据':`${m.responseRate}%（${m.quoted}/${m.invited}）`],
       ['中标率',m.winRate===null?'暂无数据':`${m.winRate}%`],['未报价',m.missed],['主动放弃',m.declined],
     ].map(([label,value])=><div className="procurement-stat" key={label}><span>{label}</span><strong>{value}</strong></div>)}</section>
@@ -23,6 +23,6 @@ export function ProcurementReportView({report}:{report:ProcurementReport}) {
     <Card title="配件类别竞争力">{report.categories.length?<Table rowKey="category" pagination={false} dataSource={report.categories} columns={[{title:'配件类别',dataIndex:'category'},{title:'可比较场次',dataIndex:'samples'},{title:'价格水平',dataIndex:'gapBand'}]}/>:<p>暂无满足匿名样本门槛的配件类别。</p>}</Card>
     <Card title="季度变化"><Table rowKey="quarter" pagination={false} dataSource={report.quarters} scroll={{x:500}} columns={[{title:'季度',dataIndex:'quarter'},{title:'报价',dataIndex:'quoted'},{title:'中标',dataIndex:'awarded'},{title:'价格差距',dataIndex:'gapBand',render:v=>v||'同行样本不足'}]}/></Card>
     {report.note?<div className="procurement-report-note"><strong>合作建议</strong><p>{report.note}</p></div>:null}
-    <p className="procurement-muted">统计按报价收集结束时间归属期间，取消询价不纳入表现。报价采用人民币含税含运费总价。中标金额为报价金额，未代表实际付款或采购支出。报告为固定历史快照。</p>
+    <p className="procurement-muted">统计按报价收集结束时间归属期间，取消询价不纳入表现。报价采用人民币含税含运费总价。金额仅统计单家中标报价；多家中标数量线下确定，仅计次数，不计金额。金额不代表实际付款或采购支出。报告为固定历史快照。</p>
   </div>;
 }

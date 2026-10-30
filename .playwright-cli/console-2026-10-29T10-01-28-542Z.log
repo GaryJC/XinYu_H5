@@ -1,0 +1,4 @@
+[  330078ms] [ERROR] Warning: [antd: Modal] Static function can not consume context like dynamic theme. Please use 'App' component instead. @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/es-BiDARMsy.js?v=6b8b1e33:166
+[53775864ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5174/@vite/client:992
+[53776604ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=6b8b1e33:14335
+[53776696ms] [ERROR] Warning: [antd: Drawer] `height` is deprecated. Please use `size` instead. @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/es-BiDARMsy.js?v=6b8b1e33:166

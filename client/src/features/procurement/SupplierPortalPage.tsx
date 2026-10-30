@@ -21,8 +21,8 @@ export function SupplierPortalPage() {
       <Form.Item label="预留手机号" name="phone" rules={[{required:true,pattern:/^1\d{10}$/,message:'请输入预留的11位手机号'}]}><Input inputMode="tel" autoComplete="tel"/></Form.Item>
       <Form.Item label="联系人姓名或供应商名称" name="identity" rules={[{required:true,max:100}]}><Input autoComplete="organization"/></Form.Item>
       <Button type="primary" htmlType="submit" loading={p.busy} disabled={!p.token}>进入</Button>
-      <p className="procurement-muted">无需加入钉钉企业，无密码、无短信。请使用采购员登记的信息，勿转发专属链接。信息不匹配请联系采购员。</p>
-      {!p.token?<Alert type="warning" title="缺少邀请凭证，请打开采购员发送的完整专属链接。"/>:null}
+      <p className="procurement-muted">无需加入钉钉企业，无密码、无短信。请使用采购员登记的信息，仅本次受邀供应商可参与报价。信息不匹配请联系采购员。</p>
+      {!p.token?<Alert type="warning" title="缺少邀请凭证，请打开采购员发送的完整邀请链接。"/>:null}
     </Form></Card>:data.kind==='report'?<><ProcurementReportView report={data.report}/><Card title="合作反馈"><Input.TextArea aria-label="合作反馈" placeholder="希望沟通合作价格、部分配件可优惠，或对统计口径有疑问…" maxLength={1000} value={feedback} onChange={e=>setFeedback(e.target.value)} rows={3}/><Button style={{marginTop:12}} type="primary" loading={p.busy} disabled={!feedback.trim()} onClick={()=>void p.feedback(feedback)}>提交反馈</Button></Card></>:<>
       <Card title={`${data.supplierName} · ${data.terms.partName}`} extra={<Button loading={p.busy} onClick={()=>void p.refresh()}>刷新状态</Button>}>
         <Alert type={data.status==='awarded'?'success':'info'} title={`${statusLabels[data.status]} · ${data.result}`} description={`报价截止：${dateTime(data.deadline)}。供应商之间的报价互不可见。`}/>

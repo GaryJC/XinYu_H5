@@ -1,3 +1,4 @@
+import {procurementWinnerIds} from '../../shared/procurementWinners.mjs';
 import {hasRole} from '../../shared/roles.mjs';
 import {HttpError} from '../http/HttpError.mjs';
 const fail=(message,status=409)=>{throw new HttpError(status,message);};
@@ -6,6 +7,7 @@ export function purchaseApproval(tender,user,input,now=new Date().toISOString())
  if(input.expectedVersion!==tender.version)fail('询价或审批已更新，请刷新后重试');
  const previous=tender.purchaseApproval;
  if(input.action==='submit-approval') {
+  if(procurementWinnerIds(tender).length>1)fail('多家中标的实际采购数量和金额尚未确定，不能按各家全量报价提报采购审批');
   if(!hasRole(user,'warehouse'))fail('仅仓管可提报采购审批',403);
   if(previous&&!['rejected'].includes(previous.status))fail('已提报或已批准，不能重复提报');
   const field=(key,label,required=true)=>{const value=input[key];if(typeof value!=='string'||value.length>500||required&&!value.trim())fail(`请填写有效的${label}`,400);return value.trim();};

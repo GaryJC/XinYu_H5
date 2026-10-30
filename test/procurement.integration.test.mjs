@@ -175,8 +175,8 @@ test('procurement PostgreSQL, supplier isolation, concurrency, reports and notif
       const before=Number((await pool.query('select count(*) from procurement_notification_jobs')).rows[0].count);
       await Promise.all([s.quote(verified.session,q),s.quote(verified.session,q)]);
       const after=Number((await pool.query('select count(*) from procurement_notification_jobs')).rows[0].count);
-      assert.equal(after-before,1,'retries enqueue one submission notification only');
-      const notice=(await pool.query('select payload from procurement_notification_jobs where tender_id=$1 order by created_at desc',[published.tender.id])).rows[0].payload;
+      assert.equal(after-before,2,'retries enqueue one submission and one completion notification only');
+      const notice=(await pool.query("select payload from procurement_notification_jobs where tender_id=$1 and not (payload ? 'completionKey') order by created_at desc",[published.tender.id])).rows[0].payload;
       assert.match(notice.title,/已提交报价/);assert.match(notice.summary,/200.00/);
       let current=(await s.tenderDetail(manager,published.tender.id)).tender;
       assert.equal('deliveryAddress' in current.data,false,'new tenders no longer require or return a delivery address');
@@ -209,6 +209,21 @@ test('procurement PostgreSQL, supplier isolation, concurrency, reports and notif
       const worker=await import('../server/workers/procurementWorker.mjs'),notifications=await import('../server/repositories/procurementNotificationRepository.mjs');
       while(await worker.resolveProcurementRecipients()){}
       const recipients=(await pool.query('select distinct recipient_id from procurement_notifications order by recipient_id')).rows.map(r=>r.recipient_id);assert.deepEqual(recipients,['manager','warehouse']);
+      const routed=(await pool.query('select recipient_id,payload from procurement_notifications')).rows;
+      assert.ok(routed.some(n=>n.payload.recipientRole==='manager'));
+      for(const n of routed)assert.equal(n.recipient_id,n.payload.recipientRole||'warehouse');
+      const deliveryView=(await s.tenderDetail(manager,created.tender.id)).notifications;
+      const groups=new Map();for(const n of deliveryView)groups.set(n.batchId,[...(groups.get(n.batchId)||[]),n]);
+      assert.ok(groups.size>1,'separate notification events must remain separate');
+      for(const rows of groups.values()) {
+        assert.equal(rows.length,1,'one event targets only its designated role');
+        assert.ok(rows.every(n=>n.title&&n.createdAt&&!n.simulated));
+      }
+      const legacyIds=[...groups.values()][0].map(n=>n.id);
+      await pool.query("update procurement_notifications set payload=payload-'notificationBatchId',task_id='mock-test' where id=any($1::uuid[])",[legacyIds]);
+      const legacyView=(await s.tenderDetail(manager,created.tender.id)).notifications.filter(n=>legacyIds.includes(n.id));
+      assert.ok(legacyView.every(n=>n.simulated));
+      assert.ok(legacyView[0].batchId,'legacy notification remains readable');
       const claims=await Promise.all([notifications.claimDelivery(),notifications.claimDelivery()]);assert.notEqual(claims[0].id,claims[1].id);
       for(const row of claims)await notifications.finishDelivery(row,{status:'failed',error:'test',retryable:false});
       assert.equal(await worker.deliverProcurementNotification(),true);
@@ -233,6 +248,82 @@ test('procurement PostgreSQL, supplier isolation, concurrency, reports and notif
       assert.equal(result.tender.data.unit,'件');assert.equal(result.tender.data.paymentTerms,'');assert.equal(result.tender.data.qualityRequirements,'');
       const detail=await s.tenderDetail(manager,result.tender.id);
       assert.equal(detail.tender.data.paymentTerms,'');
+    });
+    await t.test('one shared link identifies only invited suppliers and revokes every shared session on rotation',async()=>{
+      const a=await s.updateSupplier(manager,null,{name:'统一甲',contactName:'甲',phone:'13700000001',categories:'制动',note:'',active:true});
+      const b=await s.updateSupplier(manager,null,{name:'统一乙',contactName:'乙',phone:'13700000002',categories:'制动',note:'',active:true});
+      const published=await s.publishTender(manager,{...body(),supplierIds:[a.id,b.id]});
+      const token=published.sharedLink.token;
+      const login=async(supplier,tokenValue=token)=>(await s.verifyPortal({token:tokenValue,phone:supplier.phone,identity:supplier.name},'shared-ip')).session;
+      const sa=await login(a),sb=await login(b),va=await s.portal(sa),vb=await s.portal(sb);
+      assert.notEqual(va.invitationId,vb.invitationId);assert.equal(va.supplierName,a.name);assert.equal(vb.supplierName,b.name);
+      await assert.rejects(()=>login(suppliers[5]),e=>e.status===403);
+      await assert.rejects(()=>s.quote(sa,quote(100,vb.invitationId)),e=>e.status===409);
+      await s.quote(sa,{...quote(100,va.invitationId),termsVersion:1});
+      assert.equal((await s.portal(sb)).quotes.length,0);
+      assert.equal((await s.resumePortal(sa,{token})).supplierName,a.name);
+      const next=(await s.tenderAction(manager,published.tender.id,{action:'share-link'})).link;
+      await assert.rejects(()=>login(a),e=>e.status===403);
+      await assert.rejects(()=>s.portal(sa),e=>e.status===401);await assert.rejects(()=>s.portal(sb),e=>e.status===401);
+      const fresh=await login(b,next.token);assert.equal((await s.portal(fresh)).supplierName,b.name);
+      await s.tenderAction(manager,published.tender.id,{action:'revoke-shared-link'});
+      await assert.rejects(()=>s.portal(fresh),e=>e.status===401);
+      const legacy=published.links.find(l=>l.supplierName===a.name);
+      assert.equal((await s.portal(await login(a,legacy.token))).supplierName,a.name);
+      const activeLink=(await s.tenderAction(manager,published.tender.id,{action:'share-link'})).link;
+      await pool.query('update procurement_suppliers set phone=$2,contact_name=$3 where id=$1',[a.id,b.phone,b.contactName]);
+      await assert.rejects(()=>s.verifyPortal({token:activeLink.token,phone:b.phone,identity:b.contactName},'ambiguous'),e=>e.status===403);
+      await pool.query('update procurement_suppliers set active=false where id=$1',[b.id]);
+      await assert.rejects(()=>login(b,activeLink.token),e=>e.status===403);
+      await pool.query("update procurement_links set expires_at=now()-interval '1 second' where token_hash=$1",[s.hashToken(activeLink.token)]);
+      await assert.rejects(()=>login(a,activeLink.token),e=>e.status===403);
+
+    });
+    await t.test('manual multiple awards persist, isolate winner results and do not invent purchase totals',async()=>{
+      const published=await s.publishTender(manager,{...body(),supplierIds:suppliers.slice(0,3).map(x=>x.id)});
+      const entries=[];
+      for(let n=0;n<3;n++){
+        const supplier=suppliers[n],session=(await s.verifyPortal({token:published.sharedLink.token,phone:supplier.phone,identity:supplier.name},'multi-award')).session;
+        const view=await s.portal(session);await s.quote(session,{...quote(100*(n+1),view.invitationId),termsVersion:1});entries.push(session);
+      }
+      await s.tenderAction(manager,published.tender.id,{action:'close'});
+      const winners=[suppliers[1].id,suppliers[2].id];
+      const result=await s.tenderAction(manager,published.tender.id,{action:'settle',winnerIds:winners,reason:'供应能力，分开采购，数量线下确认'});
+      assert.deepEqual(result.tender.winnerIds,winners);assert.equal(result.tender.winnerId,null);
+      assert.match((await s.portal(entries[0])).result,/未中标/);
+      for(const session of entries.slice(1))assert.match((await s.portal(session)).result,/您已中标.*线下确认/);
+      await assert.rejects(()=>s.tenderAction(manager,published.tender.id,{action:'settle',winnerIds:[suppliers[0].id]}),e=>e.status===409);
+      const {analyze,supplierReport}=await import('../server/services/procurementAnalytics.mjs');
+      const metrics=analyze([result.tender],{});assert.equal(metrics.awarded,1);assert.equal(metrics.awardAmountFen,0);
+      assert.equal(metrics.suppliers.reduce((n,m)=>n+m.awarded,0),2);assert.ok(metrics.suppliers.every(m=>m.priceLost===0));
+      assert.equal(supplierReport([result.tender],suppliers[1],{}).metrics.awarded,1);
+      await assert.rejects(()=>s.tenderAction(warehouse,published.tender.id,{action:'submit-approval',expectedVersion:result.tender.version}),e=>e.status===409&&e.message.includes('数量'));
+    });
+    await t.test('quote completion notices are durable, concurrent-safe and scoped to current terms',async()=>{
+      const published=await s.publishTender(manager,{...body(),supplierIds:suppliers.slice(0,2).map(x=>x.id)});
+      const entries=[];
+      for(const supplier of suppliers.slice(0,2)){
+        const session=(await s.verifyPortal({token:published.sharedLink.token,phone:supplier.phone,identity:supplier.name},'completion-test')).session;
+        entries.push({session,view:await s.portal(session)});
+      }
+      const notices=async()=>(await pool.query("select payload from procurement_notification_jobs where tender_id=$1 and payload ? 'completionKey'",[published.tender.id])).rows.map(r=>r.payload);
+      await s.quote(entries[0].session,{...quote(100,entries[0].view.invitationId),termsVersion:1});
+      assert.equal((await notices()).length,0);
+      const last={invitationId:entries[1].view.invitationId,requestId:randomUUID(),declined:true,note:'无货',termsVersion:1};
+      await Promise.all([s.quote(entries[1].session,last),s.quote(entries[1].session,last)]);
+      assert.equal((await notices()).length,1);assert.match((await notices())[0].title,/全部供应商已响应/);assert.match((await notices())[0].summary,/1 家已报价，1 家放弃/);
+      const renewed={...quote(120,entries[1].view.invitationId),termsVersion:1};
+      await Promise.all([s.quote(entries[1].session,renewed),s.quote(entries[0].session,{...quote(130,entries[0].view.invitationId),termsVersion:1})]);
+      assert.equal((await notices()).length,2);assert.equal((await notices()).filter(n=>n.completionKey==='1:all-quoted').length,1);
+      await s.quote(entries[1].session,{...quote(140,entries[1].view.invitationId),termsVersion:1});
+      assert.equal((await notices()).length,2);
+      const current=(await s.tenderDetail(manager,published.tender.id)).tender;
+      const changed=await s.tenderAction(manager,current.id,{...current.data,quantity:3,deadline:null,action:'update',expectedVersion:current.version});
+      assert.equal(changed.tender.termsVersion,2);
+      await s.quote(entries[0].session,{...quote(150,entries[0].view.invitationId),termsVersion:2});
+      assert.equal((await notices()).length,2,'old-term quotes cannot complete new round');
+      await s.quote(entries[1].session,{...quote(160,entries[1].view.invitationId),termsVersion:2});
+      assert.equal((await notices()).filter(n=>n.completionKey==='2:all-quoted').length,1);
     });
   } finally {
     if(uploadRoot)await fs.rm(uploadRoot,{recursive:true,force:true});
