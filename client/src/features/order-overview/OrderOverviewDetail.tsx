@@ -1,14 +1,14 @@
 import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { OrderSupportingRecords } from "./OrderSupportingRecords";
 import { useState } from 'react';
-import { Alert, Button, Checkbox, Collapse, Descriptions, Empty, Grid, Image, Space, Spin, Table } from 'antd';
+import { Alert, Button, Checkbox, Collapse, Descriptions, Empty, Grid, Space, Spin, Table } from 'antd';
 import type { OrderPhotoCategory } from '../../../../shared/types';
 import { collectOrderPhotoAlbums, photoAlbumLabels } from '../../../../shared/orderPhotoAlbums.mjs';
 import { OrderDetail } from '../workbench/OrderDetail';
 import { PartsRequirementSummary } from '../dispatch/PartsRequirementSummary';
 import { RepairRoundHistory } from '../dispatch/RepairRoundHistory';
 import { dispatchEventLabel, displayTime } from '../dispatch/dispatchLabels';
-import { AuthenticatedImage } from '../../shared/ui/AuthenticatedImage';
+import { AuthenticatedImage, AuthenticatedImagePreviewGroup } from '../../shared/ui/AuthenticatedImage';
 import { useOrderOverview, useOrderPhotoExport } from './useOrderOverview';
 import './order-overview.css';
 const categories=Object.keys(photoAlbumLabels) as OrderPhotoCategory[];
@@ -36,7 +36,7 @@ export function OrderOverviewDetail({id}:{id:string}) {
       {exporter.error&&<Alert showIcon type="error" title={exporter.error}/>}
       {exporter.download&&<Alert showIcon type="success" title={`已生成 ${exporter.download.photoCount} 张照片的 Word 文档`} description={<><p>下载链接 5 分钟内有效。钉钉内可保存到钉盘；无法下载时复制链接到浏览器打开。</p><a href={exporter.download.path} download={exporter.download.fileName}>下载 Word</a><p style={{wordBreak:'break-all',userSelect:'all'}}>{new URL(exporter.download.path,location.origin).href}</p></>}/>}
     </section>
-    <Collapse items={categories.map(key=>({key,label:`${photoAlbumLabels[key]}照片（${albums[key].length}）`,children:<Image.PreviewGroup><div className="overview-photo-grid">{albums[key].map(photo=><div key={photo.id}><AuthenticatedImage fileId={photo.id} alt={`${photoAlbumLabels[key]}：${photo.originalName}`} width="100%" height={120}/><small>{photo.uploadedName} · {displayTime(photo.createdAt)}</small></div>)}</div>{!albums[key].length&&<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无照片"/>}</Image.PreviewGroup>}))}/>
+    <Collapse items={categories.map(key=>({key,label:`${photoAlbumLabels[key]}照片（${albums[key].length}）`,children:<AuthenticatedImagePreviewGroup fileIds={albums[key].map(photo=>photo.id)}><div className="overview-photo-grid">{albums[key].map(photo=><div key={photo.id}><AuthenticatedImage fileId={photo.id} alt={`${photoAlbumLabels[key]}：${photo.originalName}`} width="100%" height={120}/><small>{photo.uploadedName} · {displayTime(photo.createdAt)}</small></div>)}</div>{!albums[key].length&&<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无照片"/>}</AuthenticatedImagePreviewGroup>}))}/>
     <h3>全部工单信息</h3>
     <OrderDetail order={order} isMobile={!screens.md} onUpdated={()=>retry()}/>
     <OrderSupportingRecords data={data}/>

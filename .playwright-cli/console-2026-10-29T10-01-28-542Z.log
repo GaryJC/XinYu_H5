@@ -50,3 +50,6 @@
 Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=6b8b1e33:5257
 [69913277ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5174/api/auth/me:0
 [69913307ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5174/api/auth/me:0
+[72405982ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5174/@vite/client:992
+[72407179ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=6b8b1e33:14335
+[72407285ms] [ERROR] Warning: [antd: Drawer] `height` is deprecated. Please use `size` instead. @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/es-BiDARMsy.js?v=6b8b1e33:166

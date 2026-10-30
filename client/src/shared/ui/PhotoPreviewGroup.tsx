@@ -2,6 +2,9 @@ import { Alert, Button, Dropdown, Image, message } from "antd";
 import { useState, type ReactElement, type ReactNode } from "react";
 
 import { canCopyImage, copyImage } from "../browser/copyImage";
+import { downloadImage } from "../browser/downloadImage";
+
+const isMobileClient = () => /Android|iPhone|iPad|iPod|HarmonyOS/i.test(navigator.userAgent);
 
 export function PhotoPreviewActions({ source, children }: { source: string; children: ReactNode }) {
   const [busy, setBusy] = useState(false);
@@ -11,6 +14,10 @@ export function PhotoPreviewActions({ source, children }: { source: string; chil
     setError("");
     setBusy(true);
     try {
+      if (!isMobileClient()) {
+        downloadImage(source);
+        return;
+      }
       const match = /^data:(image\/[\w.+-]+);base64,(.+)$/s.exec(source);
       if (!match) throw new Error("图片尚未加载完成，请重新打开预览。");
       const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0));
@@ -35,7 +42,7 @@ export function PhotoPreviewActions({ source, children }: { source: string; chil
   }
   return <div style={{ maxWidth: "calc(100vw - 32px)", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
     {error && <Alert type="error" title={error} showIcon />}
-    <Button onClick={send} loading={busy} disabled={!source}>发送到 / 保存图片</Button>
+    <Button onClick={send} loading={busy} disabled={!source}>{isMobileClient() ? "发送到 / 保存图片" : "下载图片"}</Button>
     {children}
   </div>;
 }
@@ -44,8 +51,7 @@ export function PhotoContextMenu({ source, children }: { source: string; childre
   const [messages, holder] = message.useMessage();
   const [busy, setBusy] = useState(false);
   const [nativeMenu, setNativeMenu] = useState(false);
-  const desktopDingTalk = /DingTalk/i.test(navigator.userAgent) && !/Android|iPhone|iPad|iPod|HarmonyOS/i.test(navigator.userAgent);
-  if (!desktopDingTalk || !canCopyImage() || nativeMenu) return <>{holder}{children}</>;
+  if (isMobileClient() || nativeMenu) return <>{holder}{children}</>;
   async function copy() {
     if (busy || !source) return;
     setBusy(true);
@@ -58,13 +64,21 @@ export function PhotoContextMenu({ source, children }: { source: string; childre
   }
   return <>{holder}<Dropdown trigger={["contextMenu"]} styles={{ root: { zIndex: 2000 } }} menu={{
     items: [
-      { key: "copy", label: busy ? "正在复制…" : "复制图片", disabled: busy || !source },
+      { key: "copy", label: busy ? "正在复制…" : "复制图片", disabled: busy || !source || !canCopyImage() },
+      { key: "download", label: "下载图片", disabled: busy || !source },
       { key: "native", label: "复制不成功？使用原生右键菜单", disabled: busy }
     ],
     onClick: ({ key }) => {
       if (key === "native") {
         setNativeMenu(true);
-        void messages.info("请再次右键点击照片；若菜单提供“复制图片”，请选择该项。没有该项时请使用“发送到 / 保存图片”。", 8);
+        void messages.info("请再次右键点击照片；若菜单提供“复制图片”，请选择该项。没有该项时请使用预览工具栏的“下载图片”。", 8);
+      } else if (key === "download") {
+        try {
+          downloadImage(source);
+          void messages.info("已尝试启动下载，请查看下载列表；若没有反应，请在外部浏览器打开后下载。", 6);
+        } catch (reason) {
+          void messages.error(reason instanceof Error ? reason.message : "下载失败，请在浏览器中打开后保存。", 6);
+        }
       } else { void copy(); }
     }
   }}>{children}</Dropdown></>;
