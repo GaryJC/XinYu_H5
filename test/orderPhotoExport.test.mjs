@@ -23,7 +23,7 @@ test('overview checks role and shop before reading full details',async()=>{
   for(const role of ['advisor','manager'])await assert.rejects(()=>readOrderOverview('id',{role,active:true,shopId:'shop-b'},database),error=>error.status===403);
   await assert.rejects(()=>readOrderOverview('id',{role:'advisor',active:true,shopId:'shop-a'},{query:async()=>({rows:[]})}),error=>error.status===404);
 });
-test('Word packs landscape photos into fewer pages, embeds every photo and preserves aspect ratios',async()=>{
+test('Word keeps landscape photos readable across pages and embeds every photo without distortion',async()=>{
   const image=await sharp({create:{width:800,height:400,channels:3,background:'#446688'}}).png().toBuffer();
   const photos=Array.from({length:11},(_,i)=>({...file(String(i),'other'),uploadedName:'不应显示的维修人',category:i<5?'reception':i<10?'repair':'completed'}));
   const content=await buildOrderPhotoDocument({id:'ORDER<&>',vehicle:{plate:'测试车'},dispatchNo:'PG<&>'},photos,async()=>image);
@@ -42,7 +42,7 @@ test('unreadable photo fails the export instead of silently omitting it',async()
 });
 
 
-test('a lone photo stays within one third of the page instead of enlarging',async()=>{
+test('a lone photo keeps its orientation-specific size instead of filling the page',async()=>{
   const image=await sharp({create:{width:800,height:400,channels:3,background:'#446688'}}).png().toBuffer();
   const document=strFromU8(unzipSync(await buildOrderPhotoDocument({},[file('single','other')],async()=>image))['word/document.xml']);
   assert.equal((document.match(/<w:gridCol /g)||[]).length,1);
@@ -68,7 +68,7 @@ test('adaptive layouts fit the page, preserve order and proportions across mixed
         }
       }
     }
-    if(ratios.length===12 || ratios.every(ratio=>ratio===0.75))assert.equal(pages.length,1);
+    if(ratios.every(ratio=>ratio===0.75))assert.equal(pages.length,1);
     if(ratios.length===11)assert.equal(pages.length,1);
   }
 });
@@ -90,15 +90,37 @@ test('single portraits, panoramas and last-page leftovers obey both size limits 
   }
 });
 
-test('mixed neighbors and page breaks never shrink independently sized photos',()=>{
+test('nine portraits keep their larger size while eleven mixed photos can use a denser sheet',()=>{
   const images=[{width:1200,height:1600},{width:1600,height:1200},{width:1200,height:1600}];
-  const mixed=layoutOrderPhotos([...images,...Array(8).fill(images[0])]).flat(2);
-  for(const cell of mixed){
-    const image=cell.index<3?images[cell.index]:images[0];
-    const alone=layoutOrderPhotos([image])[0][0][0];
-    assert.equal(cell.width,alone.width);
-    assert.equal(cell.height,alone.height);
-  }
-  assert.equal(layoutOrderPhotos([...images,...Array(8).fill(images[0])]).length,2);
+  const mixed=layoutOrderPhotos([...images,...Array(8).fill(images[0])]);
+  assert.equal(mixed.length,1);
   assert.equal(layoutOrderPhotos(Array(9).fill(images[0])).length,1);
+  const alone=layoutOrderPhotos([images[0]])[0][0][0];
+  for(const cell of layoutOrderPhotos(Array(9).fill(images[0])).flat(2))assert.equal(cell.height,alone.height);
+});
+
+test('27R2F fits eleven mixed photos on one sheet with bounded compression',()=>{
+  const images=[{width:1200,height:1600},{width:1600,height:1200},{width:1200,height:1600},{width:1200,height:1600},{width:1600,height:1201},...Array(6).fill({width:1200,height:1600})];
+  const pages=layoutOrderPhotos(images);
+  assert.equal(pages.length,1);
+  assert.equal(pages[0].length,4);
+  for(const cell of pages.flat(2)) {
+    const cmWidth=cell.width/1440*2.54,cmHeight=cell.height/1440*2.54;
+    if(images[cell.index].width<images[cell.index].height){assert.ok(cmWidth>=4.9);assert.ok(cmHeight>=6.5);}
+    else {assert.ok(cmWidth>=6);assert.ok(cmHeight>=4.5);}
+  }
+});
+
+
+test('9620 fits nine mixed photos on one sheet without shrinking portraits',()=>{
+  const portrait={width:1200,height:1600},landscape={width:1600,height:1200};
+  const images=[...Array(6).fill(portrait),landscape,portrait,portrait];
+  const pages=layoutOrderPhotos(images);
+  assert.equal(pages.length,1);
+  assert.deepEqual(pages[0].map(row=>row.length),[3,3,3]);
+  for(const cell of pages.flat(2)){
+    assert.ok(cell.width/1440*2.54>=6);
+    if(cell.index!==6)assert.ok(cell.height/1440*2.54>=8);
+    else assert.ok(cell.height/1440*2.54>=4.5);
+  }
 });
