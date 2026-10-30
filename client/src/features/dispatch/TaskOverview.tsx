@@ -6,7 +6,7 @@ import { displayTime } from './dispatchLabels';
 export function TaskOverview({task,children,dueEditor,techniciansEditor}:{task:DispatchTask;children:ReactNode;dueEditor?:ReactNode;techniciansEditor?:ReactNode}) {
  return <section className="task-overview" aria-label="任务概览">
    <div className="task-overview-status">{children}{!!task.inspectionDeferredCount&&<Tag color="orange">待定 × {task.inspectionDeferredCount}</Tag>}<RepairContext task={task}/></div>
-   <div className="task-overview-ref">派工号 {task.dispatchNo || task.orderId}</div>
+   <div className="task-overview-ref"><span>派工号</span><strong>{task.dispatchNo || task.orderId}</strong></div>
    {task.repairRound&&task.roundReason?<p className="repair-round-reason">{task.roundKind==='additional'?'追加维修原因':'返工原因'}：{task.roundReason}</p>:null}
    <dl>
      <div><dt>托修单位</dt><dd>{task.customerName || '未填写'}</dd></div>

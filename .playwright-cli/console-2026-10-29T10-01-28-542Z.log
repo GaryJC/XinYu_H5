@@ -53,3 +53,5 @@ Visit https://react.dev/link/error-boundaries to learn more about error boundari
 [72405982ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5174/@vite/client:992
 [72407179ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=6b8b1e33:14335
 [72407285ms] [ERROR] Warning: [antd: Drawer] `height` is deprecated. Please use `size` instead. @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/es-BiDARMsy.js?v=6b8b1e33:166
+[74320759ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5174/src/features/dispatch/PartsRequirementSummary.tsx?t=1793342409288:0
+[74320759ms] [ERROR] [vite] Failed to reload /src/features/dispatch/PartsRequirementSummary.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://localhost:5174/@vite/client:928

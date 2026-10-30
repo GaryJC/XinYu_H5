@@ -41,3 +41,11 @@
 .repair-item-name-row>.repair-item-name-field{display:flex;flex-direction:column;gap:4px}
 .repair-item-name-count{align-self:flex-end;white-space:nowrap;font-size:12px;line-height:18px;color:#778399}
 .repair-item-name-row>.ant-btn{flex:none;min-height:36px;height:36px;width:28px;padding:0}
+
+/* The owner label and gap share the row with the select; width:100% on
+   the select alone otherwise pushes the narrow dispatch dialog sideways. */
+.repair-item-owner { min-width:0; max-width:100%; }
+.repair-item-owner>.ant-select { flex:1; min-width:0; }
+.repair-items-toolbar { flex-wrap:wrap; }
+.repair-items-editor,.repair-item-list,.repair-item-row { min-width:0; max-width:100%; }
+.repair-item-content .dispatch-item-times { overflow-wrap:anywhere; }
