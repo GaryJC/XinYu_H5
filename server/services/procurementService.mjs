@@ -16,7 +16,7 @@ async function actor(user,db) {const fresh=await repo.currentActor(user,db);proc
 async function ownedTender(user,id,db) {const row=await repo.lockTender(uuid(id),db);if(!row||row.shop_id!==user.shopId)throw missing();await repo.freezeDue(db,id);return (await repo.readTenders(user.shopId,{id},db))[0];}
 async function newLink(db,{invitationId,reportId,tenderId,supplierName,readOnly=false}) {
   const token=randomBytes(32).toString('base64url'),expiresAt=new Date(Date.now()+(reportId||readOnly?30:90)*86400000).toISOString();
-  await repo.saveLink(db,{id:randomUUID(),invitationId,reportId,tenderId,hash:hashToken(token),expiresAt});return {supplierName,token,expiresAt};
+  await repo.saveLink(db,{id:randomUUID(),invitationId,reportId,tenderId,hash:hashToken(token),expiresAt,token});return {supplierName,token,expiresAt};
 }
 export async function listSuppliers(user) {procurementAccess(user);return repo.suppliers(user.shopId);}
 export async function updateSupplier(user,id,body) {

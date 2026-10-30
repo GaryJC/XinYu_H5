@@ -16,7 +16,7 @@ export function ProcurementPurchaseApproval({tender:t,user,controller:c}:{tender
  if(procurementWinnerIds(t).length>1&&!a)return <Alert type="info" title="已记录多家中标，实际采购数量及金额线下确定" description="各家报价均基于整单询价数量，不能直接相加作为采购金额。本次不自动生成带金额的采购审批单。"/>;
  const warehouse=hasRole(user,'warehouse'),manager=hasRole(user,'manager');
  const status=a?{pending:'待管理员审批',approved:'已批准',rejected:'已驳回'}[a.status]:'尚未提报';
- const sheet=a?<PurchaseApprovalSheet approval={a} tenderId={t.id}/>:null;
+ const sheet=a?<PurchaseApprovalSheet approval={a}/>:null;
  return <Card title="购买配件审批" extra={<Tag color={a?.status==='approved'?'green':a?.status==='rejected'?'red':'orange'}>{status}</Tag>}>
   {!a||a.status==='rejected'?<>{a?.reason?<Alert type="warning" title={`驳回原因：${a.reason}`}/>:null}{warehouse?<Form form={form} layout="vertical" initialValues={{paymentMethod:s?.paymentMethod||'银行转账',recipientUnit:s?.recipientUnit,contactName:s?.contactName,phone:s?.phone,handlerPhone:s?.handlerPhone,invoice:s?.invoice,note:s?.note||'',customerAmount:s?.customerAmountFen===undefined?undefined:s.customerAmountFen/100}}
    onFinish={values=>Modal.confirm({title:'向门店管理员提报采购审批？',content:'提报后将固定本次明细，等待管理员批准或驳回。',onOk:()=>c.action({...values,action:'submit-approval',expectedVersion:t.version,customerAmountFen:values.customerAmount==null?undefined:Math.round(values.customerAmount*100)})})}>

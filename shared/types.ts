@@ -582,7 +582,7 @@ export type ProcurementTender = {
 export type ProcurementLink = { supplierName: string; token: string; expiresAt: string };
 export type ProcurementAudit = { id: string; actor: string; action: string; detail: Record<string, unknown>; at: string };
 export type ProcurementDelivery = { id: string; status: string; error: string; recipientName: string; batchId?: string; title?: string; createdAt?: string; simulated?: boolean };
-export type ProcurementDetail = { tender: ProcurementTender; audit: ProcurementAudit[]; notifications: ProcurementDelivery[] };
+export type ProcurementDetail = { sharedLink?: ProcurementLink; hasActiveSharedLink?: boolean; tender: ProcurementTender; audit: ProcurementAudit[]; notifications: ProcurementDelivery[] };
 export type ProcurementMetric = {
   supplierId: string; supplierName: string; invited: number; quoted: number; valid: number; awarded: number;
   lost: number; missed: number; declined: number; invalid: number; pending: number; participatedFailed: number;

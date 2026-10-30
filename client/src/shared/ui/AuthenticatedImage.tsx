@@ -1,7 +1,7 @@
 import { Image, Skeleton } from "antd";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { requestCachedImage } from "../api/httpClient";
-import { PhotoPreviewActions } from "./PhotoPreviewGroup";
+import { PhotoContextMenu, PhotoPreviewActions } from "./PhotoPreviewGroup";
 
 type AuthenticatedImageProps = {
   fileId: string;
@@ -87,6 +87,7 @@ export function AuthenticatedImagePreviewGroup({ fileIds, children }: { fileIds:
 
   return <previewContext.Provider value={{ fullSources, loadFull, setThumbnail }}>
     <Image.PreviewGroup items={fileIds.map((fileId) => fullSources[fileId] || thumbnailSources[fileId] || "")} preview={{
+      imageRender: (original, info) => <PhotoContextMenu source={fullSources[fileIds[info.current ?? 0]] || ""}>{original}</PhotoContextMenu>,
       onOpenChange: (open, info) => { if (open) loadFull(fileIds[info.current ?? 0]); },
       onChange: (current) => loadFull(fileIds[current]),
       actionsRender: (actions, info) => <PhotoPreviewActions source={fullSources[fileIds[info.current ?? 0]] || ""}>{actions}</PhotoPreviewActions>
@@ -151,6 +152,7 @@ export function AuthenticatedImage({ fileId, alt, width, height }: Authenticated
     <Image width={width} height={height} src={source || undefined} alt={alt}
       placeholder={!source ? <Skeleton.Image active style={{ width, height }} /> : undefined}
       preview={{ src: group?.fullSources[fileId] || fullSource || source,
+        imageRender: group ? undefined : (original) => <PhotoContextMenu source={fullSource}>{original}</PhotoContextMenu>,
         actionsRender: group ? undefined : (actions) => <PhotoPreviewActions source={fullSource}>{actions}</PhotoPreviewActions> }}
       onClick={loadFull}
       onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") loadFull(); }} />

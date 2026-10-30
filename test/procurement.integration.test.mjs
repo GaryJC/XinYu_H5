@@ -254,6 +254,9 @@ test('procurement PostgreSQL, supplier isolation, concurrency, reports and notif
       const b=await s.updateSupplier(manager,null,{name:'统一乙',contactName:'乙',phone:'13700000002',categories:'制动',note:'',active:true});
       const published=await s.publishTender(manager,{...body(),supplierIds:[a.id,b.id]});
       const token=published.sharedLink.token;
+      assert.equal((await s.tenderDetail(manager,published.tender.id)).sharedLink.token,token);
+      assert.equal((await s.tenderDetail(manager,published.tender.id)).hasActiveSharedLink,true);
+      // Reading and copying the stored link must not rotate supplier sessions.
       const login=async(supplier,tokenValue=token)=>(await s.verifyPortal({token:tokenValue,phone:supplier.phone,identity:supplier.name},'shared-ip')).session;
       const sa=await login(a),sb=await login(b),va=await s.portal(sa),vb=await s.portal(sb);
       assert.notEqual(va.invitationId,vb.invitationId);assert.equal(va.supplierName,a.name);assert.equal(vb.supplierName,b.name);
@@ -263,11 +266,15 @@ test('procurement PostgreSQL, supplier isolation, concurrency, reports and notif
       assert.equal((await s.portal(sb)).quotes.length,0);
       assert.equal((await s.resumePortal(sa,{token})).supplierName,a.name);
       const next=(await s.tenderAction(manager,published.tender.id,{action:'share-link'})).link;
+      assert.notEqual(next.token,token);
+      assert.equal((await s.tenderDetail(manager,published.tender.id)).sharedLink.token,next.token);
       await assert.rejects(()=>login(a),e=>e.status===403);
       await assert.rejects(()=>s.portal(sa),e=>e.status===401);await assert.rejects(()=>s.portal(sb),e=>e.status===401);
       const fresh=await login(b,next.token);assert.equal((await s.portal(fresh)).supplierName,b.name);
       await s.tenderAction(manager,published.tender.id,{action:'revoke-shared-link'});
       await assert.rejects(()=>s.portal(fresh),e=>e.status===401);
+      assert.equal((await s.tenderDetail(manager,published.tender.id)).sharedLink,undefined);
+      assert.equal((await s.tenderDetail(manager,published.tender.id)).hasActiveSharedLink,false);
       const legacy=published.links.find(l=>l.supplierName===a.name);
       assert.equal((await s.portal(await login(a,legacy.token))).supplierName,a.name);
       const activeLink=(await s.tenderAction(manager,published.tender.id,{action:'share-link'})).link;

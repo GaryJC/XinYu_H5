@@ -28,8 +28,8 @@ export async function addInvitation(db,tenderId,supplier) {
   const id=randomUUID();
   return (await db.query('insert into procurement_invitations(id,tender_id,supplier_id,supplier_snapshot) values($1,$2,$3,$4) returning *',[id,tenderId,supplier.id,JSON.stringify(mapSupplier(supplier))])).rows[0];
 }
-export async function saveLink(db,{id,invitationId=null,reportId=null,tenderId=null,hash,expiresAt}) {
-  await db.query('insert into procurement_links(id,invitation_id,report_id,token_hash,expires_at,tender_id) values($1,$2,$3,$4,$5,$6)',[id,invitationId,reportId,hash,expiresAt,tenderId]);
+export async function saveLink(db,{id,invitationId=null,reportId=null,tenderId=null,hash,expiresAt,token=null}) {
+  await db.query('insert into procurement_links(id,invitation_id,report_id,token_hash,expires_at,tender_id,shared_token) values($1,$2,$3,$4,$5,$6,$7)',[id,invitationId,reportId,hash,expiresAt,tenderId,tenderId?token:null]);
 }
 export async function revokeLinks(db,{invitationId=null,reportId=null}) {
   await db.query(`update procurement_links set revoked_at=clock_timestamp() where revoked_at is null and ${invitationId?'invitation_id':'report_id'}=$1`,[invitationId||reportId]);
@@ -66,7 +66,9 @@ export async function readTenders(shopId,{id,from,to}={},db=pool) {
 export async function detail(shopId,id,db=pool) {
   const tender=(await readTenders(shopId,{id},db))[0];if(!tender)return null;
   const {rows:events}=await db.query('select id::text,actor,action,detail,at from procurement_audit where shop_id=$1 and tender_id=$2 order by procurement_audit.id desc',[shopId,id]);
-  return {tender,audit:events.map(e=>({...e,at:iso(e.at)})),notifications:await deliveries(db,{tenderId:id})};
+  const {rows:[link]}=await db.query("select shared_token,expires_at from procurement_links where tender_id=$1 and revoked_at is null and expires_at>clock_timestamp() order by created_at desc,id desc limit 1",[id]);
+  const sharedLink=link?.shared_token?{supplierName:'本次询价全部受邀供应商',token:link.shared_token,expiresAt:iso(link.expires_at)}:undefined;
+  return {tender,sharedLink,hasActiveSharedLink:!!link,audit:events.map(e=>({...e,at:iso(e.at)})),notifications:await deliveries(db,{tenderId:id})};
 }
 export async function deliveries(db,{tenderId=null,reportId=null}) {
   const column=tenderId?'tender_id':'report_id',id=tenderId||reportId;

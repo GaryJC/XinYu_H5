@@ -1,5 +1,7 @@
-import { Alert, Button, Image } from "antd";
-import { useState, type ReactNode } from "react";
+import { Alert, Button, Dropdown, Image, message } from "antd";
+import { useState, type ReactElement, type ReactNode } from "react";
+
+import { copyImage } from "../browser/copyImage";
 
 export function PhotoPreviewActions({ source, children }: { source: string; children: ReactNode }) {
   const [busy, setBusy] = useState(false);
@@ -17,7 +19,7 @@ export function PhotoPreviewActions({ source, children }: { source: string; chil
       // Keep share in the click's activation: no asynchronous fetch before it.
       if (navigator.canShare?.({ files: [file] }) && navigator.share) {
         await navigator.share({ files: [file] });
-      } else if (/Android|iPhone|iPad|DingTalk/i.test(navigator.userAgent)) {
+      } else if (/Android|iPhone|iPad|iPod|HarmonyOS/i.test(navigator.userAgent)) {
         throw new Error("当前钉钉版本不支持系统分享，请在手机浏览器中打开后保存；也请检查钉钉的相册权限。");
       } else {
         const link = document.createElement("a");
@@ -38,8 +40,31 @@ export function PhotoPreviewActions({ source, children }: { source: string; chil
   </div>;
 }
 
+export function PhotoContextMenu({ source, children }: { source: string; children: ReactElement }) {
+  const [messages, holder] = message.useMessage();
+  const [busy, setBusy] = useState(false);
+  const desktopDingTalk = /DingTalk/i.test(navigator.userAgent) && !/Android|iPhone|iPad|iPod|HarmonyOS/i.test(navigator.userAgent);
+  if (!desktopDingTalk) return children;
+  async function copy() {
+    if (busy || !source) return;
+    setBusy(true);
+    try {
+      await copyImage(source);
+      void messages.success("图片已复制，可粘贴到聊天或 Word");
+    } catch (reason) {
+      void messages.error(reason instanceof Error ? reason.message : "复制失败，请保存图片后使用。", 6);
+    } finally { setBusy(false); }
+  }
+  return <>{holder}<Dropdown trigger={["contextMenu"]} styles={{ root: { zIndex: 2000 } }} menu={{
+    items: [{ key: "copy", label: busy ? "正在复制…" : "复制图片", disabled: busy || !source }],
+    onClick: () => { void copy(); }
+  }}>{children}</Dropdown></>;
+}
+
 export function PhotoPreviewGroup({ children }: { children: ReactNode }) {
-  return <Image.PreviewGroup preview={{ actionsRender: (actions, info) =>
+  return <Image.PreviewGroup preview={{
+    imageRender: (original, info) => <PhotoContextMenu source={info.image.url}>{original}</PhotoContextMenu>,
+    actionsRender: (actions, info) =>
     <PhotoPreviewActions key={info.image.url} source={info.image.url}>{actions}</PhotoPreviewActions>
   }}>{children}</Image.PreviewGroup>;
 }
