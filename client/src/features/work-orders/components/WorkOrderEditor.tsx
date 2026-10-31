@@ -1,3 +1,4 @@
+import {useDirectDispatch} from '../hooks/useDirectDispatch';
 import {VehicleLicenseHistoryPrompt} from '../../vehicle-license-history/VehicleLicenseHistoryPrompt';
 import { useRepairConfirmationRows } from "../hooks/useRepairConfirmationRows";
 import { CustomerSignatureSection } from "../../signature/CustomerSignatureSection";
@@ -46,6 +47,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     lookupVehicleLicenseForDevelopment, selectVehicleReference, departments, departmentError
   } = controller;
   const confirmationRows=useRepairConfirmationRows(draft,setDraft);
+  const directDispatch=useDirectDispatch(draft,setDraft,controller.users,selectedOrder?.id);
   const paperOnly = draft.paperOrder?.mode === "pending";
   const paperDingTalk = draft.paperOrder?.mode === "dingtalk";
   const showLegacySyncStatus = Boolean(selectedOrder && !["草稿","待客户签字"].includes(selectedOrder.status));
@@ -348,6 +350,13 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
 
             </FormSection>
             <FormSection title="维修项目">
+            <Form.Item>
+              <Checkbox checked={Boolean(draft.dispatchPlan)} disabled={!canEditForm} onChange={event=>directDispatch.enable(event.target.checked)}>直接派工</Checkbox>
+              {draft.dispatchPlan && <p>勾选多个项目可批量设置或更换负责人，每项仍由一名维修工负责。现场签字完成后自动进入待接单；远程签字需经服务顾问确认。</p>}
+            </Form.Item>
+            {draft.dispatchPlan && <Form.Item label="派工预计完工时间" required>
+              <DatePicker showTime disabled={!canEditForm} aria-label="派工预计完工时间" value={draft.dispatchPlan.dueAt?dayjs(draft.dispatchPlan.dueAt):null} onChange={value=>directDispatch.due(value?.toISOString()||'')} />
+            </Form.Item>}
             <div className="section-title-row">
               <Form.Item className="section-title-form-item" label="维修项目明细" required validateStatus={fieldError("维修项目") ? "error" : undefined} help={fieldError("维修项目")}>
                 <span>每项单独填写；需客户确认的项目可勾选“待定”</span>
@@ -367,6 +376,11 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               </Button>
             </div>
 
+            {draft.dispatchPlan && <div className="direct-dispatch-batch" aria-label="批量设置项目负责人">
+              <Checkbox aria-label="全选可派工项目" disabled={!canEditForm || !draft.repairItems.length} checked={directDispatch.allSelected} indeterminate={directDispatch.selected.length>0&&!directDispatch.allSelected} onChange={event=>directDispatch.selectAll(event.target.checked)}>全选可派工项目</Checkbox>
+              <span>已选 {directDispatch.selected.length} 项</span>
+              <Select aria-label="批量设置负责人" showSearch optionFilterProp="label" disabled={!canEditForm || !directDispatch.selected.length} placeholder="选择负责人，应用到已选项目" options={directDispatch.options} value={directDispatch.bulkValue} onChange={directDispatch.assignSelected} />
+            </div>}
             <div className="repair-table repair-items-editor" role="table" aria-label="维修项目明细">
               <div className="repair-row repair-head" role="row">
                 <span>项目</span>
@@ -375,7 +389,11 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               {confirmationRows.rows.map((item,index) => (
                 <div className="repair-row" role="row" key={item.key}>
                   <div className="repair-item-content" data-label={`项目 ${index + 1}`}>
+                    {draft.dispatchPlan && <Checkbox className="direct-dispatch-select" aria-label={`选择项目 ${index+1}`} disabled={!canEditForm || item.pending} checked={!!item.repair&&directDispatch.selected.includes(item.repair.id)} onChange={event=>item.repair&&directDispatch.select(item.repair.id,event.target.checked)}>选择项目 {index+1}{item.pending?'（待定，暂不派工）':''}</Checkbox>}
                     <Input.TextArea className="repair-item-name" autoSize={{ minRows: 2 }} placeholder="例如：检查发动机异响，更换磨损皮带" required aria-required="true" maxLength={200} showCount status={fieldError("维修项目") && (!item.name.trim() || item.name.length > 200) ? "error" : undefined} disabled={!canEditForm} aria-label="项目名称" value={item.name} onChange={event=>confirmationRows.changeName(item,event.target.value)} />
+                    {draft.dispatchPlan && (item.pending ? <p className="dispatch-muted">待定项目确认后再安排派工</p> : <Form.Item label="负责人" required style={{marginTop:12}}>
+                      <Select aria-label={`项目 ${index+1} 负责人`} showSearch optionFilterProp="label" disabled={!canEditForm} placeholder="请选择维修工" options={directDispatch.options} value={draft.dispatchPlan.itemAssignments?.find(row=>row.itemId===item.repair?.id)?.technicianId || draft.dispatchPlan.technicianId} onChange={value=>directDispatch.assign(item.repair!.id,value)} />
+                    </Form.Item>)}
                     <div className="repair-pending-choice"><Checkbox aria-label={`项目 ${index+1} 待定`} disabled={!canEditForm} checked={item.pending} onChange={event=>confirmationRows.toggle(item,event.target.checked)}>待定</Checkbox></div>
                   </div>
                   <div data-label="操作"><Button type="text" danger disabled={!canEditForm} aria-label="删除维修项目" onClick={()=>confirmationRows.remove(item)}><Trash2 size={15}/></Button></div>

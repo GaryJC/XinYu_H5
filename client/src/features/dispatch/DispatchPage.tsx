@@ -39,6 +39,7 @@ export function DispatchPage({user,view,initialStage}:{user:UserProfile;view:str
       {badges(t)}
       <p className="dispatch-order-number">{t.dispatchNo||t.orderId}</p>
       <div className="dispatch-task-info">
+        <div><span>服务顾问</span><strong>{t.advisor||'未填写'}</strong></div>
         <div><span>维修人员</span><strong>{t.technicianName||'待指派'}</strong></div>
         <div><span>维修项目</span><span>{t.items.map(i=>i.name).join('、')}</span></div>
         <div><span>预计完工</span><span>{displayTime(t.dueAt)}</span></div>
@@ -46,6 +47,7 @@ export function DispatchPage({user,view,initialStage}:{user:UserProfile;view:str
       <div className="dispatch-task-progress"><span>项目完成</span><strong>{t.items.filter(i=>['待检验','已完工'].includes(i.status)).length} / {t.items.length}</strong></div>
     </Card>)}</div>:<Table loading={c.loading} rowKey="orderId" dataSource={c.tasks} pagination={false} scroll={{x:1100}} columns={[
       {title:'车辆 / 单号',key:'order',render:(_,t)=><><Button type="link" onClick={()=>c.select(t.orderId)}>{t.plate}</Button><div className="dispatch-muted">{t.dispatchNo||t.orderId}</div></>},
+      {title:'服务顾问',dataIndex:'advisor',render:value=>value||'未填写'},
       {title:'维修员工 / 承包方',dataIndex:'technicianName',render:value=>value||'待指派'},
       {title:'阶段',key:'stage',render:(_,t)=>badges(t)},
       {title:'维修内容',key:'items',render:(_,t)=><div className="dispatch-summary">{t.items.map(i=>i.name).join('、')}</div>},

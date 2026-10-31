@@ -102,6 +102,10 @@ export function validateWorkOrderDraft(draft: WorkOrderDraft) {
   const repairItems = [...filterEmptyRepairItems(draft.repairItems), ...(draft.pendingRepairs||[]).filter(p=>p.state!=='declined'&&!p.scheduled)];
   if (!repairItems.length || repairItems.some((item) => !item.name.trim())) errors.push("维修项目不能为空");
   if (repairItems.some((item) => item.name.length > 200)) errors.push("维修项目每项不能超过 200 个字符");
+  if(draft.dispatchPlan) {
+    if(!draft.dispatchPlan.dueAt || !Number.isFinite(Date.parse(draft.dispatchPlan.dueAt))) errors.push("直接派工预计完工时间必填");
+    if(draft.dispatchPlan.itemAssignments && (!draft.repairItems.length || draft.repairItems.some(item=>!draft.dispatchPlan?.itemAssignments?.some(row=>row.itemId===item.id&&row.technicianId)))) errors.push("直接派工须为每个非待定维修项目选择负责人");
+  }
   return errors;
 }
 

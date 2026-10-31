@@ -1,3 +1,4 @@
+import { applyPlannedResponsibilities } from '../domain/dispatchPlanItems.mjs';
 import { hasAnyRole } from "../../shared/roles.mjs";
 import { applyDispatchAction } from '../domain/dispatchPolicy.mjs';
 import { dispatchPeople } from './dispatchRepository.mjs';
@@ -9,12 +10,13 @@ export async function saveDispatchPlan(client, order, actor, plan) {
     return;
   }
   if (!actor?.active || !hasAnyRole(actor, ['advisor','manager']) || actor.shopId!==order.shop.id) throw new HttpError(403,'无权预先指派维修工');
-  const ids=plan.technicianIds??(plan.technicianId?[plan.technicianId]:[]);
+  const assignedItems=plan.itemAssignments===undefined?undefined:applyPlannedResponsibilities(order.repairItems,plan.itemAssignments);
+  const ids=assignedItems?[...new Set(assignedItems.map(item=>item.responsibleId))]:plan.technicianIds??(plan.technicianId?[plan.technicianId]:[]);
   await client.query('select id from users where shop_id=$1 order by id for share',[actor.shopId]);
   const people=await dispatchPeople(actor,client);
-  const task=applyDispatchAction({orderId:order.id,shopId:order.shop.id,stage:'待派工',version:0,items:[]}, {...plan,action:'assign',expectedVersion:0,requestId:'validate-draft',technicianIds:ids},actor,people);
+  const task=applyDispatchAction({orderId:order.id,shopId:order.shop.id,stage:'待派工',version:0,items:assignedItems||[]}, {...plan,action:'assign',expectedVersion:0,requestId:'validate-draft',technicianIds:ids},actor,people);
   const {technicianId,technicianIds,executionMode,serviceUnit,serviceAddress,serviceContact,departureAt,expectedReturnAt,returnedAt,contractor,contractorId,outsourcingMode,agreedFee,handedOverAt,receivedAt}=task;
-  const data={technicianIds,executionMode,serviceUnit,serviceAddress,serviceContact,departureAt,expectedReturnAt,returnedAt,contractor,contractorId,outsourcingMode,agreedFee,handedOverAt,receivedAt};
+  const data={...(assignedItems?{itemAssignments:assignedItems.map(item=>({itemId:item.id,technicianId:item.responsibleId}))}:{}),technicianIds,executionMode,serviceUnit,serviceAddress,serviceContact,departureAt,expectedReturnAt,returnedAt,contractor,contractorId,outsourcingMode,agreedFee,handedOverAt,receivedAt};
   await client.query(`insert into work_order_dispatch_plans(order_id,technician_id,assigned_by,due_at,urgent,note,execution_data)
     values($1,$2,$3,$4,$5,$6,$7) on conflict(order_id) do update set technician_id=excluded.technician_id,
     assigned_by=excluded.assigned_by,due_at=excluded.due_at,urgent=excluded.urgent,note=excluded.note,execution_data=excluded.execution_data,activation_error='',activated_at=null`,

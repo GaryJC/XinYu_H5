@@ -1,3 +1,4 @@
+import { applyPlannedResponsibilities } from './dispatchPlanItems.mjs';
 import {validateInspectionDeferred} from './inspectionDeferred.mjs';
 import {addReviewProjects} from './reviewAssignment.mjs';
 import {prepareSettlementAssignment} from './settlementAssignment.mjs';
@@ -32,6 +33,7 @@ export function validateDispatchRequest(input) {
   validateReopenItems(input||{});
   validateRepairItemEdits(input||{});
   validateProjectReassignment(input||{});
+  if(input?.itemAssignments!==undefined && input.action!=='assign') fail('项目预派工仅用于首次派工',400);
   validateInspectionDeferred(input||{});
   const actions = ['complete-outsourced','update-technicians','update-due','send-review','submit-review','edit-repair-items','edit-parts','issue-parts','confirm-parts','record-parts','reopen-repair','start-order','submit-order','claim-inspection','reassign-inspection','retry-inspection-notifications','retry-scheduler-notifications','record-hours','assign','reassign','reoffer','cancel','accept','decline','start','finish','pick','pause','resume','submit','inspect','update','remind','retry-notification','reconcile'];
   if (!input || !actions.includes(input.action) || !Number.isInteger(input.expectedVersion) || input.expectedVersion < 0 || typeof input.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(input.requestId)) fail('操作参数无效：需要版本号及唯一请求编号',400);
@@ -155,6 +157,11 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     }
     if (!input.dueAt) fail('请填写预计完工时间',400);
     Object.assign(next,{ technicianId:worker.id, technicianName:worker.name, assignedBy:actor.id, assignedAt:now, acceptedAt:mode==='outsourced'?now:undefined, inspectorId:undefined, inspectorName:undefined, stage:mode==='outsourced'?'待开工':'待接单', feedback:undefined, pausedAt:undefined,pauseReason:undefined,pauseNote:undefined, needsReview:false, dueAt:new Date(input.dueAt).toISOString(), urgent:input.urgent ?? task.urgent ?? false, note:input.note ?? task.note ?? '' });
+    if(input.itemAssignments!==undefined) {
+      if(mode!=='internal' || input.repairItems!==undefined) fail('直接派工仅支持店内维修且不可同时修改项目',400);
+      next.items=applyPlannedResponsibilities(next.items,input.itemAssignments);
+      resolveRepairResponsibilities(next,people,{required:true});
+    }
     next.items.forEach(i=> { if(['待派工','待领料'].includes(i.status)) i.status='待开工'; });
     if(input.repairItems!==undefined) {
       editRepairItems(next,input.repairItems,actor,now,{startNewItems:false,allowRemoval:true});

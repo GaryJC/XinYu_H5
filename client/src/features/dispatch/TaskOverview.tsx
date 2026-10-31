@@ -11,6 +11,7 @@ export function TaskOverview({task,children,dueEditor,techniciansEditor}:{task:D
    <dl>
      <div><dt>托修单位</dt><dd>{task.customerName || '未填写'}</dd></div>
      <div><dt>车型 / 里程</dt><dd>{task.vehicleModel || '未填写'}{task.vehicleMileage?` · ${task.vehicleMileage} km`:''}</dd></div>
+     <div><dt>服务顾问</dt><dd>{task.advisor || '未填写'}</dd></div>
      <div><dt>{task.executionMode==='outsourced'?'承包方':'维修员工'}</dt><dd>{techniciansEditor || task.technicianName || '待指派'}</dd></div>
      <div className="task-due-row"><dt>预计完工</dt><dd>{dueEditor || displayTime(task.dueAt)}</dd></div>
    </dl>

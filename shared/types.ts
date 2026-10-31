@@ -303,6 +303,7 @@ export type DashboardSummary = {
 };
 
 export type WorkOrderDispatchPlan = DispatchExecution & {
+  itemAssignments?: Array<{ itemId: number; technicianId: string }>;
   technicianIds?: string[];
   technicianId?: string;
   technicianName?: string;
