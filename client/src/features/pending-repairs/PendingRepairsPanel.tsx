@@ -26,7 +26,17 @@ export function PendingRepairsPanel({orderId,user,onChanged,stage,refreshVersion
  const [execution,setExecution]=useState<DispatchExecution>({executionMode:'internal'});
  const [name,setName]=useState(''),[reason,setReason]=useState(''),[note,setNote]=useState(''),[technicianId,setTechnician]=useState<string>(),[dueAt,setDue]=useState('');
  function open(action:PendingRepairCommand['action'],item?:PendingRepair){setFormError('');setName('');setReason('');setNote('');setTechnician(undefined);setDue('');setDialog({action,item});if(['schedule','approve-and-schedule'].includes(action))void c.loadPeople().then(result=>{if(result){const {task,defaultTechnicianId}=result;setTechnician(defaultTechnicianId);const {executionMode,contractorId,contractor,outsourcingMode,serviceUnit,serviceAddress,serviceContact}=task;setExecution({executionMode,contractorId,contractor,outsourcingMode,serviceUnit,serviceAddress,serviceContact});}});}
- async function submit(){if(!dialog)return;setFormError('');if(dialog.item?.source==='inspection'&&['decline','cancel'].includes(dialog.action)&&!note.trim()){setFormError('请填写不再维修原因');return;}const ok=await c.act({action:dialog.action,id:dialog.item?.id,name,reason,note,...execution,technicianId,dueAt:dueAt?new Date(`${dueAt}:00+08:00`).toISOString():undefined});if(ok)setDialog(undefined);}
+ async function submit(){
+  if(!dialog||c.busy)return;
+  setFormError('');
+  if(dialog.action==='add'&&(!name.trim()||!reason.trim())){setFormError(!name.trim()?'请填写项目名称':'请填写待确认原因');return;}
+  if(dialog.item?.source==='inspection'&&['decline','cancel'].includes(dialog.action)&&!note.trim()){setFormError('请填写不再维修原因');return;}
+  try {
+   const ok=await c.act({action:dialog.action,id:dialog.item?.id,name:name.trim(),reason:reason.trim(),note,...execution,technicianId,dueAt:dueAt?new Date(`${dueAt}:00+08:00`).toISOString():undefined});
+   if(ok)setDialog(undefined);
+  } catch(error){setFormError(error instanceof Error?error.message:'保存失败，请重试');}
+ }
+
  const schedulingBlock=pendingRepairScheduleBlock(stage??c.task?.stage);
  const scheduling=!!dialog&&['schedule','approve-and-schedule'].includes(dialog.action);
  return <section className="pending-repairs-panel" aria-label="待客户确认项目">

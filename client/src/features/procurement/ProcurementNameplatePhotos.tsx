@@ -1,3 +1,4 @@
+import { createRequestId } from "../../shared/api/requestId";
 import {useEffect,useState,useRef} from 'react';
 import {Alert,Button,Image,Space} from 'antd';
 import {ImageSourcePicker} from '../../shared/ui/ImageSourcePicker';
@@ -22,7 +23,7 @@ export function ProcurementNameplatePhotos({value=[],onChange,onBusy,disabled,ot
    let ids=other?[...value]:[];
    for(const file of files.slice(0,other?limit:1)){
     const body=await prepareUploadPhoto(file);
-    const saved=await procurementApi.uploadPhoto({...body,requestId:crypto.randomUUID()});
+    const saved=await procurementApi.uploadPhoto({...body,requestId:createRequestId()});
     ids=[...ids,saved.id];onChange?.(ids);
    }
   });

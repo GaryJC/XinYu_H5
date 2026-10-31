@@ -22,6 +22,7 @@ export default defineConfig({
     }
   }],
   build: {
+    target: ["chrome80", "safari13"],
     // Keep max-width media queries: Vite's modern defaults rewrite them to
     // range syntax (width <= ...), which older DingTalk WebViews ignore.
     cssTarget: ["chrome80", "safari13"],

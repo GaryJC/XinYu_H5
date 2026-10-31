@@ -11,7 +11,7 @@ function loadModule(relativePath, dependencies) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   });
   const exports = {};
-  vm.runInNewContext(outputText, { exports, require(name) {
+  vm.runInNewContext("Object.hasOwn = undefined;\n" + outputText, { exports, require(name) {
     assert.ok(name in dependencies, `Unexpected import: ${name}`);
     return dependencies[name];
   } });

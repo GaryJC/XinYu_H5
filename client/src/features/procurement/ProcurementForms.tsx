@@ -1,3 +1,4 @@
+import { createRequestId } from "../../shared/api/requestId";
 import {ProcurementNameplatePhotos} from "./ProcurementNameplatePhotos";
 import { useRef,useState } from "react";
 import { Button,Checkbox,Form,Input,InputNumber,Select,Space } from 'antd';
@@ -23,7 +24,7 @@ export function TenderForm({suppliers,busy,onSave,onCancel,tender}:{suppliers:Pr
     deliveryBy:localDateTime(new Date(Date.now()+3*86400000)),deadline:localDateTime(new Date(Date.now()+86400000)),
     ...(tender?{...tender.data,nameplatePhotoIds:(tender.data.nameplatePhotoIds||[]).slice(0,1),otherPhotoIds:[...new Set([...(tender.data.otherPhotoIds||[]),...(tender.data.nameplatePhotoIds||[]).slice(1)])],deliveryBy:localDateTime(new Date(tender.data.deliveryBy)),deadline:tender.deadline?localDateTime(new Date(tender.deadline)):undefined,hasDeadline:!!tender.deadline}:{})}}
     onFinish={async v=>{if(photoBusy||busy)return;const body={...v,unit:tender?.data.unit||'件',qualityRequirements:tender?.data.qualityRequirements||'',paymentTerms:v.paymentTerms||'',deliveryBy:tender&&v.deliveryBy===localDateTime(new Date(tender.data.deliveryBy))?tender.data.deliveryBy:new Date(v.deliveryBy).toISOString(),deadline:v.hasDeadline?(tender?.deadline&&v.deadline===localDateTime(new Date(tender.deadline))?tender.deadline:new Date(v.deadline).toISOString()):null,supplierIds:tender?tender.invitations.map(i=>i.supplierId):v.supplierIds,imageUrls:tender?.data.imageUrls||[],vin:String(v.vin||'').trim().toUpperCase(),category:tender?.data.category||''};
-      const fingerprint=JSON.stringify(body);if(request.current.fingerprint!==fingerprint)request.current={fingerprint,id:crypto.randomUUID()};
+      const fingerprint=JSON.stringify(body);if(request.current.fingerprint!==fingerprint)request.current={fingerprint,id:createRequestId()};
       await onSave({...body,requestId:request.current.id});}}>
 
     <div className="procurement-form-grid">

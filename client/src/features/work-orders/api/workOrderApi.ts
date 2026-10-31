@@ -33,7 +33,7 @@ import { request, setAuthToken } from "../../../shared/api/httpClient";
 import { roles } from "../domain/workOrderDomain";
 
 function validateAuthenticatedUser(user: UserProfile) {
-  if (!user || !Object.hasOwn(roles, user.role)) {
+  if (!user || !Object.prototype.hasOwnProperty.call(roles, user.role)) {
     throw new Error("当前账号的岗位尚未在此版本开放，请切换受支持的账号或联系管理员。");
   }
   return user;
