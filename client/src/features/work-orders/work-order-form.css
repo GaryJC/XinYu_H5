@@ -96,6 +96,6 @@
   .form-panel .repair-items-editor .repair-item-name textarea { font-size: 16px; }
 }
 
-.direct-dispatch-batch { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:12px; margin-bottom:16px; background:#f0f6ff; border-radius:8px; }
-.direct-dispatch-batch > .ant-select { flex:1 1 260px; min-width:0; }
 .direct-dispatch-select { margin-bottom:12px; }
+
+.direct-dispatch-selection { display:flex; align-items:center; gap:12px; margin-top:12px; }
