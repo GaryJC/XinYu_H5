@@ -40,7 +40,11 @@
 .shortcut-arrow { margin-left: auto; flex-shrink: 0; color: #788aa2; }
 .workbench-shortcut-grid button:first-child { background: #f4f7ff; border-color: #dae5ff; }
 .workbench-shortcut-grid button { transition: background .15s, border-color .15s; }
-.workbench-shortcut-grid button:hover { background: #edf3fc; color: #235e9d; }
+/* Touch WebViews can retain :hover after a tap and navigation back. */
+@media (hover: hover) and (pointer: fine) {
+ .workbench-shortcut-grid button:hover { background: #edf3fc; color: #235e9d; }
+}
+.workbench-shortcut-grid button:active { background: #edf3fc; color: #235e9d; }
 .workbench-shortcut-grid button:focus-visible, .workbench-archive .orders-table tr:focus-visible, .workbench-archive .archive-order-card:focus-visible { outline: 2px solid #3b7bc4; outline-offset: -2px; }
 .workbench-shell .role-focus-strip { background: transparent; border: 0; padding: 0 4px; margin-bottom: 22px; grid-template-columns: auto 1fr; color: #718199; font-size: 12px; }
 .workbench-shell .role-focus-strip strong { font-weight: 500; color: #60758f; }

@@ -28,7 +28,7 @@
 .detail-repair-heading { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid #e5ebf3; }
 .detail-repair-index { color: #2563eb; font-size: 12px; background: #eaf0ff; border-radius: 6px; padding: 3px 6px; font-variant-numeric: tabular-nums; }
 .detail-repair-heading h4 { flex: 1; min-width: 100px; font-size: 14px; line-height: 1.7; margin: 0; overflow-wrap: anywhere; }
-.detail-repair-status { color: #516783; font-size: 12px; padding: 3px 8px; border: 1px solid #dce5f0; border-radius: 6px; }
+.detail-repair-heading .repair-status-tag { flex-shrink: 0; margin: 0; font-size: 12px; padding: 3px 8px; border-radius: 6px; }
 .detail-repair-card dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0 0; }
 .detail-repair-card dl > div { min-width: 0; }
 .detail-repair-card dt { color: #66788f; font-size: 12px; margin-bottom: 4px; }
@@ -58,6 +58,5 @@
 .detail-dispatch-number .copy-icon-button.ant-btn .ant-btn-icon { margin: 0; line-height: 1; }
 
 .order-detail-content .detail-repair-link.ant-btn { height: auto; padding: 0; font-size: inherit; font-weight: inherit; }
-.detail-repair-card.is-link { cursor: pointer; }
-.detail-repair-card.is-link:hover { background: #edf3ff; border-color: #bfd0ef; }
-.detail-repair-card.is-link:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+.detail-repair-open.ant-btn { flex: none; width: 44px; height: 44px; color: #2563eb; margin: -8px -8px -8px 0; }

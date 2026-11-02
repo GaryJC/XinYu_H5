@@ -1,3 +1,4 @@
+import { RepairStatusTag } from "../dispatch/RepairStatusTag";
 import { ActionHistory } from "../../shared/ui/ActionHistory";
 import './workbench.css';
 import './order-detail.css';
@@ -34,7 +35,7 @@ export function OrderDetail({ order, isMobile, user, onUpdated, onOpenRepairs }:
     { key: "shop", label: "门店地址", children: order.shop.address || "-", span: 2 },
     { key: "shopPhone", label: "门店电话", children: order.shop.phone || "-" },
     { key: "platform", label: "平台工单号", children: order.platformOrderNo || "-", span: 2 },
-    { key: "vin", label: "VIN/底盘号", children: order.vehicle.vin ? <span className="detail-copy-value">{order.vehicle.vin}<CopyTextButton text={order.vehicle.vin} label="复制 VIN/底盘号" /></span> : "-", span: 2 },
+    { key: "vin", label: "VIN/底盘号", children: order.vehicle.vin ? <span className="detail-copy-value">{order.vehicle.vin}<CopyTextButton text={order.vehicle.vin} label="复制 VIN/底盘号" iconOnly /></span> : "-", span: 2 },
     { key: "mileage", label: "进厂里程", children: order.vehicle.mileage ? `${order.vehicle.mileage} km` : "-" },
     { key: "purchase", label: "购车日期", children: order.vehicle.purchaseDate || "-" },
     { key: "customer", label: "车主名称/所属单位", children: order.customer.name || "-", span: 2 },
@@ -102,14 +103,14 @@ export function OrderLegacySyncStatus({ order }: { order: WorkOrder }) {
 function OrderRepairRecords({order,isMobile,onOpen}:{order:WorkOrder;isMobile:boolean;onOpen?:()=>void}) {
   if (isMobile) return <section className="workbench-detail-group detail-repairs" aria-label="维修项目">
     <h3><Wrench size={18} aria-hidden="true" />{onOpen ? <Button type="link" className="detail-repair-link" onClick={onOpen} aria-label="查看派工单维修项目">维修项目<ChevronRight size={16} aria-hidden="true" /></Button> : "维修项目"}<span className="detail-section-count">{order.repairItems.length} 项</span></h3>
-    {order.repairItems.length ? <div className="detail-repair-list">{order.repairItems.map((item, index) => <article className={`detail-repair-card${onOpen ? ' is-link' : ''}`} key={item.id} role={onOpen ? 'button' : undefined} tabIndex={onOpen ? 0 : undefined} aria-label={onOpen ? `在派工单中查看维修项目：${item.name || '未填写项目'}` : undefined} onClick={onOpen} onKeyDown={event => {if(onOpen && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')){event.preventDefault();onOpen();}}}>
-      <div className="detail-repair-heading"><span className="detail-repair-index">{String(index + 1).padStart(2, '0')}</span><h4>{item.name || '未填写项目'}</h4><span className="detail-repair-status">{item.status || '未记录'}</span></div>
+    {order.repairItems.length ? <div className="detail-repair-list">{order.repairItems.map((item, index) => <article className="detail-repair-card" key={item.id}>
+      <div className="detail-repair-heading"><span className="detail-repair-index">{String(index + 1).padStart(2, '0')}</span><h4>{item.name || '未填写项目'}</h4><RepairStatusTag status={item.status || '未记录'} />{onOpen && <Button type="text" className="detail-repair-open" aria-label={`在派工单中查看维修项目：${item.name || '未填写项目'}`} title="查看维修项目" icon={<ChevronRight size={20} aria-hidden="true" />} onClick={onOpen} />}</div>
       <dl><div><dt>工费</dt><dd>¥{item.laborFee}</dd></div><div><dt>主修人</dt><dd>{item.owner || '未分配'}</dd></div><div><dt>开工</dt><dd>{item.startAt || '未记录'}</dd></div><div><dt>完工</dt><dd>{item.finishAt || '未记录'}</dd></div><div><dt>检查人</dt><dd>{item.inspector || '未记录'}</dd></div></dl>
     </article>)}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无维修项目" />}
   </section>;
   return <DetailTable title="维修项目" onOpen={onOpen} rowKey="id" dataSource={order.repairItems} columns={[
       { title: "项目", dataIndex: "name" }, { title: "工费", dataIndex: "laborFee", render: (value: number) => `¥${value}` },
-      { title: "主修人", dataIndex: "owner" }, { title: "状态", dataIndex: "status" }, { title: "开工", dataIndex: "startAt" },
+      { title: "主修人", dataIndex: "owner" }, { title: "状态", dataIndex: "status", render: (value: string) => <RepairStatusTag status={value || "未记录"} /> }, { title: "开工", dataIndex: "startAt" },
       { title: "完工", dataIndex: "finishAt" }, { title: "检查人", dataIndex: "inspector" }
     ]} />;
 }
@@ -139,7 +140,7 @@ function DesktopOrderRecords({ order }: { order: WorkOrder }) {
     <OrderEventHistory order={order} kind="sync" title="平台同步记录" />
     <DetailTable title="出库单" rowKey="id" dataSource={order.outboundOrders} columns={[
       { title: "出库单号", dataIndex: "id" }, { title: "派工号", dataIndex: "dispatchNo" }, { title: "技师", dataIndex: "technician" },
-      { title: "状态", dataIndex: "status" }, { title: "物料项目数", render: (_: unknown, item: WorkOrder["outboundOrders"][number]) => item.items.length }
+      { title: "状态", dataIndex: "status", render: (value: string) => <RepairStatusTag status={value || "未记录"} /> }, { title: "物料项目数", render: (_: unknown, item: WorkOrder["outboundOrders"][number]) => item.items.length }
     ]} />
     <OrderEventHistory order={order} kind="settlement" title="结算记录" />
     <OrderAuditHistory order={order} title="操作留痕" />
