@@ -13,9 +13,9 @@ import './vehicle-trips.css';
 
 const time = (value?: string) => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '—';
 const actions: Record<string, string> = { create: '提交申请', approve: '批准申请', reject: '驳回', cancel: '取消申请', depart: '确认出车', return: '确认还车' };
-export function VehicleTripsPage({ user }: { user: UserProfile }) {
+export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserProfile; initialScope?:string }) {
   const feedback = useActionFeedback();
-  const state = useVehicleTrips();
+  const state = useVehicleTrips(initialScope);
   const [form] = Form.useForm();
   const {scope,setScope}=state;
   const [rejectOpen, setRejectOpen] = useState(false);

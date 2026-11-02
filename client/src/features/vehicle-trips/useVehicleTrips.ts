@@ -8,10 +8,10 @@ import { prepareUploadPhoto } from '../../shared/images/prepareOcrImage';
 import { companyVehicleApi } from '../company-vehicles/companyVehicleApi';
 import { vehicleTripApi } from './vehicleTripApi';
 
-export function useVehicleTrips() {
+export function useVehicleTrips(initialScope = 'all') {
   const feedback = useActionFeedback();
   const [vehicles, setVehicles] = useState<CompanyVehicle[]>([]);
-  const [scope,setScope]=useState('all');
+  const [scope,setScope]=useState(initialScope);
   const mobile=!Grid.useBreakpoint().md;
   const list=usePagedList(scope,page=>vehicleTripApi.page(page,scope),mobile,true,trip=>trip.id);
   const trips=list.items;

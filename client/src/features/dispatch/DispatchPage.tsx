@@ -6,6 +6,7 @@ import { WarehousePartsPage } from './WarehousePartsPage';
 import { TechnicianRepairPage } from './TechnicianRepairPage';
 import { useEffect,useRef } from 'react';
 import { DispatchWorkloadBoard } from './DispatchWorkloadBoard';
+import { OperationsDashboardPage } from '../operations-dashboard/OperationsDashboardPage';
 import { executionLabels } from './DispatchExecutionFields';
 import { Alert,Button,Card,Drawer,Empty,Grid,Space,Table,Tag } from 'antd';
 import type { DispatchMetric,DispatchTask,UserProfile } from '../../../../shared/types';
@@ -27,7 +28,7 @@ export function DispatchPage({user,view,initialStage}:{user:UserProfile;view:str
     <div className="dispatch-heading"><div><h2>{view}</h2><p>{view==='派工台'?'默认显示本店全部未完成工单，维修结束的工单请在“已完成”中查看。':c.manager?'查看本店工单，可按状态筛选并安排维修与检验。':c.inspectionLead?'查看本店检验任务，可按状态筛选和处理检验结果。':'及时确认任务，记录项目进度。'}{c.updatedAt?` 更新于 ${c.updatedAt}`:''}</p></div><Button onClick={()=>{c.setError('');void c.refresh();}} loading={c.loading}>刷新</Button></div>
     {c.error?<Alert type="error" showIcon closable title={c.error} onClose={()=>c.setError('')}/>:null}
     <DispatchFilterBar controller={c} inspection={inspection}/>
-    {c.inspectionLead?<DispatchWorkloadBoard summaries={c.summaries} filters={c.filters} onSelect={(technicianId,metric)=>{
+    {c.manager&&view==='派工台'?<OperationsDashboardPage embedded refreshKey={c.updatedAt} onOpen={id=>c.select(id)}/>:c.inspectionLead?<DispatchWorkloadBoard summaries={c.summaries} filters={c.filters} onSelect={(technicianId,metric)=>{
       c.setFilters(f=>({from:f.from,to:f.to,technicianId,metric}));
       if(mobile) taskHeading.current?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
     }}/>:null}

@@ -681,3 +681,18 @@ export interface WorkOrderListQuery {
 export interface ArchiveOptions { statuses: Array<{value: string; label: string}>; advisors: Array<{value: string; label: string}>; technicians: Array<{value: string; label: string}>; }
 
 export type DispatchFilters = {partsStatus?:string;partsSort?:string;executionMode?:string;search?:string;technicianId?:string;stage?:string;metric?:string;urgent?:string;overdue?:string;from?:string;to?:string};
+
+export type OperationsMetric = 'unfinished'|'working'|'waiting'|'parts'|'pickup'|'paused'|'inspection'|'overdue';
+export type OperationsProject = {
+  key:string; orderId:string; plate:string; dispatchNo:string; name:string;
+  ownerId?:string; ownerName:string; status:string; dueAt?:string;
+  flags:OperationsMetric[]; waitingSince?:string; note:string;
+};
+export type OperationsWorker = {
+  id:string; name:string; assignable:boolean; vehicles:number;
+  counts:Record<OperationsMetric,number>;
+};
+export type OperationsDashboard = {
+  generatedAt:string; vehicles:number; unassigned:number; uncertain:number;
+  counts:Record<OperationsMetric,number>; workers:OperationsWorker[]; projects:OperationsProject[];
+};

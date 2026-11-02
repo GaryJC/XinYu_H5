@@ -151,3 +151,7 @@ button.workbench-metric:focus-visible { outline: 3px solid #366fbb; outline-offs
 .dispatch-task-heading { scroll-margin-top: 20px; }
 
 .archive-filter-anchor { scroll-margin-top: 20px; }
+
+.todo-overview-title { display:flex; align-items:center; gap:6px; flex-wrap:wrap; min-width:0; }
+.todo-overview-title .ant-btn { color:#657b94; font-size:12px; }
+.todo-approval-caption { display:block; color:#8896a8; font-size:12px; margin-top:4px; }

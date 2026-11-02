@@ -1,3 +1,4 @@
+import { verifyTechnicianMembership } from "../integrations/dingtalk/technicianRoster.mjs";
 import {hasPendingInspection} from '../../shared/repairProgress.mjs';
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import { outsourcingMembership } from './outsourcingMembership.mjs';
@@ -53,8 +54,8 @@ export async function listDispatchTasks(actor, client=pool) {
   });
 }
 export async function dispatchPeople(actor, client=pool) {
-  const {rows}=await client.query(`select id,name,role,active,shop_id,inspector_role_member, roles, ${outsourcingMembership} from users where shop_id=$1 order by name,id`,[actor.shopId]);
-  return rows.map(r=>({id:r.id,name:r.name,role:r.role,roles:r.roles,active:r.active,shopId:r.shop_id,inspectorRoleMember:r.inspector_role_member,outsourcingRoleMember:r.outsourcing_role_member}));
+  const {rows}=await client.query(`select id,name,role,active,shop_id,inspector_role_member, roles,dingtalk_user_id, ${outsourcingMembership} from users where shop_id=$1 order by name,id`,[actor.shopId]);
+  return verifyTechnicianMembership(rows.map(r=>({id:r.id,name:r.name,role:r.role,roles:r.roles,active:r.active,shopId:r.shop_id,dingtalkUserId:r.dingtalk_user_id,inspectorRoleMember:r.inspector_role_member,outsourcingRoleMember:r.outsourcing_role_member})));
 }
 export async function saveDispatchTask(client, task, { metadataOnly = false, techniciansOnly = false } = {}) {
   const {inspectionDeferredCount,hasPartsHistory,pendingRepairCount,orderId,shopId,technicianId,inspectorId,stage,version,plate,dispatchNo,arrivalDate,orderStatus,faultDescription,overdue,repairCatalog,vehicleVin,vehicleModel,vehicleMileage,customerName,advisor,...data}=task;
