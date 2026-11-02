@@ -8,7 +8,7 @@ import { TechnicianRepairPage } from './TechnicianRepairPage';
 import { useEffect,useRef,useState } from 'react';
 import { DispatchWorkloadBoard } from './DispatchWorkloadBoard';
 import {DispatchWorkloadChart} from './DispatchWorkloadChart';
-import {workloadLabels} from '../operations-dashboard/WorkerLoadChart';
+import {workloadLabels} from '../operations-dashboard/workloadLabels';
 import { executionLabels } from './DispatchExecutionFields';
 import { Alert,Button,Card,Drawer,Empty,Grid,Space,Table,Tag } from 'antd';
 import type { DispatchMetric,DispatchTask,UserProfile } from '../../../../shared/types';

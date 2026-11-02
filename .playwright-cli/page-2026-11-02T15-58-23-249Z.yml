@@ -1,0 +1,729 @@
+- generic [ref=e1]:
+  - generic [ref=e4]:
+    - complementary [ref=e5]:
+      - generic [ref=e7]:
+        - generic [ref=e14]:
+          - strong [ref=e15]: 修理委托
+          - generic [ref=e16]: 门店协同工作台
+        - generic [ref=e17]: 业务导航
+        - navigation "主导航" [ref=e18]:
+          - button "我的维修" [ref=e352] [cursor=pointer]
+          - button "出车申请" [ref=e45] [cursor=pointer]
+        - paragraph [ref=e56]: 按门店与岗位权限使用委托开单、签字与归档功能。
+    - main [ref=e57]:
+      - generic [ref=e58]:
+        - generic [ref=e60]:
+          - text: 门店工作空间
+          - heading "我的维修" [level=1] [ref=e356]
+          - paragraph [ref=e62]: 李富强 · 维修技师
+        - generic [ref=e63]:
+          - generic [ref=e68]: 测试身份：李富强
+          - generic [ref=e75] [cursor=pointer]:
+            - generic [ref=e76]:
+              - generic: 选择测试身份
+              - combobox "切换本地测试身份" [ref=e77]
+            - img "down" [ref=e357]
+          - generic [ref=e82]: 维修技师
+      - region "我的维修" [ref=e360]:
+        - generic [ref=e361]:
+          - paragraph [ref=e362]: 查看负责的车辆，跟进维修与检验进度。
+          - button "刷新" [ref=e363] [cursor=pointer]
+        - generic [ref=e371]:
+          - generic [ref=e372]:
+            - searchbox "搜索我的维修" [ref=e374]
+            - button [ref=e376] [cursor=pointer]:
+              - img "search" [ref=e378]
+          - radiogroup "维修任务分类" [ref=e381]:
+            - generic [ref=e382]:
+              - generic [ref=e383] [cursor=pointer]:
+                - radio "待接单 0"
+                - generic [ref=e385]:
+                  - generic [ref=e386]: 待接单
+                  - strong [ref=e387]: "0"
+              - generic [ref=e388] [cursor=pointer]:
+                - radio "进行中 25" [checked]
+                - generic [ref=e390]:
+                  - generic [ref=e391]: 进行中
+                  - strong [ref=e392]: "25"
+              - generic [ref=e393] [cursor=pointer]:
+                - radio "待检验 2"
+                - generic [ref=e395]:
+                  - generic [ref=e396]: 待检验
+                  - strong [ref=e397]: "2"
+              - generic [ref=e398] [cursor=pointer]:
+                - radio "回审 1"
+                - generic [ref=e400]:
+                  - generic [ref=e401]: 回审
+                  - strong [ref=e402]: "1"
+              - generic [ref=e403] [cursor=pointer]:
+                - radio "已完成 1"
+                - generic [ref=e405]:
+                  - generic [ref=e406]: 已完成
+                  - strong [ref=e407]: "1"
+        - generic [ref=e408]:
+          - button "查看维修任务 鲁B96001" [ref=e409] [cursor=pointer]:
+            - generic [ref=e410]:
+              - generic [ref=e411]:
+                - heading "鲁B96001" [level=3] [ref=e412]
+                - generic [ref=e413]: 待开工
+              - paragraph [ref=e414]:
+                - generic [ref=e415]: 派工号
+                - text: A996001
+              - generic [ref=e416]:
+                - generic [ref=e417]: 加急
+                - generic [ref=e418]: 超期
+              - generic [ref=e419]:
+                - generic [ref=e420]:
+                  - generic [ref=e421]: 维修项目
+                  - generic [ref=e422]: 2 项
+                - list [ref=e423]:
+                  - listitem [ref=e424]: 【测试】更换机油机滤
+                  - listitem [ref=e425]: 【测试】全车检查
+              - generic [ref=e426]:
+                - generic [ref=e427]:
+                  - generic [ref=e432]: 配件
+                  - strong [ref=e433]: 待备料
+                - generic [ref=e434]:
+                  - generic [ref=e438]: 预计完工
+                  - strong [ref=e439]: 2026/10/17 23:17
+              - generic [ref=e441]:
+                - generic [ref=e442]: 已提报或通过
+                - strong [ref=e443]:
+                  - text: "0"
+                  - generic [ref=e444]: / 2
+          - button "查看维修任务 鲁B90002" [ref=e445] [cursor=pointer]:
+            - generic [ref=e446]:
+              - generic [ref=e447]:
+                - heading "鲁B90002" [level=3] [ref=e448]
+                - generic [ref=e449]: 正在维修
+              - paragraph [ref=e450]:
+                - generic [ref=e451]: 委托单号
+                - text: WT-MOCK-TECH-02
+              - generic [ref=e452]: 超期
+              - generic [ref=e454]:
+                - generic [ref=e455]:
+                  - generic [ref=e456]: 维修项目
+                  - generic [ref=e457]: 1 项
+                - list [ref=e458]:
+                  - listitem [ref=e459]: 【模拟】检查空调
+              - generic [ref=e460]:
+                - generic [ref=e461]:
+                  - generic [ref=e466]: 配件
+                  - strong [ref=e467]: 未登记需求
+                - generic [ref=e468]:
+                  - generic [ref=e472]: 预计完工
+                  - strong [ref=e473]: 2026/09/15 16:14
+              - generic [ref=e475]:
+                - generic [ref=e476]: 已提报或通过
+                - strong [ref=e477]:
+                  - text: "0"
+                  - generic [ref=e478]: / 1
+          - button "查看维修任务 鲁B90003" [ref=e479] [cursor=pointer]:
+            - generic [ref=e480]:
+              - generic [ref=e481]:
+                - heading "鲁B90003" [level=3] [ref=e482]
+                - generic [ref=e483]: 正在维修
+              - paragraph [ref=e484]:
+                - generic [ref=e485]: 委托单号
+                - text: WT-MOCK-TECH-03
+              - generic [ref=e486]: 超期
+              - generic [ref=e488]:
+                - generic [ref=e489]:
+                  - generic [ref=e490]: 维修项目
+                  - generic [ref=e491]: 1 项
+                - list [ref=e492]:
+                  - listitem [ref=e493]: 【模拟】制动系统检修
+              - generic [ref=e494]:
+                - generic [ref=e495]:
+                  - generic [ref=e500]: 配件
+                  - strong [ref=e501]: 备料完成
+                - generic [ref=e502]:
+                  - generic [ref=e506]: 预计完工
+                  - strong [ref=e507]: 2026/09/15 16:14
+              - generic [ref=e509]:
+                - generic [ref=e510]: 已提报或通过
+                - strong [ref=e511]:
+                  - text: "0"
+                  - generic [ref=e512]: / 1
+          - button "查看维修任务 鲁B90004" [ref=e513] [cursor=pointer]:
+            - generic [ref=e514]:
+              - generic [ref=e515]:
+                - heading "鲁B90004" [level=3] [ref=e516]
+                - generic [ref=e517]: 正在维修
+              - paragraph [ref=e518]:
+                - generic [ref=e519]: 委托单号
+                - text: WT-MOCK-TECH-04
+              - generic [ref=e520]: 超期
+              - generic [ref=e522]:
+                - generic [ref=e523]:
+                  - generic [ref=e524]: 维修项目
+                  - generic [ref=e525]: 1 项
+                - list [ref=e526]:
+                  - listitem [ref=e527]: 【模拟】外派维修冷却系统
+              - generic [ref=e528]:
+                - generic [ref=e529]:
+                  - generic [ref=e534]: 配件
+                  - strong [ref=e535]: 未登记需求
+                - generic [ref=e536]:
+                  - generic [ref=e540]: 预计完工
+                  - strong [ref=e541]: 2026/09/15 16:14
+              - generic [ref=e543]:
+                - generic [ref=e544]: 已提报或通过
+                - strong [ref=e545]:
+                  - text: "0"
+                  - generic [ref=e546]: / 1
+          - button "查看维修任务 鲁B90006" [ref=e547] [cursor=pointer]:
+            - generic [ref=e548]:
+              - generic [ref=e549]:
+                - heading "鲁B90006" [level=3] [ref=e550]
+                - generic [ref=e551]: 正在维修
+              - paragraph [ref=e552]:
+                - generic [ref=e553]: 委托单号
+                - text: WT-MOCK-TECH-06
+              - generic [ref=e554]:
+                - generic [ref=e555]: 超期
+                - generic [ref=e556]: 返工
+              - generic [ref=e557]:
+                - generic [ref=e558]:
+                  - generic [ref=e559]: 维修项目
+                  - generic [ref=e560]: 1 项
+                - list [ref=e561]:
+                  - listitem [ref=e562]: 【模拟】转向系统异响
+              - generic [ref=e563]:
+                - generic [ref=e564]:
+                  - generic [ref=e569]: 配件
+                  - strong [ref=e570]: 未登记需求
+                - generic [ref=e571]:
+                  - generic [ref=e575]: 预计完工
+                  - strong [ref=e576]: 2026/09/15 16:14
+              - generic [ref=e578]:
+                - generic [ref=e579]: 已提报或通过
+                - strong [ref=e580]:
+                  - text: "0"
+                  - generic [ref=e581]: / 1
+          - button "查看维修任务 鲁B96003" [ref=e582] [cursor=pointer]:
+            - generic [ref=e583]:
+              - generic [ref=e584]:
+                - heading "鲁B96003" [level=3] [ref=e585]
+                - generic [ref=e586]: 正在维修
+              - paragraph [ref=e587]:
+                - generic [ref=e588]: 派工号
+                - text: A996003
+              - generic [ref=e589]: 超期
+              - generic [ref=e591]:
+                - generic [ref=e592]:
+                  - generic [ref=e593]: 维修项目
+                  - generic [ref=e594]: 1 项
+                - list [ref=e595]:
+                  - listitem [ref=e596]: 【测试】检查空调异响
+              - generic [ref=e597]:
+                - generic [ref=e598]:
+                  - generic [ref=e603]: 配件
+                  - strong [ref=e604]: 待备料
+                - generic [ref=e605]:
+                  - generic [ref=e609]: 预计完工
+                  - strong [ref=e610]: 2026/10/16 00:17
+              - generic [ref=e612]:
+                - generic [ref=e613]: 已提报或通过
+                - strong [ref=e614]:
+                  - text: "0"
+                  - generic [ref=e615]: / 1
+          - button "查看维修任务 鲁B96005" [ref=e616] [cursor=pointer]:
+            - generic [ref=e617]:
+              - generic [ref=e618]:
+                - heading "鲁B96005" [level=3] [ref=e619]
+                - generic [ref=e620]: 暂停
+              - paragraph [ref=e621]:
+                - generic [ref=e622]: 派工号
+                - text: A996005
+              - generic [ref=e623]: 超期
+              - generic [ref=e625]:
+                - generic [ref=e626]:
+                  - generic [ref=e627]: 维修项目
+                  - generic [ref=e628]: 1 项
+                - list [ref=e629]:
+                  - listitem [ref=e630]: 【测试】检修冷却系统
+              - generic [ref=e631]:
+                - generic [ref=e632]:
+                  - generic [ref=e637]: 配件
+                  - strong [ref=e638]: 待备料
+                - generic [ref=e639]:
+                  - generic [ref=e643]: 预计完工
+                  - strong [ref=e644]: 2026/10/16 17:17
+              - generic [ref=e646]:
+                - generic [ref=e647]: 已提报或通过
+                - strong [ref=e648]:
+                  - text: "0"
+                  - generic [ref=e649]: / 1
+          - button "查看维修任务 鲁B96002" [ref=e650] [cursor=pointer]:
+            - generic [ref=e651]:
+              - generic [ref=e652]:
+                - heading "鲁B96002" [level=3] [ref=e653]
+                - generic [ref=e654]: 待开工
+              - paragraph [ref=e655]:
+                - generic [ref=e656]: 派工号
+                - text: A996002
+              - generic [ref=e657]: 超期
+              - generic [ref=e659]:
+                - generic [ref=e660]:
+                  - generic [ref=e661]: 维修项目
+                  - generic [ref=e662]: 1 项
+                - list [ref=e663]:
+                  - listitem [ref=e664]: 【测试】检修制动系统
+              - generic [ref=e665]:
+                - generic [ref=e666]:
+                  - generic [ref=e671]: 配件
+                  - strong [ref=e672]: 待备料
+                - generic [ref=e673]:
+                  - generic [ref=e677]: 预计完工
+                  - strong [ref=e678]: 2026/10/16 23:17
+              - generic [ref=e680]:
+                - generic [ref=e681]: 已提报或通过
+                - strong [ref=e682]:
+                  - text: "0"
+                  - generic [ref=e683]: / 1
+          - button "查看维修任务 鲁B96008" [ref=e684] [cursor=pointer]:
+            - generic [ref=e685]:
+              - generic [ref=e686]:
+                - heading "鲁B96008" [level=3] [ref=e687]
+                - generic [ref=e688]: 正在维修
+              - paragraph [ref=e689]:
+                - generic [ref=e690]: 派工号
+                - text: A996008
+              - generic [ref=e691]:
+                - generic [ref=e692]: 超期
+                - generic [ref=e693]: 返工第 1 轮
+              - generic [ref=e694]:
+                - generic [ref=e695]:
+                  - generic [ref=e696]: 维修项目
+                  - generic [ref=e697]: 2 项
+                - list [ref=e698]:
+                  - listitem [ref=e699]: 【测试】转向系统检查
+                  - listitem [ref=e700]: 【测试】路试复查
+              - generic [ref=e701]:
+                - generic [ref=e702]:
+                  - generic [ref=e707]: 配件
+                  - strong [ref=e708]: 无需配件
+                - generic [ref=e709]:
+                  - generic [ref=e713]: 预计完工
+                  - strong [ref=e714]: 2026/10/16 23:17
+              - generic [ref=e716]:
+                - generic [ref=e717]: 已提报或通过
+                - strong [ref=e718]:
+                  - text: "0"
+                  - generic [ref=e719]: / 2
+          - button "查看维修任务 鲁B96004" [ref=e720] [cursor=pointer]:
+            - generic [ref=e721]:
+              - generic [ref=e722]:
+                - heading "鲁B96004" [level=3] [ref=e723]
+                - generic [ref=e724]: 正在维修
+              - paragraph [ref=e725]:
+                - generic [ref=e726]: 派工号
+                - text: A996004
+              - generic [ref=e727]: 超期
+              - generic [ref=e729]:
+                - generic [ref=e730]:
+                  - generic [ref=e731]: 维修项目
+                  - generic [ref=e732]: 2 项
+                - list [ref=e733]:
+                  - listitem [ref=e734]: 【测试】更换空气滤芯
+                  - listitem [ref=e735]: 【测试】常规保养
+              - generic [ref=e736]:
+                - generic [ref=e737]:
+                  - generic [ref=e742]: 配件
+                  - strong [ref=e743]: 待备料
+                - generic [ref=e744]:
+                  - generic [ref=e748]: 预计完工
+                  - strong [ref=e749]: 2026/10/17 11:17
+              - generic [ref=e751]:
+                - generic [ref=e752]: 已提报或通过
+                - strong [ref=e753]:
+                  - text: "0"
+                  - generic [ref=e754]: / 2
+          - button "查看维修任务 鲁B90007" [ref=e755] [cursor=pointer]:
+            - generic [ref=e756]:
+              - generic [ref=e757]:
+                - heading "鲁B90007" [level=3] [ref=e758]
+                - generic [ref=e759]: 正在维修
+              - paragraph [ref=e760]:
+                - generic [ref=e761]: 委托单号
+                - text: WT-MOCK-TECH-07
+              - generic [ref=e762]:
+                - generic [ref=e763]: 超期
+                - generic [ref=e764]: 返工第 1 轮
+              - generic [ref=e765]:
+                - generic [ref=e766]:
+                  - generic [ref=e767]: 维修项目
+                  - generic [ref=e768]: 2 项
+                - list [ref=e769]:
+                  - listitem [ref=e770]: 【模拟】发动机常规保养
+                  - listitem [ref=e771]: 【验收】检查保养后异响
+              - generic [ref=e772]:
+                - generic [ref=e773]:
+                  - generic [ref=e778]: 配件
+                  - strong [ref=e779]: 备料完成
+                - generic [ref=e780]:
+                  - generic [ref=e784]: 预计完工
+                  - strong [ref=e785]: 2026/10/18 18:00
+              - generic [ref=e787]:
+                - generic [ref=e788]: 已提报或通过
+                - strong [ref=e789]:
+                  - text: "0"
+                  - generic [ref=e790]: / 2
+          - button "查看维修任务 鲁B279X6" [ref=e791] [cursor=pointer]:
+            - generic [ref=e792]:
+              - generic [ref=e793]:
+                - heading "鲁B279X6" [level=3] [ref=e794]
+                - generic [ref=e795]: 待开工
+              - paragraph [ref=e796]:
+                - generic [ref=e797]: 派工号
+                - text: DEMO-HISTORY-01
+              - generic [ref=e798]: 超期
+              - generic [ref=e800]:
+                - generic [ref=e801]:
+                  - generic [ref=e802]: 维修项目
+                  - generic [ref=e803]: 1 项
+                - list [ref=e804]:
+                  - listitem [ref=e805]: 【测试】历史用料查询与配件交接验证
+              - generic [ref=e806]:
+                - generic [ref=e807]:
+                  - generic [ref=e812]: 配件
+                  - strong [ref=e813]: 待备料
+                - generic [ref=e814]:
+                  - generic [ref=e818]: 预计完工
+                  - strong [ref=e819]: 2026/10/19 16:31
+              - generic [ref=e821]:
+                - generic [ref=e822]: 已提报或通过
+                - strong [ref=e823]:
+                  - text: "0"
+                  - generic [ref=e824]: / 1
+          - button "查看维修任务 鲁BWL030" [ref=e825] [cursor=pointer]:
+            - generic [ref=e826]:
+              - generic [ref=e827]:
+                - heading "鲁BWL030" [level=3] [ref=e828]
+                - generic [ref=e829]: 正在维修
+              - paragraph [ref=e830]:
+                - generic [ref=e831]: 派工号
+                - text: DEMO-HISTORY-02
+              - generic [ref=e832]: 超期
+              - generic [ref=e834]:
+                - generic [ref=e835]:
+                  - generic [ref=e836]: 维修项目
+                  - generic [ref=e837]: 1 项
+                - list [ref=e838]:
+                  - listitem [ref=e839]: 【测试】历史用料查询与配件交接验证
+              - generic [ref=e840]:
+                - generic [ref=e841]:
+                  - generic [ref=e846]: 配件
+                  - strong [ref=e847]: 备料完成
+                - generic [ref=e848]:
+                  - generic [ref=e852]: 预计完工
+                  - strong [ref=e853]: 2026/10/19 16:31
+              - generic [ref=e855]:
+                - generic [ref=e856]: 已提报或通过
+                - strong [ref=e857]:
+                  - text: "0"
+                  - generic [ref=e858]: / 1
+          - button "查看维修任务 鲁BPL970" [ref=e859] [cursor=pointer]:
+            - generic [ref=e860]:
+              - generic [ref=e861]:
+                - heading "鲁BPL970" [level=3] [ref=e862]
+                - generic [ref=e863]: 待开工
+              - paragraph [ref=e864]:
+                - generic [ref=e865]: 派工号
+                - text: DEMO-HISTORY-03
+              - generic [ref=e866]: 超期
+              - generic [ref=e868]:
+                - generic [ref=e869]:
+                  - generic [ref=e870]: 维修项目
+                  - generic [ref=e871]: 1 项
+                - list [ref=e872]:
+                  - listitem [ref=e873]: 【测试】历史用料查询与配件交接验证
+              - generic [ref=e874]:
+                - generic [ref=e875]:
+                  - generic [ref=e880]: 配件
+                  - strong [ref=e881]: 备料完成
+                - generic [ref=e882]:
+                  - generic [ref=e886]: 预计完工
+                  - strong [ref=e887]: 2026/10/19 16:31
+              - generic [ref=e889]:
+                - generic [ref=e890]: 已提报或通过
+                - strong [ref=e891]:
+                  - text: "0"
+                  - generic [ref=e892]: / 1
+          - button "查看维修任务 鲁UP1913" [ref=e893] [cursor=pointer]:
+            - generic [ref=e894]:
+              - generic [ref=e895]:
+                - heading "鲁UP1913" [level=3] [ref=e896]
+                - generic [ref=e897]: 正在维修
+              - paragraph [ref=e898]:
+                - generic [ref=e899]: 派工号
+                - text: DEMO-HISTORY-04
+              - generic [ref=e900]: 超期
+              - generic [ref=e902]:
+                - generic [ref=e903]:
+                  - generic [ref=e904]: 本人负责项目
+                  - generic [ref=e905]: 1 项
+                - list [ref=e906]:
+                  - listitem [ref=e907]: 【测试】历史用料查询与配件交接验证
+              - generic [ref=e908]:
+                - generic [ref=e909]:
+                  - generic [ref=e914]: 配件
+                  - strong [ref=e915]: 未登记需求
+                - generic [ref=e916]:
+                  - generic [ref=e920]: 预计完工
+                  - strong [ref=e921]: 2026/10/19 16:31
+              - generic [ref=e923]:
+                - generic [ref=e924]: 已提报或通过
+                - strong [ref=e925]:
+                  - text: "0"
+                  - generic [ref=e926]: / 1
+          - button "查看维修任务 鲁B5P2Z7" [ref=e927] [cursor=pointer]:
+            - generic [ref=e928]:
+              - generic [ref=e929]:
+                - heading "鲁B5P2Z7" [level=3] [ref=e930]
+                - generic [ref=e931]: 正在维修
+              - paragraph [ref=e932]:
+                - generic [ref=e933]: 委托单号
+                - text: WT-20261023-2ACDAC75A4F3
+              - generic [ref=e934]: 超期
+              - generic [ref=e936]:
+                - generic [ref=e937]:
+                  - generic [ref=e938]: 维修项目
+                  - generic [ref=e939]: 2 项
+                - list [ref=e940]:
+                  - listitem [ref=e941]: 正常项目
+                  - listitem [ref=e942]: 测试待定
+              - generic [ref=e943]:
+                - generic [ref=e944]:
+                  - generic [ref=e949]: 配件
+                  - strong [ref=e950]: 无需配件
+                - generic [ref=e951]:
+                  - generic [ref=e955]: 预计完工
+                  - strong [ref=e956]: 2026/10/22 11:57
+              - generic [ref=e958]:
+                - generic [ref=e959]: 已提报或通过
+                - strong [ref=e960]:
+                  - text: "0"
+                  - generic [ref=e961]: / 2
+          - button "查看维修任务 鲁B测试622" [ref=e962] [cursor=pointer]:
+            - generic [ref=e963]:
+              - generic [ref=e964]:
+                - heading "鲁B测试622" [level=3] [ref=e965]
+                - generic [ref=e966]: 待开工
+              - paragraph [ref=e967]:
+                - generic [ref=e968]: 派工号
+                - text: DM261022121405
+              - generic [ref=e969]: 超期
+              - generic [ref=e971]:
+                - generic [ref=e972]:
+                  - generic [ref=e973]: 本人负责项目
+                  - generic [ref=e974]: 1 项
+                - list [ref=e975]:
+                  - listitem [ref=e976]: 【模拟】发动机常规保养
+              - generic [ref=e977]:
+                - generic [ref=e978]:
+                  - generic [ref=e983]: 配件
+                  - strong [ref=e984]: 待备料
+                - generic [ref=e985]:
+                  - generic [ref=e989]: 预计完工
+                  - strong [ref=e990]: 2026/10/24 12:14
+              - generic [ref=e992]:
+                - generic [ref=e993]: 已提报或通过
+                - strong [ref=e994]:
+                  - text: "0"
+                  - generic [ref=e995]: / 1
+          - button "查看维修任务 鲁BTEST02" [ref=e996] [cursor=pointer]:
+            - generic [ref=e997]:
+              - generic [ref=e998]:
+                - heading "鲁BTEST02" [level=3] [ref=e999]
+                - generic [ref=e1000]: 正在维修
+              - paragraph [ref=e1001]:
+                - generic [ref=e1002]: 委托单号
+                - text: WT-20260817-6E9C277E9C29
+              - generic [ref=e1003]: 超期
+              - generic [ref=e1005]:
+                - generic [ref=e1006]:
+                  - generic [ref=e1007]: 本人负责项目
+                  - generic [ref=e1008]: 1 项
+                - list [ref=e1009]:
+                  - listitem [ref=e1010]: 测试
+              - generic [ref=e1011]:
+                - generic [ref=e1012]:
+                  - generic [ref=e1017]: 配件
+                  - strong [ref=e1018]: 无需配件
+                - generic [ref=e1019]:
+                  - generic [ref=e1023]: 预计完工
+                  - strong [ref=e1024]: 2026/10/24 16:24
+              - generic [ref=e1025]: 本人已提交 · 等待其他项目
+              - generic [ref=e1027]:
+                - generic [ref=e1028]: 已提报或通过
+                - strong [ref=e1029]:
+                  - text: "1"
+                  - generic [ref=e1030]: / 1
+          - button "查看维修任务 鲁BTEST03" [ref=e1031] [cursor=pointer]:
+            - generic [ref=e1032]:
+              - generic [ref=e1033]:
+                - heading "鲁BTEST03" [level=3] [ref=e1034]
+                - generic [ref=e1035]: 正在维修
+              - paragraph [ref=e1036]:
+                - generic [ref=e1037]: 委托单号
+                - text: WT-20260817-9704F0693A25
+              - generic [ref=e1038]: 超期
+              - generic [ref=e1040]:
+                - generic [ref=e1041]:
+                  - generic [ref=e1042]: 维修项目
+                  - generic [ref=e1043]: 2 项
+                - list [ref=e1044]:
+                  - listitem [ref=e1045]: 制动系统检查
+                  - listitem [ref=e1046]: 更换前制动片
+              - generic [ref=e1047]:
+                - generic [ref=e1048]:
+                  - generic [ref=e1053]: 配件
+                  - strong [ref=e1054]: 备料完成
+                - generic [ref=e1055]:
+                  - generic [ref=e1059]: 预计完工
+                  - strong [ref=e1060]: 2026/10/29 12:06
+              - generic [ref=e1062]:
+                - generic [ref=e1063]: 已提报或通过
+                - strong [ref=e1064]:
+                  - text: "0"
+                  - generic [ref=e1065]: / 2
+          - button "查看维修任务 鲁B498Z3" [ref=e1066] [cursor=pointer]:
+            - generic [ref=e1067]:
+              - generic [ref=e1068]:
+                - heading "鲁B498Z3" [level=3] [ref=e1069]
+                - generic [ref=e1070]: 正在维修
+              - paragraph [ref=e1071]:
+                - generic [ref=e1072]: 派工号
+                - text: A66901
+              - generic [ref=e1073]:
+                - generic [ref=e1074]: 超期
+                - generic [ref=e1075]: 追加维修第 1 轮
+              - generic [ref=e1076]:
+                - generic [ref=e1077]:
+                  - generic [ref=e1078]: 维修项目
+                  - generic [ref=e1079]: 1 项
+                - list [ref=e1080]:
+                  - listitem [ref=e1081]: 测试之后
+              - generic [ref=e1082]:
+                - generic [ref=e1083]:
+                  - generic [ref=e1088]: 配件
+                  - strong [ref=e1089]: 待备料
+                - generic [ref=e1090]:
+                  - generic [ref=e1094]: 预计完工
+                  - strong [ref=e1095]: 2026/10/29 12:17
+              - generic [ref=e1097]:
+                - generic [ref=e1098]: 已提报或通过
+                - strong [ref=e1099]:
+                  - text: "0"
+                  - generic [ref=e1100]: / 1
+        - generic "列表分页" [ref=e1101]:
+          - list [ref=e1102]:
+            - listitem [ref=e1103]: 共 25 条
+            - listitem "上一页" [ref=e1104]:
+              - button [disabled] [ref=e1105]:
+                - img "left" [ref=e1106]
+            - listitem "1" [ref=e1109] [cursor=pointer]
+            - listitem "2" [ref=e1111] [cursor=pointer]
+            - listitem "下一页" [ref=e1113] [cursor=pointer]:
+              - button [ref=e1114]:
+                - img "right" [ref=e1115]
+  - dialog "鲁B9NP01 · 我的维修" [ref=e1119]:
+    - generic [ref=e1121]:
+      - button "关闭" [ref=e1122] [cursor=pointer]:
+        - img "close" [ref=e1123]
+      - generic [ref=e1126]: 鲁B9NP01 · 我的维修
+    - generic [ref=e1128]:
+      - region "任务概览" [ref=e1129]:
+        - generic [ref=e1135]:
+          - text: 维修任务
+          - heading "鲁B9NP01" [level=2] [ref=e1136]
+          - paragraph [ref=e1137]: 铭牌功能测试车
+        - generic [ref=e1138]:
+          - generic [ref=e1139]: 待开工
+          - generic "维修与领料批次"
+        - generic [ref=e1140]:
+          - generic [ref=e1141]: 派工号
+          - strong [ref=e1142]: WT-20261102-4520ACA50275
+        - generic [ref=e1143]:
+          - generic [ref=e1144]:
+            - term [ref=e1145]: 托修单位
+            - definition [ref=e1146]: 【本地临时测试】铭牌复用
+          - generic [ref=e1147]:
+            - term [ref=e1148]: 服务顾问
+            - definition [ref=e1149]: 张三（测试）
+          - generic [ref=e1150]:
+            - term [ref=e1151]: 维修员工
+            - definition [ref=e1152]: 李富强
+          - generic [ref=e1153]:
+            - term [ref=e1154]: 预计完工
+            - definition [ref=e1155]:
+              - generic [ref=e1156]: 未记录
+      - navigation "维修详情快捷定位" [ref=e1158]:
+        - button "维修项目" [ref=e1159] [cursor=pointer]
+        - button "所需配件" [ref=e1164] [cursor=pointer]
+        - button "维修照片" [ref=e1171] [cursor=pointer]
+      - region "维修项目" [ref=e1177]:
+        - generic [ref=e1178]:
+          - heading "主要作业与增修项目" [level=3] [ref=e1179]
+          - button "edit 编辑项目" [ref=e1180] [cursor=pointer]:
+            - img "edit" [ref=e1182]
+            - generic [ref=e1185]: 编辑项目
+        - list [ref=e1187]:
+          - listitem [ref=e1188]:
+            - generic [ref=e1189]: "01"
+            - generic [ref=e1191]:
+              - generic [ref=e1192]:
+                - generic [ref=e1193]: 铭牌复用功能检查
+                - generic [ref=e1194]: 待开工
+              - generic [ref=e1195]: 负责人：李富强
+              - group [ref=e1196]:
+                - generic "时间记录" [ref=e1197] [cursor=pointer]
+      - region "配件与领料" [ref=e1198]:
+        - region "所需配件" [ref=e1199]:
+          - generic [ref=e1200]:
+            - heading "所需配件" [level=3] [ref=e1201]
+            - generic [ref=e1202]: 尚未登记
+        - button "向仓库申请领料" [ref=e1203] [cursor=pointer]
+      - button "collapsed 配件申请与备料记录" [ref=e1212] [cursor=pointer]:
+        - img "collapsed" [ref=e1214]
+        - generic [ref=e1217]: 配件申请与备料记录
+      - region "维修拍照与记录" [ref=e1218]:
+        - region "维修照片" [ref=e1219]:
+          - heading "维修照片 （必填）" [level=3] [ref=e1221]
+          - paragraph [ref=e1222]: 提交完工前，须上传至少一张本轮维修照片。支持相册多选，上传后自动保存；本轮照片可多选删除。
+          - generic [ref=e1223]:
+            - generic [ref=e1224]:
+              - button "拍照记录" [ref=e1225] [cursor=pointer]
+              - button "维修记录拍照" [ref=e1231] [cursor=pointer]
+            - generic [ref=e1232]:
+              - button "相册" [ref=e1233] [cursor=pointer]
+              - button "维修记录从相册选择" [ref=e1241] [cursor=pointer]
+          - status [ref=e1242]: 本轮尚未上传维修照片
+      - region "车辆铭牌照片" [ref=e1243]:
+        - heading "车辆铭牌照片" [level=3] [ref=e1245]
+        - paragraph [ref=e1246]: 请拍清车辆型号、发动机型号和 VIN，供仓管核对配件。
+        - generic [ref=e1247]:
+          - strong [ref=e1248]: 找到这辆车上次保存的铭牌
+          - paragraph [ref=e1249]: 2026/11/2 · 鲁B9NP01 · VIN 一致
+          - button "上次保存的车辆铭牌照片" [ref=e1252]:
+            - img "上次保存的车辆铭牌照片" [ref=e1253]
+            - generic [ref=e1254] [cursor=pointer]
+          - button "使用上次铭牌" [ref=e1255] [cursor=pointer]
+        - generic [ref=e1257]:
+          - generic [ref=e1258]:
+            - button "重新拍摄" [ref=e1259] [cursor=pointer]
+            - button "车辆铭牌照片拍照" [ref=e1265] [cursor=pointer]
+          - generic [ref=e1266]:
+            - button "相册选择" [ref=e1267] [cursor=pointer]
+            - button "车辆铭牌照片从相册选择" [ref=e1275] [cursor=pointer]
+      - button "collapsed 完整派工单与接车照片" [ref=e1278] [cursor=pointer]:
+        - img "collapsed" [ref=e1280]
+        - generic [ref=e1283]: 完整派工单与接车照片
+      - button "collapsed 更多信息" [ref=e1286] [cursor=pointer]:
+        - img "collapsed" [ref=e1288]
+        - generic [ref=e1291]: 更多信息
+      - generic [ref=e1293]:
+        - button "暂停维修" [ref=e1294] [cursor=pointer]
+        - button "开始维修" [ref=e1296] [cursor=pointer]

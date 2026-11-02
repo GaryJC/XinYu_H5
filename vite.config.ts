@@ -22,12 +22,34 @@ export default defineConfig({
     }
   }],
   build: {
+    manifest: true,
+    // Font subsets should remain cacheable files, not base64 in print JavaScript.
+    assetsInlineLimit: (filePath) => /\.woff2?$/.test(filePath) ? false : undefined,
     target: ["chrome80", "safari13"],
     // Keep max-width media queries: Vite's modern defaults rewrite them to
     // range syntax (width <= ...), which older DingTalk WebViews ignore.
     cssTarget: ["chrome80", "safari13"],
     outDir: "../dist",
     emptyOutDir: true
+  },
+  css: {
+    postcss: {
+      plugins: [{
+        postcssPlugin: "print-font-woff2-only",
+        Once(root) {
+          // Chrome 80 / Safari 13 both support WOFF2. Keep every Unicode subset
+          // and weight, but do not ship a duplicate WOFF copy of the same font.
+          root.walkDecls("src", declaration => {
+            const isPrintFont = declaration.parent?.nodes.some(node =>
+              node.type === "decl" && node.prop === "font-family" && /['"]?Noto Serif SC['"]?/.test(node.value)
+            );
+            if (isPrintFont) {
+              declaration.value = declaration.value.replace(/,\s*url\([^)]*\.woff['"]?\)\s*format\(['"]woff['"]\)/g, "");
+            }
+          });
+        }
+      }]
+    }
   },
   server: {
     host: "0.0.0.0",

@@ -4,7 +4,7 @@ import type {ECElementEvent} from 'echarts/core';
 import type {OperationsWorker,WorkloadState} from '../../../../shared/types';
 import {Chart} from '../../shared/charts/Chart';
 import './worker-load-chart.css';
-export const workloadLabels:Record<WorkloadState,string>={working:'维修中',waiting:'未开工',paused:'暂停',inspection:'待检验',unfinished:'全部未完成'};
+import { workloadLabels } from "./workloadLabels";
 const states=['working','waiting','paused','inspection'] as const;
 const colors=['#4279d9','#2ba69a','#e7b35a','#a18ad2'];
 type Props={hideTitle?:boolean;workers:OperationsWorker[];selected?:{workerId?:string;state?:WorkloadState};onSelect?:(workerId:string,state:WorkloadState)=>void};

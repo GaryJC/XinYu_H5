@@ -1,9 +1,11 @@
+import { lazy, Suspense } from "react";
 import { Alert, Button, Form, Input, Tooltip } from "antd";
 import type { UserProfile, WorkOrder } from "../../../../shared/types";
 import { FormDialog } from "../../shared/ui/BusinessForm";
 import { VehicleReferenceAutocomplete } from "../vehicle-identity/VehicleReferenceAutocomplete";
-import { CreateVehicleReferenceButton } from "../vehicle-identity/CreateVehicleReferenceButton";
 import { useCustomerVehicleEditor } from "./useCustomerVehicleEditor";
+
+const CreateVehicleReferenceButton = lazy(() => import("../vehicle-identity/CreateVehicleReferenceButton").then(module => ({ default: module.CreateVehicleReferenceButton })));
 
 export function CustomerVehicleEditor({ order, user, onUpdated, disabled }: {
   order: WorkOrder; user?: UserProfile; onUpdated: (order: WorkOrder) => void; disabled?: boolean;
@@ -42,7 +44,7 @@ export function CustomerVehicleEditor({ order, user, onUpdated, disabled }: {
               placeholder={`查询已有${label}，或使用下方新增`} onSelect={select}
               onChange={value => setChange(current => current ? { ...current, ...(model
                 ? { model: value, modelLegacyCode: "" } : { organization: value, organizationLegacyCode: "" }) } : current)} />
-            <CreateVehicleReferenceButton kind={kind} currentName={name} currentCode={code} disabled={busy} onCreate={select} />
+            <Suspense fallback={<span role="status">正在加载新增{label}…</span>}><CreateVehicleReferenceButton kind={kind} currentName={name} currentCode={code} disabled={busy} onCreate={select} /></Suspense>
           </Form.Item>;
         })}
       </Form>}

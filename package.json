@@ -17,6 +17,7 @@
     "test": "node --test",
     "build": "npm run typecheck && node --env-file-if-exists=.env.production --env-file-if-exists=.env.local node_modules/vite/bin/vite.js build",
     "check": "npm test && npm run build",
+    "analyze:bundle": "node scripts/report-bundle.mjs",
     "package:deploy": "node scripts/create-deployment-package.mjs",
     "preview": "vite preview"
   },

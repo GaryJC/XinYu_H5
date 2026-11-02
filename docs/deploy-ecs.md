@@ -263,6 +263,7 @@ server {
     index index.html;
 
     gzip on;
+    gzip_vary on;
     gzip_min_length 1024;
     gzip_types text/css application/javascript application/json image/svg+xml;
 
@@ -277,6 +278,13 @@ server {
 
     location = /index.html {
         add_header Cache-Control "no-store" always;
+    }
+
+    # Vite content-hashed assets can be reused across visits. Missing chunks
+    # must return 404 rather than the SPA HTML (e.g. after a deployment).
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
     }
 
     location / {

@@ -1,0 +1,157 @@
+- generic [ref=e1]:
+  - generic [ref=e4]:
+    - complementary [ref=e5]:
+      - generic [ref=e7]:
+        - generic [ref=e14]:
+          - strong [ref=e15]: 修理委托
+          - generic [ref=e16]: 门店协同工作台
+        - generic [ref=e17]: 业务导航
+        - navigation "主导航" [ref=e18]:
+          - button "工作台" [ref=e19] [cursor=pointer]
+          - button "委托开单" [ref=e26] [cursor=pointer]
+          - button "派工台" [ref=e32] [cursor=pointer]
+          - button "工单全览" [ref=e39] [cursor=pointer]
+          - button "出车申请" [ref=e45] [cursor=pointer]
+        - paragraph [ref=e56]: 按门店与岗位权限使用委托开单、签字与归档功能。
+    - main [ref=e57]:
+      - generic [ref=e58]:
+        - generic [ref=e60]:
+          - text: 门店工作空间
+          - heading "工作台" [level=1] [ref=e61]
+          - paragraph [ref=e62]: 请先登录 · — 张委托单
+        - generic [ref=e63]:
+          - button "委托开单" [ref=e64] [cursor=pointer]
+          - generic [ref=e68]: 钉钉组织已同步
+          - generic [ref=e75] [cursor=pointer]:
+            - generic [ref=e76]:
+              - generic: 选择测试身份
+              - combobox "切换本地测试身份" [expanded] [active] [ref=e77]:
+                - listbox:
+                  - option "张三｜服务顾问": advisor
+                  - option "Gary｜门店管理员": manager
+            - img "down" [ref=e79]
+          - generic [ref=e82]: 未登录
+      - generic [ref=e88]:
+        - heading "待办概览" [level=2] [ref=e90]
+        - generic [ref=e91]: 当前可见待办
+      - region "全部待办统计" [ref=e92]:
+        - button "查看待客户签字事项" [ref=e93] [cursor=pointer]:
+          - generic [ref=e94]: 待客户签字
+          - strong [ref=e102]: 0单
+          - generic [ref=e103]: 查看并处理
+        - button "查看待派工事项" [ref=e104] [cursor=pointer]:
+          - generic [ref=e105]: 待派工
+          - strong [ref=e114]: —单
+          - generic [ref=e115]: 查看并处理
+        - button "查看待检验事项" [ref=e116] [cursor=pointer]:
+          - generic [ref=e117]: 待检验
+          - strong [ref=e125]: —单
+          - generic [ref=e126]: 查看并处理
+        - button "查看维修中事项" [ref=e127] [cursor=pointer]:
+          - generic [ref=e128]: 维修中
+          - strong [ref=e134]: —单
+          - generic [ref=e135]: 查看并处理
+      - region "快捷入口" [ref=e136]:
+        - generic [ref=e137]:
+          - heading "快捷入口" [level=2] [ref=e138]
+          - generic [ref=e139]: 常用业务
+        - generic [ref=e140]:
+          - button "委托开单" [ref=e141] [cursor=pointer]
+          - button "派工台" [ref=e150] [cursor=pointer]
+          - button "出车申请" [ref=e160] [cursor=pointer]
+      - generic [ref=e169]:
+        - generic [ref=e170]:
+          - strong [ref=e171]: 服务顾问工作区
+          - generic [ref=e172]: 查看本店委托单、维修任务和维修工负荷
+        - paragraph [ref=e173]: 开单、客户签字、提交润丰同步、指派和改派维修工
+        - generic [ref=e174]:
+          - generic [ref=e175]: 不能配置门店权限
+          - generic [ref=e176]: 不能检验通过
+      - generic [ref=e178]:
+        - generic [ref=e179]:
+          - generic [ref=e180]:
+            - heading "归档查询" [level=2] [ref=e181]
+            - paragraph [ref=e182]: 点击任一委托单可查看完整归档内容。
+          - generic [ref=e183]:
+            - button "待客户确认跟进" [ref=e184] [cursor=pointer]
+            - button "刷新列表" [ref=e319] [cursor=pointer]
+            - button "全部从润丰更新" [ref=e192] [cursor=pointer]
+            - generic [ref=e200]:
+              - searchbox "搜索车牌 / VIN / 工单号 / 派工号" [ref=e202]
+              - button [ref=e204] [cursor=pointer]:
+                - img "search" [ref=e206]
+        - paragraph [ref=e209]: 更新全部已同步且有权限的委托单，不受搜索和分页影响；保留签名、照片和维修进度。更新期间请保持页面打开。
+        - region "委托单筛选" [ref=e211]:
+          - generic [ref=e212]:
+            - generic [ref=e213]: 创建日期
+            - generic [ref=e214]:
+              - button "全 部" [ref=e215] [cursor=pointer]
+              - button "今 天" [ref=e217] [cursor=pointer]
+              - button "昨 天" [ref=e219] [cursor=pointer]
+              - button "近7天" [ref=e221] [cursor=pointer]
+              - button "自定义" [ref=e223] [cursor=pointer]
+            - generic [ref=e225]:
+              - generic [ref=e226] [cursor=pointer]:
+                - generic "更新时间最新" [ref=e227]:
+                  - text: 更新时间最新
+                  - combobox "委托单排序" [ref=e228]
+                - img "down" [ref=e230]
+              - generic [ref=e233] [cursor=pointer]:
+                - checkbox "百援门店单" [ref=e235]
+                - generic [ref=e236]: 百援门店单
+              - button "重置" [ref=e237] [cursor=pointer]
+          - generic [ref=e239]:
+            - generic [ref=e240]:
+              - generic [ref=e241]: 业务状态
+              - generic [ref=e242]:
+                - generic [ref=e243]:
+                  - generic: 全部
+                  - combobox "业务状态" [ref=e245]
+                - img "down" [ref=e247]
+            - generic [ref=e250]:
+              - generic [ref=e251]: 服务顾问
+              - generic [ref=e252]:
+                - generic [ref=e253]:
+                  - generic: 全部
+                  - combobox "服务顾问" [ref=e255]
+                - img "down" [ref=e257]
+            - generic [ref=e260]:
+              - generic [ref=e261]: 维修技师
+              - generic [ref=e262]:
+                - generic [ref=e263]:
+                  - generic: 全部
+                  - combobox "维修技师" [ref=e265]
+                - img "down" [ref=e267]
+          - generic [ref=e270]: 共 0 张
+        - table [ref=e278]:
+          - rowgroup [ref=e290]:
+            - row [ref=e291]:
+              - columnheader "派工号" [ref=e292]
+              - columnheader "车牌" [ref=e293]
+              - columnheader "车主" [ref=e294]
+              - columnheader "服务顾问" [ref=e295]
+              - columnheader "维修技师" [ref=e296]
+              - columnheader "业务状态" [ref=e297]
+              - columnheader "润丰同步" [ref=e298]
+              - columnheader "金额" [ref=e299]
+              - columnheader "创建时间" [ref=e300]
+              - columnheader "更新时间" [ref=e301]
+          - rowgroup [ref=e302]:
+            - row [ref=e303] [cursor=pointer]:
+              - cell "暂无数据 暂无符合条件的委托单 清空筛选" [ref=e304]:
+                - generic [ref=e306]:
+                  - img "暂无数据" [ref=e308]
+                  - generic [ref=e314]: 暂无符合条件的委托单
+                  - button "清空筛选" [ref=e316]
+        - generic "列表分页" [ref=e318]
+  - generic [ref=e322]:
+    - generic [ref=e325]:
+      - generic "张三｜服务顾问" [ref=e326] [cursor=pointer]
+      - generic "Gary｜门店管理员" [ref=e328] [cursor=pointer]
+      - generic "仓管｜测试" [ref=e330] [cursor=pointer]
+      - generic "李富强｜维修工（测试）" [ref=e332] [cursor=pointer]
+      - generic "检验员｜测试" [ref=e334] [cursor=pointer]
+      - generic "普通员工｜出车申请" [ref=e336] [cursor=pointer]
+      - generic "未分配岗位员工｜出车申请" [ref=e338] [cursor=pointer]
+      - generic "已停用员工" [ref=e340] [cursor=pointer]
+    - generic [ref=e343] [cursor=pointer]

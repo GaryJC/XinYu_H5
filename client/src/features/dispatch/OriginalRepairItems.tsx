@@ -1,5 +1,6 @@
 import type {DispatchDetail} from '../../../../shared/types';
-import {Tag} from 'antd';
+import {RepairStatusTag} from './RepairStatusTag';
+import './repair-items-editor.css';
 
 export function OriginalRepairItems({detail}:{detail:DispatchDetail}) {
   if(!detail.task.repairRound)return null;
@@ -9,9 +10,8 @@ export function OriginalRepairItems({detail}:{detail:DispatchDetail}) {
     <h3>原主要作业与项目</h3>
     <ol className="repair-item-list">{original.items.map((item,index)=><li key={item.id} className="repair-item-row">
       <div className="repair-item-leading"><span className="repair-item-number">{String(index+1).padStart(2,'0')}</span></div>
-      <div className="repair-item-content"><div className="repair-item-title">{item.name}</div>
+      <div className="repair-item-content"><div className="repair-item-name-row"><div className="repair-item-title">{item.name}</div><RepairStatusTag status={item.status}/></div>
         <div className="repair-item-owner">负责人：{item.responsibleName||original.technicianName||'未记录'}</div>
-        <Tag>{item.status}</Tag>
       </div>
     </li>)}</ol>
   </section>;

@@ -44,8 +44,8 @@
 .technician-projects>.repair-items-heading { padding-bottom: 14px; border-bottom: 1px solid #e8edf5; }
 .technician-projects .repair-items-heading>.ant-btn { flex-shrink: 0; }
 .technician-detail .is-compact:not(.is-editing) .repair-item-row { border: 1px solid #e8edf4; border-radius: 12px; padding: 14px; background: #f8fafc; }
-.technician-detail .is-compact:not(.is-editing) .repair-item-name-row { flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
-.technician-detail .is-compact:not(.is-editing) .repair-item-title { font-size: 16px; line-height: 1.7; font-weight: 600; min-width: min(100%,120px); }
+.technician-detail .is-compact:not(.is-editing) .repair-item-name-row { flex-wrap: nowrap; align-items: baseline; justify-content: space-between; gap: 6px 10px; }
+.technician-detail .is-compact:not(.is-editing) .repair-item-title { font-size: 16px; line-height: 1.7; font-weight: 600; min-width: 0; }
 .technician-detail .is-compact:not(.is-editing) .repair-status-tag { font-size: 12px; padding: 1px 7px; }
 .technician-detail .is-compact:not(.is-editing) .repair-item-owner { font-size: 15px; line-height: 1.7; margin-top: 6px; }
 .technician-detail .ant-alert-description,.technician-detail .repair-item-return-reason { font-size: 15px; line-height: 1.8; }

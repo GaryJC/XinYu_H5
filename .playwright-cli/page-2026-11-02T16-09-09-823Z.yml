@@ -1,0 +1,121 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - generic [ref=e7]:
+      - generic [ref=e14]:
+        - strong [ref=e15]: 修理委托
+        - generic [ref=e16]: 门店协同工作台
+      - generic [ref=e17]: 业务导航
+      - navigation "主导航" [ref=e18]:
+        - button "检验任务" [ref=e344] [cursor=pointer]
+        - button "出车申请" [ref=e45] [cursor=pointer]
+      - paragraph [ref=e56]: 按门店与岗位权限使用委托开单、签字与归档功能。
+  - main [ref=e57]:
+    - generic [ref=e58]:
+      - generic [ref=e60]:
+        - text: 门店工作空间
+        - heading "检验任务" [level=1] [ref=e350]
+        - paragraph [ref=e62]: 检验员（测试） · 检验员
+      - generic [ref=e63]:
+        - generic [ref=e68]: 测试身份：检验员（测试）
+        - generic [ref=e75] [cursor=pointer]:
+          - generic [ref=e76]:
+            - generic: 选择测试身份
+            - combobox "切换本地测试身份" [active] [ref=e77]
+          - img "down" [ref=e351]
+        - generic [ref=e82]: 检验员
+    - region "检验任务" [ref=e354]:
+      - generic [ref=e355]:
+        - paragraph [ref=e357]: 查看本店检验任务，可按状态筛选和处理检验结果。 更新于 00:09:09
+        - button "刷新" [ref=e358] [cursor=pointer]
+      - search "工单搜索筛选" [ref=e366]:
+        - generic [ref=e367]:
+          - searchbox "搜索派工任务" [ref=e369]
+          - button [ref=e371] [cursor=pointer]:
+            - img "search" [ref=e373]
+        - generic "工单状态筛选" [ref=e376]:
+          - tablist [ref=e377]:
+            - generic [ref=e379]:
+              - tab "全部未完成 50" [ref=e381] [cursor=pointer]:
+                - generic [ref=e382]:
+                  - generic [ref=e383]: 全部未完成
+                  - strong [ref=e384]: "50"
+              - tab "待检验 2" [selected] [ref=e386] [cursor=pointer]:
+                - generic [ref=e387]:
+                  - generic [ref=e388]: 待检验
+                  - strong [ref=e389]: "2"
+              - tab "待定 2" [ref=e391] [cursor=pointer]:
+                - generic [ref=e392]:
+                  - generic [ref=e393]: 待定
+                  - strong [ref=e394]: "2"
+              - tab "回审 1" [ref=e396] [cursor=pointer]:
+                - generic [ref=e397]:
+                  - generic [ref=e398]: 回审
+                  - strong [ref=e399]: "1"
+              - tab "已完成 8" [ref=e401] [cursor=pointer]:
+                - generic [ref=e402]:
+                  - generic [ref=e403]: 已完成
+                  - strong [ref=e404]: "8"
+          - generic:
+            - generic:
+              - tabpanel "待检验 2"
+        - generic [ref=e405]:
+          - button "筛选" [ref=e406] [cursor=pointer]:
+            - img "filter" [ref=e408]
+          - button "加急" [ref=e412] [cursor=pointer]:
+            - img "thunderbolt" [ref=e414]
+          - button "超期" [ref=e418] [cursor=pointer]:
+            - img "clock-circle" [ref=e420]
+          - button "重置筛选" [ref=e425] [cursor=pointer]:
+            - generic [ref=e426]: 1 项 · 清空
+      - region "工作负荷看板" [ref=e427]:
+        - heading [level=3] [ref=e428]:
+          - button "工作负荷看板 · 6 人 展开" [ref=e429] [cursor=pointer]:
+            - generic [ref=e430]:
+              - text: 工作负荷看板
+              - generic [ref=e431]: · 6 人
+            - generic [ref=e432]: 展开
+      - heading "待检验（2）" [level=3] [ref=e437]
+      - table [ref=e444]:
+        - rowgroup [ref=e445]:
+          - row [ref=e446]:
+            - columnheader "车辆 / 单号" [ref=e447]
+            - columnheader "服务顾问" [ref=e448]
+            - columnheader "维修员工 / 承包方" [ref=e449]
+            - columnheader "阶段" [ref=e450]
+            - columnheader "维修内容" [ref=e451]
+            - columnheader "项目进度" [ref=e452]
+            - columnheader "预计完工" [ref=e453]
+            - columnheader "操作" [ref=e454]
+        - rowgroup [ref=e455]:
+          - row [ref=e456]:
+            - cell "鲁BTEST02 WT-20260817-6E9C277E9C29" [ref=e457]:
+              - button "鲁BTEST02" [ref=e458] [cursor=pointer]
+              - generic [ref=e460]: WT-20260817-6E9C277E9C29
+            - cell "联调测试顾问-李四" [ref=e461]
+            - cell "曲怀复、李富强" [ref=e462]
+            - cell "店内维修 正在维修 超期" [ref=e463]:
+              - generic [ref=e464]:
+                - generic [ref=e465]: 店内维修
+                - generic [ref=e467]: 正在维修
+                - generic [ref=e469]: 超期
+            - cell "前保险杠喷漆、测试" [ref=e471]
+            - cell "1/2" [ref=e473]
+            - cell "2026/10/24 16:24:00" [ref=e474]
+            - cell [ref=e475]:
+              - button "详 情" [ref=e476] [cursor=pointer]
+          - row [ref=e478]:
+            - cell "鲁BN9620 PHOTO-TEST-1" [ref=e479]:
+              - button "鲁BN9620" [ref=e480] [cursor=pointer]
+              - generic [ref=e482]: PHOTO-TEST-1
+            - cell "张三（测试）" [ref=e483]
+            - cell "李富强" [ref=e484]
+            - cell "店内维修 正在维修" [ref=e485]:
+              - generic [ref=e486]:
+                - generic [ref=e487]: 店内维修
+                - generic [ref=e489]: 正在维修
+            - cell "检修左前门玻璃机、固定右前门密封条、拆装门里子换玻璃机、粘玻璃机固定架两个" [ref=e491]
+            - cell "4/4" [ref=e493]
+            - cell "未记录" [ref=e494]
+            - cell [ref=e495]:
+              - button "详 情" [ref=e496] [cursor=pointer]
+      - generic "列表分页" [ref=e498]
