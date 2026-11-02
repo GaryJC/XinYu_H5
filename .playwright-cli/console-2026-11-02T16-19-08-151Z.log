@@ -9,3 +9,6 @@
     at gu (http://127.0.0.1:4173/assets/jsx-runtime-yxuSORUj.js:8:111421)
     at ld (http://127.0.0.1:4173/assets/jsx-runtime-yxuSORUj.js:8:123057)
     at id (http://127.0.0.1:4173/assets/jsx-runtime-yxuSORUj.js:8:121617)
+[  364015ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4173/assets/WorkerLoadChart-L47hieEA.js:0
+[  364017ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4173/assets/WorkerLoadChart-L47hieEA.js:0
+[  364317ms] Failed to fetch dynamically imported module: http://127.0.0.1:4173/assets/WorkerLoadChart-L47hieEA.js

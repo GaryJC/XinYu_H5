@@ -5571,3 +5571,19 @@ Visit https://react.dev/link/error-boundaries to learn more about error boundari
 [368514033ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
 [368544045ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
 [368544045ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[368574032ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[368574032ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[368604046ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[368604046ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[368634044ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[368634044ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[368664045ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[368664045ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[368694037ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[368694037ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[368724047ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[368724047ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[368754049ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[368754049ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[368767614ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=3630e295:14335
+[368768129ms] [ERROR] Warning: [antd: Drawer] `height` is deprecated. Please use `size` instead. @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/es-BiDARMsy.js?v=3630e295:166

@@ -1,0 +1,114 @@
+- generic [ref=f2e4]:
+  - complementary [ref=f2e5]:
+    - generic [ref=f2e7]:
+      - generic [ref=f2e14]:
+        - strong [ref=f2e15]: 修理委托
+        - generic [ref=f2e16]: 门店协同工作台
+      - generic [ref=f2e17]: 业务导航
+      - navigation "主导航" [ref=f2e18]:
+        - button "工作台" [ref=f2e1006] [cursor=pointer]
+        - button "委托开单" [ref=f2e26] [cursor=pointer]
+        - button "派工台" [ref=f2e1013] [cursor=pointer]
+        - button "检验任务" [ref=f2e39] [cursor=pointer]
+        - button "工单全览" [ref=f2e45] [cursor=pointer]
+        - button "配件竞价" [ref=f2e51] [cursor=pointer]
+        - button "出车申请" [ref=f2e59] [cursor=pointer]
+        - button "车辆管理" [ref=f2e65] [cursor=pointer]
+        - button "数据看板" [ref=f2e70] [cursor=pointer]
+        - button "权限设置" [ref=f2e74] [cursor=pointer]
+      - paragraph [ref=f2e84]: 按门店与岗位权限使用委托开单、签字与归档功能。
+  - main [ref=f2e85]:
+    - generic [ref=f2e86]:
+      - generic [ref=f2e88]:
+        - text: 门店工作空间
+        - heading "派工台" [level=1] [ref=f2e1020]
+        - paragraph [ref=f2e90]: 测试管理员 · 门店管理员
+      - generic [ref=f2e91]:
+        - generic [ref=f2e96]: 已登录：测试管理员
+        - generic [ref=f2e103]: 门店管理员
+    - region "派工台" [ref=f2e1021]:
+      - generic [ref=f2e1022]:
+        - paragraph [ref=f2e1024]: 默认显示本店未完成工单，历史工单可在“已完成”中查看。 更新于 00:24:29
+        - button "刷新" [ref=f2e1025] [cursor=pointer]
+      - search "工单搜索筛选" [ref=f2e1033]:
+        - generic [ref=f2e1034]:
+          - searchbox "搜索派工任务" [ref=f2e1036]
+          - button [ref=f2e1038] [cursor=pointer]:
+            - img "search" [ref=f2e1040]
+        - generic "工单状态筛选" [ref=f2e1043]:
+          - tablist [ref=f2e1044]:
+            - generic [ref=f2e1046]:
+              - tab "全部未完成 —" [selected] [ref=f2e1048] [cursor=pointer]:
+                - generic [ref=f2e1049]:
+                  - generic [ref=f2e1050]: 全部未完成
+                  - strong [ref=f2e1051]: —
+              - tab "未派工 —" [ref=f2e1053] [cursor=pointer]:
+                - generic [ref=f2e1054]:
+                  - generic [ref=f2e1055]: 未派工
+                  - strong [ref=f2e1056]: —
+              - tab "待客户确认 —" [ref=f2e1058] [cursor=pointer]:
+                - generic [ref=f2e1059]:
+                  - generic [ref=f2e1060]: 待客户确认
+                  - strong [ref=f2e1061]: —
+              - tab "待定 —" [ref=f2e1063] [cursor=pointer]:
+                - generic [ref=f2e1064]:
+                  - generic [ref=f2e1065]: 待定
+                  - strong [ref=f2e1066]: —
+              - tab "未接单 —" [ref=f2e1068] [cursor=pointer]:
+                - generic [ref=f2e1069]:
+                  - generic [ref=f2e1070]: 未接单
+                  - strong [ref=f2e1071]: —
+              - tab "待开工 —" [ref=f2e1073] [cursor=pointer]:
+                - generic [ref=f2e1074]:
+                  - generic [ref=f2e1075]: 待开工
+                  - strong [ref=f2e1076]: —
+              - tab "正在维修 —" [ref=f2e1078] [cursor=pointer]:
+                - generic [ref=f2e1079]:
+                  - generic [ref=f2e1080]: 正在维修
+                  - strong [ref=f2e1081]: —
+              - tab "暂停 —" [ref=f2e1083] [cursor=pointer]:
+                - generic [ref=f2e1084]:
+                  - generic [ref=f2e1085]: 暂停
+                  - strong [ref=f2e1086]: —
+              - tab "待检验 —" [ref=f2e1088] [cursor=pointer]:
+                - generic [ref=f2e1089]:
+                  - generic [ref=f2e1090]: 待检验
+                  - strong [ref=f2e1091]: —
+              - tab "回审 —" [ref=f2e1093] [cursor=pointer]:
+                - generic [ref=f2e1094]:
+                  - generic [ref=f2e1095]: 回审
+                  - strong [ref=f2e1096]: —
+              - tab "草稿 —" [ref=f2e1098] [cursor=pointer]:
+                - generic [ref=f2e1099]:
+                  - generic [ref=f2e1100]: 草稿
+                  - strong [ref=f2e1101]: —
+              - tab "待客户签字 —" [ref=f2e1103] [cursor=pointer]:
+                - generic [ref=f2e1104]:
+                  - generic [ref=f2e1105]: 待客户签字
+                  - strong [ref=f2e1106]: —
+              - tab "已完成 —" [ref=f2e1108] [cursor=pointer]:
+                - generic [ref=f2e1109]:
+                  - generic [ref=f2e1110]: 已完成
+                  - strong [ref=f2e1111]: —
+            - button [ref=f2e1113]:
+              - img "ellipsis" [ref=f2e1114]
+          - generic:
+            - generic:
+              - tabpanel "全部未完成 —"
+        - generic [ref=f2e1117]:
+          - button "筛选" [ref=f2e1118] [cursor=pointer]:
+            - img "filter" [ref=f2e1120]
+          - button "加急" [ref=f2e1124] [cursor=pointer]:
+            - img "thunderbolt" [ref=f2e1126]
+          - button "超期" [ref=f2e1130] [cursor=pointer]:
+            - img "clock-circle" [ref=f2e1132]
+      - region "维修工在手项目分布" [ref=f2e1137]:
+        - heading [level=3] [ref=f2e1138]:
+          - button "维修工在手项目分布 展开" [ref=f2e1139] [cursor=pointer]:
+            - generic [ref=f2e1140]: 维修工在手项目分布
+            - generic [ref=f2e1141]: 展开
+      - heading "全部未完成（0）" [level=3] [ref=f2e1146]
+      - generic [ref=f2e1147]:
+        - img "暂无数据" [ref=f2e1149]
+        - generic [ref=f2e1160]: 没有符合条件的维修任务
+      - generic "列表分页" [ref=f2e1161]
