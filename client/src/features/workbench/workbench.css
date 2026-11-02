@@ -155,3 +155,9 @@ button.workbench-metric:focus-visible { outline: 3px solid #366fbb; outline-offs
 .todo-overview-title { display:flex; align-items:center; gap:6px; flex-wrap:wrap; min-width:0; }
 .todo-overview-title .ant-btn { color:#657b94; font-size:12px; }
 .todo-approval-caption { display:block; color:#8896a8; font-size:12px; margin-top:4px; }
+
+.approval-entry-description{margin:0 0 16px;color:#657085;font-size:13px}
+.approval-category-list{display:flex;flex-direction:column;gap:12px;padding-bottom:env(safe-area-inset-bottom,0px)}
+.approval-category-list button{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;min-height:64px;padding:16px;border:1px solid #dfe6f0;border-radius:12px;background:#f7f9fc;color:#253750;font:inherit;cursor:pointer;text-align:left}
+.approval-category-list strong{color:#2166c0;margin-right:4px}
+.approval-category-list button:focus-visible{outline:2px solid #1677ff;outline-offset:2px}

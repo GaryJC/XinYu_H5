@@ -1,3 +1,4 @@
+import { businessAnalytics } from '../services/businessAnalyticsService.mjs';
 import { operationsDashboard } from "../services/operationsDashboardService.mjs";
 import { handleVehicleTrips } from "./vehicleTripRouter.mjs";
 import { handleOrderOverview, handleOrderPhotoDownload } from './orderOverviewRouter.mjs';
@@ -149,6 +150,12 @@ export async function handleApiRequest(req, res, url) {
   if (req.method === "PUT" && url.pathname === "/api/admin/dingtalk-department-mappings") {
     requireManager(currentUser);
     throw new HttpError(410, "无需配置角色 ID 或部门映射，请直接在钉钉分配角色");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/dashboard/analytics") {
+    requireManager(currentUser);
+    sendJson(res,200,await businessAnalytics(currentUser,Number(url.searchParams.get("days")||30)));
+    return true;
   }
 
   if (req.method === "GET" && url.pathname === "/api/dashboard/operations") {

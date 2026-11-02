@@ -6,7 +6,7 @@ export function advancedFilterCount(filters:DispatchFilters) {
  return Number(Boolean(filters.executionMode))+Number(Boolean(filters.from||filters.to))+Number(Boolean(filters.technicianId));
 }
 export function activeFilterCount(filters:DispatchFilters) {
- return advancedFilterCount(filters)+Number(Boolean(filters.search))+Number(Boolean(filters.stage))+Number(Boolean(filters.metric))+Number(filters.urgent==='true')+Number(filters.overdue==='true');
+ return advancedFilterCount(filters)+Number(Boolean(filters.search))+Number(Boolean(filters.stage))+Number(Boolean(filters.metric||filters.workloadState))+Number(filters.urgent==='true')+Number(filters.overdue==='true');
 }
 export function filterDateError(filters:DispatchFilters) {
  return filters.from&&filters.to&&filters.from>filters.to?'开始日期不能晚于结束日期':'';

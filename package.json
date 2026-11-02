@@ -34,6 +34,8 @@
     "antd": "^6.5.0",
     "dayjs": "^1.11.21",
     "dingtalk-jsapi": "^3.2.9",
+    "echarts": "^6.1.0",
+    "fflate": "^0.8.3",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "lucide-react": "latest",
@@ -45,8 +47,7 @@
     "react-dom": "latest",
     "sharp": "^0.34.5",
     "typescript": "latest",
-    "vite": "latest",
-    "fflate": "^0.8.3"
+    "vite": "latest"
   },
   "devDependencies": {
     "@types/node": "^26.0.1",

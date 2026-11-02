@@ -6,7 +6,8 @@ import { WarehousePartsPage } from './WarehousePartsPage';
 import { TechnicianRepairPage } from './TechnicianRepairPage';
 import { useEffect,useRef } from 'react';
 import { DispatchWorkloadBoard } from './DispatchWorkloadBoard';
-import { OperationsDashboardPage } from '../operations-dashboard/OperationsDashboardPage';
+import {DispatchWorkloadChart} from './DispatchWorkloadChart';
+import {workloadLabels} from '../operations-dashboard/WorkerLoadChart';
 import { executionLabels } from './DispatchExecutionFields';
 import { Alert,Button,Card,Drawer,Empty,Grid,Space,Table,Tag } from 'antd';
 import type { DispatchMetric,DispatchTask,UserProfile } from '../../../../shared/types';
@@ -20,6 +21,8 @@ export function DispatchPage({user,view,initialStage}:{user:UserProfile;view:str
   const taskHeading=useRef<HTMLHeadingElement>(null);
   const inspection=view==='检验任务';
   useEffect(()=>{if(initialStage&&!c.loading)taskHeading.current?.scrollIntoView({block:'start'});},[initialStage,c.loading]);
+  const clearWorkload=()=>c.setFilters(f=>({...f,workloadState:undefined,technicianId:undefined}));
+  useEffect(()=>{if(c.filters.workloadState)taskHeading.current?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});},[c.filters.workloadState,c.filters.technicianId]);
   const chosen=c.summaries.find(s=>s.id===c.filters.technicianId);
   function badges(t:DispatchTask) {return <Space className="dispatch-badges" size={[8,8]} wrap><Tag>{executionLabels[t.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(t)}</Tag>{!!t.inspectionDeferredCount&&<Tag color="orange">待定 × {t.inspectionDeferredCount}</Tag>}{t.pendingRepairCount?<Tag color="orange">存在待客户确认项目</Tag>:null}{t.urgent?<Tag color="red">加急</Tag>:null}{t.overdue?<Tag color="red">超期</Tag>:null}{t.repairRound?<Tag color="orange">{t.roundKind==='additional'?'追加维修第':'返工第'} {t.repairRound} 轮</Tag>:t.rework?<Tag color="orange">返工</Tag>:null}{t.feedback?<Tag color="orange">无法接单</Tag>:null}{t.needsReview?<Tag>待核对</Tag>:null}</Space>;}
   if(view==='配件申请' && hasRole(user, 'warehouse')) return <WarehousePartsPage controller={c}/>;
@@ -28,11 +31,11 @@ export function DispatchPage({user,view,initialStage}:{user:UserProfile;view:str
     <div className="dispatch-heading"><div><h2>{view}</h2><p>{view==='派工台'?'默认显示本店全部未完成工单，维修结束的工单请在“已完成”中查看。':c.manager?'查看本店工单，可按状态筛选并安排维修与检验。':c.inspectionLead?'查看本店检验任务，可按状态筛选和处理检验结果。':'及时确认任务，记录项目进度。'}{c.updatedAt?` 更新于 ${c.updatedAt}`:''}</p></div><Button onClick={()=>{c.setError('');void c.refresh();}} loading={c.loading}>刷新</Button></div>
     {c.error?<Alert type="error" showIcon closable title={c.error} onClose={()=>c.setError('')}/>:null}
     <DispatchFilterBar controller={c} inspection={inspection}/>
-    {c.manager&&view==='派工台'?<OperationsDashboardPage embedded refreshKey={c.updatedAt} onOpen={id=>c.select(id)}/>:c.inspectionLead?<DispatchWorkloadBoard summaries={c.summaries} filters={c.filters} onSelect={(technicianId,metric)=>{
+    {c.manager&&view==='派工台'?<DispatchWorkloadChart refreshKey={c.updatedAt} filters={c.filters} onClear={clearWorkload} onSelect={(technicianId,workloadState)=>c.setFilters({technicianId,workloadState})}/>:c.inspectionLead?<DispatchWorkloadBoard summaries={c.summaries} filters={c.filters} onSelect={(technicianId,metric)=>{
       c.setFilters(f=>({from:f.from,to:f.to,technicianId,metric}));
       if(mobile) taskHeading.current?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
     }}/>:null}
-    <div className="dispatch-heading"><h3 ref={taskHeading} className="dispatch-task-heading">{chosen?`${personDisplayName(chosen,c.summaries)} · `:''}{c.filters.metric?(c.filters.metric==='current'?'当前任务':metrics[c.filters.metric as DispatchMetric]):(statusFilters.find(option=>option.value===(c.filters.stage||''))?.label||'维修任务')}（{c.list.total}）</h3>{c.filters.metric?<Button onClick={()=>update('metric',undefined)}>清除数量筛选</Button>:null}</div>
+    <div className="dispatch-heading"><h3 ref={taskHeading} className="dispatch-task-heading">{chosen?`${personDisplayName(chosen,c.summaries)} · `:''}{c.filters.workloadState?workloadLabels[c.filters.workloadState]:c.filters.metric?(c.filters.metric==='current'?'当前任务':metrics[c.filters.metric as DispatchMetric]):(statusFilters.find(option=>option.value===(c.filters.stage||''))?.label||'维修任务')}（{c.list.total}{c.filters.workloadState?' 单':''}）</h3>{c.filters.workloadState?<Button onClick={clearWorkload}>清除负荷筛选</Button>:c.filters.metric?<Button onClick={()=>update('metric',undefined)}>清除数量筛选</Button>:null}</div>
     {mobile && c.loading && <LoadingState label="正在加载维修任务…" />}
     {!c.loading&&!c.tasks.length?<Empty description="没有符合条件的维修任务"/>:mobile?<div className="dispatch-task-cards">{c.tasks.map(t=><Card key={t.orderId} className="dispatch-task-card" size="small" title={t.plate||'未填写车牌'} role="button" tabIndex={0} aria-label={`查看维修任务 ${t.plate||t.dispatchNo||t.orderId}`}
       onClick={()=>c.select(t.orderId)}

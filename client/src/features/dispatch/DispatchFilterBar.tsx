@@ -10,11 +10,11 @@ export function DispatchFilterBar({controller:c,inspection}:{controller:Dispatch
  const {token}=theme.useToken(),f=useDispatchFilterDraft(c.filters,c.setFilters);
  const advanced=advancedFilterCount(c.filters),active=activeFilterCount(c.filters);
  const statuses=inspection?inspectionStatuses:statusFilters;
- const patch=(key:'executionMode'|'from'|'to'|'technicianId',value:string|undefined)=>{f.setDraft(d=>({...d,[key]:value,...(key==='technicianId'?{metric:undefined}:{})}));f.setError('');};
+ const patch=(key:'executionMode'|'from'|'to'|'technicianId',value:string|undefined)=>{f.setDraft(d=>({...d,[key]:value,...(key==='technicianId'?{metric:undefined,workloadState:undefined}:{})}));f.setError('');};
  return <>
   <div className="dispatch-filter-bar" role="search" aria-label="工单搜索筛选" style={{background:token.colorBgContainer,borderColor:token.colorBorderSecondary,color:token.colorText}}>
    <Input.Search aria-label="搜索派工任务" placeholder="车牌 / 委托单号 / 派工号" allowClear value={f.search} onChange={e=>f.setSearch(e.target.value)} onSearch={f.submitSearch} onCompositionStart={()=>{f.composing.current=true;}} onCompositionEnd={()=>{f.composing.current=false;}} enterKeyHint="search" autoComplete="off"/>
-   <Tabs className="dispatch-status-tabs" aria-label="工单状态筛选" activeKey={c.filters.stage||''} type="line" tabBarGutter={0} onChange={stage=>c.setFilters(current=>({...current,stage:stage||undefined,metric:undefined}))} items={statuses.map(({value,label})=>({key:value,label}))}/>
+   <Tabs className="dispatch-status-tabs" aria-label="工单状态筛选" activeKey={c.filters.stage||''} type="line" tabBarGutter={0} onChange={stage=>c.setFilters(current=>({...current,stage:stage||undefined,metric:undefined,workloadState:undefined}))} items={statuses.map(({value,label})=>({key:value,label}))}/>
    <p className="dispatch-status-scroll-hint">左右滑动查看更多状态 ↔</p>
    <div className="dispatch-quick-filters">
     <Button icon={<FilterOutlined/>} color={advanced?'primary':'default'} variant="outlined" aria-label={advanced?`筛选，${advanced} 项已生效`:'筛选'} onClick={f.begin}>筛选{advanced?` · ${advanced}`:''}</Button>
@@ -29,7 +29,7 @@ export function DispatchFilterBar({controller:c,inspection}:{controller:Dispatch
     <fieldset><legend>统计日期范围</legend><div className="dispatch-filter-dates">
      <label>开始日期<Input aria-label="完成记录起始日期" type="date" value={f.draft.from||''} max={f.draft.to||undefined} onChange={e=>patch('from',e.target.value||undefined)}/></label>
      <label>结束日期<Input aria-label="完成记录结束日期" type="date" value={f.draft.to||''} min={f.draft.from||undefined} onChange={e=>patch('to',e.target.value||undefined)}/></label>
-    </div><p>用于已完成记录、个人完成量和退回项目统计；已完成列表未选日期时显示全部，个人统计默认本月。</p></fieldset>
+    </div><p>用于完成记录、个人完成量及退回统计。<br/>不选日期：完成记录显示全部，个人统计默认本月。</p></fieldset>
     {c.inspectionLead?<label className="dispatch-filter-worker">维修工<Select aria-label="筛选维修工" allowClear placeholder="全部维修工" value={f.draft.technicianId} onChange={value=>patch('technicianId',value)} options={c.summaries.map(person=>({value:person.id,label:`${personDisplayName(person,c.summaries)}${person.active?'':'（停用）'}`}))}/></label>:null}
     {f.error?<Alert type="error" showIcon title={f.error}/>:null}
     <p className="dispatch-filter-note">维修结束的工单统一在“已完成”中查看；返工、回审中的工单仍列为未完成。</p>

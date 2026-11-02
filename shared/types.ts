@@ -680,7 +680,8 @@ export interface WorkOrderListQuery {
 }
 export interface ArchiveOptions { statuses: Array<{value: string; label: string}>; advisors: Array<{value: string; label: string}>; technicians: Array<{value: string; label: string}>; }
 
-export type DispatchFilters = {partsStatus?:string;partsSort?:string;executionMode?:string;search?:string;technicianId?:string;stage?:string;metric?:string;urgent?:string;overdue?:string;from?:string;to?:string};
+export type WorkloadState = "working" | "waiting" | "paused" | "inspection" | "unfinished";
+export type DispatchFilters = {workloadState?:WorkloadState;partsStatus?:string;partsSort?:string;executionMode?:string;search?:string;technicianId?:string;stage?:string;metric?:string;urgent?:string;overdue?:string;from?:string;to?:string};
 
 export type OperationsMetric = 'unfinished'|'working'|'waiting'|'parts'|'pickup'|'paused'|'inspection'|'overdue';
 export type OperationsProject = {
@@ -695,4 +696,17 @@ export type OperationsWorker = {
 export type OperationsDashboard = {
   generatedAt:string; vehicles:number; unassigned:number; uncertain:number;
   counts:Record<OperationsMetric,number>; workers:OperationsWorker[]; projects:OperationsProject[];
+};
+
+export type AnalyticsCount = {name:string;value:number};
+export type AnalyticsComparison = {value:number;previous:number;change:number|null};
+export type BusinessAnalytics = {
+  generatedAt:string;
+  range:{days:number;from:string;to:string;previousFrom:string;previousTo:string};
+  kpis:{orders:AnalyticsComparison;completed:AnalyticsComparison;vehicles:AnalyticsComparison;cycleDays:{value:number|null;previous:number|null;samples:number}};
+  daily:Array<{date:string;previousDate:string;created:number;previous:number;completed:number}>;
+  monthly:Array<{month:string;value:number;partial:boolean}>;
+  customers:AnalyticsCount[];customerCount:number;vehicleMix:AnalyticsCount[];status:AnalyticsCount[];
+  aging:AnalyticsCount[];cycleBuckets:AnalyticsCount[];execution:AnalyticsCount[];liveCount:number;
+  quality:{missingCompletion:number;missingVehicle:number;invalidCreated:number};
 };

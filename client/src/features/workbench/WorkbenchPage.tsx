@@ -14,7 +14,7 @@ import { roleFocus } from "./workbenchConfig";
 import { dispatchEnabled, isDispatchNavigation } from "../dispatch/dispatchAvailability";
 import { useWorkbenchController } from "./useWorkbenchController";
 
-const OperationsDashboardPage = lazy(() => import('../operations-dashboard/OperationsDashboardPage').then(m=>({default:m.OperationsDashboardPage})));
+const BusinessAnalyticsPage = lazy(() => import('../business-analytics/BusinessAnalyticsPage').then(m=>({default:m.BusinessAnalyticsPage})));
 const VehicleTripsPage = lazy(() => import('../vehicle-trips/VehicleTripsPage').then(m => ({ default: m.VehicleTripsPage })));
 const CompanyVehiclesPage = lazy(() => import('../company-vehicles/CompanyVehiclesPage').then(m => ({ default: m.CompanyVehiclesPage })));
 
@@ -171,7 +171,7 @@ export function WorkbenchPage() {
           <Suspense fallback={<LoadingState label="正在加载配件竞价…" />}><ProcurementPage key={currentUser.id} user={currentUser}/></Suspense>
         ) : null}
 
-        {!bindingRequired && activeNav === "数据看板" && currentUser && hasRole(currentUser,'manager') && <Suspense fallback={<LoadingState label="正在加载运营看板…"/>}><OperationsDashboardPage key={currentUser.id} onOpen={controller.openDispatch}/></Suspense>}
+        {!bindingRequired && activeNav === "数据看板" && currentUser && hasRole(currentUser,'manager') && <Suspense fallback={<LoadingState label="正在加载运营看板…"/>}><BusinessAnalyticsPage key={currentUser.id}/></Suspense>}
 
         {!bindingRequired && (activeNav === "权限设置") ? (
           <Suspense fallback={<LoadingState label="正在加载功能模块…" />}>

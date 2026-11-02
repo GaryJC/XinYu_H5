@@ -1,3 +1,4 @@
+import {buildOperationsDashboard} from './operationsDashboard.mjs';
 import {isRepairCompleted} from '../../shared/repairCompletion.mjs';
 import {hasRole,hasAnyRole} from '../../shared/roles.mjs';
 import {hasPendingInspection} from '../../shared/repairProgress.mjs';
@@ -8,8 +9,15 @@ export function filterDispatchTasks(tasks, actor, query={}) {
   const range=completionRange(query.from,query.to);
   const executionModes=query.executionMode?query.executionMode.split(','):[];
   if(executionModes.some(mode=>!['internal','field','outsourced'].includes(mode))) throw new HttpError(400,'执行方式筛选无效');
+  let workloadOrders;
+  if(query.workloadState){
+    if(!['working','waiting','paused','inspection','unfinished'].includes(query.workloadState)||!query.technicianId)throw new HttpError(400,'维修工项目状态筛选无效');
+    // Reuse the chart's per-project classification, including personal pauses and mixed-team inspection.
+    workloadOrders=new Set(buildOperationsDashboard(tasks,[]).projects.filter(p=>p.ownerId===query.technicianId&&p.flags.includes(query.workloadState)).map(p=>p.orderId));
+  }
   return tasks.filter(t=> {
-    if(query.technicianId && !technicianIds(t).includes(query.technicianId)) return false;
+    if(workloadOrders&&!workloadOrders.has(t.orderId))return false;
+    if(!workloadOrders && query.technicianId && !technicianIds(t).includes(query.technicianId)) return false;
     if(executionModes.length && !executionModes.includes(t.executionMode||'internal')) return false;
     if(query.stage==='进行中' && !['待开工','维修中','暂停'].includes(t.stage)) return false;
     if(query.stage==='已完成') { if(!isRepairCompleted(t.stage,t.orderStatus))return false; }
@@ -22,6 +30,7 @@ export function filterDispatchTasks(tasks, actor, query={}) {
     if(query.urgent==='true' && !t.urgent) return false;
     if(query.overdue==='true' && !t.overdue) return false;
     if(query.search && ![t.orderId,t.dispatchNo,t.plate].some(v=>v.toLowerCase().includes(query.search.toLowerCase()))) return false;
+    if(workloadOrders)return true;
     if(hasRole(actor, 'warehouse')&&!hasAnyRole(actor,['manager','advisor','inspector'])) return true;
     if(query.includeCompleted!=='true' && isRepairCompleted(t.stage,t.orderStatus) && !['已完成','完成','维修完成','待结算','待客户确认','待定'].includes(query.stage) && query.metric!=='completed') return false;
     if(query.metric) return dispatchMetric(t,query.metric,range.from,range.to);
