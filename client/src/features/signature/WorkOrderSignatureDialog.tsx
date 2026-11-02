@@ -113,7 +113,7 @@ export function WorkOrderSignatureDialog({ session, completeSignature, onClose, 
                   <Summary label="旧件处置" value={signatureSession.order.oldPartsHandling} />
                 </div>
                 <div className="public-items">
-                  {signatureSession.order.repairItems.map((item) => <div key={item.id}><span>{item.name}</span><strong>¥{item.laborFee}</strong></div>)}
+                  {signatureSession.order.repairItems.map((item) => <div key={item.id}><span>{item.name}</span></div>)}
                 </div>
                 {!remote && <Form.Item
                   className="field"

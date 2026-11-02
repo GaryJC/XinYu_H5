@@ -1,13 +1,17 @@
 import {randomUUID} from 'node:crypto';
 import {hasRole} from '../../shared/roles.mjs';
+import {normalizeVehicleIdentity} from './vehicleNameplateHistoryRepository.mjs';
 
 // Caller holds the work-order lock; the file, current pointer and outbox commit together.
-export async function recordVehicleNameplate(client,task,actor,fileId,requestId) {
+export async function recordVehicleNameplate(client,task,actor,fileId,requestId,sourceFileId) {
+ await client.query(`update files set nameplate_vehicle_vin=coalesce(nameplate_vehicle_vin,$2),
+  nameplate_vehicle_plate=coalesce(nameplate_vehicle_plate,$3),nameplate_recorded_at=coalesce(nameplate_recorded_at,created_at)
+  where id=$1 and order_id=$4`,[fileId,normalizeVehicleIdentity(task.vehicleVin),normalizeVehicleIdentity(task.plate),task.orderId]);
  const {rows:previous}=await client.query("select id from files where order_id=$1 and kind='vehicle_nameplate_photo' and id<>$2 order by created_at desc,id desc limit 1",[task.orderId,fileId]);
  const previousFileId=task.vehicleNameplateFileId||previous[0]?.id;
  await client.query("update dispatch_tasks set data=jsonb_set(data,'{vehicleNameplateFileId}',to_jsonb($2::text)) where order_id=$1",[task.orderId,fileId]);
  const {rows:[event]}=await client.query('insert into dispatch_events(order_id,actor_id,actor_name,request_id,request_body,action,detail) values($1,$2,$3,$4,$5,$6,$7) returning id',[
-  task.orderId,actor.id,actor.name,`nameplate:${requestId}`,JSON.stringify({fileId}), 'vehicle-nameplate-upload',JSON.stringify({fileId,previousFileId})
+  task.orderId,actor.id,actor.name,`nameplate:${requestId}`,JSON.stringify({fileId}), sourceFileId?'vehicle-nameplate-reuse':'vehicle-nameplate-upload',JSON.stringify({fileId,previousFileId,...(sourceFileId?{sourceFileId}:{})})
  ]);
  if(!previousFileId)return;
  const {rows:people}=await client.query('select id,role,roles from users where active=true and shop_id=$1',[task.shopId]);

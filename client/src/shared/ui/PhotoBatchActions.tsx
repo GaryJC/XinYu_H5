@@ -1,5 +1,6 @@
+import { PhotoRemoveButton } from './PhotoRemoveButton';
 import { useState } from "react";
-import { Button, Checkbox, Popconfirm, Space } from "antd";
+import { Checkbox, Popconfirm, Space } from "antd";
 
 export function usePhotoSelection(ids: string[]) {
   const [selected, setSelected] = useState<string[]>([]);
@@ -23,7 +24,7 @@ export function PhotoBatchActions({ ids, selection, disabled, onRemove }: {
       onChange={event => selection.selectAll(event.target.checked)}>全选照片</Checkbox>
     <Popconfirm title={`确认删除选中的 ${selection.selectedIds.length} 张照片？`} okText="删除" cancelText="取消"
       onConfirm={async () => { const result = await onRemove(selection.selectedIds); if (result !== false) selection.clear(); }}>
-      <Button danger disabled={disabled || !selection.selectedIds.length}>删除所选（{selection.selectedIds.length}）</Button>
+      <PhotoRemoveButton disabled={disabled || !selection.selectedIds.length}>删除所选（{selection.selectedIds.length}）</PhotoRemoveButton>
     </Popconfirm>
   </Space>;
 }

@@ -1,0 +1,11 @@
+.photo-remove-button.ant-btn {
+  align-self: flex-start;
+  min-height: 44px;
+  height: auto;
+  max-width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: normal;
+  box-shadow: none;
+}

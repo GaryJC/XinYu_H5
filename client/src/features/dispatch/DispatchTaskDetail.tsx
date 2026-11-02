@@ -1,3 +1,4 @@
+import { useDispatchProjectFocus } from './useDispatchProjectFocus';
 import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { LoadingState } from "../../shared/ui/LoadingState";
 import {hasPendingInspection,hasUnpreparedParts} from '../../../../shared/repairProgress.mjs';
@@ -29,7 +30,7 @@ import { requestBlob } from '../../shared/api/httpClient';
 import type { DispatchController } from './useDispatchController';
 import { dispatchEventLabel, actionLabels,displayTime,notificationLabels,taskStatusLabel } from './dispatchLabels';
 import { DispatchActionDialog } from './DispatchActionDialog';
-export function DispatchTaskDetail({controller,user}:{controller:DispatchController;user:UserProfile}) {
+export function DispatchTaskDetail({controller,user,readyForFocus=true}:{controller:DispatchController;user:UserProfile;readyForFocus?:boolean}) {
   const [projectActionsTarget,setProjectActionsTarget]=useState<HTMLDivElement|null>(null);
   const [actionBar,setActionBar]=useState<HTMLDivElement|null>(null);
   const actionBarHeight=useElementHeight(actionBar);
@@ -37,6 +38,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
   const [partsDialog,setPartsDialog]=useState(false);
   const [dialog,setDialog]=useState<DispatchActionName>();
   const detail=controller.detail;
+  const projectsRef=useDispatchProjectFocus(detail?.task.orderId,readyForFocus);
   const inspectionDraft=useInspectionDraft(detail?.task);
   const [inspectionReview,setInspectionReview]=useState<InspectionReview>();
   if(!detail) return <>{controller.error?<Alert type="error" title={controller.error}/>:null}{controller.detailLoading?<LoadingState label="正在加载维修任务…" />:null}</>;
@@ -88,6 +90,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     {task.stage==='暂停'?<Alert type="warning" title={`暂停：${task.pauseReason}`} description={`${task.pauseNote||''} · 自 ${displayTime(task.pausedAt)}，已暂停 ${Math.max(0,Math.floor((Date.now()-Date.parse(task.pausedAt||''))/60000))} 分钟`}/>:null}
     {hasPendingInspection(task)?<Alert type="info" title={task.inspectorName?`已由 ${task.inspectorName} 接手检验`:'等待检验员领取'}/>:null}
     {controller.error?<Alert type="error" showIcon title={controller.error}/>:null}
+    <div ref={projectsRef} tabIndex={-1} role="region" aria-label="派工单维修项目" className="dispatch-projects-anchor">
     {hasPendingInspection(task)?<section className="task-projects">
       <h3>待检项目 · {inspectionDraft.pending.length} 项</h3>
       <InspectionItems items={task.items} choices={inspectionDraft.choices} onChange={inspectionDraft.change} disabled={!inspect||!task.inspectorId||unsigned||task.needsReview||controller.busy}/>
@@ -103,6 +106,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
     <p className="dispatch-muted">需要配件的任务由仓管确认出库后自动开工；无需配件直接开工。</p>
     </section>:null}
     {hasPendingInspection(task)?<PassedInspectionItems items={task.items}/>:null}
+    </div>
     <RepairWritebackStatus controller={controller} admin={hasRole(user, 'manager')}/>
     <PartsRequirementSummary value={task.partsRequirement}/>
     {outsourced?task.partsRequests?.map(parts=><section key={parts.ownerId}><h3>历史配件申请 · {parts.ownerName}</h3><PartsRequirementSummary value={parts}/></section>):null}
@@ -150,7 +154,7 @@ export function DispatchTaskDetail({controller,user}:{controller:DispatchControl
       {event.detail.pauseReason?<p>{event.detail.pauseReason}</p>:null}
       {event.detail.reason?<p>{event.detail.reason}</p>:null}{event.detail.note?<p>{event.detail.note}</p>:null}</>}))}/>
     </>}]} />
-    {actions.length?<div ref={setActionBar} className="task-detail-actions"><div ref={setProjectActionsTarget} className="project-actions-slot"/><Space wrap>{actions.map(action=><Button key={action} danger={action==='reopen-repair'} type={['assign','accept','submit','inspect','claim-inspection'].includes(action)?'primary':'default'} loading={controller.busy} disabled={controller.busy||photoBlocked||action==='inspect'&&!inspectionDraft.complete} onClick={()=>{
+    {actions.length?<div ref={setActionBar} className="task-detail-actions"><div ref={setProjectActionsTarget} className="project-actions-slot"/><Space wrap>{actions.map(action=><Button key={action} className={action==='inspect'?'task-inspection-submit':undefined} danger={action==='reopen-repair'} type={['assign','accept','submit','inspect','claim-inspection'].includes(action)?'primary':'default'} loading={controller.busy} disabled={controller.busy||photoBlocked||action==='inspect'&&!inspectionDraft.complete} onClick={()=>{
       if(action==='inspect'){if(!inspectionDraft.complete){controller.setError('请先为每个待检项目选择通过、退回或待定');return;}setInspectionReview({version:task.version,choices:{...inspectionDraft.choices}});setDialog(action);}
       else if(action==='accept')setPartsDialog(true);else if(['resume','reoffer','remind','claim-inspection','retry-inspection-notifications'].includes(action)) void controller.act({action});else setDialog(action);
     }}>{action==='inspect'?(inspectionDraft.complete?`提交检验结果（通过 ${inspectionDraft.pending.length-inspectionDraft.rejectedItemIds.length-inspectionDraft.deferredItemIds.length} · 退回 ${inspectionDraft.rejectedItemIds.length} · 待定 ${inspectionDraft.deferredItemIds.length}）`:`还剩 ${inspectionDraft.pending.filter(item=>!inspectionDraft.choices[item.id]).length} 项未确认`):actionLabels[action]}</Button>)}</Space></div>:null}

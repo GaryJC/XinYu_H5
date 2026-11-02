@@ -1,3 +1,4 @@
+import { PhotoRemoveButton } from '../../shared/ui/PhotoRemoveButton';
 import { useState } from 'react';
 import { Button, Checkbox, Modal, Popover } from 'antd';
 import { Images, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
@@ -36,7 +37,7 @@ export function OrderPhotoGallery({ title, files, editable, busy, multiple, onUp
       <Checkbox disabled={busy} checked={selection.selectedIds.length===files.length} indeterminate={!!selection.selectedIds.length&&selection.selectedIds.length<files.length}
         onChange={event=>selection.selectAll(event.target.checked)}>全选照片</Checkbox>
       <span>已选 {selection.selectedIds.length} 张</span>
-      <Button type="text" danger icon={<Trash2 size={15}/>} disabled={busy||!selection.selectedIds.length} onClick={()=>remove(selection.selectedIds)}>删除所选</Button>
+      <PhotoRemoveButton disabled={busy||!selection.selectedIds.length} onClick={()=>remove(selection.selectedIds)}>删除所选</PhotoRemoveButton>
     </div>}
     {!!files.length?<AuthenticatedImagePreviewGroup fileIds={files.map(file=>file.id)}><div className="order-photo-grid">
       {files.map((file,index)=><article className={`order-photo-card${selection.selectedIds.includes(file.id)?' is-selected':''}`} key={file.id}>
@@ -44,7 +45,7 @@ export function OrderPhotoGallery({ title, files, editable, busy, multiple, onUp
           {managing&&editable&&<Checkbox className="order-photo-check" aria-label={`选择照片 ${file.originalName||file.id}`} disabled={busy} checked={selection.selectedIds.includes(file.id)} onChange={event=>selection.toggle(file.id,event.target.checked)}/>}
         </div>
         <div className="order-photo-caption"><span title={file.originalName}>{file.originalName||`照片 ${index+1}`}</span>
-          {editable&&!managing&&<Popover trigger="click" placement="bottomRight" open={open===file.id&&!busy} onOpenChange={value=>setOpen(value?file.id:undefined)} content={<div className="order-photo-menu"><strong>更换照片</strong>{picker(file.id)}<Button type="text" danger icon={<Trash2 size={16}/>} disabled={busy} onClick={()=>{setOpen(undefined);remove([file.id]);}} aria-label={`删除${title} ${file.originalName||file.id}`}>删除照片</Button></div>}>
+          {editable&&!managing&&<Popover trigger="click" placement="bottomRight" open={open===file.id&&!busy} onOpenChange={value=>setOpen(value?file.id:undefined)} content={<div className="order-photo-menu"><strong>更换照片</strong>{picker(file.id)}<PhotoRemoveButton disabled={busy} onClick={()=>{setOpen(undefined);remove([file.id]);}} aria-label={`删除${title} ${file.originalName||file.id}`}>删除照片</PhotoRemoveButton></div>}>
             <Button color="primary" variant="text" icon={<MoreHorizontal size={19}/>} aria-label={`照片操作 ${file.originalName||file.id}`} disabled={busy}/>
           </Popover>}
         </div>

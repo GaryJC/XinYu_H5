@@ -1,6 +1,6 @@
 import { warehouseRequests, matchesPartsStatus, sortWarehouseRequests } from '../../shared/warehouseRequests.mjs';
 import { pageResult } from '../domain/pagination.mjs';
-import {filterDispatchTasks} from '../domain/dispatchTaskFilters.mjs';
+import {filterDispatchTasks,countDispatchTaskStatuses} from '../domain/dispatchTaskFilters.mjs';
 import {reconcileInspectionDeferred} from '../domain/inspectionDeferred.mjs';
 import {writePendingRepairs} from '../repositories/pendingRepairsRepository.mjs';
 import {enqueueDeferredNotifications} from '../repositories/inspectionDeferredRepository.mjs';
@@ -36,7 +36,7 @@ export async function queryDispatchTasks(actor, query={}) {
       .map(task=>({...task,partsRequests:undefined}));
     return {...pageResult(items,query),counts};
   }
-  return query.page === undefined ? filtered : pageResult(filtered,query);
+  return query.page === undefined ? filtered : {...pageResult(filtered,query),counts:countDispatchTaskStatuses(tasks,actor,query)};
 }
 export async function myRepairCounts(actor) {
   if(!hasAnyRole(actor, ['technician','outsourcing'])&&!actor.outsourcingRoleMember) throw new HttpError(403,'仅维修工可查看本人任务数量');

@@ -4,7 +4,7 @@ import { userRoles } from "../../../../shared/roles.mjs";
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import { EmployeeBindingGate } from "../employee-binding/EmployeeBindingGate";
 import { lazy, Suspense, useState } from "react";
-import { ArrowLeft, ArrowUp, ClipboardCheck, LockKeyhole, Menu, RefreshCcw, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowUp, ClipboardCheck, LockKeyhole, Menu, Plus, ChevronRight, RefreshCcw, UserRound } from "lucide-react";
 import { Alert, Button, Drawer, FloatButton, Grid, Layout, Select, Space } from "antd";
 import { DevelopmentPersonaKey } from "../../../../shared/types";
 import "./workbench.css";
@@ -46,11 +46,12 @@ export function WorkbenchPage() {
   const bindingRequired = currentUser && hasRole(currentUser, 'technician') && !currentUser.legacyEmployeeCode && !['出车申请', '车辆管理'].includes(activeNav);
 
   const navigation = (
-    <div className="navigation-shell">
+    <div className="navigation-shell workbench-navigation">
       <div className="brand">
         <div className="brand-mark"><ClipboardCheck size={20} /></div>
         <div><strong>修理委托</strong><span>门店协同工作台</span></div>
       </div>
+      <div className="navigation-caption">业务导航</div>
       <nav className="nav-list" aria-label="主导航">
         {visibleNavItems.map((item) => {
           const Icon = item.icon;
@@ -91,6 +92,9 @@ export function WorkbenchPage() {
             </div>
           </div>
           <div className="topbar-actions">
+            {activeNav === '工作台' && visibleNavItems.some(item => item.label === '委托开单') && (
+              <Button type="primary" className="workbench-create" icon={<Plus size={17} aria-hidden="true" />} onClick={() => setActiveNav('委托开单')}>委托开单</Button>
+            )}
             {!isMobile ? <div className="sync-state"><RefreshCcw size={15} /><span>{syncLabel}</span></div> : null}
             {isDevelopmentAuth ? (
               <Select
@@ -141,7 +145,7 @@ export function WorkbenchPage() {
               <div className="workbench-section-heading"><h2>快捷入口</h2><span>常用业务</span></div>
               <div className="workbench-shortcut-grid">{visibleNavItems.filter(item => !['工作台', '车辆管理', '数据看板', '权限设置', '配件竞价', '工单全览'].includes(item.label)).map(item => {
                 const Icon = item.icon;
-                return <button type="button" key={item.label} onClick={() => setActiveNav(item.label)}><span><Icon size={21} /></span>{item.label}</button>;
+                return <button type="button" key={item.label} onClick={() => setActiveNav(item.label)}><span className="shortcut-icon"><Icon size={21} aria-hidden="true" /></span><span className="shortcut-label">{item.label}</span><ChevronRight className="shortcut-arrow" size={16} aria-hidden="true" /></button>;
               })}</div>
             </section>
             <section className="role-focus-strip">

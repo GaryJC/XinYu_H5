@@ -14,7 +14,7 @@ export function DispatchFilterBar({controller:c,inspection}:{controller:Dispatch
  return <>
   <div className="dispatch-filter-bar" role="search" aria-label="工单搜索筛选" style={{background:token.colorBgContainer,borderColor:token.colorBorderSecondary,color:token.colorText}}>
    <Input.Search aria-label="搜索派工任务" placeholder="车牌 / 委托单号 / 派工号" allowClear value={f.search} onChange={e=>f.setSearch(e.target.value)} onSearch={f.submitSearch} onCompositionStart={()=>{f.composing.current=true;}} onCompositionEnd={()=>{f.composing.current=false;}} enterKeyHint="search" autoComplete="off"/>
-   <Tabs className="dispatch-status-tabs" aria-label="工单状态筛选" activeKey={c.filters.stage||''} type="line" tabBarGutter={0} onChange={stage=>c.setFilters(current=>({...current,stage:stage||undefined,metric:undefined,workloadState:undefined}))} items={statuses.map(({value,label})=>({key:value,label}))}/>
+   <Tabs className="dispatch-status-tabs" aria-label="工单状态筛选" activeKey={c.filters.stage||''} type="line" tabBarGutter={0} onChange={stage=>c.setFilters(current=>({...current,stage:stage||undefined,metric:undefined,workloadState:undefined}))} items={statuses.map(({value,label})=>({key:value,label:<span className="dispatch-status-label"><span>{label}</span><strong className="dispatch-status-count">{c.list.counts?.[value]??'—'}</strong></span>}))}/>
    <p className="dispatch-status-scroll-hint">左右滑动查看更多状态 ↔</p>
    <div className="dispatch-quick-filters">
     <Button icon={<FilterOutlined/>} color={advanced?'primary':'default'} variant="outlined" aria-label={advanced?`筛选，${advanced} 项已生效`:'筛选'} onClick={f.begin}>筛选{advanced?` · ${advanced}`:''}</Button>

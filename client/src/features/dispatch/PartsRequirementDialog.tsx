@@ -1,10 +1,11 @@
+import { PhotoRemoveButton } from '../../shared/ui/PhotoRemoveButton';
 import {VehicleNameplatePhotos,useVehicleNameplateUpload} from './VehicleNameplatePhotos';
 import {OrderPhotoGallery} from '../work-order-photos/OrderPhotoGallery';
 import {usePartsPhotoAttachments} from './usePartsPhotoAttachments';
 import {RepairContext} from './RepairContext';
 import {PartsRequirementSummary} from './PartsRequirementSummary';
 import { useEffect,useState } from 'react';
-import { Alert,Button,Checkbox,Collapse,Input,InputNumber,Radio,Table } from 'antd';
+import { Alert,Button,Collapse,Input,InputNumber,Radio,Table } from 'antd';
 import { DeleteOutlined, PlusOutlined, CheckOutlined } from '@ant-design/icons';
 import './parts-requirement.css';
 import type { PartsRequirement } from '../../../../shared/types';
@@ -44,7 +45,6 @@ export function PartsRequirementDialog({controller:c,accepting,onClose,onUploadi
   const uploading=nameplate.uploading||uploads.some(u=>u.state==='uploading')||attachments.uploading;
   useEffect(()=>{onUploading?.(uploading);return()=>onUploading?.(false);},[uploading,onUploading]);
   const busy=c.busy||uploading||nameplate.checking;
-  const photos=c.detail!.files.filter(f=>f.kind==='repair_parts_photo'&&(f.repairRound||0)===round);
   async function upload(row:Upload) {
     setUploads(rows=>rows.map(r=>r.id===row.id?{...r,state:'uploading',error:undefined}:r));
     try {row.body ||= await prepareOcrImage(row.file);const photo=await dispatchApi.uploadPhoto(task.orderId,{...row.body,requestId:row.id,repairRound:round,purpose:'parts'});setPhotoIds(ids=>ids.includes(photo.id)?ids:[...ids,photo.id]);await c.refreshDetail();setUploads(rows=>rows.filter(r=>r.id!==row.id));}
@@ -89,19 +89,19 @@ export function PartsRequirementDialog({controller:c,accepting,onClose,onUploadi
       </section>
       <div className="parts-reference-upload"><OrderPhotoGallery title="配件照片（选填）" manageLabel="多选删除" removeHint="将从本次配件需求中移除所选照片，提交后生效；取消配件需求编辑则不保存此次删除。" files={referencePhotoIds.map((id,index)=>({id,originalName:c.detail!.files.find(file=>file.id===id)?.originalName||`配件照片 ${index+1}`}))} editable busy={busy||stale} multiple onUpload={attachments.upload} onRemove={attachments.remove}/><p className="parts-photo-hint">最多 10 张，支持相册多选；照片随本次申请发送仓库，删除后提交生效。</p></div>
     </div>:null}
-    {mode==='photo'?<div className="parts-photo-section"><div className="parts-section-heading"><h3>手写配件清单</h3><span>{photoIds.length} / 10 张</span></div><p className="parts-photo-hint">请拍清配件名称、数量和单位，仓管将按选中的照片备料。</p><ImageSourcePicker label="手写配件清单" primaryActionLabel="拍摄手写配件清单" galleryActionLabel="相册选择" disabled={busy||photoIds.length+uploads.length>=10} loading={uploads.some(u=>u.state==='uploading')} onSelect={select}/>
-      <div className="repair-photo-grid">{photos.map(photo=><div key={photo.id}><AuthenticatedImage fileId={photo.id} alt="手写配件清单" width="100%" height={100}/><Checkbox checked={photoIds.includes(photo.id)} disabled={busy||(!photoIds.includes(photo.id)&&photoIds.length>=10)} onChange={e=>setPhotoIds(ids=>e.target.checked?[...ids,photo.id]:ids.filter(id=>id!==photo.id))}>用于本次申请</Checkbox></div>)}</div>
+    {mode==='photo'?<div className="parts-photo-section"><div className="parts-section-heading"><h3>手写配件清单</h3><span>{photoIds.length} / 10 张</span></div><p className="parts-photo-hint">请拍清配件名称、数量和单位。上传的照片将随本次申请提交给仓库，无需勾选。</p><ImageSourcePicker label="手写配件清单" primaryActionLabel="拍摄手写配件清单" galleryActionLabel="相册选择" disabled={busy||photoIds.length+uploads.length>=10} loading={uploads.some(u=>u.state==='uploading')} onSelect={select}/>
+      {photoIds.length?<><div className="repair-photo-grid">{photoIds.map((id,index)=><div key={id}><AuthenticatedImage fileId={id} alt={`本次申请清单照片 ${index+1}`} width="100%" height={100}/><PhotoRemoveButton disabled={busy||stale} aria-label={`从本次申请移除清单照片 ${index+1}`} onClick={()=>setPhotoIds(ids=>ids.filter(photoId=>photoId!==id))}>移除</PhotoRemoveButton></div>)}</div><p className="parts-photo-hint parts-photo-selection-note">移除仅影响本次申请，提交后生效；历史申请的照片保留。</p></>:<p className="parts-photo-empty">本次申请尚未添加清单照片，请拍照或从相册选择。</p>}
     </div>:null}
     </>:null}
-    {needsNameplate&&!nameplateOpen?<VehicleNameplatePhotos currentId={task.vehicleNameplateFileId} files={c.detail!.files} onUpload={nameplate.upload} disabled={busy||stale} uploading={nameplate.uploading} error={nameplate.error}/>:null}
-    {uploads.map(row=><div key={row.id} role="status">{row.state==='uploading'?'手写清单上传中…':<><Alert type="error" title="清单照片上传失败" description={row.error}/><Button disabled={busy} onClick={()=>void upload(row)}>重试</Button><Button disabled={busy} onClick={()=>setUploads(rows=>rows.filter(r=>r.id!==row.id))}>移除失败照片</Button></>}</div>)}
+    {needsNameplate&&!nameplateOpen?<VehicleNameplatePhotos currentId={task.vehicleNameplateFileId} files={c.detail!.files} onUpload={nameplate.upload} disabled={busy||stale} uploading={nameplate.uploading} error={nameplate.error} historyLoading={nameplate.historyLoading} historyError={nameplate.historyError} onReloadHistory={nameplate.reloadHistory}/>:null}
+    {uploads.map(row=><div key={row.id} role="status">{row.state==='uploading'?'手写清单上传中…':<><Alert type="error" title="清单照片上传失败" description={row.error}/><Button disabled={busy} onClick={()=>void upload(row)}>重试</Button><PhotoRemoveButton disabled={busy} onClick={()=>setUploads(rows=>rows.filter(r=>r.id!==row.id))}>移除失败照片</PhotoRemoveButton></>}</div>)}
     {attachments.error?<Alert type="error" showIcon title={attachments.error}/>:null}
-    {attachments.uploads.map(row=><div key={row.id} className="repair-photo-upload" role="status">{row.state==='uploading'?<span>{row.file.name} · 配件照片上传中…</span>:<><Alert type="error" showIcon title={`${row.file.name} 上传失败`} description={row.error}/><Button disabled={busy||stale} onClick={()=>void attachments.retry(row)}>重试</Button><Button disabled={busy} onClick={()=>attachments.removeFailed(row.id)}>移除失败照片</Button></>}</div>)}
+    {attachments.uploads.map(row=><div key={row.id} className="repair-photo-upload" role="status">{row.state==='uploading'?<span>{row.file.name} · 配件照片上传中…</span>:<><Alert type="error" showIcon title={`${row.file.name} 上传失败`} description={row.error}/><Button disabled={busy||stale} onClick={()=>void attachments.retry(row)}>重试</Button><PhotoRemoveButton disabled={busy} onClick={()=>attachments.removeFailed(row.id)}>移除失败照片</PhotoRemoveButton></>}</div>)}
     {error||c.error?<Alert type="error" showIcon title={error||c.error}/>:null}
   </FormDialog>
   {nameplateOpen?<FormDialog open title={hasNameplate?"确认车辆铭牌照片":"请上传车辆铭牌照片"} okText="提交配件需求" cancelText="返回编辑" confirmLoading={c.busy||nameplate.checking} okButtonProps={{disabled:busy||stale||!hasNameplate}} cancelButtonProps={{disabled:busy}} closable={!busy} mask={{closable:false}} onCancel={()=>{if(!busy)setNameplateOpen(false);}} onOk={()=>void confirm()}>
     <p>{hasNameplate?'铭牌照片已上传，请核对后继续提交配件需求。':'本工单尚未上传车辆铭牌，请上传后继续提交。其他维修工可共用这张照片。'}</p>
-    <VehicleNameplatePhotos currentId={task.vehicleNameplateFileId} files={c.detail!.files} onUpload={nameplate.upload} disabled={busy||stale} uploading={nameplate.uploading} error={nameplate.error}/>
+    <VehicleNameplatePhotos currentId={task.vehicleNameplateFileId} files={c.detail!.files} onUpload={nameplate.upload} disabled={busy||stale} uploading={nameplate.uploading} error={nameplate.error} historyLoading={nameplate.historyLoading} historyError={nameplate.historyError} onReloadHistory={nameplate.reloadHistory}/>
     {stale?<Alert type="warning" title="工单已更新，请返回并重新打开配件申请"/>:null}
     {error||c.error?<Alert type="error" showIcon title={error||c.error}/>:null}
   </FormDialog>:null}</>;

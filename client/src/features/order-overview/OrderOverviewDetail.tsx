@@ -12,7 +12,7 @@ import { AuthenticatedImage, AuthenticatedImagePreviewGroup } from '../../shared
 import { useOrderOverview, useOrderPhotoExport } from './useOrderOverview';
 import './order-overview.css';
 const categories=Object.keys(photoAlbumLabels) as OrderPhotoCategory[];
-export function OrderOverviewDetail({id}:{id:string}) {
+export function OrderOverviewDetail({id,onOpenRepairs}:{id:string;onOpenRepairs?:()=>void}) {
   const {data,error,loading,retry}=useOrderOverview(id);
   const exporter=useOrderPhotoExport(id);
   const [selected,setSelected]=useState<OrderPhotoCategory[]>(categories);
@@ -38,7 +38,7 @@ export function OrderOverviewDetail({id}:{id:string}) {
     </section>
     <Collapse items={categories.map(key=>({key,label:`${photoAlbumLabels[key]}照片（${albums[key].length}）`,children:<AuthenticatedImagePreviewGroup fileIds={albums[key].map(photo=>photo.id)}><div className="overview-photo-grid">{albums[key].map(photo=><div key={photo.id}><AuthenticatedImage fileId={photo.id} alt={`${photoAlbumLabels[key]}：${photo.originalName}`} width="100%" height={120}/><small>{photo.uploadedName} · {displayTime(photo.createdAt)}</small></div>)}</div>{!albums[key].length&&<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无照片"/>}</AuthenticatedImagePreviewGroup>}))}/>
     <h3>全部工单信息</h3>
-    <OrderDetail order={order} isMobile={!screens.md} onUpdated={()=>retry()}/>
+    <OrderDetail order={order} isMobile={!screens.md} onOpenRepairs={onOpenRepairs} onUpdated={()=>retry()}/>
     <OrderSupportingRecords data={data}/>
     <h3>维修流程与配件</h3>
     <Descriptions bordered size="small" column={screens.md?2:1} items={[

@@ -63,7 +63,7 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
     if(selection.current===id)return;
     selection.current=id;detailGeneration.current++;setDetail(undefined);
     pending.current=undefined;setDetailLoading(Boolean(id));setSelectedId(id);setError('');
-    const url=new URL(location.href);if(id) url.searchParams.set('dispatchOrder',id);else url.searchParams.delete('dispatchOrder');
+    const url=new URL(location.href);url.searchParams.delete('dispatchSection');if(id) url.searchParams.set('dispatchOrder',id);else url.searchParams.delete('dispatchOrder');
     history.replaceState(null,'',url);
   }
   async function act(input:ActionInput):Promise<boolean> {

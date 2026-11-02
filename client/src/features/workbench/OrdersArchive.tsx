@@ -57,6 +57,11 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
   const canAssign = (order: WorkOrder) => dispatchEnabled && ["advisor","manager"].includes(role) && order.shop.id===currentUser?.shopId && workOrderDisplayStatus(order) === "待派工" && (!order.technician || order.technician === "待派工");
   const canOpenDispatch = Boolean(detailOrder && dispatchEnabled && ["advisor","manager"].includes(role)
     && detailOrder.shop.id === currentUser?.shopId && !["草稿","待客户签字","待处理纸质委托书"].includes(detailOrder.status));
+  const openRepairProjects = canOpenDispatch && detailOrder ? () => {
+    const orderId = detailOrder.id;
+    setDetailOrderId(undefined);
+    controller.openDispatch(orderId, 'repairs');
+  } : undefined;
   const [deleteError, setDeleteError] = useState("");
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
@@ -215,7 +220,7 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
         )}
         styles={{ body: { overflowY: "auto" } }}
       >
-        {overview && detailOrder ? <Suspense fallback={<Spin/>}><OrderOverviewDetail key={detailOrder.id} id={detailOrder.id}/></Suspense> : <>
+        {overview && detailOrder ? <Suspense fallback={<Spin/>}><OrderOverviewDetail key={detailOrder.id} id={detailOrder.id} onOpenRepairs={openRepairProjects}/></Suspense> : <>
         {detailOrder && <PaperOrderResolution key={`paper-${detailOrder.id}`} order={detailOrder} user={currentUser} onUpdated={controller.acceptRefreshedOrder} onEdit={resumeDraft}/>}
         {detailOrder && <div style={{ marginBottom: 12 }}><CustomerVehicleEditor key={`${detailOrder.id}-${currentUser?.id}`} order={detailOrder} user={currentUser}
           disabled={Boolean(legacyRefresh.progress)} onUpdated={order => { controller.acceptRefreshedOrder(order); controller.refreshArchiveSummary(); }} /></div>}
@@ -225,7 +230,7 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
         {deleteError ? <Alert type="error" showIcon title="删除草稿失败" description={deleteError} style={{ marginBottom: 12 }} /> : null}
         {detailOrder?.vehicleLicenseException?<div style={{marginBottom:16}}><VehicleLicenseExceptionNotice exception={detailOrder.vehicleLicenseException} current={isCurrentVehicleLicenseException(detailOrder.vehicleLicenseException,detailOrder.vehicle)}/></div>:null}
         {detailOrder && <SignatureReview order={detailOrder} user={currentUser} onUpdated={controller.acceptRefreshedOrder} />}
-        {detailOrder ? <OrderDetail key={detailOrder.id} order={detailOrder} isMobile={isMobile} user={currentUser} onUpdated={controller.acceptRefreshedOrder}/> : null}
+        {detailOrder ? <OrderDetail key={detailOrder.id} order={detailOrder} isMobile={isMobile} user={currentUser} onUpdated={controller.acceptRefreshedOrder} onOpenRepairs={openRepairProjects}/> : null}
         </>}
       </Modal>
       {signature.session && <WorkOrderSignatureDialog key={signature.session.token} session={signature.session}

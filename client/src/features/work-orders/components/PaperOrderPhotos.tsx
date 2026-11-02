@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Alert, Button, Checkbox, Popover, Spin } from "antd";
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
+import { PhotoRemoveButton } from "../../../shared/ui/PhotoRemoveButton";
 import { PhotoBatchActions, usePhotoSelection } from "../../../shared/ui/PhotoBatchActions";
 import { ImageSourcePicker } from "../../../shared/ui/ImageSourcePicker";
 import { AuthenticatedImage, AuthenticatedImagePreviewGroup } from "../../../shared/ui/AuthenticatedImage";
@@ -19,9 +20,9 @@ export function PaperOrderPhotos({ids,disabled,controls}:{ids:string[];disabled:
     <AuthenticatedImagePreviewGroup fileIds={ids}><div className="paper-order-photo-grid">{ids.map((id, index)=><div className="paper-order-photo-card" key={id}>
       {!disabled && <Checkbox className="paper-order-photo-select" aria-label={`选择纸质委托书照片 ${index + 1}`} disabled={controls.uploading}
         checked={selection.selectedIds.includes(id)} onChange={event=>selection.toggle(id,event.target.checked)}/>}
-      <AuthenticatedImage fileId={id} width="100%" height="100%" alt={`纸质委托书照片 ${index + 1}`}/>
-      {!disabled && <Button className="paper-order-photo-remove" danger shape="circle" aria-label={`移除照片 ${index + 1}`} title="移除照片"
-        icon={<X size={18} aria-hidden="true" />} disabled={controls.uploading} onClick={()=>controls.remove(id)} />}
+      <div className="paper-order-photo-thumbnail"><AuthenticatedImage fileId={id} width="100%" height="100%" alt={`纸质委托书照片 ${index + 1}`}/></div>
+      {!disabled && <PhotoRemoveButton aria-label={`移除照片 ${index + 1}`} title="移除照片"
+        disabled={controls.uploading} onClick={()=>controls.remove(id)}>移除</PhotoRemoveButton>}
     </div>)}
       {!disabled && <Popover content={picker} trigger="click" placement="bottom" open={pickerOpen && !controls.uploading} onOpenChange={setPickerOpen}>
         <Button className="paper-order-photo-add" disabled={controls.uploading} aria-label="添加纸质委托书照片" aria-expanded={pickerOpen && !controls.uploading}>

@@ -1,16 +1,16 @@
-.repair-task-drawer .ant-drawer-body{background:#f5f7fa;padding:20px}
+.repair-task-drawer .ant-drawer-body{background:#f4f6fa;padding:20px}
 .repair-task-drawer .ant-drawer-header{padding:18px 20px}
-.task-overview,.technician-detail>section,.task-detail-layout>section{background:#fff;border:1px solid #e8ecf1;border-radius:12px;padding:18px}
+.task-overview,.technician-detail>section,.task-detail-layout>section,.dispatch-projects-anchor>.task-projects{background:#fff;border:1px solid #e2e8f1;border-radius:16px;padding:20px}
 .task-overview-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .task-overview-status .ant-tag{margin:0}
 .task-overview-ref{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 10px;margin:14px 0 18px;font-size:13px;color:#657085;overflow-wrap:anywhere}
-.task-overview-ref strong{min-width:0;font-size:19px;line-height:1.5;font-weight:650;color:#243247;font-variant-numeric:tabular-nums;letter-spacing:.3px}
-.task-overview dl{margin:0;display:grid;gap:10px;font-size:13px;line-height:1.6}
-.task-overview dl>div{display:grid;grid-template-columns:84px minmax(0,1fr);gap:8px}
-.task-overview dt{color:#788497}
+.task-overview-ref strong{min-width:0;font-size:14px;line-height:1.7;font-weight:400;color:#243247;font-variant-numeric:tabular-nums;letter-spacing:0}
+.task-overview dl{margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;font-size:14px;line-height:1.7}
+.task-overview dl>div{display:flex;flex-direction:column;gap:5px;min-width:0}
+.task-overview dt{color:#66788f;font-size:12px}
 .task-overview dd{margin:0;overflow-wrap:anywhere}
 .repair-task-drawer h3{font-size:15px;margin:0 0 14px}
-.technician-detail>section>p{font-size:13px;color:#526079}
+.technician-detail>section>p{font-size:16px;line-height:1.8;color:#334b69;white-space:pre-wrap;overflow-wrap:anywhere}
 .repair-task-drawer .ant-collapse{background:#fff;border-color:#e8ecf1}
 .repair-task-drawer .ant-collapse-header{font-size:13px;padding:16px!important;align-items:center!important}
 .repair-task-drawer .ant-alert{font-size:13px;border-radius:10px}
@@ -35,7 +35,7 @@
 @media(max-width:767px){
  .repair-task-drawer .ant-drawer-body{padding:16px}
  .repair-task-drawer .ant-drawer-header{padding:16px}
- .task-overview,.technician-detail>section,.task-detail-layout>section{padding:16px}
+ .task-overview,.technician-detail>section,.task-detail-layout>section,.dispatch-projects-anchor>.task-projects{padding:16px}
  .technician-detail{gap:16px;padding-bottom:90px}
  .task-detail-actions,.technician-action-bar{width:100%;padding-inline:16px}
  .task-detail-actions>.ant-space>.ant-space-item{flex:1}
@@ -52,10 +52,43 @@
  .task-detail-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
  .task-detail-actions>.ant-space,.task-detail-actions>.ant-space>.ant-space-item{display:contents}
  .task-detail-actions .repair-items-save>.ant-btn,.task-detail-actions .ant-btn{width:100%;padding-inline:10px;min-width:0}
+ .task-detail-actions .task-inspection-submit{grid-column:1/-1;height:auto;min-height:44px;padding-block:8px;white-space:normal;line-height:1.5}
+ .task-detail-actions .task-inspection-submit>span{min-width:0;overflow-wrap:anywhere}
 }
 
 .task-due-field { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
 .task-due-field .ant-input { width: 100%; }
 
-.task-overview dl > .task-due-row { align-items: center; }
+.task-overview dl > .task-due-row { align-items: stretch; }
 .task-due-display { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; vertical-align: top; }
+
+.dispatch-projects-anchor { display: grid; gap: 16px; scroll-margin-top: 16px; min-width: 0; }
+.dispatch-projects-anchor:focus-visible { outline: 2px solid #2563eb; outline-offset: 4px; border-radius: 12px; }
+
+.task-overview-identity { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.task-overview-identity>div { min-width: 0; }
+.task-vehicle-icon { display: grid; place-items: center; width: 46px; height: 46px; flex-shrink: 0; color: #2563eb; background: #edf3ff; border-radius: 12px; }
+.task-overview-eyebrow { color: #66788f; font-size: 12px; }
+.task-overview-identity h2 { margin: 3px 0 4px; font-size: 23px; line-height: 1.4; color: #273f60; overflow-wrap: anywhere; }
+.task-overview-identity p { margin: 0; color: #66788f; font-size: 12px; line-height: 1.7; }
+.task-overview .task-overview-ref { margin: 14px 0 18px; padding-bottom: 16px; border-bottom: 1px solid #e8edf5; }
+.task-overview dl>.task-overview-customer, .task-overview dl>.task-overview-wide { grid-column: 1 / -1; }
+.task-overview .task-due-display { align-items: baseline; }
+.task-overview .task-due-display>.ant-btn { height: 24px; min-height: 24px; padding: 0 4px; font-size: 12px; }
+.dispatch-projects-anchor>.task-projects>h3 { color: #334b69; font-size: 16px; line-height: 1.6; padding-bottom: 14px; border-bottom: 1px solid #e8edf5; }
+.dispatch-projects-anchor>.task-projects .inspection-progress { margin: 2px 0 0; color: #66788f; font-size: 12px; line-height: 1.7; }
+.repair-task-drawer .ant-drawer-header { border-bottom-color: #e2e8f1; background: #fff; }
+.repair-task-drawer .ant-drawer-title { color: #273f60; line-height: 1.6; }
+.repair-task-drawer .ant-collapse { border-radius: 12px; }
+.task-detail-actions { box-shadow: 0 -4px 16px #24364e06; }
+@media(max-width:767px) {
+ .repair-task-drawer .ant-drawer-body { padding: 14px; }
+ .task-overview,.dispatch-projects-anchor>.task-projects { padding: 18px 16px; }
+ .task-overview dl { gap: 14px; }
+ .repair-task-drawer .inspection-item { flex-wrap: wrap; gap: 12px; padding: 14px; border-radius: 12px; }
+ .repair-task-drawer .inspection-item-name { flex-basis: 100%; }
+ .repair-task-drawer .inspection-item .ant-radio-group { width: 100%; margin-left: 0; }
+ .repair-task-drawer .inspection-item .ant-radio-button-wrapper { flex: 1; justify-content: center; min-height: 44px; padding-inline: 6px; }
+ .repair-task-drawer .inspection-item-name strong { font-size: 15px; font-weight: 600; }
+ .repair-task-drawer .inspection-item-number { width: 26px; height: 26px; text-align: center; color: #60728a; background: #edf1f7; border-radius: 6px; }
+}

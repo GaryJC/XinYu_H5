@@ -32,6 +32,10 @@
 .parts-photo-section{padding:16px;background:#f7f9fc;border:1px solid #e8ecf1;border-radius:10px}
 .parts-photo-hint{font-size:12px;line-height:1.7;color:#788497;margin:0 0 16px}
 .parts-photo-section .repair-photo-grid{margin-top:16px}
+.parts-photo-section .repair-photo-grid>div{min-width:0;display:flex;flex-direction:column;gap:6px}
+.parts-photo-section .repair-photo-grid>div>.ant-btn{align-self:flex-start;font-size:13px}
+.parts-photo-section .parts-photo-empty{margin:16px 0 0;font-size:13px;line-height:1.7;color:#66788f}
+.parts-photo-section .parts-photo-selection-note{margin:12px 0 0}
 .parts-requirement-modal .ant-alert{margin-top:16px}
 .parts-requirement-modal .ant-modal-footer{margin-top:20px;padding-top:16px;border-top:1px solid #edf0f4}
 @media(max-width:575px){

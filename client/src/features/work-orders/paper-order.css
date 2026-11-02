@@ -15,6 +15,7 @@
 
 .paper-order-photo-grid {
   display: grid;
+  align-items: start;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   gap: 12px;
 }
@@ -22,6 +23,13 @@
 .paper-order-photo-card {
   position: relative;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.paper-order-photo-thumbnail {
+  width: 100%;
   aspect-ratio: 1;
   border: 1px solid #edf0f4;
   border-radius: 8px;
@@ -62,20 +70,6 @@
   grid-template-columns: 1fr;
   gap: 8px;
   width: 200px;
-}
-
-.paper-order-photo-card > .paper-order-photo-remove.ant-btn {
-  position: absolute;
-  z-index: 1;
-  top: 4px;
-  right: 4px;
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  padding: 0;
-  background: #fff;
-  border-color: #ffccc7;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
 }
 
 .paper-order-help {

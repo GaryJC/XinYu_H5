@@ -1,3 +1,4 @@
+import { PhotoRemoveButton } from '../../shared/ui/PhotoRemoveButton';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Checkbox, Grid, Modal } from 'antd';
 import { HelpCircle, Trash2 } from 'lucide-react';
@@ -91,10 +92,10 @@ export function PreRepairPhotos({ photos = {}, disabled, controls, errors = [], 
       {managing && editable && Boolean(extras.length) && <div className="pre-repair-batch">
         <Checkbox disabled={busy} checked={selection.selectedIds.length === extras.length} indeterminate={Boolean(selection.selectedIds.length && selection.selectedIds.length < extras.length)} onChange={event => selection.selectAll(event.target.checked)}>全选补充照片</Checkbox>
         <span>已选 {selection.selectedIds.length} 张</span>
-        <Button type="text" danger icon={<Trash2 size={16} />} disabled={busy || !selection.selectedIds.length} onClick={() => {
+        <PhotoRemoveButton disabled={busy || !selection.selectedIds.length} onClick={() => {
           const ids = [...selection.selectedIds];
           requestRemoval(`选中的 ${ids.length} 张补充照片`, () => controls!.removeExtras!(ids));
-        }}>删除所选</Button>
+        }}>删除所选</PhotoRemoveButton>
       </div>}
       {['extra','other'].includes(controls?.uploading || '') && <div className="pre-repair-upload-progress" role="status">{controls?.uploading === 'extra' ? '正在上传补充照片' : '正在更新照片'} · {progressText}</div>}
       {extras.length ? <div className="pre-repair-photo-grid">

@@ -112,7 +112,7 @@ export function useWorkbenchController() {
   function openTodo(stage:string) {
     homeScroll.current=window.scrollY;
     const nav=stage==='待客户签字'||!dispatchEnabled?'工单全览':stage==='待检验'&&hasAnyRole(currentUser,['manager','inspector'])?'检验任务':'派工台';
-    const url=new URL(location.href);for(const key of ['dispatchOrder','workOrder','paperOrder'])url.searchParams.delete(key);history.replaceState(null,'',url);
+    const url=new URL(location.href);for(const key of ['dispatchOrder','dispatchSection','workOrder','paperOrder'])url.searchParams.delete(key);history.replaceState(null,'',url);
     setLinkedOrderDetail(undefined);
     if(nav==='工单全览')archive.setFilters({...defaultArchiveFilters(),statuses:[stage]});
     setTodoEntry({stage,nav,key:Date.now()});setActiveNav(nav);window.scrollTo(0,0);
@@ -468,9 +468,10 @@ export function useWorkbenchController() {
     loadDashboard
   });
 
-  function openDispatch(orderId: string) {
+  function openDispatch(orderId: string, section?: 'repairs') {
     if (!dispatchEnabled) return;
     const url=new URL(location.href);url.searchParams.delete('workOrder');url.searchParams.delete('paperOrder');url.searchParams.set('dispatchOrder',orderId);
+    if(section) url.searchParams.set('dispatchSection',section); else url.searchParams.delete('dispatchSection');
     history.replaceState(null,'',url);setActiveNav('派工台');
   }
 

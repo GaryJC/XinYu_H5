@@ -1,9 +1,11 @@
 import { request } from '../../shared/api/httpClient';
+import type {VehicleNameplateEnsureRequest} from '../../../../shared/types';
 import type { ResolveRepairWritebackRequest, RepairPhotoDeleteRequest, RepairPhotoDeleteResponse, VehiclePartsHistory, RunfengWarehouse, RunfengStockSearchResult, RepairPhotoUploadRequest, RepairTaskCounts, DispatchActionRequest, DispatchDetail, DispatchPeople, DispatchTask, TechnicianSummary } from '../../../../shared/types';
 import type { DispatchFilters, PageResult } from '../../../../shared/types';
 export type { DispatchFilters } from '../../../../shared/types';
 function query(filters: DispatchFilters) { return new URLSearchParams(Object.entries(filters).filter(([,v])=>Boolean(v)) as [string,string][]).toString(); }
 export const dispatchApi={
+  ensureNameplate:(id:string,body:VehicleNameplateEnsureRequest)=>request<{id:string|null}>(`/api/dispatch/tasks/${encodeURIComponent(id)}/nameplate/ensure`,{method:'POST',body}),
   resolveRepairWriteback:(id:string,body:ResolveRepairWritebackRequest)=>request<{ok:boolean}>(`/api/dispatch/tasks/${encodeURIComponent(id)}/repair-writeback/resolve`,{method:'POST',body}),
   retryRepairWriteback:(id:string)=>request<{ok:boolean}>(`/api/dispatch/tasks/${encodeURIComponent(id)}/repair-writeback/retry`,{method:'POST',body:{}}),
   vehiclePartsHistory:(id:string)=>request<VehiclePartsHistory>(`/api/dispatch/tasks/${encodeURIComponent(id)}/parts-history`),

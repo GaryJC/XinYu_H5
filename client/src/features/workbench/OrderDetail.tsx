@@ -1,79 +1,97 @@
 import { ActionHistory } from "../../shared/ui/ActionHistory";
 import './workbench.css';
-import { CarFront, ClipboardList, Users, Wallet } from 'lucide-react';
+import './order-detail.css';
+import { CarFront, ClipboardList, Users, Wallet, Wrench, FileText, ChevronRight } from 'lucide-react';
+import { CopyTextButton } from "../../shared/ui/CopyTextButton";
 import { type ReactNode } from 'react';
-import { Collapse, Descriptions, Empty, Table, Tag } from 'antd';
+import { Button, Collapse, Descriptions, Empty, Table } from 'antd';
 import type { WorkOrder, UserProfile } from '../../../../shared/types';
 import { CustomerSignatureSection } from '../signature/CustomerSignatureSection';
 import { CustomerVehicleUpdateTag } from '../customer-vehicle-update/CustomerVehicleUpdateTag';
 import { SubmittedOrderPhotos } from '../work-order-photos/SubmittedOrderPhotos';
 import { workOrderDisplayStatus } from '../work-orders/domain/workOrderDomain';
 import { LegacySyncStatusChip, StatusChip } from '../../shared/ui/Status';
-export function OrderDetail({ order, isMobile, user, onUpdated }: { order: WorkOrder; isMobile: boolean; user?: UserProfile; onUpdated:(order:WorkOrder)=>void }) {
-  if (order.paperOrder?.mode === "pending") return <>
+export function OrderDetail({ order, isMobile, user, onUpdated, onOpenRepairs }: { order: WorkOrder; isMobile: boolean; user?: UserProfile; onUpdated:(order:WorkOrder)=>void; onOpenRepairs?:()=>void }) {
+  if (order.paperOrder?.mode === "pending") return <div className="order-detail-content">
+    <OrderIdentity order={order} />
+    <section className="workbench-detail-group" aria-label="纸质委托单信息"><h3><FileText size={18} aria-hidden="true" />纸质委托单信息</h3>
     <Descriptions bordered size="small" column={isMobile ? 1 : 3} items={[
       {key:"id",label:"委托单号",children:order.id},
       {key:"advisor",label:"服务顾问",children:order.advisor},
       {key:"created",label:"创建时间",children:order.createdAt}
-    ]}/>
+    ]}/></section>
     <SubmittedOrderPhotos order={order} user={user} onUpdated={onUpdated} section="other"/>
     <CustomerSignatureSection order={order} user={user} onUpdated={onUpdated}/>
-  </>;
+  </div>;
   const signatures = Object.entries(order.signatures).map(([type, name]) => `${type}: ${name}`).join("；") || "-";
   const descriptions = [
-    { key: "id", label: "委托单号", children: order.id },
-    { key: "status", label: "状态", children: <StatusChip status={workOrderDisplayStatus(order)} /> },
-    { key: "legacySyncStatus", label: "润丰同步", children: <OrderLegacySyncStatus order={order} /> },
+    { key: "id", label: "委托单号", children: order.id, span: 2 },
     { key: "advisor", label: "服务顾问", children: order.advisor || "-" },
-    { key: "dispatch", label: "派工号", children: order.dispatchNo || "-" },
+    { key: "dispatch", label: "派工号", children: <DispatchNumber value={order.dispatchNo} /> },
     { key: "arrival", label: "进厂日期", children: order.arrivalDate || "-" },
     { key: "delivery", label: "预计交车", children: order.estimatedDeliveryAt || "-" },
     { key: "updated", label: "更新时间", children: order.updatedAt || "-" },
-    { key: "shop", label: "门店地址", children: order.shop.address || "-" },
+    { key: "shop", label: "门店地址", children: order.shop.address || "-", span: 2 },
     { key: "shopPhone", label: "门店电话", children: order.shop.phone || "-" },
-    { key: "platform", label: "平台工单号", children: order.platformOrderNo || "-" },
-    { key: "plate", label: "车牌号码", children: order.vehicle.plate || "-" },
-    { key: "vin", label: "VIN/底盘号", children: order.vehicle.vin || "-" },
+    { key: "platform", label: "平台工单号", children: order.platformOrderNo || "-", span: 2 },
+    { key: "vin", label: "VIN/底盘号", children: order.vehicle.vin ? <span className="detail-copy-value">{order.vehicle.vin}<CopyTextButton text={order.vehicle.vin} label="复制 VIN/底盘号" /></span> : "-", span: 2 },
     { key: "mileage", label: "进厂里程", children: order.vehicle.mileage ? `${order.vehicle.mileage} km` : "-" },
-    { key: "model", label: "车型", children: order.vehicle.model || "-" },
     { key: "purchase", label: "购车日期", children: order.vehicle.purchaseDate || "-" },
-    { key: "customer", label: "车主名称/所属单位", children: order.customer.name || "-" },
+    { key: "customer", label: "车主名称/所属单位", children: order.customer.name || "-", span: 2 },
     { key: "contact", label: "联系人", children: order.customer.contact || "-" },
     { key: "phone", label: "联系电话", children: order.customer.phone || "-" },
-    { key: "address", label: "车辆地址", children: order.customer.address || "-", span: isMobile ? 2 : 3 },
-    { key: "fault", label: "故障描述", children: order.faultDescription || "-", span: isMobile ? 2 : 3 },
+    { key: "address", label: "车辆地址", children: order.customer.address || "-", span: 2 },
+    { key: "fault", label: "故障描述", children: order.faultDescription || "-", span: 2 },
     { key: "belongings", label: "随车物品", children: order.inspection.belongings.join("、") || "-" },
     { key: "exterior", label: "外观状况", children: order.inspection.exteriorIssues.join("、") || "-" },
     { key: "fuel", label: "燃油存量", children: order.inspection.fuelLevel },
-    { key: "estimated", label: "预计修理费", children: `¥${order.estimatedFee || 0}` },
-    { key: "settlement", label: "结算金额", children: `¥${order.settlementAmount || 0}` },
-    { key: "oldParts", label: "旧件处置", children: order.oldPartsHandling },
-    { key: "feeNote", label: "费用备注", children: order.feeNote || "-", span: isMobile ? 2 : 3 },
-    { key: "signatures", label: "签字记录", children: signatures, span: isMobile ? 2 : 3 }
+    { key: "oldParts", label: "旧件处置", children: order.oldPartsHandling, span: 2 },
+    { key: "feeNote", label: "费用备注", children: order.feeNote || "-", span: 2 },
+    { key: "signatures", label: "签字记录", children: signatures, span: 2 }
   ];
 
   return (
-    <>
-      <div className="workbench-order-summary">
-        <span className="workbench-order-icon"><CarFront size={28} /></span>
-        <div><span className="workbench-detail-eyebrow">车辆档案</span><h2>{order.vehicle.plate || '未登记车牌'}</h2><p>{order.vehicle.model || '车型待补充'}</p></div>
-        <div className="workbench-order-status"><StatusChip status={workOrderDisplayStatus(order)} /><OrderLegacySyncStatus order={order} /></div>
-      </div>
+    <div className="order-detail-content">
+      <OrderIdentity order={order} />
+      <div className="order-detail-grid">
       {[
-        { title: '委托与进度', icon: ClipboardList, keys: ['dispatch','advisor','arrival','delivery','updated','shop','shopPhone','id','platform'] },
+        { title: '委托与进度', icon: ClipboardList, keys: ['dispatch','advisor','arrival','delivery','updated','shopPhone','shop','id','platform'] },
         { title: '车辆与客户', icon: Users, keys: ['vin','mileage','purchase','customer','contact','phone','address'] },
-        { title: '故障与检查', icon: CarFront, keys: ['fault','belongings','exterior','fuel'] },
-        { title: '费用与签字', icon: Wallet, keys: ['estimated','settlement','oldParts','feeNote','signatures'] }
-      ].map(group => <section className="workbench-detail-group" key={group.title}>
-        <h3><group.icon size={18} />{group.title}</h3>
-        <Descriptions className="archive-descriptions" layout="vertical" size="small" column={isMobile ? 2 : 3} items={group.keys.flatMap(key => descriptions.filter(item => item.key === key))} />
+        { title: '故障与检查', icon: CarFront, keys: ['fault','belongings','exterior','fuel'] }
+      ].map(group => <section className="workbench-detail-group" key={group.title} aria-label={group.title}>
+        <h3><group.icon size={18} aria-hidden="true" />{group.title}</h3>
+        <Descriptions className="archive-descriptions" layout="vertical" size="small" column={2} items={group.keys.flatMap(key => descriptions.filter(item => item.key === key))} />
       </section>)}
-      <OrderRepairRecords order={order} isMobile={isMobile}/>
+      </div>
+      <OrderRepairRecords order={order} isMobile={isMobile} onOpen={onOpenRepairs}/>
+      <section className="workbench-detail-group" aria-label="费用与签字">
+        <h3><Wallet size={18} aria-hidden="true" />费用与签字</h3>
+        <Descriptions className="archive-descriptions" layout="vertical" size="small" column={2} items={descriptions.filter(item => ['oldParts', 'feeNote', 'signatures'].includes(item.key))} />
+      </section>
       <SubmittedOrderPhotos order={order} user={user} onUpdated={onUpdated}/>
       <CustomerSignatureSection order={order} user={user} onUpdated={onUpdated}/>
       {isMobile ? <MobileOrderRecords order={order} /> : <DesktopOrderRecords order={order} />}
-    </>
+    </div>
   );
+}
+
+function DispatchNumber({ value }: { value?: string }) {
+  return value ? <div className="detail-dispatch-number"><strong>{value}</strong><CopyTextButton text={value} label="复制派工号" iconOnly /></div> : <span>暂无派工号</span>;
+}
+
+function OrderIdentity({ order }: { order: WorkOrder }) {
+  return <section className="workbench-order-summary detail-identity" aria-label="委托单摘要">
+    <div className="detail-identity-heading">
+      <span className="workbench-order-icon"><CarFront size={28} aria-hidden="true" /></span>
+      <div className="detail-identity-vehicle"><span className="workbench-detail-eyebrow">{order.paperOrder ? '纸质委托单' : '机动车修理委托单'}</span><h2>{order.vehicle.plate || '未登记车牌'}</h2><p>{order.vehicle.model || '车型待补充'}</p></div>
+      <div className="workbench-order-status"><StatusChip status={workOrderDisplayStatus(order)} /><OrderLegacySyncStatus order={order} /></div>
+    </div>
+    <div className="detail-identity-meta">
+      <div><span>车主 / 所属单位</span><strong>{order.customer.name || '未登记车主'}</strong></div>
+      <div><span>服务顾问</span><strong>{order.advisor || '未分配'}</strong></div>
+      <div><span>派工单号</span><DispatchNumber value={order.dispatchNo} /></div>
+    </div>
+  </section>;
 }
 
 export function OrderLegacySyncStatus({ order }: { order: WorkOrder }) {
@@ -81,13 +99,15 @@ export function OrderLegacySyncStatus({ order }: { order: WorkOrder }) {
   return <><LegacySyncStatusChip status={order.legacySyncStatus} /><CustomerVehicleUpdateTag order={order} /></>;
 }
 
-function OrderRepairRecords({order,isMobile}:{order:WorkOrder;isMobile:boolean}) {
-  if(isMobile) return <Collapse className="archive-mobile-collapse" defaultActiveKey={["repairs"]} items={[
-    { key: "repairs", label: `维修项目（${order.repairItems.length}）`, children: <MobileRecords rows={order.repairItems.map((item) => [
-      ["项目", item.name || "-"], ["工费", `¥${item.laborFee}`], ["主修人", item.owner], ["状态", item.status], ["开工", item.startAt || "-"], ["完工", item.finishAt || "-"], ["检查人", item.inspector]
-    ])} /> }
-  ]}/>;
-  return <DetailTable title="维修项目" rowKey="id" dataSource={order.repairItems} columns={[
+function OrderRepairRecords({order,isMobile,onOpen}:{order:WorkOrder;isMobile:boolean;onOpen?:()=>void}) {
+  if (isMobile) return <section className="workbench-detail-group detail-repairs" aria-label="维修项目">
+    <h3><Wrench size={18} aria-hidden="true" />{onOpen ? <Button type="link" className="detail-repair-link" onClick={onOpen} aria-label="查看派工单维修项目">维修项目<ChevronRight size={16} aria-hidden="true" /></Button> : "维修项目"}<span className="detail-section-count">{order.repairItems.length} 项</span></h3>
+    {order.repairItems.length ? <div className="detail-repair-list">{order.repairItems.map((item, index) => <article className={`detail-repair-card${onOpen ? ' is-link' : ''}`} key={item.id} role={onOpen ? 'button' : undefined} tabIndex={onOpen ? 0 : undefined} aria-label={onOpen ? `在派工单中查看维修项目：${item.name || '未填写项目'}` : undefined} onClick={onOpen} onKeyDown={event => {if(onOpen && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')){event.preventDefault();onOpen();}}}>
+      <div className="detail-repair-heading"><span className="detail-repair-index">{String(index + 1).padStart(2, '0')}</span><h4>{item.name || '未填写项目'}</h4><span className="detail-repair-status">{item.status || '未记录'}</span></div>
+      <dl><div><dt>工费</dt><dd>¥{item.laborFee}</dd></div><div><dt>主修人</dt><dd>{item.owner || '未分配'}</dd></div><div><dt>开工</dt><dd>{item.startAt || '未记录'}</dd></div><div><dt>完工</dt><dd>{item.finishAt || '未记录'}</dd></div><div><dt>检查人</dt><dd>{item.inspector || '未记录'}</dd></div></dl>
+    </article>)}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无维修项目" />}
+  </section>;
+  return <DetailTable title="维修项目" onOpen={onOpen} rowKey="id" dataSource={order.repairItems} columns={[
       { title: "项目", dataIndex: "name" }, { title: "工费", dataIndex: "laborFee", render: (value: number) => `¥${value}` },
       { title: "主修人", dataIndex: "owner" }, { title: "状态", dataIndex: "status" }, { title: "开工", dataIndex: "startAt" },
       { title: "完工", dataIndex: "finishAt" }, { title: "检查人", dataIndex: "inspector" }
@@ -126,10 +146,10 @@ function DesktopOrderRecords({ order }: { order: WorkOrder }) {
   </>;
 }
 
-function DetailTable<T extends object>({ title, rowKey, dataSource, columns }: {
-  title: string; rowKey: string | ((item: T) => string); dataSource: T[]; columns: Parameters<typeof Table<T>>[0]["columns"];
+function DetailTable<T extends object>({ title, rowKey, dataSource, columns, onOpen }: {
+  title: string; onOpen?:()=>void; rowKey: string | ((item: T) => string); dataSource: T[]; columns: Parameters<typeof Table<T>>[0]["columns"];
 }) {
-  return <section className="archive-detail-section"><h3>{title}</h3><Table<T> size="small" rowKey={rowKey} dataSource={dataSource} columns={columns} pagination={false} scroll={{ x: "max-content" }} locale={{ emptyText: "暂无记录" }} /></section>;
+  return <section className="archive-detail-section"><h3>{onOpen ? <Button type="link" className="detail-repair-link" onClick={onOpen} aria-label="查看派工单维修项目">{title}<ChevronRight size={16} aria-hidden="true" /></Button> : title}</h3><Table<T> onRow={onOpen ? () => ({onClick:onOpen,tabIndex:0,role:"button",'aria-label':"查看派工单维修项目",onKeyDown:event=>{if(event.target===event.currentTarget&&(event.key==='Enter'||event.key===' ')){event.preventDefault();onOpen();}}}) : undefined} size="small" rowKey={rowKey} dataSource={dataSource} columns={columns} pagination={false} scroll={{ x: "max-content" }} locale={{ emptyText: "暂无记录" }} /></section>;
 }
 
 function OrderAuditHistory({order,title}:{order:WorkOrder;title?:string}) {

@@ -3,6 +3,7 @@ import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import {resolveRepairWriteback,retryRepairWriteback} from '../services/repairWritebackService.mjs';
 import { warehouseVehiclePartsHistory,warehouseHistoricalPartStock,warehouseStockOptions,searchWarehouseStock } from '../services/warehouseStockService.mjs';
 import { uploadRepairPhoto, deleteRepairPhoto, deleteRepairPhotos } from '../services/repairPhotoService.mjs';
+import {ensureVehicleNameplate} from '../services/vehicleNameplateHistoryService.mjs';
 import { readJson, sendJson } from '../http/response.mjs';
 import { requireAnyRole } from '../domain/accessPolicy.mjs';
 import { DISPATCH_ROLES } from '../domain/dispatchPolicy.mjs';
@@ -33,6 +34,8 @@ export async function handleDispatchRequest(req,res,url,actor) {
     const id=decodeURIComponent(stock[1]);
     sendJson(res,200,stock[2]?await warehouseStockOptions(actor,id):await searchWarehouseStock(actor,id,query));return true;
   }
+  const nameplate=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)\/nameplate\/ensure$/);
+  if(nameplate&&req.method==='POST'){sendJson(res,200,await ensureVehicleNameplate(actor,decodeURIComponent(nameplate[1]),await readJson(req)));return true;}
   const deletePhoto=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)\/photos\/([^/]+)$/);
   if(deletePhoto && req.method==='DELETE') {sendJson(res,200,await deleteRepairPhoto(actor,decodeURIComponent(deletePhoto[1]),decodeURIComponent(deletePhoto[2])));return true;}
   const photo=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)\/photos$/);
