@@ -35,7 +35,7 @@ export function OrderDetail({ order, isMobile, user, onUpdated, onOpenRepairs }:
     { key: "shop", label: "门店地址", children: order.shop.address || "-", span: 2 },
     { key: "shopPhone", label: "门店电话", children: order.shop.phone || "-" },
     { key: "platform", label: "平台工单号", children: order.platformOrderNo || "-", span: 2 },
-    { key: "vin", label: "VIN/底盘号", children: order.vehicle.vin ? <span className="detail-copy-value">{order.vehicle.vin}<CopyTextButton text={order.vehicle.vin} label="复制 VIN/底盘号" iconOnly /></span> : "-", span: 2 },
+    { key: "vin", label: "VIN/底盘号", children: order.vehicle.vin ? <span className="detail-copy-value">{order.vehicle.vin}<CopyTextButton text={order.vehicle.vin} label="复制 VIN/底盘号" /></span> : "-", span: 2 },
     { key: "mileage", label: "进厂里程", children: order.vehicle.mileage ? `${order.vehicle.mileage} km` : "-" },
     { key: "purchase", label: "购车日期", children: order.vehicle.purchaseDate || "-" },
     { key: "customer", label: "车主名称/所属单位", children: order.customer.name || "-", span: 2 },
@@ -77,7 +77,7 @@ export function OrderDetail({ order, isMobile, user, onUpdated, onOpenRepairs }:
 }
 
 function DispatchNumber({ value }: { value?: string }) {
-  return value ? <div className="detail-dispatch-number"><strong>{value}</strong><CopyTextButton text={value} label="复制派工号" iconOnly /></div> : <span>暂无派工号</span>;
+  return value ? <div className="detail-dispatch-number"><strong>{value}</strong><CopyTextButton text={value} label="复制派工号" /></div> : <span>暂无派工号</span>;
 }
 
 function OrderIdentity({ order }: { order: WorkOrder }) {

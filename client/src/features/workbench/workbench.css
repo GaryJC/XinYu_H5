@@ -38,7 +38,6 @@
 .shortcut-icon { display: grid; place-items: center; flex-shrink: 0; width: 40px; height: 40px; border-radius: 12px; background: #edf3ff; color: #2563eb; }
 .shortcut-label { font-weight: 600; }
 .shortcut-arrow { margin-left: auto; flex-shrink: 0; color: #788aa2; }
-.workbench-shortcut-grid button:first-child { background: #f4f7ff; border-color: #dae5ff; }
 .workbench-shortcut-grid button { transition: background .15s, border-color .15s; }
 /* Touch WebViews can retain :hover after a tap and navigation back. */
 @media (hover: hover) and (pointer: fine) {
@@ -170,7 +169,7 @@ button.workbench-metric:focus-visible { outline: 3px solid #366fbb; outline-offs
 .todo-metric-caption { display: block; color: #66788f; font-size: 12px; margin-top: 8px; }
 
 .approval-entry-description{margin:0 0 16px;color:#657085;font-size:13px}
-.approval-category-list{display:flex;flex-direction:column;gap:12px;padding-bottom:env(safe-area-inset-bottom,0px)}
+.approval-category-list{display:flex;flex-direction:column;gap:12px}
 .approval-category-list button{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;min-height:64px;padding:16px;border:1px solid #dfe6f0;border-radius:12px;background:#f7f9fc;color:#253750;font:inherit;cursor:pointer;text-align:left}
 .approval-category-list strong{color:#2166c0;margin-right:4px}
 .approval-category-list button:focus-visible{outline:2px solid #1677ff;outline-offset:2px}

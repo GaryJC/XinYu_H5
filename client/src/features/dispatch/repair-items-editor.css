@@ -5,7 +5,12 @@
 .repair-item-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
 .repair-item-row{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid #eef0f4}
 .repair-item-row:last-child{border-bottom:0;padding-bottom:0}
-.is-editing .repair-item-row{padding:14px;background:#f7f9fc;border:1px solid #e8edf4;border-radius:10px}
+.is-editing .repair-item-row{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:12px;padding:14px;background:#f7f9fc;border:1px solid #e8edf4;border-radius:10px}
+.is-editing .repair-item-row>.repair-item-content{grid-column:1/-1}
+.is-editing .repair-item-leading{flex-direction:row;gap:10px;min-height:32px}
+.repair-item-tools{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
+.repair-item-tools>.repair-status-tag{margin:0}
+.repair-item-tools>.ant-btn{flex:none;width:32px;height:32px;min-height:32px;padding:0}
 .repair-item-number{display:flex;align-items:center;justify-content:center;flex:none;width:26px;height:26px;border-radius:7px;background:#edf1f6;font-size:11px;font-weight:600;color:#758197;margin-top:1px}
 .repair-item-content{flex:1;min-width:0}
 .repair-item-meta{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:26px;margin-bottom:8px}
@@ -39,9 +44,11 @@
 .repair-item-name-row{display:flex;align-items:flex-start;justify-content:space-between;gap:6px}
 .repair-item-name-row>.repair-status-tag{flex-shrink:0;margin-inline-end:0}
 .repair-item-name-row>.ant-input,.repair-item-name-row>.repair-item-name-field,.repair-item-name-row>.repair-item-title{flex:1;min-width:0}
-.repair-item-name-row>.repair-item-name-field{display:flex;flex-direction:column;gap:4px}
-.repair-item-name-count{align-self:flex-end;white-space:nowrap;font-size:12px;line-height:18px;color:#778399}
-.repair-item-name-row>.ant-btn{flex:none;min-height:36px;height:36px;width:28px;padding:0}
+.repair-item-name-row>.repair-item-name-field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.repair-item-field-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;line-height:20px;color:#778399}
+.repair-item-name-count{white-space:nowrap;font-size:12px;color:#778399}
+.is-editing label.repair-item-owner{flex-direction:column;align-items:stretch;gap:6px;font-size:13px;line-height:20px}
+.is-editing label.repair-item-owner>.ant-select{flex:none}
 
 /* The owner label and gap share the row with the select; width:100% on
    the select alone otherwise pushes the narrow dispatch dialog sideways. */
@@ -50,3 +57,11 @@
 .repair-items-toolbar { flex-wrap:wrap; }
 .repair-items-editor,.repair-item-list,.repair-item-row { min-width:0; max-width:100%; }
 .repair-item-content .dispatch-item-times { overflow-wrap:anywhere; }
+
+.repair-item-progress { margin-top:16px; padding-top:14px; border-top:1px solid #e2e8f1; font-size:13px; line-height:1.6; }
+.repair-progress-records { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px 16px; margin:0; }
+.repair-progress-records>div { min-width:0; }
+.repair-progress-records dt { margin-bottom:4px; color:#748198; font-size:12px; }
+.repair-progress-records dd { display:flex; flex-direction:column; gap:2px; min-width:0; margin:0; color:#344761; overflow-wrap:anywhere; }
+.repair-progress-records time { font-variant-numeric: tabular-nums; }
+.repair-progress-unrecorded { color:#8a95a6; }

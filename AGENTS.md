@@ -17,6 +17,8 @@
 - Do not add business logic to `client/src/App.tsx`.
 - Preserve mobile DingTalk WebView behavior and existing accessibility labels.
 
+- All copy buttons must use the shared `CopyTextButton` / `CopyActionButton` and the dispatch-number style: compact blue icon, transparent background, no border or shadow, and an accessible label. Do not add feature-specific copy button styling.
+
 ## Server
 
 - Routes parse HTTP input and format output only.

@@ -121,10 +121,10 @@ export function WorkbenchPage() {
                 ]}
               />
             ) : null}
-            <Space className="role-switcher">
+            {import.meta.env.DEV ? <Space className="role-switcher">
               <UserRound size={16} />
               <span>{currentUser ? userRoles(currentUser).map(role=>roles[role].name).join(" · ") : "未登录"}</span>
-            </Space>
+            </Space> : null}
           </div>
         </header>
 

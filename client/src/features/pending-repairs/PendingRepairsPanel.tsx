@@ -3,7 +3,7 @@ import { LoadingState } from "../../shared/ui/LoadingState";
 import {inspectionDeferredOwner} from '../../../../shared/inspectionDeferredOwnership.mjs';
 import {canRegisterPendingRepair,canManagePendingRepair} from '../../../../shared/pendingRepairPermissions.mjs';
 import {pendingRepairScheduleBlock} from '../../../../shared/pendingRepairScheduling.mjs';
-import {PlusOutlined,InfoCircleOutlined} from '@ant-design/icons';
+import {PlusOutlined,InfoCircleOutlined,ArrowDownOutlined} from '@ant-design/icons';
 import {displayTime} from '../dispatch/dispatchLabels';
 import './pending-repairs.css';
 import {DispatchExecutionFields} from '../dispatch/DispatchExecutionFields';
@@ -14,7 +14,7 @@ import {usePendingRepairs} from './usePendingRepairs';
 import type {PendingRepair,PendingRepairCommand,UserProfile,DispatchExecution} from '../../../../shared/types';
 import {hasAnyRole} from '../../../../shared/roles.mjs';
 const labels={pending:'待客户确认',approved:'同意维修',declined:'本次暂不维修'};
-export function PendingRepairsPanel({orderId,user,onChanged,stage,refreshVersion}:{orderId:string;user?:UserProfile;onChanged?:()=>void;stage?:string;refreshVersion?:number}) {
+export function PendingRepairsPanel({orderId,user,onChanged,stage,refreshVersion,onOpenRepair}:{orderId:string;user?:UserProfile;onChanged?:()=>void;stage?:string;refreshVersion?:number;onOpenRepair?:(item:PendingRepair)=>void}) {
  const c=usePendingRepairs(orderId,onChanged,refreshVersion);
  const inspectionEditable=!!user&&hasAnyRole(user,['manager','inspector']);
  const editable=canManagePendingRepair(user);
@@ -55,6 +55,7 @@ export function PendingRepairsPanel({orderId,user,onChanged,stage,refreshVersion
     <Button type="primary" disabled={c.busy||Boolean(schedulingBlock)} onClick={()=>open(item.state==='pending'?'approve-and-schedule':'schedule',item)}>安排维修</Button>
     {item.state==='pending'&&<Button disabled={c.busy} onClick={()=>open('decline',item)}>本次暂不维修</Button>}
    </div>}
+   {item.scheduled&&onOpenRepair&&<Button className="pending-repair-jump" type="link" icon={<ArrowDownOutlined/>} onClick={()=>onOpenRepair(item)} aria-label={`查看维修项目：${item.name}`}>查看维修项目</Button>}
    <Collapse className="pending-repair-history" ghost items={[{key:'history',label:'处理记录',children:<ActionHistory items={item.history.map((h,i)=>({key:i,title:h.action,actor:h.actor,time:displayTime(h.at),detail:<>{h.respondent?<p>回复人：{h.respondent}</p>:null}{h.note?<p>{h.note}</p>:null}</>}))}/>}]}/>
   </article>;})}</div>
   {!c.data.items.length&&c.loaded&&<p className="pending-repairs-empty">暂无待确认项目</p>}

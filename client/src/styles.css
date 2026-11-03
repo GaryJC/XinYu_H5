@@ -347,7 +347,7 @@ html, body { touch-action: pan-x pan-y; }
 .archive-custom-dates { margin-bottom: 12px; }
 .archive-custom-dates > button { margin-right: 8px; }
 .archive-drawer-fields { display: grid; gap: 16px; }
-.archive-filter-footer { display: flex; justify-content: flex-end; gap: 12px; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.archive-filter-footer { display: flex; justify-content: flex-end; gap: 12px; }
 .archive-filter-drawer .archive-filter-fields { grid-template-columns: 1fr; }
 /* Shared by page spacing, fixed form actions and floating controls. */
 .has-mobile-bottom-nav {

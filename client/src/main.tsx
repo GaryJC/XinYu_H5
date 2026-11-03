@@ -7,6 +7,8 @@ import { App } from "./App";
 import { WebViewStyleProvider } from "./shared/ui/WebViewStyleProvider";
 import "antd/dist/reset.css";
 import "./styles.css";
+import "./shared/ui/native-date-input.css";
+import "./shared/ui/overlay-safe-area.css";
 
 dayjs.locale("zh-cn");
 

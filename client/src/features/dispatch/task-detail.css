@@ -92,3 +92,24 @@
  .repair-task-drawer .inspection-item-name strong { font-size: 15px; font-weight: 600; }
  .repair-task-drawer .inspection-item-number { width: 26px; height: 26px; text-align: center; color: #60728a; background: #edf1f7; border-radius: 6px; }
 }
+
+/* Keep the current work reachable without scrolling through all task metadata. */
+.task-overview.is-compact .task-overview-eyebrow { display: none; }
+.task-overview.is-compact .task-overview-identity { margin-bottom: 10px; }
+.task-overview.is-compact>.task-overview-status { margin-bottom: 14px; }
+.task-overview.is-compact>dl { gap: 10px 16px; }
+.task-overview-more { margin-top: 14px; border-top: 1px solid #e8edf5; }
+.task-overview-more>summary { padding-top: 12px; color: #526783; cursor: pointer; font-size: 13px; }
+.task-overview-more>summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+.task-section-nav { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; padding: 8px; background: #fff; border: 1px solid #e2e8f1; border-radius: 12px; }
+.task-section-nav .ant-btn { min-width: 0; padding-inline: 4px; font-size: 13px; min-height: 40px; }
+.task-section-anchor { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.task-section-anchor>section { background: #fff; border: 1px solid #e2e8f1; border-radius: 16px; padding: 20px; }
+.task-section-anchor, .dispatch-projects-anchor, .task-detail-layout [data-repair-item-id] { scroll-margin-top: 16px; }
+.task-section-anchor:focus, .dispatch-projects-anchor:focus { outline: none; }
+[data-repair-item-id]:focus { outline: 2px solid #2563eb; outline-offset: 3px; }
+@media(max-width:767px) {
+ .task-overview.is-compact { padding: 14px 16px; }
+ .task-overview.is-compact .task-overview-identity h2 { font-size: 20px; }
+ .task-section-anchor>section { padding: 16px; }
+}

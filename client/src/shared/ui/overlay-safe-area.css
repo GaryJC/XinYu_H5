@@ -1,0 +1,27 @@
+/* Shared by every Drawer, including nested detail and bottom-sheet drawers.
+   Keep the inset on the footer when present; otherwise it belongs to the
+   scrolling body. A spacer preserves each feature's existing body padding. */
+@media (max-width: 767px), (pointer: coarse) {
+  .ant-drawer-body:last-child::after {
+    content: "";
+    display: block;
+    flex-shrink: 0;
+    width: 100%;
+    height: env(safe-area-inset-bottom, 0px);
+  }
+
+  .ant-drawer .ant-drawer-footer {
+    /* Override feature padding shorthands and inline styles consistently. */
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .ant-modal .ant-modal-footer {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .ant-modal-body:last-child::after {
+    content: "";
+    display: block;
+    height: env(safe-area-inset-bottom, 0px);
+  }
+}

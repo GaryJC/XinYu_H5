@@ -1,3 +1,4 @@
+import { CopyActionButton } from "../../shared/ui/CopyTextButton";
 import { ProcurementNotifications } from './ProcurementNotifications';
 import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -39,7 +40,7 @@ export function ProcurementPage({user}:{user:UserProfile}) {
     </Drawer>
     <Modal zIndex={1500} title="分享链接" open={c.links.length>0} onCancel={()=>c.setLinks([])} footer={<Button onClick={()=>c.setLinks([])}>完成</Button>}>
       <Alert type="info" title={c.links[0]?.supplierName==='本次询价全部受邀供应商'?'同一链接可群发给本次受邀供应商':'请发送给对应供应商'} description="供应商需填写预留手机号和姓名或供应商名称核验身份。请复制保存链接。"/>
-      {c.links.map(l=><div className="procurement-link" key={l.token}><strong>{l.supplierName}</strong><Input aria-label={`${l.supplierName}专属链接`} readOnly value={publicLink(l.token)}/><small>有效期至 {dateTime(l.expiresAt)}</small><Button onClick={()=>{void navigator.clipboard.writeText(publicLink(l.token)).catch(()=>Modal.info({zIndex:1600,title:'请长按链接输入框复制',content:publicLink(l.token)}));}}>复制链接</Button></div>)}
+      {c.links.map(l=><div className="procurement-link" key={l.token}><strong>{l.supplierName}</strong><Input aria-label={`${l.supplierName}专属链接`} readOnly value={publicLink(l.token)}/><small>有效期至 {dateTime(l.expiresAt)}</small><CopyActionButton onClick={()=>{void navigator.clipboard.writeText(publicLink(l.token)).catch(()=>Modal.info({zIndex:1600,title:'请长按链接输入框复制',content:publicLink(l.token)}));}} label="复制链接" /></div>)}
     </Modal>
   </section>;
 }

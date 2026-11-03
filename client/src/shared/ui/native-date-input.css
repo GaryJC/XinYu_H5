@@ -1,0 +1,30 @@
+/* Native date editors have an intrinsic width in mobile WebViews. Allow them
+   to shrink inside forms and grids without hiding the native picker button. */
+input[type="datetime-local"],
+input[type="date"],
+input[type="time"] {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+input[type="datetime-local"]::-webkit-date-and-time-value,
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value {
+  min-width: 0;
+  text-align: left;
+}
+
+input[type="datetime-local"]::-webkit-datetime-edit,
+input[type="date"]::-webkit-datetime-edit,
+input[type="time"]::-webkit-datetime-edit {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ant-form-item-control,
+.ant-form-item-control-input,
+.ant-form-item-control-input-content {
+  min-width: 0;
+}

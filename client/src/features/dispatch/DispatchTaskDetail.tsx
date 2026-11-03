@@ -21,7 +21,8 @@ import { PartsRequirementDialog } from './PartsRequirementDialog';
 import { PartsRequirementSummary } from './PartsRequirementSummary';
 import { RepairRoundHistory } from './RepairRoundHistory';
 import { executionLabels,executionTextFields,executionTimeFields } from './DispatchExecutionFields';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { scrollToTaskSection } from './taskSectionNavigation';
 import { Alert,Button,Card,Collapse,Descriptions,Space,Tag } from 'antd';
 import type { DispatchActionName,UserProfile } from '../../../../shared/types';
 import { AuthenticatedImage } from '../../shared/ui/AuthenticatedImage';
@@ -37,6 +38,8 @@ export function DispatchTaskDetail({controller,user,readyForFocus=true}:{control
   const [photoBlocked,setPhotoBlocked]=useState(false);
   const [partsDialog,setPartsDialog]=useState(false);
   const [dialog,setDialog]=useState<DispatchActionName>();
+  const pendingRef=useRef<HTMLDivElement>(null);
+  const recordsRef=useRef<HTMLDivElement>(null);
   const detail=controller.detail;
   const projectsRef=useDispatchProjectFocus(detail?.task.orderId,readyForFocus);
   const inspectionDraft=useInspectionDraft(detail?.task);
@@ -81,8 +84,15 @@ export function DispatchTaskDetail({controller,user,readyForFocus=true}:{control
     catch(e){controller.setError(e instanceof Error?e.message:'附件加载失败');}
   }
   return <div className={`dispatch-detail task-detail-layout${actions.length?" has-task-actions":""}`} style={actions.length?{paddingBottom:Math.max(90,actionBarHeight+16)}:undefined}>
-    <TaskOverview task={task} techniciansEditor={<TaskTechniciansEditor controller={controller} user={user} blocked={photoBlocked}/>} dueEditor={<TaskDueDateEditor key={`${task.orderId}-${user.id}`} controller={controller} user={user} blocked={photoBlocked} />}><Space wrap><Tag>{executionLabels[task.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(task)}</Tag>{task.urgent?<Tag color="red">加急</Tag>:null}{task.overdue?<Tag color="red">超期</Tag>:null}{task.rework&&!task.repairRound?<Tag color="orange">返工第 {task.reworkCount} 次</Tag>:null}</Space></TaskOverview>
-    <PendingRepairsPanel stage={task.stage} refreshVersion={task.version} orderId={task.orderId} user={user} onChanged={()=>{void controller.refreshDetail();void controller.refresh();}}/>
+    <TaskOverview compact task={task} techniciansEditor={<TaskTechniciansEditor controller={controller} user={user} blocked={photoBlocked}/>} dueEditor={<TaskDueDateEditor key={`${task.orderId}-${user.id}`} controller={controller} user={user} blocked={photoBlocked} />}><Space wrap><Tag>{executionLabels[task.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(task)}</Tag>{task.urgent?<Tag color="red">加急</Tag>:null}{task.overdue?<Tag color="red">超期</Tag>:null}{task.rework&&!task.repairRound?<Tag color="orange">返工第 {task.reworkCount} 次</Tag>:null}</Space></TaskOverview>
+    <nav className="task-section-nav" aria-label="维修任务区域导航">
+      <Button onClick={()=>scrollToTaskSection(projectsRef.current)}>维修项目 · {task.items.length}</Button>
+      <Button onClick={()=>scrollToTaskSection(pendingRef.current)}>待确认事项</Button>
+      <Button onClick={()=>scrollToTaskSection(recordsRef.current)}>配件与记录</Button>
+    </nav>
+    <div ref={pendingRef} tabIndex={-1} className="task-section-anchor task-pending-anchor" role="region" aria-label="待定与待确认事项">
+    <PendingRepairsPanel onOpenRepair={item=>scrollToTaskSection(projectsRef.current, item.itemId)} stage={task.stage} refreshVersion={task.version} orderId={task.orderId} user={user} onChanged={()=>{void controller.refreshDetail();void controller.refresh();}}/>
+    </div>
     {unsigned?<Alert type="info" showIcon title="确认客户签字后才能派工" description="请在委托开单中完成工单与客户签字，确认客户签字后即可从派工台安排维修。"/>:null}
     {outsourced?<Alert type="info" title="外包维修由内部人员登记完工，无需提检" description={partsApplicant?'配件由您申请，备齐后由仓库通知您领取。':'配件由本单派工人申请。'}/>:null}
     {task.needsReview?<Alert type="warning" title="历史任务待核对" description="历史记录未能完整确认人员或进度；管理员核对后才能继续，不补造历史时间。"/>:null}
@@ -98,7 +108,7 @@ export function DispatchTaskDetail({controller,user,readyForFocus=true}:{control
     </section>:null}
     {!hasPendingInspection(task)||task.items.some(item=>!['待检验','已完工'].includes(item.status))?<section className="task-projects">
     <h3>维修项目 · {task.items.filter(i=>['待检验','已完工'].includes(i.status)).length}/{task.items.length} {outsourced?'已完成':'已提报或通过'}</h3>
-    {controller.manager&&!unsigned&&!task.needsReview&&(['待派工','待接单','待开工','维修中','暂停'].includes(task.stage)||task.stage==='回审'&&task.executionMode!=='outsourced'||task.stage==='维修完成'&&task.orderStatus==='待结算'&&task.executionMode!=='outsourced')?<DispatchProjectsEditor key={task.orderId} task={task} controller={controller} actionsTarget={projectActionsTarget}/>:task.items.map(item=><Card key={item.id} size="small" title={item.name} extra={<Tag>{item.status}</Tag>}>
+    {controller.manager&&!unsigned&&!task.needsReview&&(['待派工','待接单','待开工','维修中','暂停'].includes(task.stage)||task.stage==='回审'&&task.executionMode!=='outsourced'||task.stage==='维修完成'&&task.orderStatus==='待结算'&&task.executionMode!=='outsourced')?<DispatchProjectsEditor key={task.orderId} task={task} controller={controller} actionsTarget={projectActionsTarget}/>:task.items.map(item=><Card key={item.id} data-repair-item-id={item.id} tabIndex={-1} size="small" title={item.name} extra={<Tag>{item.status}</Tag>}>
       <p>{outsourced?'承包方':'负责人'}：{outsourced?task.contractor:item.responsibleName||'待指定'}</p>
       <div className="dispatch-item-times"><span>开工：{displayTime(item.startAt)}</span><span>完工提报：{displayTime(item.finishAt)}</span>{!outsourced?<span>检验：{item.inspectorName||'未检验'} · {displayTime(item.inspectedAt)}</span>:null}<span>领料确认：{displayTime(item.pickedAt)}</span></div>
       <DispatchItemProgressActions task={task} item={item} controller={controller} enabled={owner&&!unsigned}/>
@@ -107,6 +117,7 @@ export function DispatchTaskDetail({controller,user,readyForFocus=true}:{control
     </section>:null}
     {hasPendingInspection(task)?<PassedInspectionItems items={task.items}/>:null}
     </div>
+    <div ref={recordsRef} tabIndex={-1} className="task-section-anchor" role="region" aria-label="配件与处理记录">
     <RepairWritebackStatus controller={controller} admin={hasRole(user, 'manager')}/>
     <PartsRequirementSummary value={task.partsRequirement}/>
     {outsourced?task.partsRequests?.map(parts=><section key={parts.ownerId}><h3>历史配件申请 · {parts.ownerName}</h3><PartsRequirementSummary value={parts}/></section>):null}
@@ -154,6 +165,7 @@ export function DispatchTaskDetail({controller,user,readyForFocus=true}:{control
       {event.detail.pauseReason?<p>{event.detail.pauseReason}</p>:null}
       {event.detail.reason?<p>{event.detail.reason}</p>:null}{event.detail.note?<p>{event.detail.note}</p>:null}</>}))}/>
     </>}]} />
+    </div>
     {actions.length?<div ref={setActionBar} className="task-detail-actions"><div ref={setProjectActionsTarget} className="project-actions-slot"/><Space wrap>{actions.map(action=><Button key={action} className={action==='inspect'?'task-inspection-submit':undefined} danger={action==='reopen-repair'} type={['assign','accept','submit','inspect','claim-inspection'].includes(action)?'primary':'default'} loading={controller.busy} disabled={controller.busy||photoBlocked||action==='inspect'&&!inspectionDraft.complete} onClick={()=>{
       if(action==='inspect'){if(!inspectionDraft.complete){controller.setError('请先为每个待检项目选择通过、退回或待定');return;}setInspectionReview({version:task.version,choices:{...inspectionDraft.choices}});setDialog(action);}
       else if(action==='accept')setPartsDialog(true);else if(['resume','reoffer','remind','claim-inspection','retry-inspection-notifications'].includes(action)) void controller.act({action});else setDialog(action);
