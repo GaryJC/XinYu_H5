@@ -3,18 +3,18 @@ import {ClockCircleOutlined,FilterOutlined,ThunderboltOutlined} from '@ant-desig
 import type {DispatchController} from './useDispatchController';
 import {executionLabels} from './DispatchExecutionFields';
 import {personDisplayName,statusFilters} from './dispatchLabels';
-import {activeFilterCount,advancedFilterCount,useDispatchFilterDraft} from './useDispatchFilterDraft';
+import {activeFilterCount,advancedFilterCount,selectStatusFilters,useDispatchFilterDraft} from './useDispatchFilterDraft';
 import './dispatch-filter-bar.css';
 const inspectionStatuses=[{value:'',label:'全部未完成'},{value:'待检验',label:'待检验'},{value:'待定',label:'待定'},{value:'回审',label:'回审'},{value:'已完成',label:'已完成'}];
 export function DispatchFilterBar({controller:c,inspection}:{controller:DispatchController;inspection:boolean}) {
  const {token}=theme.useToken(),f=useDispatchFilterDraft(c.filters,c.setFilters);
  const advanced=advancedFilterCount(c.filters),active=activeFilterCount(c.filters);
- const statuses=inspection?inspectionStatuses:statusFilters;
+ const statuses=[...(c.filters.search||c.filters.includeCompleted==='true'?[{value:'all',label:'全部工单'}]:[]),...(inspection?inspectionStatuses:statusFilters)];
  const patch=(key:'executionMode'|'from'|'to'|'technicianId',value:string|undefined)=>{f.setDraft(d=>({...d,[key]:value,...(key==='technicianId'?{metric:undefined,workloadState:undefined}:{})}));f.setError('');};
  return <>
   <div className="dispatch-filter-bar" role="search" aria-label="工单搜索筛选" style={{background:token.colorBgContainer,borderColor:token.colorBorderSecondary,color:token.colorText}}>
    <Input.Search aria-label="搜索派工任务" placeholder="车牌 / 委托单号 / 派工号" allowClear value={f.search} onChange={e=>f.setSearch(e.target.value)} onSearch={f.submitSearch} onCompositionStart={()=>{f.composing.current=true;}} onCompositionEnd={()=>{f.composing.current=false;}} enterKeyHint="search" autoComplete="off"/>
-   <Tabs className="dispatch-status-tabs" aria-label="工单状态筛选" activeKey={c.filters.stage||''} type="line" tabBarGutter={0} onChange={stage=>c.setFilters(current=>({...current,stage:stage||undefined,metric:undefined,workloadState:undefined}))} items={statuses.map(({value,label})=>({key:value,label:<span className="dispatch-status-label"><span>{label}</span><strong className="dispatch-status-count">{c.list.counts?.[value]??'—'}</strong></span>}))}/>
+   <Tabs className="dispatch-status-tabs" aria-label="工单状态筛选" activeKey={c.filters.stage||(c.filters.includeCompleted==='true'?'all':'')} type="line" tabBarGutter={0} onChange={stage=>c.setFilters(current=>selectStatusFilters(current,stage))} items={statuses.map(({value,label})=>({key:value,label:<span className="dispatch-status-label"><span>{label}</span><strong className="dispatch-status-count">{c.list.counts?.[value]??'—'}</strong></span>}))}/>
    <p className="dispatch-status-scroll-hint">左右滑动查看更多状态 ↔</p>
    <div className="dispatch-quick-filters">
     <Button icon={<FilterOutlined/>} color={advanced?'primary':'default'} variant="outlined" aria-label={advanced?`筛选，${advanced} 项已生效`:'筛选'} onClick={f.begin}>筛选{advanced?` · ${advanced}`:''}</Button>
@@ -32,7 +32,7 @@ export function DispatchFilterBar({controller:c,inspection}:{controller:Dispatch
     </div><p>用于完成记录、个人完成量及退回统计。<br/>不选日期：完成记录显示全部，个人统计默认本月。</p></fieldset>
     {c.inspectionLead?<label className="dispatch-filter-worker">维修工<Select aria-label="筛选维修工" allowClear placeholder="全部维修工" value={f.draft.technicianId} onChange={value=>patch('technicianId',value)} options={c.summaries.map(person=>({value:person.id,label:`${personDisplayName(person,c.summaries)}${person.active?'':'（停用）'}`}))}/></label>:null}
     {f.error?<Alert type="error" showIcon title={f.error}/>:null}
-    <p className="dispatch-filter-note">维修结束的工单统一在“已完成”中查看；返工、回审中的工单仍列为未完成。</p>
+    <p className="dispatch-filter-note">提交搜索时从全部工单中查找（含已完成）；随后选择筛选条件，会与搜索词一起生效。</p>
    </div>
   </Drawer>
  </>;

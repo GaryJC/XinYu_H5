@@ -92,7 +92,7 @@ export function useWorkbenchController() {
   const inspectorOptions = useMemo(() => users.filter((user) => user.active && hasRole(user, 'inspector')).map((user) => user.name), [users]);
 
   const searchTerm = archive.filters.search;
-  const setSearchTerm = (search: string) => archive.setFilters({ ...archive.filters, search });
+  const setSearchTerm = (search: string) => archive.setFilters({ ...defaultArchiveFilters(), sort:archive.filters.sort, search:search.trim() });
   const searchedOrders = archive.filteredOrders;
 
   const [todoCounts,setTodoCounts]=useState<Record<string,number>>({});

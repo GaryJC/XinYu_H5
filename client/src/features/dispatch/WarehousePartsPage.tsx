@@ -1,3 +1,4 @@
+import { searchAllFilters } from './useDispatchFilterDraft';
 import { ListPagination } from '../../shared/ui/ListPagination';
 import { Grid } from 'antd';
 import { LoadingState } from "../../shared/ui/LoadingState";
@@ -39,14 +40,14 @@ export function WarehousePartsPage({controller:source}:{controller:DispatchContr
     <div className="dispatch-heading"><div><h2>配件申请</h2><p>待处理 {pendingCount} 单 · 按配件确认备料，通知对应维修工领取。</p></div><Button loading={c.loading} onClick={()=>{void c.refresh();void c.refreshDetail();}}>刷新</Button></div>
     {c.error?<Alert type="error" showIcon title={c.error}/>:null}
     <div className="warehouse-filters">
-      <Input.Search aria-label="搜索配件申请" placeholder="车牌 / 委托单号 / 派工号" allowClear onSearch={search=>c.setFilters(filters=>({...filters,search}))}/>
+      <Input.Search aria-label="搜索配件申请" placeholder="车牌 / 委托单号 / 派工号" allowClear onSearch={search=>c.setFilters({...searchAllFilters(search),partsStatus:search.trim()?'all':'待备料',partsSort:sortOrder})}/>
       <label className="warehouse-sort">排序
         <Select aria-label="配件申请排序" value={sortOrder} onChange={setSortOrder} options={[
           {value:'newest',label:'申请时间：最新在前'},
           {value:'oldest',label:'申请时间：最早在前'}
         ]}/>
       </label>
-      <Segmented className="repair-task-tabs" block aria-label="配件申请状态" value={status} onChange={setStatus} options={['待备料','部分备齐','备料完成'].map(value=>({value,label:value})).map(option=>({...option,className:status===option.value?'repair-tab-active':undefined,label:`${option.label}（${counts[option.value]||0}）`}))}/>
+      <Segmented className="repair-task-tabs" block aria-label="配件申请状态" value={status} onChange={setStatus} options={[...(source.filters.search||status==='all'?['all']:[]),'待备料','部分备齐','备料完成'].map(value=>({value,label:value==='all'?'全部':value})).map(option=>({...option,className:status===option.value?'repair-tab-active':undefined,label:`${option.label}（${counts[option.value]||0}）`}))}/>
     </div>
     {c.loading && <LoadingState label="正在加载配件申请…" />}
     {!c.loading && !tasks.length?<Empty description="暂无配件申请"/>:null}

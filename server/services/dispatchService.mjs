@@ -29,9 +29,10 @@ export async function queryDispatchTasks(actor, query={}) {
   if(query.counts==='true') return Object.fromEntries(['待派工','维修中','待检验'].map(stage=>[stage,filterDispatchTasks(tasks,actor,{stage}).length]));
   const filtered = filterDispatchTasks(tasks,actor,query);
   if(query.partsStatus) {
-    if(!['待备料','部分备齐','备料完成'].includes(query.partsStatus))throw new HttpError(400,'配件状态无效');
+    if(!['all','待备料','部分备齐','备料完成'].includes(query.partsStatus))throw new HttpError(400,'配件状态无效');
     const requests=warehouseRequests(filtered);
     const counts=Object.fromEntries(['待备料','部分备齐','备料完成'].map(status=>[status,requests.filter(task=>matchesPartsStatus(task,status)).length]));
+    if(query.search||query.partsStatus==='all')counts.all=requests.filter(task=>matchesPartsStatus(task,'all')).length;
     const items=sortWarehouseRequests(requests.filter(task=>matchesPartsStatus(task,query.partsStatus)),query.partsSort==='oldest'?'oldest':'newest')
       .map(task=>({...task,partsRequests:undefined}));
     return {...pageResult(items,query),counts};

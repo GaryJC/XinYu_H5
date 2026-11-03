@@ -683,7 +683,7 @@ export interface WorkOrderListQuery {
 export interface ArchiveOptions { statuses: Array<{value: string; label: string}>; advisors: Array<{value: string; label: string}>; technicians: Array<{value: string; label: string}>; }
 
 export type WorkloadState = "working" | "waiting" | "paused" | "inspection" | "unfinished";
-export type DispatchFilters = {workloadState?:WorkloadState;partsStatus?:string;partsSort?:string;executionMode?:string;search?:string;technicianId?:string;stage?:string;metric?:string;urgent?:string;overdue?:string;from?:string;to?:string};
+export type DispatchFilters = {includeCompleted?:string;workloadState?:WorkloadState;partsStatus?:string;partsSort?:string;executionMode?:string;search?:string;technicianId?:string;stage?:string;metric?:string;urgent?:string;overdue?:string;from?:string;to?:string};
 
 export type OperationsMetric = 'unfinished'|'working'|'waiting'|'parts'|'pickup'|'paused'|'inspection'|'overdue';
 export type OperationsProject = {

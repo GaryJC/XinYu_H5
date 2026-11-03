@@ -22,9 +22,9 @@ test('status counts include all pages and count mixed inspection/deferred orders
  assert.equal(counts['待接单'],0);
 });
 test('badges match each tab after search, urgency, dates, worker and execution filters',()=>{
- for(const query of [{search:'鲁B99999'},{urgent:'true'},{overdue:'true'},{technicianId:'other'},{executionMode:'field'},{from:'2026-10-01',to:'2026-10-31'},{stage:'待检验',metric:'inspection',technicianId:'tech'},{workloadState:'inspection',technicianId:'tech'}]) {
+ for(const query of [{search:'鲁B99999'},{search:'鲁B12345',includeCompleted:'true'},{urgent:'true'},{overdue:'true'},{technicianId:'other'},{executionMode:'field'},{from:'2026-10-01',to:'2026-10-31'},{stage:'待检验',metric:'inspection',technicianId:'tech'},{workloadState:'inspection',technicianId:'tech'}]) {
   const counts=countDispatchTaskStatuses(tasks,actor,query);
-  for(const [stage,count] of Object.entries(counts))assert.equal(count,filterDispatchTasks(tasks,actor,{...query,stage,metric:undefined,workloadState:undefined}).length);
+  for(const [stage,count] of Object.entries(counts))assert.equal(count,filterDispatchTasks(tasks,actor,{...query,stage:stage==='all'?undefined:stage,includeCompleted:stage==='all'?'true':undefined,metric:undefined,workloadState:undefined}).length);
  }
  assert.equal(countDispatchTaskStatuses(tasks,actor,{from:'2026-10-01',to:'2026-10-31'})['已完成'],1);
  assert.equal(countDispatchTaskStatuses(tasks,actor,{urgent:'true'})['待检验'],2);

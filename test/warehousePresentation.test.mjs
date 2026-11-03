@@ -35,3 +35,16 @@ test('supplement batch event snapshots retain distinct labels after later reques
  assert.equal(dispatchEventLabel({action:'confirm-parts',detail:{partsRequirement:{preparedAt:'ready'}}}),'备料完成');
  assert.equal(dispatchEventLabel({action:'issue-parts',detail:{partsRequirement:{batch:1}}}),'确认出库');
 });
+
+
+test('all parts searches span preparation states including completed orders, without treating no-parts as an application',async()=>{
+ const {matchesPartsStatus}=await import('../shared/warehouseRequests.mjs');
+ const pending={stage:'维修中',acceptedAt:'now',partsRequirement:{mode:'list',items:[{}]}};
+ const prepared={stage:'维修完成',acceptedAt:'now',partsRequirement:{mode:'list',items:[{}],preparedAt:'now'}};
+ assert.equal(matchesPartsStatus(pending,'all'),true);
+ assert.equal(matchesPartsStatus(prepared,'all'),true);
+ assert.equal(matchesPartsStatus(prepared,'待备料'),false);
+ assert.equal(matchesPartsStatus(prepared,'备料完成'),true);
+ assert.equal(matchesPartsStatus({partsRequirement:{mode:'none'}},'all'),false);
+ assert.equal(matchesPartsStatus({},'all'),false);
+});

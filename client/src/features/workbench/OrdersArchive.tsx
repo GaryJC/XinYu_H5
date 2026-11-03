@@ -43,6 +43,8 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
     return () => cancelAnimationFrame(frame);
   }, [entryKey, ordersLoading]);
   const signature = useArchiveSignature(currentUser, controller.acceptRefreshedOrder, controller.refreshArchiveSummary);
+  const [searchDraft,setSearchDraft]=useState(searchTerm);
+  useEffect(()=>setSearchDraft(searchTerm),[searchTerm]);
   const [detailOrderId, setLocalDetailOrderId] = useState<string | undefined>(()=>new URLSearchParams(location.search).get("paperOrder") || undefined);
   const setDetailOrderId=(id?:string)=>{setLocalDetailOrderId(id);if(!id)controller.clearLinkedOrder();};
   const detailOrder = controller.orders.find(order => order.id === detailOrderId) || (controller.selectedOrder?.id === detailOrderId ? controller.selectedOrder : undefined) || ((!detailOrderId || controller.linkedOrderDetail?.id === detailOrderId) ? controller.linkedOrderDetail : undefined);
@@ -113,7 +115,7 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
           disabled={Boolean(legacyRefresh.progress)} onClick={() => void legacyRefresh.refreshAll()}>
           {legacyRefresh.progress ? `正在更新 ${legacyRefresh.progress.done}/${legacyRefresh.progress.total}` : "全部从润丰更新"}
         </Button>}
-        <Input.Search className="search-box" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="搜索车牌 / VIN / 工单号 / 派工号" allowClear />
+        <Input.Search className="search-box" value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} onSearch={setSearchTerm} placeholder="搜索车牌 / VIN / 工单号 / 派工号" allowClear />
         </div>
       </div>
       {["advisor", "manager"].includes(role) && <p className="workbench-archive-help">更新全部已同步且有权限的委托单，不受搜索和分页影响；保留签名、照片和维修进度。更新期间请保持页面打开。</p>}

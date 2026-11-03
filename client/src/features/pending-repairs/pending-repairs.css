@@ -8,7 +8,7 @@
 .pending-repair-card{min-width:0;padding:16px;border:1px solid #e7ebf1;border-radius:10px;background:#fafbfd}
 .pending-repair-card.is-pending{border-color:#eee3cd;background:#fffdf8}
 .pending-repair-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-.pending-repair-name{display:flex;align-items:baseline;gap:8px;min-width:0;line-height:1.6;font-size:15px}
+.pending-repair-name{display:flex;flex:1;align-items:baseline;gap:8px;min-width:0;line-height:1.6;font-size:15px}
 .pending-repair-name strong{min-width:0;overflow-wrap:anywhere;white-space:pre-wrap}
 .pending-repair-number{color:#929baa;font-size:12px;font-variant-numeric:tabular-nums;flex-shrink:0}
 .pending-repair-heading .ant-tag{margin:2px 0 0;flex-shrink:0;font-size:12px}
@@ -26,6 +26,11 @@
 .pending-repairs-sync summary:focus-visible{outline:2px solid #1677ff;outline-offset:3px;border-radius:3px}
 .pending-repairs-panel .pending-repairs-sync p{margin:6px 0 0;overflow-wrap:anywhere}
 .pending-repairs-panel .pending-repairs-empty{margin:8px 0 0;color:#7a8596;font-size:13px}
-@media(max-width:480px){.pending-repair-card{padding:12px}.pending-repairs-header{gap:8px}.pending-repairs-panel .pending-repairs-header h3{font-size:15px}.pending-repair-heading{flex-wrap:wrap;gap:6px}.pending-repair-heading .ant-tag{margin-left:24px}.pending-repair-name{flex:1 1 100%}.pending-repairs-add{padding-inline:10px}.pending-repair-actions{gap:8px}}
+@media(max-width:480px){.pending-repair-card{padding:12px}.pending-repairs-header{gap:8px}.pending-repairs-panel .pending-repairs-header h3{font-size:15px}.pending-repair-heading{gap:6px}.pending-repairs-add{padding-inline:10px}.pending-repair-actions{gap:8px}}
 
-.pending-repair-jump.ant-btn { margin-top: 8px; padding-inline: 0; min-height: 40px; }
+.pending-repairs-panel .pending-repair-history .ant-collapse-header{flex-wrap:wrap;column-gap:4px;padding:0 8px!important}
+.pending-repairs-panel .pending-repair-history .ant-collapse-title{padding:11px 0}
+.pending-repairs-panel .pending-repair-history .ant-collapse-extra{margin-left:auto}
+.pending-repairs-panel .pending-repair-jump.ant-btn{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 8px;color:#42658f;font-size:12px;box-shadow:none}
+.pending-repair-jump.ant-btn .anticon{font-size:12px}
+@media(hover:hover) and (pointer:fine){.pending-repairs-panel .pending-repair-jump.ant-btn:hover{color:#1677ff;background:#eef4ff}}

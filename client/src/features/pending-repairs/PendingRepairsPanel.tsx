@@ -55,8 +55,7 @@ export function PendingRepairsPanel({orderId,user,onChanged,stage,refreshVersion
     <Button type="primary" disabled={c.busy||Boolean(schedulingBlock)} onClick={()=>open(item.state==='pending'?'approve-and-schedule':'schedule',item)}>安排维修</Button>
     {item.state==='pending'&&<Button disabled={c.busy} onClick={()=>open('decline',item)}>本次暂不维修</Button>}
    </div>}
-   {item.scheduled&&onOpenRepair&&<Button className="pending-repair-jump" type="link" icon={<ArrowDownOutlined/>} onClick={()=>onOpenRepair(item)} aria-label={`查看维修项目：${item.name}`}>查看维修项目</Button>}
-   <Collapse className="pending-repair-history" ghost items={[{key:'history',label:'处理记录',children:<ActionHistory items={item.history.map((h,i)=>({key:i,title:h.action,actor:h.actor,time:displayTime(h.at),detail:<>{h.respondent?<p>回复人：{h.respondent}</p>:null}{h.note?<p>{h.note}</p>:null}</>}))}/>}]}/>
+   <Collapse className="pending-repair-history" ghost items={[{key:'history',label:'处理记录',extra:item.scheduled&&onOpenRepair?<Button className="pending-repair-jump" type="text" onClick={event=>{event.stopPropagation();onOpenRepair(item);}} onKeyDown={event=>event.stopPropagation()} aria-label={`查看维修项目：${item.name}`}><span>查看维修项目</span><ArrowDownOutlined/></Button>:undefined,children:<ActionHistory items={item.history.map((h,i)=>({key:i,title:h.action,actor:h.actor,time:displayTime(h.at),detail:<>{h.respondent?<p>回复人：{h.respondent}</p>:null}{h.note?<p>{h.note}</p>:null}</>}))}/>}]}/>
   </article>;})}</div>
   {!c.data.items.length&&c.loaded&&<p className="pending-repairs-empty">暂无待确认项目</p>}
   {c.data.items.length>0&&<details className="pending-repairs-sync"><summary><InfoCircleOutlined/> 润丰同步说明</summary><p>检验待定项目须由原检验人直接派工，其他有权限人员可发送处理提醒；本轮结束后回写【待定】前缀，再次通过后移除前缀。删除或撤销另行同步，历史记录保留。首次开单带入客户待确认项目；开单后新增项目在后续一轮全部检验通过后随完整清单写回。检验通过不代表同步成功，请查看润丰写回结果。润丰已审核、结算，或项目已有非零金额、工时等计价数据时停止覆盖，需人工处理。</p></details>}

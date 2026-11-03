@@ -1,0 +1,183 @@
+- generic [ref=e13]:
+  - main [ref=e14]:
+    - generic [ref=e15]:
+      - generic [ref=e17]:
+        - text: 门店工作空间
+        - heading "检验任务" [level=1] [ref=e242]
+        - paragraph [ref=e19]: 检验员（测试） · 检验员
+      - generic [ref=e20]:
+        - generic [ref=e25] [cursor=pointer]:
+          - generic [ref=e26]:
+            - generic: 选择测试身份
+            - combobox "切换本地测试身份" [active] [ref=e27]
+          - img "down" [ref=e243]
+        - generic [ref=e32]: 检验员
+    - region "检验任务" [ref=e246]:
+      - generic [ref=e247]:
+        - paragraph [ref=e249]: 查看本店检验任务，可按状态筛选和处理检验结果。 更新于 14:44:00
+        - button "刷新" [ref=e250] [cursor=pointer]
+      - search "工单搜索筛选" [ref=e258]:
+        - generic [ref=e259]:
+          - searchbox "搜索派工任务" [ref=e261]
+          - button [ref=e263] [cursor=pointer]:
+            - img "search" [ref=e265]
+        - generic "工单状态筛选" [ref=e268]:
+          - tablist [ref=e269]:
+            - generic [ref=e271]:
+              - tab "全部未完成 53" [ref=e273] [cursor=pointer]:
+                - generic [ref=e274]:
+                  - generic [ref=e275]: 全部未完成
+                  - strong [ref=e276]: "53"
+              - tab "待检验 4" [selected] [ref=e278] [cursor=pointer]:
+                - generic [ref=e279]:
+                  - generic [ref=e280]: 待检验
+                  - strong [ref=e281]: "4"
+              - tab "待定 2" [ref=e283] [cursor=pointer]:
+                - generic [ref=e284]:
+                  - generic [ref=e285]: 待定
+                  - strong [ref=e286]: "2"
+              - tab "回审 1" [ref=e288] [cursor=pointer]:
+                - generic [ref=e289]:
+                  - generic [ref=e290]: 回审
+                  - strong [ref=e291]: "1"
+              - tab "已完成 7" [ref=e293] [cursor=pointer]:
+                - generic [ref=e294]:
+                  - generic [ref=e295]: 已完成
+                  - strong [ref=e296]: "7"
+          - generic:
+            - generic:
+              - tabpanel "待检验 4"
+        - generic [ref=e297]:
+          - button "筛选" [ref=e298] [cursor=pointer]:
+            - img "filter" [ref=e300]
+          - button "加急" [ref=e304] [cursor=pointer]:
+            - img "thunderbolt" [ref=e306]
+          - button "超期" [ref=e310] [cursor=pointer]:
+            - img "clock-circle" [ref=e312]
+          - button "重置筛选" [ref=e317] [cursor=pointer]:
+            - generic [ref=e318]: 1 项 · 清空
+      - region "工作负荷看板" [ref=e319]:
+        - heading [level=3] [ref=e320]:
+          - button "工作负荷看板 · 7 人 展开" [ref=e321] [cursor=pointer]:
+            - generic [ref=e322]:
+              - text: 工作负荷看板
+              - generic [ref=e323]: · 7 人
+            - generic [ref=e324]: 展开
+      - heading "待检验（4）" [level=3] [ref=e329]
+      - generic [ref=e330]:
+        - button "查看维修任务 鲁BTEST02" [ref=e331] [cursor=pointer]:
+          - generic [ref=e332]: 鲁BTEST02
+          - generic [ref=e338]:
+            - generic [ref=e339]:
+              - generic [ref=e340]: 店内维修
+              - generic [ref=e342]: 正在维修
+              - generic [ref=e344]: 超期
+            - paragraph [ref=e346]:
+              - generic [ref=e347]: 委托单号
+              - text: WT-20260817-6E9C277E9C29
+            - generic [ref=e348]:
+              - generic [ref=e349]:
+                - generic [ref=e350]: 服务顾问
+                - strong [ref=e351]: 联调测试顾问-李四
+              - generic [ref=e352]:
+                - generic [ref=e353]: 维修人员
+                - strong [ref=e354]: 曲怀复、李富强
+              - generic [ref=e355]:
+                - generic [ref=e356]: 维修项目 · 2 项
+                - generic [ref=e357]: 前保险杠喷漆、测试
+              - generic [ref=e358]:
+                - generic [ref=e359]: 预计完工
+                - generic [ref=e360]: 2026/10/24 16:24:00
+            - generic [ref=e361]:
+              - generic [ref=e362]:
+                - generic [ref=e363]: 已提报或通过
+                - strong [ref=e364]: 1 / 2
+              - progressbar "已提报或通过的维修项目" [ref=e365]
+        - button "查看维修任务 鲁B演示01" [ref=e366] [cursor=pointer]:
+          - generic [ref=e367]: 鲁B演示01
+          - generic [ref=e373]:
+            - generic [ref=e374]:
+              - generic [ref=e375]: 店内维修
+              - generic [ref=e377]: 正在维修
+            - paragraph [ref=e379]:
+              - generic [ref=e380]: 派工号
+              - text: TEAM01
+            - generic [ref=e381]:
+              - generic [ref=e382]:
+                - generic [ref=e383]: 服务顾问
+                - strong [ref=e384]: 张三（测试）
+              - generic [ref=e385]:
+                - generic [ref=e386]: 维修人员
+                - strong [ref=e387]: 李富强、王师傅（多人演示）
+              - generic [ref=e388]:
+                - generic [ref=e389]: 维修项目 · 4 项
+                - generic [ref=e390]: 【模拟】检查空调制冷、【模拟】清洁空调滤芯、【模拟】检查制动异响、【模拟】检查底盘悬挂
+              - generic [ref=e391]:
+                - generic [ref=e392]: 预计完工
+                - generic [ref=e393]: 2026/11/4 12:10:30
+            - generic [ref=e394]:
+              - generic [ref=e395]:
+                - generic [ref=e396]: 已提报或通过
+                - strong [ref=e397]: 2 / 4
+              - progressbar "已提报或通过的维修项目" [ref=e398]
+        - button "查看维修任务 鲁B演示02" [ref=e399] [cursor=pointer]:
+          - generic [ref=e400]: 鲁B演示02
+          - generic [ref=e406]:
+            - generic [ref=e407]:
+              - generic [ref=e408]: 店内维修
+              - generic [ref=e410]: 待检验
+            - paragraph [ref=e412]:
+              - generic [ref=e413]: 派工号
+              - text: TEAM02
+            - generic [ref=e414]:
+              - generic [ref=e415]:
+                - generic [ref=e416]: 服务顾问
+                - strong [ref=e417]: 张三（测试）
+              - generic [ref=e418]:
+                - generic [ref=e419]: 维修人员
+                - strong [ref=e420]: 李富强、王师傅（多人演示）
+              - generic [ref=e421]:
+                - generic [ref=e422]: 维修项目 · 4 项
+                - generic [ref=e423]: 【模拟】检查空调制冷、【模拟】清洁空调滤芯、【模拟】检查制动异响、【模拟】检查底盘悬挂
+              - generic [ref=e424]:
+                - generic [ref=e425]: 预计完工
+                - generic [ref=e426]: 2026/11/4 12:10:30
+            - generic [ref=e427]:
+              - generic [ref=e428]:
+                - generic [ref=e429]: 已提报或通过
+                - strong [ref=e430]: 4 / 4
+              - progressbar "已提报或通过的维修项目" [ref=e431]
+        - button "查看维修任务 鲁BN9620" [ref=e432] [cursor=pointer]:
+          - generic [ref=e433]: 鲁BN9620
+          - generic [ref=e439]:
+            - generic [ref=e440]:
+              - generic [ref=e441]: 店内维修
+              - generic [ref=e443]: 正在维修
+            - paragraph [ref=e445]:
+              - generic [ref=e446]: 派工号
+              - text: PHOTO-TEST-1
+            - generic [ref=e447]:
+              - generic [ref=e448]:
+                - generic [ref=e449]: 服务顾问
+                - strong [ref=e450]: 张三（测试）
+              - generic [ref=e451]:
+                - generic [ref=e452]: 维修人员
+                - strong [ref=e453]: 李富强
+              - generic [ref=e454]:
+                - generic [ref=e455]: 维修项目 · 4 项
+                - generic [ref=e456]: 检修左前门玻璃机、固定右前门密封条、拆装门里子换玻璃机、粘玻璃机固定架两个
+              - generic [ref=e457]:
+                - generic [ref=e458]: 预计完工
+                - generic [ref=e459]: 未记录
+            - generic [ref=e460]:
+              - generic [ref=e461]:
+                - generic [ref=e462]: 已提报或通过
+                - strong [ref=e463]: 4 / 4
+              - progressbar "已提报或通过的维修项目" [ref=e464]
+      - generic "列表分页" [ref=e465]:
+        - button "没有更多记录（已显示 4 条）" [disabled] [ref=e466]
+  - navigation "底部主导航" [ref=e196]:
+    - button "检验任务" [ref=e467]
+    - button "出车申请" [ref=e473]
+    - button "打开菜单" [ref=e217]:
+      - generic [ref=e219]: 更多

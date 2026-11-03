@@ -8,6 +8,7 @@ export function canProcessParts(task) {
   return Boolean(!task.needsReview && task.acceptedAt && ['待开工','维修中','暂停','回审'].includes(task.stage) && task.partsRequirement && task.partsRequirement.mode!=='none' && !task.partsRequirement.issuedAt && !task.partsRequirement.preparedAt);
 }
 export function matchesPartsStatus(task,status) {
+  if(status==='all')return Boolean(task.partsRequirement && task.partsRequirement.mode!=='none');
   return (['待备料','部分备齐'].includes(status)?canProcessParts(task):true) && partsStatus(task.partsRequirement)===status;
 }
 export function sortWarehouseRequests(tasks,order) {

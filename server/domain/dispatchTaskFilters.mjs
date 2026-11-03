@@ -9,8 +9,8 @@ import {HttpError} from '../http/HttpError.mjs';
 // Counts describe the result of clicking each tab: preserve ordinary filters,
 // but clear the workload/metric drill-down just as the tab handler does.
 export function countDispatchTaskStatuses(tasks,actor,query={}) {
-  return Object.fromEntries(['','待派工','待客户确认','待定','待接单','待开工','维修中','暂停','待检验','回审','草稿','待客户签字','已完成']
-    .map(stage=>[stage,filterDispatchTasks(tasks,actor,{...query,stage,metric:undefined,workloadState:undefined}).length]));
+  return {...(query.search||query.includeCompleted==='true'?{all:filterDispatchTasks(tasks,actor,{...query,stage:undefined,includeCompleted:'true',metric:undefined,workloadState:undefined}).length}:{}),...Object.fromEntries(['','待派工','待客户确认','待定','待接单','待开工','维修中','暂停','待检验','回审','草稿','待客户签字','已完成']
+    .map(stage=>[stage,filterDispatchTasks(tasks,actor,{...query,stage,includeCompleted:undefined,metric:undefined,workloadState:undefined}).length]))};
 }
 
 export function filterDispatchTasks(tasks, actor, query={}) {

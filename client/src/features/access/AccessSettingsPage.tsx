@@ -7,6 +7,7 @@ import { useAccessSettings } from './useAccessSettings';
 import './access.css';
 export function AccessSettingsPage({users}:{users:UserProfile[]}){
   const c=useAccessSettings(users),mobile=!Grid.useBreakpoint().md;
+  const [searchDraft,setSearchDraft]=useState('');
   const [search,setSearch]=useState(''),[role,setRole]=useState<RoleKey>(),[status,setStatus]=useState<string>(),[selected,setSelected]=useState<string>();
   const filtered=c.users.filter(user=>(!search.trim()||[user.name,user.id].some(value=>value.toLowerCase().includes(search.trim().toLowerCase())))&&(!role||hasRole(user, role))&&(!status||user.active===(status==='active')));
   const employee=c.users.find(user=>user.id===selected);
@@ -15,10 +16,10 @@ export function AccessSettingsPage({users}:{users:UserProfile[]}){
   const employeePanel=<div className="access-section">
     <div className="access-section-heading"><div><h3>本店员工 <span className="access-count">{c.users.length}</span></h3><p>这里仅展示系统识别结果，不在此给员工分配角色。管理员在钉钉调整角色后，员工重新进入应用时自动同步。</p></div></div>
     <Form layout="vertical" className="access-filter-bar">
-      <Form.Item label="搜索员工"><Input aria-label="搜索员工" placeholder="姓名 / 员工编号" allowClear value={search} onChange={e=>setSearch(e.target.value)}/></Form.Item>
+      <Form.Item label="搜索员工"><Input.Search aria-label="搜索员工" placeholder="姓名 / 员工编号" allowClear value={searchDraft} onChange={e=>setSearchDraft(e.target.value)} onSearch={value=>{setSearch(value.trim());setRole(undefined);setStatus(undefined);}}/></Form.Item>
       <Form.Item label="应用角色"><Select aria-label="筛选员工角色" allowClear placeholder="全部角色" value={role} options={roleOptions} onChange={setRole}/></Form.Item>
       <Form.Item label="账号状态"><Select aria-label="筛选员工状态" allowClear placeholder="全部状态" value={status} options={[{value:'active',label:'启用'},{value:'inactive',label:'停用'}]} onChange={setStatus}/></Form.Item>
-      <Button type="text" onClick={()=>{setSearch('');setRole(undefined);setStatus(undefined);}}>重置筛选</Button>
+      <Button type="text" onClick={()=>{setSearchDraft('');setSearch('');setRole(undefined);setStatus(undefined);}}>重置筛选</Button>
     </Form>
     <p className="access-caption">找到 {filtered.length} 位员工 · 查看详情了解当前权限及进入记录</p>
     {mobile?<div className="access-employee-cards">{filtered.length?filtered.map(user=><Card size="small" key={user.id} title={user.name} extra={<Button type="link" onClick={()=>setSelected(user.id)}>查看权限</Button>}><Space size={[8,8]} wrap>{userRoles(user).map(role=><Tag key={role} color="blue">{roleLabels[role]}</Tag>)}{statusTag(user)}</Space><p className="access-caption">门店：{user.shopId||'未分配'}</p><p className="access-caption">最近进入：{displayLogin(user.lastLoginAt)}</p></Card>):<Empty description="没有符合条件的员工"/>}</div>:<Table rowKey="id" size="middle" loading={c.loading} dataSource={filtered} pagination={{pageSize:10,showSizeChanger:false,hideOnSinglePage:true}} scroll={{x:760}} locale={{emptyText:<Empty description="没有符合条件的员工"/>}} columns={[
