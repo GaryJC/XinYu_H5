@@ -1,0 +1,16 @@
+/* Only enabled by an actual flex-gap layout probe. Grid gaps remain native. */
+.legacy-flex-gap .ant-btn > * + * { margin-left: 8px; }
+.legacy-flex-gap .ant-space-horizontal > .ant-space-item:not(:last-child) { margin-right: 8px; }
+.legacy-flex-gap .ant-space-vertical > .ant-space-item:not(:last-child) { margin-bottom: 8px; }
+.legacy-flex-gap .button-row > * + *,
+.legacy-flex-gap .inline-dispatch-actions > * + *,
+.legacy-flex-gap .repair-item-leading > * + *,
+.legacy-flex-gap .repair-item-tools > * + *,
+.legacy-flex-gap .repair-items-summary > * + * { margin-left: 8px; }
+.legacy-flex-gap .button-row > *,
+.legacy-flex-gap .inline-dispatch-actions > * { margin-bottom: 8px; }
+.legacy-flex-gap .repair-item-name-field > * + *,
+.legacy-flex-gap label.repair-item-owner > * + * { margin-top: 6px; }
+.legacy-flex-gap .repair-item-list > * + * { margin-top: 10px; }
+.legacy-flex-gap .nav-item > * + * { margin-left: 12px; }
+

@@ -59,7 +59,7 @@ export function ArchiveFilterBar({ archive, isMobile }: { archive: ArchiveFilter
       {filters.search && <Tag closable onClose={() => update({ search: '' })}>搜索：{filters.search}</Tag>}
       {(['statuses', 'advisors', 'technicians'] as const).flatMap((key, index) => filters[key].map(value => <Tag key={`${key}-${value}`} closable onClose={() => update({ [key]: filters[key].filter(item => item !== value) })}>{['状态', '顾问', '技师'][index]}：{value}</Tag>))}
     </div>
-    <Drawer title="筛选委托单" placement="bottom" open={open} onClose={() => setOpen(false)} height="80dvh" rootClassName="archive-filter-drawer" footer={<div className="archive-filter-footer">
+    <Drawer title="筛选委托单" placement="bottom" open={open} onClose={() => setOpen(false)} size="var(--archive-filter-height, 80vh)" rootClassName="archive-filter-drawer" footer={<div className="archive-filter-footer">
       <Button onClick={() => setDraft(defaultArchiveFilters())}>重置条件</Button>
       <Button type="primary" disabled={Boolean(archiveDateError(draft))} onClick={() => { setFilters(draft); setOpen(false); }}>应用</Button>
     </div>}>

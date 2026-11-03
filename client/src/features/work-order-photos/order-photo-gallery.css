@@ -11,6 +11,10 @@
 .order-photo-thumbnail{position:relative;aspect-ratio:4/3;background:#f3f5f8;overflow:hidden}
 .order-photo-thumbnail .ant-image{display:block;height:100%!important;width:100%!important}
 .order-photo-thumbnail img{height:100%!important;width:100%!important;object-fit:contain}
+@supports not (aspect-ratio:4/3){
+ .order-photo-thumbnail{height:0;padding-top:75%}
+ .order-photo-thumbnail>.authenticated-image{position:absolute;top:0;right:0;bottom:0;left:0}
+}
 .order-photo-check{position:absolute;top:8px;left:8px;padding:6px;background:#ffffffed;border-radius:7px;z-index:2}
 .order-photo-caption{display:flex;align-items:center;justify-content:space-between;gap:4px;min-height:42px;padding:3px 6px 3px 10px}
 .order-photo-caption>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:12px;color:#59677d}

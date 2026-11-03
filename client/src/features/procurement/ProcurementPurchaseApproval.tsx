@@ -27,7 +27,7 @@ export function ProcurementPurchaseApproval({tender:t,user,controller:c}:{tender
    <Form.Item name="note" label="备注"><Input.TextArea maxLength={500}/></Form.Item>
    <Button type="primary" htmlType="submit" loading={c.busy}>提报管理员审批</Button>
   </Form>:<p>等待仓管填写明细并提报审批。</p>}</>:null}
-  {s?<><div className="purchase-sheet-preview">{sheet}</div><Button icon={<Printer size={16}/>} onClick={()=>{flushSync(()=>setPrinting(true));try{window.print();}finally{setPrinting(false);}}}>打印审批单</Button></>:null}
+  {s?<><div className="purchase-sheet-preview">{sheet}</div><Button icon={<Printer size={16}/>} onClick={()=>{flushSync(()=>setPrinting(true));document.body.classList.add('is-printing-purchase-approval');try{window.print();}finally{document.body.classList.remove('is-printing-purchase-approval');setPrinting(false);}}}>打印审批单</Button></>:null}
   {a?.status==='pending'&&manager&&a.submittedBy!==user.id?<Space orientation="vertical" style={{width:'100%',marginTop:16}}>
    <Input.TextArea aria-label="采购审批意见" placeholder="审批意见（驳回必填）" maxLength={1000} value={reason} onChange={e=>setReason(e.target.value)}/>
    <Space><Button type="primary" loading={c.busy} onClick={()=>Modal.confirm({title:'批准本次采购？',content:`${s?.supplierName}，总金额 ${money(s?.totalFen)}`,onOk:()=>c.action({action:'approve-purchase',expectedVersion:t.version,reason})})}>批准采购</Button><Button danger disabled={!reason.trim()} loading={c.busy} onClick={()=>Modal.confirm({title:'驳回本次采购？',content:reason,onOk:()=>c.action({action:'reject-purchase',expectedVersion:t.version,reason})})}>驳回</Button></Space>

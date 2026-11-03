@@ -38,6 +38,12 @@
 @media(max-width:359px){.dispatch-quick-filters{flex-wrap:nowrap}.dispatch-quick-filters>.ant-btn:not(:first-child):not(.dispatch-filter-clear) .ant-btn-icon{display:none}}
 
 .dispatch-status-scroll-hint{display:none}
+/* Older WebViews cannot evaluate :has; keep the swipe hint discoverable. */
+@supports not selector(:has(*)) {
+  @media(max-width:767px) {
+    .dispatch-status-scroll-hint{display:block;margin:0;text-align:right;color:#657085;font-size:12px;line-height:18px}
+  }
+}
 @media(max-width:767px){
   .dispatch-filter-dates{grid-template-columns:minmax(0,1fr);gap:16px}
   .dispatch-filter-fields legend{margin-bottom:12px}

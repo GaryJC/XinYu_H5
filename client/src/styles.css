@@ -349,6 +349,10 @@ html, body { touch-action: pan-x pan-y; }
 .archive-drawer-fields { display: grid; gap: 16px; }
 .archive-filter-footer { display: flex; justify-content: flex-end; gap: 12px; }
 .archive-filter-drawer .archive-filter-fields { grid-template-columns: 1fr; }
+.archive-filter-drawer { --archive-filter-height: 80vh; }
+@supports (height: 100dvh) {
+  .archive-filter-drawer { --archive-filter-height: 80dvh; }
+}
 /* Shared by page spacing, fixed form actions and floating controls. */
 .has-mobile-bottom-nav {
   --mobile-bottom-nav-height: calc(61px + env(safe-area-inset-bottom, 0px));

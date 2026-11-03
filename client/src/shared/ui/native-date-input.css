@@ -28,3 +28,31 @@ input[type="time"]::-webkit-datetime-edit {
 .ant-form-item-control-input-content {
   min-width: 0;
 }
+
+/* iOS WebKit adds the host input's padding outside width:100%, even with
+   border-box (https://bugs.webkit.org/show_bug.cgi?id=301648). Keep the host
+   padding-free and put the spacing on its native value instead. Desktop
+   WebKit and Chromium use different native editors and must keep their padding. */
+@supports (-webkit-touch-callout: none) {
+  input[type="datetime-local"],
+  input[type="date"],
+  input[type="time"] {
+    /* Override both Ant Design's logical padding and feature form styles. */
+    padding: 0 !important;
+    padding-inline: 0 !important;
+    padding-block: 0 !important;
+    min-height: 44px;
+  }
+
+  input[type="datetime-local"]::-webkit-date-and-time-value,
+  input[type="date"]::-webkit-date-and-time-value,
+  input[type="time"]::-webkit-date-and-time-value {
+    box-sizing: border-box;
+    min-height: 1.5em;
+    margin: 0;
+    padding: 8px 12px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}

@@ -9,8 +9,11 @@ import "antd/dist/reset.css";
 import "./styles.css";
 import "./shared/ui/native-date-input.css";
 import "./shared/ui/overlay-safe-area.css";
+import "./shared/ui/legacy-webview.css";
+import { installWebViewCompatibility } from "./shared/browser/webViewCompatibility";
 
 dayjs.locale("zh-cn");
+installWebViewCompatibility();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

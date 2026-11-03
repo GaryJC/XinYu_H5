@@ -1,0 +1,112 @@
+- generic [ref=f3e4]:
+  - main [ref=f3e5]:
+    - generic [ref=f3e6]:
+      - generic [ref=f3e8]:
+        - text: 门店工作空间
+        - heading "我的维修" [level=1] [ref=f3e1111]
+        - paragraph [ref=f3e10]: 李富强 · 维修技师
+      - generic [ref=f3e11]:
+        - generic [ref=f3e12] [cursor=pointer]:
+          - generic [ref=f3e13]:
+            - generic: 选择测试身份
+            - combobox "切换本地测试身份" [ref=f3e14]
+          - img "down" [ref=f3e1112]
+        - generic [ref=f3e19]: 维修技师
+    - region "我的维修" [ref=f3e1115]:
+      - generic [ref=f3e1116]:
+        - paragraph [ref=f3e1117]: 查看负责的车辆，跟进维修与检验进度。
+        - button "刷新" [ref=f3e1118] [cursor=pointer]
+      - generic [ref=f3e1126]:
+        - generic [ref=f3e1127]:
+          - generic [ref=f3e1128]:
+            - searchbox "搜索我的维修" [ref=f3e1129]: WT-DEMO-TEAM
+            - button [ref=f3e1876] [cursor=pointer]:
+              - img "close-circle" [ref=f3e1877]
+          - button [ref=f3e1131] [cursor=pointer]:
+            - img "search" [ref=f3e1133]
+        - radiogroup "维修任务分类" [ref=f3e1136]:
+          - generic [ref=f3e1137]:
+            - generic [ref=f3e1138] [cursor=pointer]:
+              - radio "待接单 1"
+              - generic [ref=f3e1140]:
+                - generic [ref=f3e1141]: 待接单
+                - strong [ref=f3e1142]: "1"
+            - generic [ref=f3e1143] [cursor=pointer]:
+              - radio "进行中 24"
+              - generic [ref=f3e1145]:
+                - generic [ref=f3e1146]: 进行中
+                - strong [ref=f3e1147]: "24"
+            - generic [ref=f3e1148] [cursor=pointer]:
+              - radio "待检验 4" [checked] [active]
+              - generic [ref=f3e1150]:
+                - generic [ref=f3e1151]: 待检验
+                - strong [ref=f3e1152]: "4"
+            - generic [ref=f3e1153] [cursor=pointer]:
+              - radio "回审 1"
+              - generic [ref=f3e1155]:
+                - generic [ref=f3e1156]: 回审
+                - strong [ref=f3e1157]: "1"
+            - generic [ref=f3e1158] [cursor=pointer]:
+              - radio "已完成 1"
+              - generic [ref=f3e1160]:
+                - generic [ref=f3e1161]: 已完成
+                - strong [ref=f3e1162]: "1"
+      - generic [ref=f3e1163]:
+        - button "查看维修任务 鲁B演示01" [ref=f3e1921] [cursor=pointer]:
+          - generic [ref=f3e1922]:
+            - generic [ref=f3e1923]:
+              - heading "鲁B演示01" [level=3] [ref=f3e1924]
+              - generic [ref=f3e1925]: 正在维修
+            - paragraph [ref=f3e1926]:
+              - generic [ref=f3e1927]: 派工号
+              - text: TEAM01
+            - generic [ref=f3e1928]:
+              - generic [ref=f3e1929]:
+                - generic [ref=f3e1930]: 本人负责项目
+                - generic [ref=f3e1931]: 2 项
+              - list [ref=f3e1932]:
+                - listitem [ref=f3e1933]: 【模拟】检查空调制冷
+                - listitem [ref=f3e1934]: 【模拟】清洁空调滤芯
+            - generic [ref=f3e1935]:
+              - generic [ref=f3e1936]:
+                - generic [ref=f3e1941]: 配件
+                - strong [ref=f3e1942]: 无需配件
+              - generic [ref=f3e1943]:
+                - generic [ref=f3e1947]: 预计完工
+                - strong [ref=f3e1948]: 2026/11/04 12:10
+            - generic [ref=f3e1949]: 本人已提交 · 等待其他项目
+            - generic [ref=f3e1951]:
+              - generic [ref=f3e1952]: 已提报或通过
+              - strong [ref=f3e1953]:
+                - text: "2"
+                - generic [ref=f3e1954]: / 2
+        - button "查看维修任务 鲁B演示02" [ref=f3e1955] [cursor=pointer]:
+          - generic [ref=f3e1956]:
+            - generic [ref=f3e1957]:
+              - heading "鲁B演示02" [level=3] [ref=f3e1958]
+              - generic [ref=f3e1959]: 待检验
+            - paragraph [ref=f3e1960]:
+              - generic [ref=f3e1961]: 派工号
+              - text: TEAM02
+            - generic [ref=f3e1962]:
+              - generic [ref=f3e1963]:
+                - generic [ref=f3e1964]: 本人负责项目
+                - generic [ref=f3e1965]: 2 项
+              - list [ref=f3e1966]:
+                - listitem [ref=f3e1967]: 【模拟】检查空调制冷
+                - listitem [ref=f3e1968]: 【模拟】清洁空调滤芯
+            - generic [ref=f3e1970]:
+              - generic [ref=f3e1974]: 预计完工
+              - strong [ref=f3e1975]: 2026/11/04 12:10
+            - generic [ref=f3e1977]:
+              - generic [ref=f3e1978]: 已提报或通过
+              - strong [ref=f3e1979]:
+                - text: "2"
+                - generic [ref=f3e1980]: / 2
+      - generic "列表分页" [ref=f3e1857]:
+        - button "没有更多记录（已显示 2 条）" [disabled] [ref=f3e1981]
+  - navigation "底部主导航" [ref=f3e870]:
+    - button "我的维修" [ref=f3e1860]
+    - button "出车申请" [ref=f3e1864]
+    - button "打开菜单" [ref=f3e891]:
+      - generic [ref=f3e893]: 更多
