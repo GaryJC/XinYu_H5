@@ -181,7 +181,7 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
         assert.equal(session.status,200);assert.equal(session.cache,'no-store');
         assert.equal(session.body.order.vehicle.plate,'沪ATEST');
         assert.equal(session.body.order.customer,undefined);assert.equal(session.body.order.files,undefined);assert.equal(session.body.order.advisor,undefined);
-        assert.equal((await post(`${root}/sign`,null)).status,404);
+        assert.equal((await post(`${root}/sign`,null)).status,400);
         assert.equal((await post(`${root}/sign`,{token,imageBase64:png,confirmed:false})).status,400);
         assert.equal((await post(`${root}/sign`,{token,imageBase64:'data:image/png;base64,PHN2Zz4=',confirmed:true})).status,400);
         const signed=await Promise.all([post(`${root}/sign`,{token,imageBase64:png,confirmed:true,orderId:'wrong'}),post(`${root}/sign`,{token,imageBase64:png,confirmed:true})]);

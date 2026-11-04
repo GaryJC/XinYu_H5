@@ -26,6 +26,14 @@ export async function saveDraftPendingRepairs(client,order,actor,expectedVersion
  const stored=await readPendingRepairs(client,order.id,true);
  if(expectedVersion!==undefined&&stored.version!==expectedVersion)throw new HttpError(409,'待确认项目已更新，请刷新委托单');
  if(!Array.isArray(order.pendingRepairs)||order.pendingRepairs.length>100)throw new HttpError(400,'待确认项目最多 100 项');
+ const ids=new Set();
+ for(const input of order.pendingRepairs) {
+  if(!input||typeof input!=='object'||Array.isArray(input))throw new HttpError(400,'待确认项目格式无效');
+  if(input.id!==undefined) {
+   if(typeof input.id!=='string'||!input.id||input.id.length>200||ids.has(input.id))throw new HttpError(400,'待确认项目编号重复或无效');
+   ids.add(input.id);
+  }
+ }
  const items=[];
  for(const input of order.pendingRepairs) {
   const known=stored.items.find(p=>p.id===input.id);

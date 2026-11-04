@@ -23,11 +23,11 @@ test('paper order creation, notification, import and signature-free completion t
     const other={...advisor,id:'paper-other-advisor',name:'其他门店顾问',shopId:'other-shop'};
     await pool.query("insert into users(id,name,role,shop_id) values($1,$2,'advisor',$3)",[other.id,other.name,other.shopId]);
     let serial=0;
-    async function makePaper() {
+    async function makePaper(owner = actor) {
       const fileId=`paper-photo-${++serial}`;
       await pool.query(`insert into files(id,kind,storage_provider,bucket,object_key,mime_type,uploaded_by)
-        values($1,'other','local','','test.jpg','image/jpeg',$2)`,[fileId,actor.id]);
-      return createWorkOrder({paperOrder:{mode:'runfeng',photoIds:[fileId]},advisor:actor.name,shop:{id:actor.shopId}},actor.name,actor);
+        values($1,'other','local','','test.jpg','image/jpeg',$2)`,[fileId,owner.id]);
+      return createWorkOrder({paperOrder:{mode:'runfeng',photoIds:[fileId]},advisor:owner.name,shop:{id:owner.shopId}},owner.name,owner);
     }
     await t.test('ordinary electronic drafts remain valid without paper metadata',async()=>{
       const electronic=await createWorkOrder({advisor:actor.name,shop:{id:actor.shopId}},actor.name,actor);
@@ -66,14 +66,21 @@ test('paper order creation, notification, import and signature-free completion t
       for(const photoIds of [[],['missing']]) await assert.rejects(()=>createWorkOrder({paperOrder:{photoIds},shop:{id:actor.shopId}},actor.name,actor),/照片/);
       assert.equal((await pool.query('select count(*) from work_orders')).rows[0].count,before);
     });
-    await t.test('any same-shop advisor may take the pending order, but other shops/roles cannot',async()=>{
-      for(const user of [{...actor,shopId:'other'},{...actor,role:'technician'}]) await assert.rejects(()=>resolvePaperOrder(order.id,{mode:'dingtalk'},user),/无权/);
+    await t.test('same-shop advisors may take pending orders, but foreign shops and unrelated employees cannot',async()=>{
+      for(const user of [{...actor,shopId:'other'},{...actor,id:'unrelated-technician',name:'无关维修工',role:'technician'}]) await assert.rejects(()=>resolvePaperOrder(order.id,{mode:'dingtalk'},user),/无权/);
       order=await resolvePaperOrder(order.id,{mode:'dingtalk'},advisor);
       assert.equal(order.status,'草稿');assert.equal(order.advisor,advisor.name);
       await assert.rejects(()=>resolvePaperOrder(order.id,{mode:'dingtalk'},advisor),/已处理/);
       const supplemental=await createSignatureTokenForOrder(order.id,advisor.name);
       assert.equal(supplemental.signaturePurpose,'supplement');assert.equal(supplemental.status,'草稿');
       await assert.rejects(()=>submitPaperDingTalkOrder(order.id,advisor),/必填/);
+    });
+    await t.test('a technician may process their own paper order under all-employee opening permissions',async()=>{
+      const technician={...actor,id:'paper-technician',name:'开单维修工',role:'technician'};
+      await pool.query("insert into users(id,name,role,roles,shop_id) values($1,$2,'technician',array['technician'],$3)",[technician.id,technician.name,technician.shopId]);
+      const own=await makePaper(technician);
+      const draft=await resolvePaperOrder(own.id,{mode:'dingtalk'},technician);
+      assert.equal(draft.status,'草稿');assert.equal(draft.advisor,technician.name);
     });
     await t.test('DingTalk completion requires normal form data and license but no signature or reception photos, emits exactly one outgoing create',async()=>{
       const filled={...order,department:{code:'A',name:'维修部'},vehicle:{plate:'鲁B12345',vin:'LSVAB1234A1234567',mileage:'1000',model:'测试车型',modelLegacyCode:'TEST'},

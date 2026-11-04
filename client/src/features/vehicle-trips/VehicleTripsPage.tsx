@@ -36,7 +36,7 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
     </div>)}</div></section> : null;
   }
   return <section className="trip-page" aria-label="出车申请">
-    <header className="trip-page-heading"><div><span className="trip-eyebrow">公司用车</span><h2>出车申请</h2><p>申请、审批与还车记录，一处查看。</p></div><Button loading={state.pending === 'list'} disabled={state.busy} onClick={() => void state.refresh()}>刷新申请</Button></header>
+    <header className="trip-page-heading"><div><h2>出车申请</h2></div><Button loading={state.pending === 'list'} disabled={state.busy} onClick={() => void state.refresh()}>刷新申请</Button></header>
     {state.error && <Alert type="error" showIcon title={state.error} />}
     <Card className="trip-create-card" title={<span className="trip-section-heading"><CarFront size={20} />申请用车</span>}>
       <p>驾驶员：{user.name}。领导批准后，上传公里数照片即可出车。</p>
@@ -89,7 +89,7 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
         {detail.rejectionReason && <Alert type="warning" title={`驳回原因：${detail.rejectionReason}`} />}
         {photos('departure', '出车公里数照片')}{photos('return', '收车公里数照片')}
         {manager && !mine && detail.status === '待审批' && <section className="trip-section trip-approval">
-          <h3 className="trip-section-heading"><ClipboardCheck size={18} />领导审批</h3><p className="trip-muted">请核对用车信息，审批结果将记录你的姓名和时间。</p>
+          <h3 className="trip-section-heading"><ClipboardCheck size={18} />领导审批</h3>
           <div className="trip-approval-actions">
             <Button type="primary" loading={state.pending === 'approve'} disabled={state.busy} onClick={() => void state.act('approve')}>批准申请</Button>
             <Button danger disabled={state.busy} onClick={() => { rejectForm.resetFields(); setRejectOpen(true); }}>驳回申请</Button>

@@ -10,12 +10,24 @@ test("service advisors list all work orders within their shop", () => {
 });
 
 test("other advisors' signature session tokens are not exposed in the shared list", () => {
-  const own = { id: "own", advisor: "张三", signatureToken: "sig-own", signatureTokenUsed: false };
-  const other = { id: "other", advisor: "李四", signatureToken: "sig-other", signatureTokenUsed: false };
-  const visible = sanitizeVisibleOrders([own, other], "advisor", { name: "张三" });
+  const own = { id: "own", shop: { id: "s" }, advisor: "张三", signatureToken: "sig-own", signatureTokenUsed: false };
+  const other = { id: "other", shop: { id: "s" }, advisor: "李四", signatureToken: "sig-other", signatureTokenUsed: false };
+  const visible = sanitizeVisibleOrders([own, other], "advisor", { name: "张三", shopId: "s" });
   assert.equal(visible[0].signatureToken, "sig-own");
   assert.equal(visible[1].signatureToken, undefined);
   assert.equal(visible[1].signatureTokenUsed, undefined);
+});
+
+test("cross-shop read access never exposes signing tokens, even to managers or namesakes", () => {
+  const foreign = { shop: { id: "other" }, advisor: "张三", signatureToken: "secret", signatureTokenUsed: false };
+  for (const role of ["manager", "advisor", "technician"]) {
+    const [visible] = sanitizeVisibleOrders([foreign], role, { role, name: "张三", shopId: "s" });
+    assert.equal(visible.signatureToken, undefined);
+    assert.equal(visible.signatureTokenUsed, undefined);
+  }
+  const [local] = sanitizeVisibleOrders([{ ...foreign, shop: { id: "s" } }], "advisor", { role: "advisor", roles: ["advisor", "manager"], name: "其他人", shopId: "s" });
+  assert.equal(local.signatureToken, "secret", "all current memberships apply within the shop");
+  assert.equal(sanitizeVisibleOrders([{ signatureToken: "secret" }], "advisor", {})[0].signatureToken, undefined);
 });
 
 test("only draft work orders can be deleted", async () => {

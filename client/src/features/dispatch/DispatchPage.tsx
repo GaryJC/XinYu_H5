@@ -30,7 +30,7 @@ export function DispatchPage({user,view,initialStage}:{user:UserProfile;view:str
   if(view==='配件申请' && hasRole(user, 'warehouse')) return <WarehousePartsPage controller={c}/>;
   if(view==='我的维修' && (hasAnyRole(user, ['technician','outsourcing'])||user.outsourcingRoleMember)) return <TechnicianRepairPage controller={c} user={user}/>;
   return <section className="dispatch-page" aria-label={view}>
-    <div className="dispatch-heading"><div><p>{view==='派工台'?'默认显示本店未完成工单，历史工单可在“已完成”中查看。':c.manager?'查看本店工单，可按状态筛选并安排维修与检验。':c.inspectionLead?'查看本店检验任务，可按状态筛选和处理检验结果。':'及时确认任务，记录项目进度。'}{c.updatedAt?` 更新于 ${c.updatedAt}`:''}</p></div><Button icon={<RefreshCw size={16} aria-hidden="true" />} onClick={()=>{c.setError('');void c.refresh();}} loading={c.loading}>刷新</Button></div>
+    <div className="dispatch-heading"><div>{c.updatedAt&&<p>更新于 {c.updatedAt}</p>}</div><Button icon={<RefreshCw size={16} aria-hidden="true" />} onClick={()=>{c.setError('');void c.refresh();}} loading={c.loading}>刷新</Button></div>
     {c.error?<Alert type="error" showIcon closable title={c.error} onClose={()=>c.setError('')}/>:null}
     <DispatchFilterBar controller={c} inspection={inspection}/>
     {c.manager&&view==='派工台'?<DispatchWorkloadChart refreshKey={c.updatedAt} filters={c.filters} onClear={clearWorkload} onSelect={(technicianId,workloadState)=>c.setFilters(f=>({search:f.search,includeCompleted:f.includeCompleted,technicianId,workloadState}))}/>:c.inspectionLead?<DispatchWorkloadBoard summaries={c.summaries} filters={c.filters} onSelect={(technicianId,metric)=>{

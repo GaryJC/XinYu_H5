@@ -69,15 +69,18 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
   async function act(input:ActionInput):Promise<boolean> {
     if(!detail || detail.task.orderId!==selection.current || actionBusy.current) return false;
     actionBusy.current=true;setBusy(true);setError('');
-    const id=detail.task.orderId,key=JSON.stringify({id,input});
-    const body=pending.current?.key===key?pending.current.body:{...input,expectedVersion:detail.task.version,requestId:createRequestId()};
-    pending.current={key,body};
-    try {await dispatchApi.action(id,body);pending.current=undefined;feedback.success(dispatchActionSuccess(input.action));if(input.action==='reopen-repair'&&selection.current===id)setFilters({});await Promise.all([latestRefresh.current(),refreshDetail()]);return true;}
+    const id=detail.task.orderId;
+    try {
+      const key=JSON.stringify({id,input});
+      const body=pending.current?.key===key?pending.current.body:{...input,expectedVersion:detail.task.version,requestId:createRequestId()};
+      pending.current={key,body};
+      await dispatchApi.action(id,body);pending.current=undefined;feedback.success(dispatchActionSuccess(input.action));if(input.action==='reopen-repair'&&selection.current===id)setFilters({});await Promise.all([latestRefresh.current(),refreshDetail()]);return true;}
     catch(e) {
       feedback.error(e);
       if(selection.current===id)setError(e instanceof Error?e.message:'操作失败');
-      // A definite HTTP failure may be corrected; an ambiguous network failure retains the idempotency key.
-      if(e instanceof Error && 'status' in e) pending.current=undefined;
+      // Gateway/server failures may arrive after commit. Retain the original
+      // body and version unless the server definitively rejected the command.
+      if(e instanceof Error && 'status' in e && [400,401,403,404,409,422].includes(Number(e.status))) pending.current=undefined;
       await refreshDetail();return false;
     } finally {actionBusy.current=false;setBusy(false);}
   }

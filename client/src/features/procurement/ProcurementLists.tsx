@@ -14,7 +14,7 @@ export function TenderList({controller:c,onOpen}:{controller:ProcurementControll
   const rows=items;
   const response=(t:ProcurementTender)=>`${t.invitations.filter(i=>i.quotes[0]?.termsVersion===t.termsVersion).length} / ${t.invitations.length}`;
   const status=(t:ProcurementTender)=><><Tag color={t.status==='open'?'blue':t.status==='awarded'?'green':'default'}>{statusLabels[t.status]}</Tag>{t.purchaseApproval?<Tag color={t.purchaseApproval.status==='pending'?'orange':t.purchaseApproval.status==='approved'?'green':'red'}>{{pending:'采购待审批',approved:'采购已批准',rejected:'采购已驳回'}[t.purchaseApproval.status]}</Tag>:null}</>;
-  return <><div className="procurement-list-toolbar"><div><h3>询价记录</h3><span className="procurement-muted">共 {c.tenderList.total} 条 · 点击查看报价进度</span></div><Input.Search allowClear aria-label="搜索询价" placeholder="搜索配件、规格或车型" value={query} onChange={e=>{setQuery(e.target.value);}}/></div>
+  return <><div className="procurement-list-toolbar"><div><h3>询价记录</h3><span className="procurement-muted">共 {c.tenderList.total} 条</span></div><Input.Search allowClear aria-label="搜索询价" placeholder="搜索配件、规格或车型" value={query} onChange={e=>{setQuery(e.target.value);}}/></div>
     {desktop?<Table pagination={false} loading={busy} rowKey="id" dataSource={rows} scroll={{x:700}} columns={[
       {title:'配件',render:(_,t)=><><strong>{t.data.partName}</strong><small>{t.data.specification||'未指定规格'} · 数量 {t.data.quantity}</small></>},
       {title:'状态',render:(_,t)=>status(t)},{title:'已响应 / 受邀',render:(_,t)=>response(t)},

@@ -9,11 +9,8 @@
 .workbench-navigation .nav-list { gap: 6px; }
 .workbench-navigation .nav-item { height: 44px; border-radius: 10px; padding-inline: 14px; gap: 12px; font-size: 14px; }
 .workbench-navigation .nav-item.ant-btn-primary { background: #eaf1ff; color: #245ed0; border-color: transparent; box-shadow: none; font-weight: 600; }
-.workbench-navigation .sidebar-note { line-height: 1.8; border-top: 1px solid #edf1f6; padding: 18px 8px 0; color: #66788f; }
-.workbench-navigation .sidebar-note svg { flex-shrink: 0; margin-top: 3px; }
 .workbench-shell .main { padding: 30px 36px 40px; max-width: 1640px; margin: 0 auto; width: 100%; }
 .workbench-shell .topbar { align-items: center; padding-bottom: 24px; margin-bottom: 26px; border-bottom: 1px solid #e1e8f1; }
-.workbench-breadcrumb { color: #60728a; font-size: 12px; letter-spacing: .6px; }
 .workbench-shell .topbar h1 { font-size: 28px; line-height: 1.4; margin: 5px 0 6px; letter-spacing: -.4px; }
 .workbench-shell .topbar p { color: #74849a; font-size: 12px; line-height: 1.7; }
 .workbench-shell .topbar-actions { justify-content: flex-end; max-width: 52%; gap: 10px; }
@@ -45,22 +42,21 @@
 }
 .workbench-shortcut-grid button:active { background: #edf3fc; color: #235e9d; }
 .workbench-shortcut-grid button:focus-visible, .workbench-archive .orders-table tr:focus-visible, .workbench-archive .archive-order-card:focus-visible { outline: 2px solid #3b7bc4; outline-offset: -2px; }
-.workbench-shell .role-focus-strip { background: transparent; border: 0; padding: 0 4px; margin-bottom: 22px; grid-template-columns: auto 1fr; color: #718199; font-size: 12px; }
-.workbench-shell .role-focus-strip strong { font-weight: 500; color: #60758f; }
-.workbench-shell .role-focus-strip > div:last-child { grid-column: 1 / -1; }
-.workbench-shell .role-focus-strip > div:last-child span { background: #eaf0f7; color: #7d8ba0; }
 .workbench-archive.ant-card { border-radius: 16px; border-color: #e5ebf3; box-shadow: 0 3px 18px #24364e03; }
 .workbench-archive > .ant-card-body { padding: 24px; }
-.workbench-archive .archive-header { align-items: flex-start; flex-wrap: wrap; gap: 20px; }
+.workbench-archive .archive-header { align-items: stretch; justify-content: flex-start; flex-direction: column; gap: 10px; margin-bottom: 12px; text-align: left; }
 .workbench-archive .archive-header h2 { font-size: 19px; margin: 0 0 6px; }
 .workbench-archive .archive-header p { color: #66788f; font-size: 12px; line-height: 1.7; }
-.workbench-archive-actions { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; flex: 1 1 460px; justify-content: flex-end; }
-.workbench-archive-actions .search-box { width: 100%; max-width: 440px; }
+.workbench-archive-actions { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; max-width: 100%; justify-content: flex-start; }
+.archive-search { width: 100%; }
+.archive-refresh-description { max-width: min(280px, 70vw); line-height: 1.7; }
 .workbench-archive .ant-btn { border-radius: 8px; }
-.workbench-archive-help { padding: 10px 14px; color: #63758c; font-size: 12px; line-height: 1.7; background: #f8fafd; border-radius: 8px; margin: 0 0 18px; }
-.workbench-archive .archive-filter-bar { padding: 16px; background: #f7f9fc; border-radius: 12px; margin: 18px 0; }
+.workbench-archive .archive-filter-bar { padding: 0; background: transparent; margin: 16px 0; }
 .workbench-archive .archive-filter-fields label > span, .workbench-archive .archive-filter-toolbar > span { color: #60728a; font-size: 12px; }
 .workbench-archive .archive-filter-toolbar { gap: 12px; }
+.workbench-archive .archive-date-shortcuts { gap: 2px; padding: 3px; background: #f1f4f8; border-radius: 10px; }
+.workbench-archive .archive-date-shortcuts .ant-btn { color: #66788f; box-shadow: none; }
+.workbench-archive .archive-date-shortcuts .ant-btn.is-selected { background: #fff; color: #2563eb; font-weight: 600; box-shadow: 0 1px 3px #24364e14; }
 .workbench-archive .archive-filter-summary { color: #7b8da3; border-top: 1px solid #e7edf5; padding-top: 12px; }
 .workbench-archive .orders-table .ant-table-thead > tr > th { color: #6c7f96; background: #f6f8fb; font-size: 12px; font-weight: 500; padding: 14px 12px; white-space: nowrap; }
 .workbench-archive .orders-table .ant-table-tbody > tr > td { padding: 16px 12px; font-size: 13px; border-bottom-color: #edf1f6; }
@@ -124,17 +120,15 @@
  .workbench-shortcut-grid button { padding: 12px 10px; min-height: 64px; font-size: 13px; gap: 10px; }
  .shortcut-icon { width: 34px; height: 34px; border-radius: 10px; }
  .shortcut-arrow { display: none; }
- .workbench-shell .role-focus-strip { display: block; line-height: 1.8; }
- .workbench-shell .role-focus-strip > div:last-child { margin-top: 8px; }
  .workbench-archive > .ant-card-body { padding: 16px; }
- .workbench-archive .archive-header { gap: 14px; }
- .workbench-archive-actions { flex-basis: 100%; justify-content: flex-start; }
- .workbench-archive-actions .search-box { max-width: none; }
- .workbench-archive-actions .ant-btn { min-height: 44px; }
- .workbench-archive .archive-filter-bar { padding: 12px; }
- .workbench-archive .archive-date-shortcuts { gap: 6px; flex-wrap: wrap; }
- .workbench-archive .archive-date-shortcuts .ant-btn { min-height: 40px; padding-inline: 10px; }
- .workbench-archive .archive-list-controls { gap: 10px; }
+ .workbench-archive .archive-header { gap: 8px; }
+ .workbench-archive-actions .ant-btn { min-height: 40px; padding-inline: 10px; font-size: 13px; }
+ .workbench-archive .archive-date-shortcuts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; gap: 2px; }
+ .workbench-archive .archive-date-shortcuts .ant-btn { min-height: 40px; padding-inline: 4px; font-size: 13px; }
+ .workbench-archive .archive-list-controls { gap: 8px; }
+ .workbench-archive .archive-list-controls .ant-btn { min-height: 36px; }
+ .workbench-archive .archive-list-controls .archive-sort { flex: 1 1 150px; }
+ .workbench-archive .archive-list-controls .ant-checkbox-wrapper { font-size: 13px; margin: 0; }
  .workbench-archive .archive-order-card { padding: 16px; }
  .workbench-shell .mobile-bottom-nav { border-top-color: #e3eaf3; box-shadow: 0 -4px 20px #263b5308; }
  .workbench-shell .mobile-bottom-nav button { color: #60728a; border-radius: 10px; }
@@ -166,23 +160,18 @@ button.workbench-metric:focus-visible { outline: 3px solid #366fbb; outline-offs
 
 .todo-overview-title { display:flex; align-items:center; gap:6px; flex-wrap:wrap; min-width:0; }
 .todo-overview-title .ant-btn { color:#657b94; font-size:12px; }
-.todo-metric-caption { display: block; color: #66788f; font-size: 12px; margin-top: 8px; }
 
-.approval-entry-description{margin:0 0 16px;color:#657085;font-size:13px}
 .approval-category-list{display:flex;flex-direction:column;gap:12px}
 .approval-category-list button{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;min-height:64px;padding:16px;border:1px solid #dfe6f0;border-radius:12px;background:#f7f9fc;color:#253750;font:inherit;cursor:pointer;text-align:left}
 .approval-category-list strong{color:#2166c0;margin-right:4px}
 .approval-category-list button:focus-visible{outline:2px solid #1677ff;outline-offset:2px}
 
 /* Shared navigation styling also applies inside the mobile drawer portal. */
-.navigation-caption { margin: 0 14px 12px; color: #66788f; font-size: 11px; letter-spacing: 1px; }
 .workbench-shell .sidebar .brand strong { color: #f4f7ff; }
 .workbench-shell .sidebar .brand span,
-.workbench-shell .sidebar .navigation-caption { color: #a9b9d0; }
 .workbench-shell .sidebar .nav-item { color: #c0cde0; }
 .workbench-shell .sidebar .nav-item.ant-btn-primary { background: #2a4365; color: #fff; box-shadow: inset 3px 0 #6d9eff; }
 .workbench-shell .sidebar .nav-item:hover { color: #fff; background: #253e5f; }
-.workbench-shell .sidebar .sidebar-note { color: #a9b9d0; border-color: #31445e; }
 .workbench-navigation .nav-item:focus-visible { outline: 2px solid #6d9eff; outline-offset: 2px; }
 .workbench-create.ant-btn { font-weight: 600; box-shadow: 0 4px 10px #2563eb18; }
 .workbench-shell .topbar p { max-width: none; white-space: normal; overflow-wrap: anywhere; }

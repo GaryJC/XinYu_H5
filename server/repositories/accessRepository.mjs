@@ -8,7 +8,7 @@ export async function assertWorkOrderAccess(orderId, user, database = pool) {
   if (!order) throw new HttpError(404, "委托单不存在");
   if (!user.shopId || order.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店委托单");
   if (hasRole(user, 'manager')) return;
-  if (hasRole(user, 'advisor') && order.advisor === user.name) return;
+  if (user.name && order.advisor === user.name) return;
   throw new HttpError(403, "无权访问该委托单");
 }
 
@@ -28,6 +28,6 @@ export async function assertOcrRecordAccess(recordId, user, database = pool) {
   if (!record) throw new HttpError(404, "OCR 记录不存在");
   if (!user.shopId || record.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店记录");
   if (hasRole(user, 'manager')) return;
-  if (hasRole(user, 'advisor') && (record.uploaded_by === user.id || record.advisor === user.name)) return;
+  if ((user.id && record.uploaded_by === user.id || user.name && record.advisor === user.name)) return;
   throw new HttpError(403, "无权访问该 OCR 记录");
 }

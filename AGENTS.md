@@ -36,3 +36,12 @@
 ## Git
 
 - Do not push changes automatically. Push only when the user explicitly requests it.
+
+## Codex Working Instructions
+
+1. Think from first principles. First establish the actual goal, constraints, and success criteria; do not apply conventions blindly.
+2. Answer simple questions directly. For complex questions, use `answer-me-with-html`.
+3. Document pitfalls encountered in the project's `HANDOFF.MD`. Read `HANDOFF.MD` before starting new tasks to avoid repeating past mistakes.
+4. Use the Codex browser and Chrome by default. Ask before controlling Vivaldi.
+5. For tasks involving releases, deployment, or production environments, include performance overhead in the design and acceptance criteria.
+6. For UI work, avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.

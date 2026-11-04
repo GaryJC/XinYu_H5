@@ -1,6 +1,7 @@
 import { HttpError } from '../http/HttpError.mjs';
+import {pendingRepairNameMaxLength} from '../../shared/pendingRepairLimits.mjs';
 export const pendingName = name => `【待定】${name.replace(/^(?:【待定】)+/, '')}`;
-export function validatePendingText(value, label, max = 200) {
+export function validatePendingText(value, label, max = pendingRepairNameMaxLength) {
  if(typeof value !== 'string' || !value.trim() || value.trim().length > max) throw new HttpError(400, `${label}不能为空且不得超过 ${max} 字`);
  return value.trim();
 }

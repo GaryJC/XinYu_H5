@@ -18,11 +18,23 @@ async function parseJson(req) {
   }
 
   if (!chunks.length) return {};
+  let input;
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    input = JSON.parse(Buffer.concat(chunks).toString("utf8"));
   } catch {
     throw new HttpError(400, "请求 JSON 格式错误");
   }
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new HttpError(400, "请求内容必须是 JSON 对象");
+  }
+  return input;
+}
+
+export function sendError(res, error) {
+  const expected = error instanceof HttpError;
+  sendJson(res, expected ? error.status : 500, {
+    error: expected ? error.message : "服务器处理失败，请稍后重试"
+  });
 }
 
 export function sendJson(res, status, body) {

@@ -37,7 +37,7 @@ export function WarehousePartsPage({controller:source}:{controller:DispatchContr
   const pendingItems=available.filter(canProcessParts).reduce((count,t)=>count+(t.partsRequirement?.mode==='list'?t.partsRequirement.items.filter(i=>!i.preparedAt&&!i.issuedAt).length:0),0);
   const photoRequests=available.filter(t=>canProcessParts(t)&&t.partsRequirement?.mode==='photo').length;
   return <section className="dispatch-page" aria-label="配件申请">
-    <div className="dispatch-heading"><div><h2>配件申请</h2><p>待处理 {pendingCount} 单 · 按配件确认备料，通知对应维修工领取。</p></div><Button loading={c.loading} onClick={()=>{void c.refresh();void c.refreshDetail();}}>刷新</Button></div>
+    <div className="dispatch-heading"><div><h2>配件申请</h2><p>待处理 {pendingCount} 单</p></div><Button loading={c.loading} onClick={()=>{void c.refresh();void c.refreshDetail();}}>刷新</Button></div>
     {c.error?<Alert type="error" showIcon title={c.error}/>:null}
     <div className="warehouse-filters">
       <Input.Search aria-label="搜索配件申请" placeholder="车牌 / 委托单号 / 派工号" allowClear onSearch={search=>c.setFilters({...searchAllFilters(search),partsStatus:search.trim()?'all':'待备料',partsSort:sortOrder})}/>

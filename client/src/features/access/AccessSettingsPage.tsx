@@ -21,7 +21,7 @@ export function AccessSettingsPage({users}:{users:UserProfile[]}){
       <Form.Item label="账号状态"><Select aria-label="筛选员工状态" allowClear placeholder="全部状态" value={status} options={[{value:'active',label:'启用'},{value:'inactive',label:'停用'}]} onChange={setStatus}/></Form.Item>
       <Button type="text" onClick={()=>{setSearchDraft('');setSearch('');setRole(undefined);setStatus(undefined);}}>重置筛选</Button>
     </Form>
-    <p className="access-caption">找到 {filtered.length} 位员工 · 查看详情了解当前权限及进入记录</p>
+    <p className="access-caption">找到 {filtered.length} 位员工</p>
     {mobile?<div className="access-employee-cards">{filtered.length?filtered.map(user=><Card size="small" key={user.id} title={user.name} extra={<Button type="link" onClick={()=>setSelected(user.id)}>查看权限</Button>}><Space size={[8,8]} wrap>{userRoles(user).map(role=><Tag key={role} color="blue">{roleLabels[role]}</Tag>)}{statusTag(user)}</Space><p className="access-caption">门店：{user.shopId||'未分配'}</p><p className="access-caption">最近进入：{displayLogin(user.lastLoginAt)}</p></Card>):<Empty description="没有符合条件的员工"/>}</div>:<Table rowKey="id" size="middle" loading={c.loading} dataSource={filtered} pagination={{pageSize:10,showSizeChanger:false,hideOnSinglePage:true}} scroll={{x:760}} locale={{emptyText:<Empty description="没有符合条件的员工"/>}} columns={[
       {title:'员工',dataIndex:'name',render:(name:string,user:UserProfile)=><div><strong>{name}</strong><div className="access-caption">{user.id}</div></div>},
       {title:'应用角色',dataIndex:'role',render:(_:RoleKey,user:UserProfile)=><Space wrap>{userRoles(user).map(role=><Tag key={role} color="blue">{roleLabels[role]}</Tag>)}</Space>},

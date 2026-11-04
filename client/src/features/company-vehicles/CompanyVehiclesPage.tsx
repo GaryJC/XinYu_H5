@@ -16,11 +16,13 @@ export function CompanyVehiclesPage() {
     setEditor(vehicle);
   }
   return <section className="company-vehicles-page" aria-label="公司车辆管理">
-    <header className="company-vehicles-heading"><div><h2>公司车辆管理</h2><p>维护公司车辆档案，管理车辆启用状态。</p></div><Space wrap><Button type="primary" disabled={state.busy} onClick={() => edit('new')}>录入车辆</Button><Button loading={state.loading} disabled={state.busy} onClick={() => void state.refresh()}>刷新车辆</Button></Space></header>
+    <header className="company-vehicles-heading"><div><h2>公司车辆管理</h2></div><Space wrap><Button type="primary" disabled={state.busy} onClick={() => edit('new')}>录入车辆</Button><Button loading={state.loading} disabled={state.busy} onClick={() => void state.refresh()}>刷新车辆</Button></Space></header>
+    <Input.Search aria-label="搜索公司车辆" placeholder="搜索车牌 / 品牌 / 车型" allowClear value={state.search} onChange={event => state.setSearch(event.target.value)} />
     {state.error && <Alert type="error" showIcon title={state.error} />}
     {!state.busy && !state.vehicles.length && <Empty description="暂无公司车辆，请录入" />}
+    {!state.busy && state.vehicles.length > 0 && !state.filteredVehicles.length && <Empty description="没有符合条件的车辆"><Button onClick={() => state.setSearch('')}>清空搜索</Button></Empty>}
     {state.loading && <LoadingState label="正在加载公司车辆…" />}
-    <div className="company-vehicle-grid">{state.vehicles.map(car => <Card key={car.id} title={car.plate} extra={<Tag color={car.active ? 'green' : 'default'}>{car.active ? '启用' : '停用'}</Tag>}>
+    <div className="company-vehicle-grid">{state.filteredVehicles.map(car => <Card key={car.id} title={car.plate} extra={<Tag color={car.active ? 'green' : 'default'}>{car.active ? '启用' : '停用'}</Tag>}>
       <p>{car.brand} {car.model}</p><Space wrap>
         <Button disabled={state.busy} onClick={() => edit(car)}>编辑车辆</Button>
         <Button disabled={state.busy} onClick={() => Modal.confirm({ title: `${car.active ? '停用' : '启用'} ${car.plate}？`, content: car.active ? '停用后不能新申请或新出车，已出车仍可还车。' : '启用后可选择这辆车申请出车。', onOk: async () => { if (!await state.save({ ...car, active: !car.active }, car.id)) throw new Error('保存失败'); } })}>{car.active ? '停用' : '启用'}</Button>

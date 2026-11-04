@@ -1,3 +1,4 @@
+import { isOrderEntryRequest } from "../domain/orderEntryAccess.mjs";
 import { businessAnalytics } from '../services/businessAnalyticsService.mjs';
 import { operationsDashboard } from "../services/operationsDashboardService.mjs";
 import { handleVehicleTrips } from "./vehicleTripRouter.mjs";
@@ -90,7 +91,9 @@ export async function handleApiRequest(req, res, url) {
   }
 
   if (await handleVehicleTrips(req, res, url, currentUser)) return true;
-  requireAnyRole(currentUser, ["advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"]);
+  const orderEntry = isOrderEntryRequest(req.method, url.pathname);
+  if (orderEntry) requireAnyRole(currentUser, ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"]);
+  else requireAnyRole(currentUser, ["advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"]);
   if(await handleVehicleLicenseHistory(req,res,url,currentUser))return true;
 
   if (req.method === "GET" && url.pathname === "/api/auth/employee-binding") {
@@ -103,7 +106,7 @@ export async function handleApiRequest(req, res, url) {
     return true;
   }
   if (await handleProcurement(req,res,url,currentUser)) return true;
-  assertEmployeeBound(currentUser);
+  if (!orderEntry) assertEmployeeBound(currentUser);
   if (await handleOrderOverview(req,res,url,currentUser)) return true;
   if (await handlePrintPdfUpload(req, res, url, currentUser)) return true;
   if (await handlePendingRepairs(req,res,url,currentUser)) return true;
@@ -120,7 +123,7 @@ export async function handleApiRequest(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/company-system/departments") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     sendJson(res, 200, await listLegacyDepartments());
     return true;
   }
@@ -170,53 +173,53 @@ export async function handleApiRequest(req, res, url) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/ocr/vehicle-license") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     const input = await readJson(req);
     sendJson(res, 200, await recognizeVehicleLicenseInput(input, currentUser));
     return true;
   }
 
   if (req.method === "POST" && url.pathname === "/api/ocr/license-plate") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     const { imageBase64 } = await readJson(req);
     sendJson(res, 200, await recognizeLicensePlate(imageBase64));
     return true;
   }
 
   if (req.method === "POST" && url.pathname === "/api/ocr/vin") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     const { imageBase64 } = await readJson(req);
     sendJson(res, 200, await recognizeVin(imageBase64));
     return true;
   }
 
   if (req.method === "POST" && url.pathname === "/api/company-system/vehicles/lookup") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     const input = await readJson(req);
     sendJson(res, 200, await measureStage("vehicle_lookup", () => lookupVehicleInCompanySystem(input)));
     return true;
   }
 
   if (req.method === "POST" && url.pathname === "/api/company-system/vehicle-references/search") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     sendJson(res, 200, await searchCompanyVehicleReferences(await readJson(req)));
     return true;
   }
 
   if (req.method === "POST" && url.pathname === "/api/company-system/vehicle-references/code-check") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     sendJson(res, 200, await checkCompanyVehicleReferenceCode(await readJson(req)));
     return true;
   }
 
   if (req.method === "POST" && url.pathname === "/api/company-system/vehicle-references") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     sendJson(res, 201, await createCompanyVehicleReference(await readJson(req)));
     return true;
   }
 
   if (req.method === "POST" && url.pathname === "/api/files") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     const body = await readJson(req);
     if (String(body.kind).startsWith("trip_")) throw new HttpError(400, "出车附件请通过出车申请上传");
     if (["repair_completed_photo", "repair_parts_photo", "repair_progress_photo"].includes(body.kind)) throw new HttpError(400, "维修照片请通过维修任务上传");
@@ -249,7 +252,7 @@ export async function handleApiRequest(req, res, url) {
 
   const fileAttachMatch = url.pathname.match(/^\/api\/files\/([^/]+)\/attach$/);
   if (fileAttachMatch && req.method === "POST") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     const { orderId } = await readJson(req);
     await assertFileAccess(fileAttachMatch[1], currentUser);
     await assertWorkOrderAccess(orderId, currentUser);
@@ -258,7 +261,7 @@ export async function handleApiRequest(req, res, url) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/work-orders") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     const { draft, actor } = await readJson(req);
     sendJson(res, 201, await createWorkOrder({ ...draft, shop: { ...draft?.shop, id: currentUser.shopId }, advisor: currentUser.name }, currentUser.name || actor, currentUser));
     return true;
@@ -266,16 +269,16 @@ export async function handleApiRequest(req, res, url) {
 
   const licenseExceptionMatch=url.pathname.match(/^\/api\/work-orders\/([^/]+)\/license-exception$/);
   if(licenseExceptionMatch && req.method==='POST') {
-    requireAnyRole(currentUser,['advisor','manager']);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     sendJson(res,200,await reportVehicleLicenseException(currentUser,decodeURIComponent(licenseExceptionMatch[1]),await readJson(req)));return true;
   }
   const workOrderMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)$/);
   if(workOrderMatch && req.method==='GET') {
-    requireAnyRole(currentUser,['advisor','manager','warehouse']);
+    requireAnyRole(currentUser, ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"]);
     sendJson(res,200,await getWorkOrderDetail(decodeURIComponent(workOrderMatch[1]),currentUser));return true;
   }
   if (workOrderMatch && req.method === "PUT") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     const { order, actor, action } = await readJson(req);
     if (!order || order.id !== workOrderMatch[1]) {
       sendJson(res, 400, { error: "委托单参数不一致" });
@@ -287,7 +290,7 @@ export async function handleApiRequest(req, res, url) {
   }
 
   if (workOrderMatch && req.method === "DELETE") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     await assertWorkOrderAccess(workOrderMatch[1], currentUser);
     sendJson(res, 200, await deleteDraftWorkOrder(workOrderMatch[1]));
     return true;
@@ -295,7 +298,7 @@ export async function handleApiRequest(req, res, url) {
 
   const paperMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/paper-order\/(resolve|submit)$/);
   if (paperMatch && req.method === "POST") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     const id = decodeURIComponent(paperMatch[1]);
     sendJson(res, 200, paperMatch[2] === "resolve"
       ? await resolvePaperOrder(id, await readJson(req), currentUser)
@@ -351,7 +354,7 @@ export async function handleApiRequest(req, res, url) {
 
   const tokenMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/signature-token$/);
   if (tokenMatch && req.method === "POST") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     await assertWorkOrderAccess(tokenMatch[1], currentUser);
     const { actor, renew, signatureMode } = await readJson(req);
     sendJson(res, 200, await createSignatureTokenForOrder(tokenMatch[1], currentUser.name || actor, { renew: renew === true, signatureMode }));
@@ -360,7 +363,7 @@ export async function handleApiRequest(req, res, url) {
 
   const ocrMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/ocr-records$/);
   if (ocrMatch && req.method === "POST") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     if (ocrMatch[1] !== "draft") await assertWorkOrderAccess(ocrMatch[1], currentUser);
     const body = await readJson(req);
     if (!body.fileId || typeof body.fileId !== "string") throw new HttpError(400, "OCR 记录缺少有效文件");
@@ -371,7 +374,7 @@ export async function handleApiRequest(req, res, url) {
 
   const ocrConfirmMatch = url.pathname.match(/^\/api\/ocr-records\/([^/]+)\/confirm$/);
   if (ocrConfirmMatch && req.method === "POST") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     await assertOcrRecordAccess(ocrConfirmMatch[1], currentUser);
     const { value, actor } = await readJson(req);
     sendJson(res, 200, await confirmOcrRecord(ocrConfirmMatch[1], value, currentUser.name || actor));
@@ -409,7 +412,7 @@ export async function handleApiRequest(req, res, url) {
 
   const signatureMatch = url.pathname.match(/^\/api\/signatures\/([^/]+)$/);
   if (signatureMatch && req.method === "GET") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     const order = await findWorkOrderByToken(signatureMatch[1]);
     if (order) await assertWorkOrderAccess(order.id, currentUser);
     sendJson(res, order ? 200 : 404, order || { error: "签字会话不存在或已失效" });
@@ -418,7 +421,7 @@ export async function handleApiRequest(req, res, url) {
 
   const signMatch = url.pathname.match(/^\/api\/signatures\/([^/]+)\/sign$/);
   if (signMatch && req.method === "POST") {
-    requireAnyRole(currentUser, ["advisor", "manager"]);
+    requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
     const order = await findWorkOrderByToken(signMatch[1]);
     if (!order) throw new HttpError(404, "签字会话不存在或已失效");
     await assertWorkOrderAccess(order.id, currentUser);

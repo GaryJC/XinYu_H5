@@ -102,7 +102,7 @@ export function VehicleReferenceAutocomplete({ kind, value, disabled, placeholde
       open={open}
       allowClear
       filterOption={false}
-      notFoundContent={loading ? "正在查询公司数据库…" : emptyContent}
+      notFoundContent={loading ? "正在查询车辆档案…" : emptyContent}
       onChange={(nextValue) => {
         setSearchQuery(nextValue);
         onChange(nextValue);

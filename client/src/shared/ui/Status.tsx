@@ -30,7 +30,7 @@ const legacySyncPresentation: Record<LegacySyncStatus, { label: string; color: s
 export function MetricCard({ label, value }: { label: string; value: number }) {
   return (
     <Card className="metric-card" size="small">
-      <Statistic title={label} value={value} suffix={<small>较昨日 +{value}</small>} />
+      <Statistic title={label} value={value} />
     </Card>
   );
 }

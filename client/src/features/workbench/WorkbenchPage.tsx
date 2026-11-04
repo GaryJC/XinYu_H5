@@ -4,13 +4,12 @@ import { userRoles } from "../../../../shared/roles.mjs";
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import { EmployeeBindingGate } from "../employee-binding/EmployeeBindingGate";
 import { lazy, Suspense, useState } from "react";
-import { ArrowLeft, ArrowUp, ClipboardCheck, LockKeyhole, Menu, Plus, ChevronRight, RefreshCcw, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowUp, ClipboardCheck, Menu, Plus, ChevronRight, RefreshCcw, UserRound } from "lucide-react";
 import { Alert, Button, Drawer, FloatButton, Grid, Layout, Select, Space } from "antd";
 import { DevelopmentPersonaKey } from "../../../../shared/types";
 import "./workbench.css";
 import { roles } from "../work-orders/domain/workOrderDomain";
 import { OrdersArchive } from "./OrdersArchive";
-import { roleFocus } from "./workbenchConfig";
 import { dispatchEnabled, isDispatchNavigation } from "../dispatch/dispatchAvailability";
 import { useWorkbenchController } from "./useWorkbenchController";
 
@@ -43,15 +42,14 @@ export function WorkbenchPage() {
     devLoginLoading, loginForDevelopment
   } = controller;
 
-  const bindingRequired = currentUser && hasRole(currentUser, 'technician') && !currentUser.legacyEmployeeCode && !['出车申请', '车辆管理'].includes(activeNav);
+  const bindingRequired = currentUser && hasRole(currentUser, 'technician') && !currentUser.legacyEmployeeCode && !['出车申请', '车辆管理', '委托开单'].includes(activeNav);
 
   const navigation = (
     <div className="navigation-shell workbench-navigation">
       <div className="brand">
         <div className="brand-mark"><ClipboardCheck size={20} /></div>
-        <div><strong>修理委托</strong><span>门店协同工作台</span></div>
+        <div><strong>修理委托</strong></div>
       </div>
-      <div className="navigation-caption">业务导航</div>
       <nav className="nav-list" aria-label="主导航">
         {visibleNavItems.map((item) => {
           const Icon = item.icon;
@@ -71,7 +69,6 @@ export function WorkbenchPage() {
           );
         })}
       </nav>
-      <div className="sidebar-note"><LockKeyhole size={16} /><p>按门店与岗位权限使用委托开单、签字与归档功能。</p></div>
     </div>
   );
 
@@ -86,7 +83,6 @@ export function WorkbenchPage() {
         <header className="topbar">
           <div className="topbar-title">
             <div>
-              <span className="workbench-breadcrumb">门店工作空间</span>
               <h1>{activeNav}</h1>
               <p>{currentUser?.name ? `${currentUser.name} · ` : ''}{currentUser ? userRoles(currentUser).map(item => roles[item].name).join(' / ') : '请先登录'}{activeNav === '工作台' ? ` · ${dashboard?.total ?? '—'} 张委托单` : ''}</p>
             </div>
@@ -142,16 +138,11 @@ export function WorkbenchPage() {
             {controller.todoError?<Alert type="warning" title={controller.todoError}/>:null}
             <TodoOverview key={currentUser?.id} counters={counters} canApprove={!!currentUser&&hasRole(currentUser,'manager')} onTodo={controller.openTodo} onApprovals={()=>{setTripScope('pending');setActiveNav('出车申请');}}/>
             <section className="workbench-shortcuts" aria-label="快捷入口">
-              <div className="workbench-section-heading"><h2>快捷入口</h2><span>常用业务</span></div>
+              <div className="workbench-section-heading"><h2>快捷入口</h2></div>
               <div className="workbench-shortcut-grid">{visibleNavItems.filter(item => !['工作台', '车辆管理', '数据看板', '权限设置', '配件竞价', '工单全览'].includes(item.label)).map(item => {
                 const Icon = item.icon;
                 return <button type="button" key={item.label} onClick={() => setActiveNav(item.label)}><span className="shortcut-icon"><Icon size={21} aria-hidden="true" /></span><span className="shortcut-label">{item.label}</span><ChevronRight className="shortcut-arrow" size={16} aria-hidden="true" /></button>;
               })}</div>
-            </section>
-            <section className="role-focus-strip">
-              <div><strong>{roleFocus[role].title}</strong><span>{roleFocus[role].dataScope}</span></div>
-              <p>{roleFocus[role].primary}</p>
-              <div>{roleFocus[role].blocked.map((item) => <span key={item}>{item}</span>)}</div>
             </section>
             <OrdersArchive controller={controller} />
           </>

@@ -76,7 +76,7 @@ export function PreRepairPhotos({ photos = {}, disabled, controls, errors = [], 
     {!removal && controls?.error && <Alert type="error" showIcon title={controls.error} />}
     {controls?.successMessage && <Alert type="success" showIcon title={controls.successMessage} />}
     <AuthenticatedImagePreviewGroup fileIds={[...photoSlots.map(slot => photos[slot.key]).filter((id): id is string => Boolean(id)), ...extras]}>
-      <div className="pre-repair-group-heading"><h4>标准角度</h4><span>点击实拍照片查看原图</span></div>
+      <div className="pre-repair-group-heading"><h4>标准角度</h4></div>
       <div className="pre-repair-photo-grid">
         {photoSlots.map(slot => <PreRepairPhotoCard key={slot.key} label={slot.label} id={photos[slot.key]} slot={slot.key}
           required={required && slot.required} busy={busy} uploading={controls?.uploading === slot.key} status={progressText}

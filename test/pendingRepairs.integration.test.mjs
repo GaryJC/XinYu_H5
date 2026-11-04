@@ -26,12 +26,18 @@ test('pending repairs persist, enforce ownership, schedule once, and preserve cl
   await saveDraftPendingRepairs(pool,{id:'p-draft',pendingRepairs:draftPending.items},manager,draftPending.version);
   draftPending=await readPendingRepairs(pool,'p-draft');assert.equal(draftPending.items[0].itemId,draftId);
   await assert.rejects(()=>saveDraftPendingRepairs(pool,{id:'p-draft',pendingRepairs:[]},manager,0),/已更新/);
+  for(const rows of [[...draftPending.items,...draftPending.items],[null],[{...draftPending.items[0],name:'名'.repeat(97)}],[{...draftPending.items[0],name:'名'.repeat(101)}]]) {
+   await assert.rejects(()=>saveDraftPendingRepairs(pool,{id:'p-draft',pendingRepairs:rows},manager,draftPending.version),error=>error.status===400);
+   assert.deepEqual(await readPendingRepairs(pool,'p-draft'),draftPending,'Invalid drafts must not change saved confirmation records or their version');
+  }
   const notices=async()=> (await pool.query("select recipient_id,kind,payload from dispatch_notifications where order_id='p-order' order by created_at,id")).rows;
   const syncCounts=async()=>({created:(await pool.query("select count(*) from legacy_sync_outbox where order_id='p-order'")).rows[0].count,writeback:(await pool.query("select count(*) from repair_writebacks where order_id='p-order'")).rows[0].count});
   const s=await import('../server/services/pendingRepairsService.mjs');
   const {queryDispatchTasks}=await import('../server/services/dispatchService.mjs');
   const pendingTasks=()=>queryDispatchTasks(manager,{stage:'待客户确认'});
   const call=(input)=>s.pendingRepairCommand(manager,'p-order',{requestId:randomUUID(),...input});
+  await assert.rejects(()=>call({action:'add',name:'名'.repeat(101),reason:'等待确认',expectedVersion:0}),error=>error.status===400);
+  assert.deepEqual(await s.pendingRepairList(manager,'p-order'),{items:[],version:0});
   let data=await call({action:'add',name:'额外项目',reason:'司机回公司确认',expectedVersion:0});const id=data.items[0].id,itemId=data.items[0].itemId;
   assert.equal(data.version,1);assert.equal(data.items[0].name,'额外项目');
   assert.equal((await pendingTasks()).find(t=>t.orderId==='p-order').pendingRepairCount,1);

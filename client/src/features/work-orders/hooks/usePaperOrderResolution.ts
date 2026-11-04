@@ -20,7 +20,7 @@ export function usePaperOrderResolution(order: WorkOrder, user: UserProfile | un
   }, [order.id, order.paperOrder?.mode, user?.id]);
   const isDingTalkDraft = order.status === "草稿" && order.paperOrder?.mode === "dingtalk";
   const canChoose = order.status === "待处理纸质委托书" && order.paperOrder?.mode === "pending" || isDingTalkDraft;
-  const canProcess = Boolean(user?.active && hasAnyRole(user, ["advisor", "manager"]) && user.shopId === order.shop.id
+  const canProcess = Boolean(user?.active && (hasAnyRole(user, ["advisor", "manager"]) || user.name === order.advisor) && user.shopId === order.shop.id
     && (!isDingTalkDraft || hasRole(user, 'manager') || user.name === order.advisor));
   async function resolve() {
     if (running.current || !canProcess || !canChoose) return;

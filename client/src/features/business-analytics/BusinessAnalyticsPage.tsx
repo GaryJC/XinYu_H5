@@ -1,6 +1,6 @@
 import {useMemo,useState,type ReactNode} from 'react';
 import {Alert,Button,Empty,Select,Skeleton} from 'antd';
-import {ArrowDownRight,ArrowUpRight,ChartNoAxesCombined,RefreshCcw} from 'lucide-react';
+import {ArrowDownRight,ArrowUpRight,RefreshCcw} from 'lucide-react';
 import type {EChartsCoreOption} from 'echarts/core';
 import type {AnalyticsComparison} from '../../../../shared/types';
 import {Chart} from '../../shared/charts/Chart';
@@ -32,7 +32,7 @@ export function BusinessAnalyticsPage(){
   const workers=load.data?.workers||[];
   const countRows=(rows:Array<{name:string;value:number}>)=>rows.map(r=>[r.name,r.value]);
   return <div className="business-analytics">
-    <header className="analytics-heading"><div><span className="analytics-eyebrow"><ChartNoAxesCombined size={15}/> BUSINESS ANALYTICS</span><h2>门店经营概览</h2><p>看业务变化，找增长来源，识别周转压力。</p></div><div className="analytics-controls"><Select aria-label="经营分析统计周期" value={days} onChange={setDays} options={[7,30,90,180,365].map(value=>({value,label:`近 ${value} 天`}))}/><Button aria-label="刷新经营分析" icon={<RefreshCcw size={15}/>} loading={c.loading||load.loading} onClick={()=>{void c.refresh();void load.refresh();}}>刷新</Button></div></header>
+    <header className="analytics-heading"><div><h2>门店经营概览</h2></div><div className="analytics-controls"><Select aria-label="经营分析统计周期" value={days} onChange={setDays} options={[7,30,90,180,365].map(value=>({value,label:`近 ${value} 天`}))}/><Button aria-label="刷新经营分析" icon={<RefreshCcw size={15}/>} loading={c.loading||load.loading} onClick={()=>{void c.refresh();void load.refresh();}}>刷新</Button></div></header>
     {c.error&&<Alert type="error" showIcon title="经营数据加载失败" description={c.error} action={<Button onClick={()=>void c.refresh()}>重试</Button>}/>}
     {c.loading&&<Skeleton active paragraph={{rows:8}}/>}
     {d&&charts&&<>

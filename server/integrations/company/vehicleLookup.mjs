@@ -33,7 +33,7 @@ export async function lookupVehicleInCompanySystem({ plate, vin, model, owner } 
     throw new HttpError(400, "请提供车牌号或 VIN 码");
   }
 
-  const configured = hasSqlServerConfig();
+  const configured = configuredVehicleDatabase();
   const candidates = configured
     ? await findLegacyVehicle({ plate: normalizedPlate, vin: normalizedVin })
     : findMockVehicles(normalizedPlate, normalizedVin);
@@ -98,7 +98,7 @@ export async function searchCompanyVehicleReferences({ kind, query } = {}) {
   const normalizedQuery = normalizeReference(query);
   if (normalizedQuery.length < 2) return { kind, query: typeof query === "string" ? query : "", candidates: [] };
 
-  const configured = hasSqlServerConfig();
+  const configured = configuredVehicleDatabase();
   const candidates = kind === "model"
     ? configured
       ? await findLegacyModelCandidates(normalizedQuery)
@@ -115,7 +115,7 @@ export async function checkCompanyVehicleReferenceCode({ kind, code } = {}) {
   }
   const maxLength = kind === "model" ? 10 : 50;
   const normalizedCode = normalizeNewReferenceCode(code, maxLength);
-  const configured = hasSqlServerConfig();
+  const configured = configuredVehicleDatabase();
   const references = kind === "model" ? mockModels : mockOrganizations;
   const existing = configured
     ? await findLegacyReferenceByCode(kind, normalizedCode)
@@ -171,9 +171,6 @@ export function resolveReference(input, candidates, requireUniqueCode) {
 }
 
 function findMockVehicles(normalizedPlate, normalizedVin) {
-  if (process.env.APP_ENV === "production") {
-    throw new HttpError(503, "公司车辆数据库未配置");
-  }
   return mockVehicles
     .filter((item) =>
       (normalizedPlate && normalizeIdentifier(item.plate) === normalizedPlate) ||
@@ -184,6 +181,14 @@ function findMockVehicles(normalizedPlate, normalizedVin) {
       plateMatched: Boolean(normalizedPlate && normalizeIdentifier(item.plate) === normalizedPlate),
       vinMatched: Boolean(normalizedVin && normalizeIdentifier(item.vin) === normalizedVin)
     }));
+}
+
+function configuredVehicleDatabase() {
+  const configured = hasSqlServerConfig();
+  if (!configured && process.env.APP_ENV === "production") {
+    throw new HttpError(503, "公司车辆数据库未配置");
+  }
+  return configured;
 }
 
 function findMockReferences(references, normalizedInput) {

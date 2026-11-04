@@ -130,7 +130,7 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
           type="info"
           showIcon
           title="系统默认生成中文拼音首字母编码"
-          description="确认后会立即写入润丰 SQL Server。编码已存在且名称一致时复用，名称不一致时要求修改编码。"
+          description="确认后立即保存到润丰。已有相同编码和名称时沿用现有档案；名称不一致时需修改编码。"
           style={{ marginBottom: 16 }}
         />
         <Form layout="vertical">

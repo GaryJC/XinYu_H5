@@ -15,7 +15,7 @@ export function PreRepairPhotoCard({ label, id, slot, required, busy, uploading,
       {onSelect && <Checkbox className="pre-repair-photo-check" aria-label={selectionLabel || `选择${label}`} disabled={busy} checked={selected} onChange={event => onSelect(event.target.checked)} />}
       {uploading && <div className="pre-repair-photo-loading" role="status"><Spin size="small" /><span>{status || '正在上传…'}</span></div>}
     </div>
-    <small className={required && !id ? 'pre-repair-photo-missing' : 'pre-repair-photo-status'}>{id ? '已上传 · 点击查看原图' : required ? '待补拍 · 必拍' : '未上传 · 选填'}</small>
+    <small className={required && !id ? 'pre-repair-photo-missing' : 'pre-repair-photo-status'}>{id ? '已上传' : required ? '待补拍 · 必拍' : '未上传 · 选填'}</small>
     {!id && slot && <p>{slot === 'mileage' ? '点亮仪表盘，拍清总公里数和单位' : slot === 'front45' ? '拍到完整车头和左侧车身' : '拍到完整车尾和右侧车身'}</p>}
     {!id && action && <div className="pre-repair-empty-action">{action}</div>}
     {error && <div className="pre-repair-photo-error" role="alert">{error}</div>}

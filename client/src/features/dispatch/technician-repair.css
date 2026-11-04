@@ -1,4 +1,4 @@
-.technician-page .technician-page-heading p { margin: 0; }
+.technician-page .technician-page-heading { justify-content: flex-end; }
 .technician-search-panel { padding: 16px 16px 0; background: #fff; border: 1px solid #e2e8f1; border-radius: 16px; }
 .technician-page .technician-search-panel .repair-task-tabs { margin-top: 8px; width: 100%; overflow-x: auto; box-shadow: none; }
 .technician-page .repair-task-tabs .ant-segmented-group { width: max-content; min-width: 100%; }

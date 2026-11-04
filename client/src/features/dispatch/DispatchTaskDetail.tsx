@@ -113,7 +113,6 @@ export function DispatchTaskDetail({controller,user,readyForFocus=true}:{control
       <div className="dispatch-item-times"><span>开工：{displayTime(item.startAt)}</span><span>完工提报：{displayTime(item.finishAt)}</span>{!outsourced?<span>检验：{item.inspectorName||'未检验'} · {displayTime(item.inspectedAt)}</span>:null}<span>领料确认：{displayTime(item.pickedAt)}</span></div>
       <DispatchItemProgressActions task={task} item={item} controller={controller} enabled={owner&&!unsigned}/>
     </Card>)}
-    <p className="dispatch-muted">需要配件的任务由仓管确认出库后自动开工；无需配件直接开工。</p>
     </section>:null}
     {hasPendingInspection(task)?<PassedInspectionItems items={task.items}/>:null}
     </div>

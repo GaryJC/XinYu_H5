@@ -19,7 +19,7 @@ export function VehicleNameplatePhotos({files,currentId,onUpload,disabled=false,
     <Button icon={<ReloadOutlined/>} disabled={disabled||uploading} loading={uploading}>重新上传</Button>
    </Popover>:null}
   </div>
-  <p>{current?(current.nameplateSourceFileId?'已沿用历史铭牌，全单维修工共用。点击照片可查看原图。':'已上传，全单维修工共用。点击照片可查看原图。'):'请拍清车辆型号、发动机型号和 VIN，供仓管核对配件。'}</p>
+  <p>{current?(current.nameplateSourceFileId?'已沿用历史铭牌，全单维修工共用。':'已上传，全单维修工共用。'):'请拍清车辆型号、发动机型号和 VIN，供仓管核对配件。'}</p>
   {!current&&onUpload&&historyLoading?<p role="status">正在加载这辆车的铭牌…</p>:null}
   {!current&&onUpload&&historyError?<Alert type="warning" showIcon title="历史铭牌暂时无法加载" description="可重试查询，或直接拍摄新照片。" action={<Button disabled={disabled||uploading} onClick={onReloadHistory}>重试查询</Button>}/>:null}
   {current?<div className="vehicle-nameplate-preview"><AuthenticatedImage key={current.id} fileId={current.id} alt="车辆铭牌照片" width="100%" height={200}/></div>:picker||<p>尚未上传车辆铭牌照片</p>}

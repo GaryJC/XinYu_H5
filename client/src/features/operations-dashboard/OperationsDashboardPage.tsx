@@ -16,13 +16,13 @@ export function OperationsDashboardPage({onOpen,embedded=false,refreshKey}:{onOp
  return <section className={`operations-dashboard ${embedded?'dispatch-workload workload-board operations-embedded':''}`} aria-label={embedded?'工作负荷看板':'数据看板'}>
   {embedded&&<h3><button className="workload-board-toggle" type="button" aria-expanded={expanded} aria-controls="dispatch-workload-content" onClick={()=>setExpanded(value=>!value)}><span>工作负荷看板{c.data&&<small> · {workers.length} 人</small>}</span><span className="workload-board-toggle-hint">{expanded?'收起':'展开'}<ChevronDown size={16} style={{transform:expanded?'rotate(180deg)':undefined}}/></span></button></h3>}
   {(!embedded||expanded)&&<div id={embedded?'dispatch-workload-content':undefined} className="operations-dashboard-content">
-  {!embedded&&<header className="operations-header"><div><span className="operations-eyebrow">门店运行 · 实时负荷</span><h2>数据看板</h2><p>从人员负荷到任务卡点，让每一次派工都有依据。</p></div><Button icon={<RefreshCcw size={15}/>} loading={c.loading} onClick={()=>void c.refresh()}>刷新数据</Button></header>}
+  {!embedded&&<header className="operations-header"><div><h2>数据看板</h2></div><Button icon={<RefreshCcw size={15}/>} loading={c.loading} onClick={()=>void c.refresh()}>刷新数据</Button></header>}
   {c.error&&<Alert type="error" showIcon title={c.error} description="当前数据可能不是最新，请刷新重试。"/>}
   {!c.data?c.loading?<Spin/>:<Empty description="暂无看板数据"/>:<>
    {!embedded&&<div className="operations-timestamp">当前快照 · {time(c.data.generatedAt)} · 按本店可见任务统计</div>}
    {!embedded&&<section className="operations-kpis" aria-label="门店当前负荷">
     <div className="operations-kpi"><span>未完成车辆</span><strong>{c.data.vehicles}<small>辆</small></strong><p>已签字，维修尚未结束</p></div>
-    {(['working','parts','inspection','overdue'] as OperationsMetric[]).map(key=><button key={key} className={`operations-kpi ${key==='overdue'?'is-risk':''}`} onClick={()=>choose(key)}><span>{labels[key]}<ArrowUpRight size={15}/></span><strong>{c.data!.counts[key]}<small>项</small></strong><p>查看对应维修项目</p></button>)}
+    {(['working','parts','inspection','overdue'] as OperationsMetric[]).map(key=><button key={key} className={`operations-kpi ${key==='overdue'?'is-risk':''}`} onClick={()=>choose(key)}><span>{labels[key]}<ArrowUpRight size={15}/></span><strong>{c.data!.counts[key]}<small>项</small></strong></button>)}
    </section>}
    {!embedded&&(c.data.unassigned>0||c.data.uncertain>0)&&<Alert type="warning" showIcon title={`${c.data.unassigned} 个项目待指定负责人 · ${c.data.uncertain} 张历史任务待核对`} description="未明确归属的项目不会计入个人负荷；待核对历史任务不计入项目统计。"/>}
    <section className="operations-panel"><div className="operations-panel-heading"><div>{!embedded&&<h3><Users size={18}/>维修工负荷</h3>}<p>按本人项目统计；待料、暂停和超期可能重叠，不能相加。</p></div><Select aria-label="维修工负荷排序" value={sort} onChange={setSort} options={metrics.map(value=>({value,label:`${labels[value]}最多`}))}/></div>

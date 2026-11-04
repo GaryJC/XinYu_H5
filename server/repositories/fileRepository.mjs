@@ -82,7 +82,8 @@ export async function assertFileReadAccess(fileId, user, database = pool) {
   if (String(file.kind).startsWith("trip_")) throw new HttpError(403, "出车附件只能通过出车申请访问");
   if (!user.shopId || file.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店文件");
   if (hasRole(user, 'manager')) return;
-  if (hasRole(user, 'advisor') && (file.uploaded_by === user.id || file.advisor)) return;
+  if (user.id && file.uploaded_by === user.id || user.name && file.advisor === user.name) return;
+  if (hasRole(user, 'advisor') && file.advisor) return;
   if (user.active && hasRole(user, 'warehouse') && ["repair_parts_photo","vehicle_nameplate_photo"].includes(file.kind) && !["草稿","待客户签字"].includes(file.status)) return;
   if(user.active&&hasRole(user,'warehouse')&&file.order_id&&['vehicle_license','repair_order_photo','damage_photo','other','repair_progress_photo','repair_completed_photo'].includes(file.kind)) {
     await getDispatchTask(database,file.order_id,user);
@@ -100,7 +101,7 @@ export async function assertFileAccess(fileId, user, database = pool) {
   if (String(file.kind).startsWith("trip_")) throw new HttpError(403, "出车附件只能通过出车申请访问");
   if (!user.shopId || file.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店文件");
   if (hasRole(user, 'manager')) return;
-  if (hasRole(user, 'advisor') && (file.uploaded_by === user.id || file.advisor === user.name)) return;
+  if ((user.id && file.uploaded_by === user.id || user.name && file.advisor === user.name)) return;
   throw new HttpError(403, "无权访问该文件");
 }
 

@@ -1,11 +1,11 @@
 import { RoleKey, WorkOrder } from "../../../../../shared/types";
 
 export function canCreateOrder(role: RoleKey) {
-  return role === "advisor" || role === "manager";
+  return ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"].includes(role);
 }
 
 export function canSendSignature(role: RoleKey, order?: WorkOrder) {
-  return Boolean(order && (role === "advisor" || role === "manager") && order.status === "草稿");
+  return Boolean(order && canCreateOrder(role) && order.status === "草稿");
 }
 
 export function canSubmitDispatch(role: RoleKey, order?: WorkOrder) {

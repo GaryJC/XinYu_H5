@@ -3,3 +3,98 @@
 [     810ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5174/api/auth/me:0
 [     810ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5174/api/auth/me:0
 [ 1328392ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5174/node_modules/.vite/deps/react.js:0
+[ 1856217ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5174/@vite/client:992
+[ 1857070ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=3630e295:14335
+[73772193ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[73772194ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5174/api/dispatch/people:0
+[74466910ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5174/@vite/client:992
+[74492196ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74492196ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74522186ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74522186ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74552187ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74552187ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74582206ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74582206ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74612190ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74612191ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74642193ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74642193ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74672197ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74672198ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74702202ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74702202ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74732202ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74732202ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74762206ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74762206ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74792195ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74792195ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74822202ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74822202ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74852206ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74852206ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74882198ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74882199ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74912201ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74912201ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74942206ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74942206ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[74972204ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[74972205ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75002209ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75002209ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75032198ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75032198ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75062206ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75062207ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75092203ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75092203ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75122209ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75122210ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75152208ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75152208ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75182206ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75182206ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75212201ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75212201ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75242208ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75242208ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75272205ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75272205ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75302211ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75302211ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75332202ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75332202ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75362207ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75362207ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75392196ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75392196ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75422203ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75422203ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75452217ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75452217ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75482205ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75482205ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75512211ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75512212ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75542205ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75542205ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75572213ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75572213ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75602209ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75602209ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75632213ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75632213ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75662211ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75662211ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75692205ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75692205ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75722208ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75722208ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75752215ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75752215ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75782215ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/people:0
+[75782215ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/api/dispatch/tasks?partsStatus=%E5%BE%85%E5%A4%87%E6%96%99&partsSort=newest&page=1&pageSize=20:0
+[75789658ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=3630e295:14335
+[76535500ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5174/api/dispatch/people:0

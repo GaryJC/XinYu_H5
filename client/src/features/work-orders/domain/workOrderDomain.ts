@@ -13,9 +13,9 @@ const shopProfile = {
 export const workflow: WorkOrderStatus[] = ["草稿", "待客户签字", "已委托", "待派工", "维修中", "待结算", "完成"];
 
 export const roles: Record<RoleKey, { name: string; scope: string; permissions: string[] }> = {
-  employee: { name: "普通员工", scope: "本人的出车申请", permissions: ["出车申请"] },
-  outsourcing: {name:"外包",scope:"分配给本人的外包维修任务",permissions:["接单","领料确认","开工","完工提报"]},
-  warehouse: {name:"仓管",scope:"本店配件申请",permissions:["查看申请","确认留痕"]},
+  employee: { name: "普通员工", scope: "本人的出车申请", permissions: ["开单", "客户签字", "出车申请"] },
+  outsourcing: {name:"外包",scope:"分配给本人的外包维修任务",permissions:["开单","客户签字","接单","领料确认","开工","完工提报"]},
+  warehouse: {name:"仓管",scope:"本店配件申请",permissions:["开单","客户签字","查看申请","确认留痕"]},
   advisor: {
     name: "服务顾问",
     scope: "可创建委托单、发起客户签字、查看本店工单并安排维修",
@@ -24,12 +24,12 @@ export const roles: Record<RoleKey, { name: string; scope: string; permissions: 
   technician: {
     name: "维修技师",
     scope: "仅可查看派给自己的工单，提交维修完成",
-    permissions: ["我的维修单", "领料确认", "完工提报"]
+    permissions: ["开单", "客户签字", "我的维修单", "领料确认", "完工提报"]
   },
   inspector: {
     name: "检验员",
     scope: "可执行完工检验、总检签字、退回返修",
-    permissions: ["待检验", "检验签字", "退回维修"]
+    permissions: ["开单", "客户签字", "待检验", "检验签字", "退回维修"]
   },
   manager: {
     name: "门店管理员",

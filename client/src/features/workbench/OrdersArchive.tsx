@@ -54,7 +54,7 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
     type={legacyRefresh.report.failures.length ? "warning" : "success"}
     title={`润丰更新完成：成功 ${legacyRefresh.report.succeeded} 单，失败 ${legacyRefresh.report.failures.length} 单`}
     description={legacyRefresh.report.failures.length ? <ul style={{ paddingLeft: 18, marginBottom: 0 }}>{legacyRefresh.report.failures.map(failure =>
-      <li key={failure.id}>{failure.id}：{failure.message}</li>)}</ul> : "已更新本地数据库，可查看最新详情或打印。"} /> : null;
+      <li key={failure.id}>{failure.id}：{failure.message}</li>)}</ul> : "委托单已更新，可查看详情或打印。"} /> : null;
   const [dispatchOrder, setDispatchOrder] = useState<WorkOrder>();
   const canAssign = (order: WorkOrder) => dispatchEnabled && ["advisor","manager"].includes(role) && order.shop.id===currentUser?.shopId && workOrderDisplayStatus(order) === "待派工" && (!order.technician || order.technician === "待派工");
   const canOpenDispatch = Boolean(detailOrder && dispatchEnabled && ["advisor","manager"].includes(role)
@@ -104,21 +104,18 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
   return (
     <Card className="panel lower-panel workbench-archive">
       <div className="panel-header archive-header">
-        <div>
-          <h2>{overview ? "工单全览" : "归档查询"}</h2>
-          <p>{overview ? "查看本店全部工单资料、维修流程，按分类下载照片 Word。" : "点击任一委托单可查看完整归档内容。"}</p>
-        </div>
+        {overview && <h2>工单全览</h2>}
         <div className="workbench-archive-actions">
         {["advisor","manager"].includes(role)&&<PendingRepairFollowups user={controller.currentUser||undefined}/>}
-        <Button loading={ordersLoading} onClick={() => void controller.refreshWorkbench()}>刷新列表</Button>
-        {["advisor", "manager"].includes(role) && <Button icon={<RefreshCw size={16}/>} loading={Boolean(legacyRefresh.progress)}
-          disabled={Boolean(legacyRefresh.progress)} onClick={() => void legacyRefresh.refreshAll()}>
-          {legacyRefresh.progress ? `正在更新 ${legacyRefresh.progress.done}/${legacyRefresh.progress.total}` : "全部从润丰更新"}
-        </Button>}
-        <Input.Search className="search-box" value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} onSearch={setSearchTerm} placeholder="搜索车牌 / VIN / 工单号 / 派工号" allowClear />
+        <Button type="text" aria-label="刷新列表" icon={<RefreshCw size={16} aria-hidden="true" />} loading={ordersLoading} onClick={() => void controller.refreshWorkbench()}>刷新</Button>
+        {["advisor", "manager"].includes(role) && <Popconfirm title="更新全部润丰委托单？" description={<div className="archive-refresh-description">更新全部已同步且有权限的委托单，不受搜索和分页影响。保留签名、照片和维修进度；更新期间请保持页面打开。</div>} okText="开始更新" cancelText="取消" onConfirm={() => void legacyRefresh.refreshAll()} disabled={Boolean(legacyRefresh.progress)}>
+          <Button type="text" aria-label="全部从润丰更新" loading={Boolean(legacyRefresh.progress)} disabled={Boolean(legacyRefresh.progress)}>
+            {legacyRefresh.progress ? `正在更新 ${legacyRefresh.progress.done}/${legacyRefresh.progress.total}` : "润丰更新"}
+          </Button>
+        </Popconfirm>}
         </div>
       </div>
-      {["advisor", "manager"].includes(role) && <p className="workbench-archive-help">更新全部已同步且有权限的委托单，不受搜索和分页影响；保留签名、照片和维修进度。更新期间请保持页面打开。</p>}
+      <Input.Search className="archive-search" aria-label="搜索归档委托单" value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} onSearch={setSearchTerm} placeholder="搜索车牌 / VIN / 工单号 / 派工号" allowClear />
       {refreshReport}
       <div ref={filterAnchor} className="archive-filter-anchor"><ArchiveFilterBar key={currentUser?.id} archive={controller.archive} isMobile={isMobile} /></div>
 

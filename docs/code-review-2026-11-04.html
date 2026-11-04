@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>代码审查与修复 · 2026-11-04</title>
+  <style>
+    :root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;color:#172433;background:#f3f5f8;line-height:1.7}
+    *{box-sizing:border-box}body{margin:0}main{max-width:1140px;margin:auto;padding:42px 24px 60px}header{margin-bottom:28px}.date{color:#596a7e;font-size:14px}h1{font-size:32px;line-height:1.3;letter-spacing:-.5px;margin:8px 0 14px}h2{font-size:20px;margin:0 0 16px}h3{font-size:16px;margin:0 0 8px}p{margin:10px 0}.lead{max-width:880px;color:#44556a}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:26px 0}.stat{border:1px solid #dce3eb;border-radius:12px;background:#fff;padding:20px}.stat strong{display:block;font-size:30px;line-height:1.2;color:#146149}.stat span{font-size:13px;color:#5b6c80}section{background:white;border:1px solid #dce3eb;border-radius:14px;padding:24px;margin:22px 0}.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px;min-width:760px}th{text-align:left;font-weight:600;color:#54657a;background:#f6f8fb}th,td{padding:14px 12px;border-bottom:1px solid #e7ebf0;vertical-align:top}tbody tr:last-child td{border-bottom:0}.tag{display:inline-block;white-space:nowrap;font-size:12px;font-weight:600;border-radius:5px;padding:2px 7px}.p1{color:#9c332b;background:#fbece8}.p2{color:#8a5a12;background:#fff4d9}.p3{color:#52667e;background:#edf2f7}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.9em;background:#f0f3f7;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}pre{padding:16px;background:#f3f6fa;border:1px solid #e3e8ef;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}pre code{background:none;padding:0}.route-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.route{padding:18px;background:#f6f8fb;border-radius:10px}.good{border-left:3px solid #248366}.bad{border-left:3px solid #bd6551}.muted{color:#5c6e82;font-size:14px}ul{padding-left:22px;margin:10px 0}li{margin:7px 0}footer{color:#65768a;font-size:13px}a{color:#1558a4}details{border-top:1px solid #e7ebf0;margin-top:18px;padding-top:14px}summary{cursor:pointer;font-weight:600}summary:focus-visible{outline:2px solid #1558a4;outline-offset:4px}@media(max-width:680px){main{padding:24px 14px 40px}h1{font-size:26px}.stats{grid-template-columns:repeat(2,1fr);gap:10px}.stat{padding:15px}section{padding:18px 15px}.route-grid{grid-template-columns:1fr}}@media print{body{background:white}main{max-width:none;padding:0}section,.stat{break-inside:avoid}table{min-width:0;font-size:11px}.scroll{overflow:visible}details{display:block}}
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="date">维修委托书 H5 · 本地代码审查 · 2026 年 11 月 4 日</div>
+    <h1>已修复 7 类代码与权限问题</h1>
+    <p class="lead">本轮重点检查认证入口、门店与文件权限、员工开单、客户签字及数据持久化，并检查供应商、出车和外部系统接口的边界。在现有未提交改动上完成修复，保留已有业务流程。</p>
+  </header>
+  <div class="stats" aria-label="验证结果">
+    <div class="stat"><strong>7</strong><span>已修复问题</span></div>
+    <div class="stat"><strong>847</strong><span>测试通过</span></div>
+    <div class="stat"><strong>0</strong><span>测试失败</span></div>
+    <div class="stat"><strong>18</strong><span>集成测试跳过</span></div>
+  </div>
+
+  <section>
+    <h2>问题与修复</h2>
+    <div class="scroll"><table>
+      <thead><tr><th style="width:8%">级别</th><th style="width:24%">问题</th><th style="width:34%">触发条件与影响</th><th>修复结果</th></tr></thead>
+      <tbody>
+        <tr><td><span class="tag p1">P1</span></td><td>跨门店只读列表泄露签字凭证</td><td>纸质单通知允许跨店查看；原逻辑直接向管理员返回签字 token。凭证可用于公开签字接口，超出了只读权限。</td><td>返回 token 前必须匹配门店，并满足管理员或负责人条件。兼任管理员的账号按完整角色集合判断。分页与非分页均有数据库回归测试。</td></tr>
+        <tr><td><span class="tag p1">P1</span></td><td>普通员工上传后无法预览照片</td><td>开单白名单没有匹配真实的 <code>/api/files/:id/content</code> 路径，读取被误判为未授权；未绑定编码的维修工也会被阻挡。</td><td>白名单改为真实路径，原图和缩略图均恢复。原有文件归属和门店校验继续执行。</td></tr>
+        <tr><td><span class="tag p2">P2</span></td><td>维修工、检验员查不到自己的草稿</td><td>全员开单已开放，但列表仍只匹配分配的维修或检验任务，新草稿没有任务记录。</td><td>同店范围内合并本人负责工单与已分配任务；验证跨店与其他员工的工单仍不可见。</td></tr>
+        <tr><td><span class="tag p2">P2</span></td><td>无关工单保存改写签字时间</td><td>保存工单、流转或同步会重复写入签字，旧逻辑每次把 <code>signed_at</code> 更新成当前时间。</td><td>签字人未变化时不更新签字行，保留原始时间和签名图片引用。</td></tr>
+        <tr><td><span class="tag p2">P2</span></td><td>生产查询误用测试档案</td><td>缺少润丰连接配置时，车型/单位搜索和编码检查仍读取内置模拟数据，可能错误回填或报告编码可用。</td><td>生产环境统一返回明确的 503 配置错误；开发与测试仍可使用模拟数据。</td></tr>
+        <tr><td><span class="tag p2">P2</span></td><td>异常信息直接暴露给客户端</td><td>未预期的数据库、文件系统或运行时异常被原样返回，可能泄露内部结构与实现细节。</td><td>未知异常返回通用 500 信息，详细错误保留服务端日志。明确的业务错误仍提供可操作提示。</td></tr>
+        <tr><td><span class="tag p3">P3</span></td><td>非法 JSON 顶层值触发内部错误</td><td><code>null</code>、数组和基本类型虽是合法 JSON，却不符合接口对象契约，可能导致解构或后续代码异常。</td><td>统一入口返回 400；空请求体继续按空对象处理，兼容无参数操作。</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>照片问题：文件已上传，读取权限被误拒绝</h2>
+    <p>上传和显示照片是两个独立请求。<code>POST /api/files</code> 已获得开单权限，所以能保存照片；页面随后请求图片内容时，错误路径使白名单匹配失败，返回 403。</p>
+    <div class="route-grid">
+      <div class="route bad"><h3>修复前的白名单</h3><code>GET /api/files/:id</code><br><code>GET /api/files/:id/thumbnail</code><p class="muted">与实际前端请求不匹配。</p></div>
+      <div class="route good"><h3>实际请求与修复后的白名单</h3><code>GET /api/files/:id/content</code><p class="muted">缩略图增加 <code>?size=thumbnail</code>，路径不变。请求进入后，仍须通过文件归属、门店及用途检查。</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>验证结果</h2>
+    <ul>
+      <li>修复前新增的路径匹配、跨店凭证、生产模拟回退和 JSON 输入回归测试均复现失败；修复后通过。</li>
+      <li>完整 <code>npm run check</code> 通过：847 项通过，18 项未配置运行环境的集成测试跳过；TypeScript 与生产构建通过。</li>
+      <li>启用本轮回归、签字工作流、纸质工单与分页四组集成测试。每组创建独立临时 PostgreSQL 数据库，结束后删除；图片存入临时目录。</li>
+      <li>验证了原图/缩略图读取、陌生员工拒绝访问、跨店凭证过滤、本人草稿恢复、签字证据保留及既有并发与重试流程。</li>
+    </ul>
+    <details><summary>本轮主要修改文件</summary><ul>
+      <li><code>server/domain/orderEntryAccess.mjs</code>：开单图片路由。</li>
+      <li><code>server/db.mjs</code>：列表范围、签字 token 过滤、签字时间。</li>
+      <li><code>server/http/response.mjs</code>、<code>server/server.mjs</code>：输入和错误响应。</li>
+      <li><code>server/integrations/company/vehicleLookup.mjs</code>：生产配置守卫。</li>
+      <li><code>test/reviewRegression.integration.test.mjs</code> 及相关单元/集成测试：回归验证。</li>
+      <li><code>HANDOFF.MD</code>：问题原因、测试陷阱与验收记录。</li>
+    </ul></details>
+  </section>
+
+  <section>
+    <h2>性能与验证边界</h2>
+    <p>没有新增依赖、数据库迁移、后台任务或每次请求的数据库往返。列表 SQL 增加负责人条件；JSON 对象检查和凭证过滤在进程内完成。签字保存减少了无意义的更新时间写入。</p>
+    <p>未做生产容量压测、真实钉钉设备测试或部署。现有图表/PDF 构建包仍有超过 500 kB 的提示。本轮属于重点代码审查，不能据此断言整个系统不存在其他漏洞。</p>
+    <p>依用户选择，本次未完成在线依赖漏洞库核查，未发送依赖清单。代码未推送，未部署。</p>
+  </section>
+  <footer>报告为本地静态 HTML，不加载外部字体、脚本或统计服务。</footer>
+</main>
+</body>
+</html>

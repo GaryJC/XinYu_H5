@@ -86,7 +86,6 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             <div className="panel-header">
               <div>
                 <h2>{selectedOrder ? "委托开单" : "新建委托开单"}</h2>
-                <p>{paperOnly ? "上传纸质委托书照片，创建后选择开单方式。" : "先识别车辆，再完善接车与维修信息。"}</p>
               </div>
               <div className="button-row">
                 <Button className="new-order-button" color="primary" variant="outlined" icon={<Plus size={16} />} onClick={startNewOrder} disabled={!canCreateOrder(role) || Boolean(actionLoading)}>新建委托</Button>
@@ -351,7 +350,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             </FormSection>
             <FormSection title="维修项目">
             <Form.Item>
-              <Checkbox checked={Boolean(draft.dispatchPlan)} disabled={!canEditForm} onChange={event=>directDispatch.enable(event.target.checked)}>直接派工</Checkbox>
+              <Checkbox checked={Boolean(draft.dispatchPlan)} disabled={!canEditForm || !["advisor", "manager"].includes(role)} onChange={event=>directDispatch.enable(event.target.checked)}>直接派工</Checkbox>
               {draft.dispatchPlan && <p>勾选多个项目后，在任一已选项目中选择负责人，即可一起更新。现场签字完成后自动进入待接单；远程签字需经服务顾问确认。</p>}
             </Form.Item>
             {draft.dispatchPlan && <Form.Item label="派工预计完工时间" required>

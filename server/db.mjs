@@ -77,9 +77,9 @@ export async function listWorkOrders(role = "manager", user, query = {}) {
 }
 
 export function sanitizeVisibleOrders(orders, role, user) {
-  if (role === "manager") return orders;
-  if (role !== "advisor") return orders.map(order => ({ ...order, signatureToken: undefined, signatureTokenUsed: undefined }));
-  return orders.map((order) => order.advisor === user?.name
+  // Cross-shop paper-order notifications grant read access, never a signing capability.
+  return orders.map((order) => user?.shopId && order.shop?.id === user.shopId
+    && (hasRole(user, 'manager') || user.name && order.advisor === user.name)
     ? order
     : { ...order, signatureToken: undefined, signatureTokenUsed: undefined });
 }
@@ -307,7 +307,7 @@ export async function signWorkOrderByToken(token, signature, signatureFileId, cr
     // Public remote signatures continue through independent staff review.
     const onsite = !createSignatureFile && onsiteActor && (supplemental || order.status === '草稿');
     if (onsite) {
-      if (!onsiteActor.active || onsiteActor.shopId !== order.shop.id || !hasAnyRole(onsiteActor, ['advisor','manager'])
+      if (!onsiteActor.active || onsiteActor.shopId !== order.shop.id || !hasAnyRole(onsiteActor, ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"])
         || !hasRole(onsiteActor,'manager') && onsiteActor.name !== order.advisor) throw new HttpError(403,'仅负责此单的服务顾问或本店管理员可以提交现场签字');
       const at=new Date().toISOString();
       const review={state:'confirmed',signedAt:at,confirmedAt:at,confirmedBy:onsiteActor.name,mode:'onsite',...(supplemental?{supplemental:true}:{})};
@@ -693,6 +693,7 @@ async function replaceSignatures(client, orderId, signatures) {
         on conflict (order_id, signer_type) do update set
           signer_name = excluded.signer_name,
           signed_at = now()
+        where signatures.signer_name is distinct from excluded.signer_name
       `,
       [orderId, signerType, signerName]
     );
@@ -710,10 +711,13 @@ export function roleFilter(role, user) {
     return {where: 'where (' + filters.map(filter => '(' + filter.where.replace(/^where /, '') + ')').join(' or ') + ')',
       params: filters.reduce((longest, filter) => filter.params.length > longest.length ? filter.params : longest, [])};
   }
+  if (memberships.length === 1) role = memberships[0];
+  const ownOrder = "nullif($2::text,'') is not null and nullif($3::text,'') is not null and wo.advisor=$3";
+  if (user?.shopId && ["employee", "warehouse", "outsourcing"].includes(role)) return { where: `where wo.shop_id=$1 and (${ownOrder})`, params: [user.shopId,user.id,user.name] };
   if (!validRoles.has(role) || !user?.shopId) return { where: "where false", params: [] };
   const base = "where wo.shop_id = $1";
-  if (["technician","outsourcing"].includes(role)) return { where: `${base} and exists (select 1 from dispatch_tasks dt where dt.order_id=wo.id and (dt.technician_id=$2 or dt.data->'technicianIds' ? $2))`, params: [user.shopId,user.id] };
-  if (role === "inspector") return { where: `${base} and exists (select 1 from dispatch_tasks dt where dt.order_id=wo.id and dt.inspector_id=$2)`, params: [user.shopId,user.id] };
+  if (role === "technician") return { where: `${base} and ((${ownOrder}) or exists (select 1 from dispatch_tasks dt where dt.order_id=wo.id and (dt.technician_id=$2 or dt.data->'technicianIds' ? $2)))`, params: [user.shopId,user.id,user.name] };
+  if (role === "inspector") return { where: `${base} and ((${ownOrder}) or exists (select 1 from dispatch_tasks dt where dt.order_id=wo.id and dt.inspector_id=$2))`, params: [user.shopId,user.id,user.name] };
   if (user.id && ["advisor", "manager"].includes(role)) return {
     where: `where (wo.shop_id = $1 or (wo.paper_order is not null and exists (
       select 1 from dispatch_notifications n where n.order_id=wo.id and n.recipient_id=$2 and n.kind='纸质委托书已创建'
@@ -762,8 +766,8 @@ async function refreshOutboundPickedState(client, orderId, repairItems) {
 }
 
 export async function getWorkOrderDetail(id,user) {
-  if(hasRole(user, 'warehouse')) await getDispatchTask(pool,id,user);
-  else await assertWorkOrderAccess(id,user);
+  try { await assertWorkOrderAccess(id,user); }
+  catch (error) { if (error.status !== 403 || !hasRole(user, 'warehouse')) throw error; await getDispatchTask(pool,id,user); }
   const order=await findWorkOrderById(pool,id);
   if(!order)throw new HttpError(404,'委托单不存在');
   return sanitizeVisibleOrders([order],user.role,user)[0];

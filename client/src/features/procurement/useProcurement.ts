@@ -2,7 +2,7 @@ import { Grid } from 'antd';
 import { usePagedList } from '../../shared/hooks/usePagedList';
 import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { useCallback,useEffect,useRef,useState } from 'react';
-import type { ProcurementSupplier,ProcurementTender,ProcurementDetail,ProcurementLink,ProcurementAnalytics,ProcurementReportRecord,ProcurementAudit } from '../../../../shared/types';
+import type { ProcurementSupplierInput,ProcurementCreateInput,ProcurementSupplier,ProcurementTender,ProcurementDetail,ProcurementLink,ProcurementAnalytics,ProcurementReportRecord,ProcurementAudit } from '../../../../shared/types';
 import { procurementApi } from './procurementApi';
 export function useProcurement() {
   const feedback = useActionFeedback();
@@ -62,8 +62,42 @@ export function useProcurement() {
       await load();return d;
     }).finally(()=>{mutationPending.current=false;});
   }
+  async function createTender(body: ProcurementCreateInput, onCreated: () => void) {
+    await run(async () => {
+      const result = await procurementApi.create(body);
+      setLinks(result.sharedLink ? [result.sharedLink] : result.links);
+      onCreated();
+      await load();
+      await openTender(result.tender.id);
+    }, '配件询价已创建');
+  }
+  async function saveSupplier(body: ProcurementSupplierInput, id: string | undefined, onSaved: () => void) {
+    await run(async () => {
+      await procurementApi.saveSupplier(body, id);
+      onSaved();
+      await load();
+    }, '供应商信息已保存');
+  }
+  async function publishReport() {
+    if (!report) return;
+    const id = report.id;
+    await run(async () => {
+      const result = await procurementApi.reportAction(id, 'publish');
+      if (result.link) setLinks([result.link]);
+      setReport(await procurementApi.report(id));
+      await load();
+    }, '报告已发布，分享链接已生成');
+  }
+  async function revokeReport() {
+    if (!report) return;
+    const id = report.id;
+    await run(async () => {
+      await procurementApi.reportAction(id, 'revoke');
+      setReport(await procurementApi.report(id));
+    }, '报告链接已撤销');
+  }
   return {query,setQuery,tenderList,mobile,loadAnalytics,suppliers,tenders,detail,selectedId,links,setLinks,error:error||tenderList.error,busy:busy||tenderList.loading,refreshAt,analysis,setAnalysis,reports,report,setReport,
-    run,load,openTender,action,closeDetail:()=>{detailGeneration.current++;selection.current=undefined;setSelectedId(undefined);setDetail(undefined);},
+    createTender,saveSupplier,publishReport,revokeReport,run,load,openTender,action,closeDetail:()=>{detailGeneration.current++;selection.current=undefined;setSelectedId(undefined);setDetail(undefined);},
   };
 }
 export type ProcurementController=ReturnType<typeof useProcurement>;

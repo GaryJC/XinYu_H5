@@ -6,6 +6,7 @@ import { companyVehicleApi } from './companyVehicleApi';
 export function useCompanyVehicles() {
   const feedback = useActionFeedback();
   const [vehicles, setVehicles] = useState<CompanyVehicle[]>([]);
+  const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -19,6 +20,10 @@ export function useCompanyVehicles() {
     finally { running.current = false; setBusy(false); setLoading(false); }
   }
   useEffect(() => { void run(load); }, []);
-  return { vehicles, busy, loading, error, refresh: () => run(load),
+  const query = search.trim().toLocaleLowerCase();
+  const filteredVehicles = vehicles.filter(vehicle =>
+    [vehicle.plate, vehicle.brand, vehicle.model].some(value => value.toLocaleLowerCase().includes(query))
+  );
+  return { vehicles, filteredVehicles, search, setSearch, busy, loading, error, refresh: () => run(load),
     save: (input: CompanyVehicleInput, id?: string) => run(async () => { const saved = await companyVehicleApi.save(input, id); setVehicles(current => [saved, ...current.filter(v => v.id !== saved.id)].sort((a, b) => a.plate.localeCompare(b.plate))); }, id ? '车辆信息已保存' : '公司车辆已录入') };
 }

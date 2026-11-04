@@ -30,7 +30,7 @@ import { useWorkOrderDraft } from "../work-orders/hooks/useWorkOrderDraft";
 import { createWorkOrderWorkflowActions } from "../work-orders/hooks/createWorkOrderWorkflowActions";
 import { useVehicleLicenseOcr } from "../vehicle-license-ocr/useVehicleLicenseOcr";
 import { useVehicleIdentityRecognition } from "../vehicle-identity/useVehicleIdentityRecognition";
-import { navItems } from "./workbenchConfig";
+import { navItems, primaryNavByRole } from "./workbenchConfig";
 import { dispatchEnabled, isDispatchNavigation } from "../dispatch/dispatchAvailability";
 
 export function useWorkbenchController() {
@@ -77,7 +77,13 @@ export function useWorkbenchController() {
   } = useVehicleIdentityRecognition({ setDraft });
   const { ocrState, vehicleLicenseOcr, vehicleLicenseFileId, isUploading: isVehicleLicenseUploading, resetOcr, scanVehicleLicense, confirmVehicleLicenseOcr } =
     useVehicleLicenseOcr({ actor, draft, setDraft, onRecognized: lookupVehicleLicense });
-  const visibleNavItems = useMemo(() => navItems.filter((item) => hasAnyRole(currentUser || {role}, item.roles) && (dispatchEnabled || !isDispatchNavigation(item.label))), [role,currentUser]);
+  const visibleNavItems = useMemo(() => {
+    const user = currentUser || { role };
+    const items = navItems.filter(item => hasAnyRole(user, item.roles) && (dispatchEnabled || !isDispatchNavigation(item.label)));
+    const primaryIndex = items.findIndex(item => item.label === primaryNavByRole[user.role]);
+    if (primaryIndex > 0) items.unshift(...items.splice(primaryIndex, 1));
+    return items;
+  }, [role, currentUser]);
   const canEditForm = canCreateOrder(role) && (
     !selectedOrder || (
       isUnsignedOrderEditable(selectedOrder) && selectedOrder.shop.id === currentUser?.shopId
@@ -131,7 +137,7 @@ export function useWorkbenchController() {
     const generation = ++sessionGeneration.current;
     preRepairPhotos.reset();
     paperPhotos.reset();
-    if (!currentUser || currentUser.role === 'employee' || (hasRole(currentUser, 'technician') && !currentUser.legacyEmployeeCode)) {
+    if (!currentUser) {
       setOrders([]);
       setDashboard(undefined);
       setUsers([]);
@@ -141,7 +147,7 @@ export function useWorkbenchController() {
     }
     void loadDashboard(currentUser.role, generation);
     void loadUsers(generation);
-    if (hasAnyRole(currentUser, ["advisor", "manager"])) void loadDepartments(generation);
+    void loadDepartments(generation);
     return () => {
       if (sessionGeneration.current === generation) sessionGeneration.current += 1;
     };

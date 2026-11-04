@@ -10,7 +10,7 @@ import { serverConfig } from "./config/env.mjs";
 import { closePool } from "./database/pool.mjs";
 import { closeSqlServerPool } from "./database/sqlServerPool.mjs";
 import { HttpError } from "./http/HttpError.mjs";
-import { sendJson } from "./http/response.mjs";
+import { sendJson, sendError } from "./http/response.mjs";
 import { serveStatic } from "./http/staticFiles.mjs";
 import { handleApiRequest } from "./routes/apiRouter.mjs";
 import { withRequestTiming } from "./http/requestTiming.mjs";
@@ -44,7 +44,7 @@ const server = createServer(async (req, res) => {
         res.destroy();
         return;
       }
-      sendJson(res, status, { error: error instanceof Error ? error.message : "Server error" });
+      sendError(res, error);
     }
   });
 });

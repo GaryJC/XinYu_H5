@@ -2,7 +2,7 @@ import {pool,transaction} from '../database/pool.mjs';
 import {hasAnyRole} from '../../shared/roles.mjs';
 import {HttpError} from '../http/HttpError.mjs';
 import {findVehicleLicenseHistory,copyVehicleLicense} from '../repositories/vehicleLicenseHistoryRepository.mjs';
-function authorize(actor){if(!actor?.active||!actor.shopId||!hasAnyRole(actor,['manager','advisor']))throw new HttpError(403,'无权复用行驶证');}
+function authorize(actor){if(!actor?.active||!actor.shopId||!hasAnyRole(actor,["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"]))throw new HttpError(403,'无权复用行驶证');}
 export async function vehicleLicenseHistory(actor,input) {
  authorize(actor);
  const row=await findVehicleLicenseHistory(pool,actor.shopId,input);

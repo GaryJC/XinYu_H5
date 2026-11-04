@@ -29,7 +29,6 @@ function DashboardPanel({ dashboard }: { dashboard?: DashboardSummary }) {
       <div className="panel-header">
         <div>
           <h2>数据看板</h2>
-          <p>基于当前委托单实时聚合，后续可替换为 BI/图表服务。</p>
         </div>
       </div>
       <div className="dashboard-grid">

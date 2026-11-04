@@ -11,7 +11,7 @@ export async function reportVehicleLicenseException(actor,orderId,raw,{runTransa
     const order=await lockLicenseOrder(client,orderId);
     if(!order)throw new HttpError(404,'委托单不存在');
     const user=await licenseActor(client,actor.id);
-    if(!user?.active || !hasAnyRole(user, ['advisor','manager']) || user.role!==actor.role || user.shop_id!==order.shop_id || (!hasRole(user, 'manager')&&hasRole(user, 'advisor')&&order.advisor!==user.name))throw new HttpError(403,'无权为这张委托单备案');
+    if(!user?.active || !hasAnyRole(user, ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"]) || user.role!==actor.role || user.shop_id!==order.shop_id || (!hasRole(user, 'manager')&&order.advisor!==user.name))throw new HttpError(403,'无权为这张委托单备案');
     const plate=normalizeLicenseIdentifier(order.vehicle_plate),vin=normalizeLicenseIdentifier(order.vehicle_vin);
     const previous=await licenseRequest(client,orderId,input.requestId);
     if(previous) {

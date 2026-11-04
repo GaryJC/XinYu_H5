@@ -25,7 +25,7 @@ export function OrderPhotoGallery({ title, files, editable, busy, multiple, onUp
     onSelect={async file=>{setOpen(undefined);await onUpload([file],replaceId);}}
     onSelectMany={multiple&&!replaceId?async selected=>{setOpen(undefined);await onUpload(selected);}:undefined}/></div>;
   return <section className="order-photo-gallery" aria-label={title}>
-    <div className="order-photo-heading"><div><h3>{title}<span>{files.length} 张</span></h3><p>点击照片查看原图</p></div>
+    <div className="order-photo-heading"><div><h3>{title}<span>{files.length} 张</span></h3></div>
       {editable&&<div className="order-photo-heading-actions">
         {!!files.length&&multiple&&<Button icon={managing?undefined:<Trash2 size={16}/>} disabled={busy} onClick={()=>{setManaging(!managing);setOpen(undefined);selection.clear();}}>{managing?'完成':manageLabel}</Button>}
         {canAdd && <Popover content={picker()} trigger="click" placement="bottomRight" open={open==='add'&&!busy} onOpenChange={value=>setOpen(value?'add':undefined)}>
@@ -50,6 +50,6 @@ export function OrderPhotoGallery({ title, files, editable, busy, multiple, onUp
           </Popover>}
         </div>
       </article>)}
-    </div></AuthenticatedImagePreviewGroup>:<div className="order-photo-empty"><Images size={24}/><span>暂无{title}</span>{editable&&canAdd&&<small>支持拍照或从相册添加</small>}</div>}
+    </div></AuthenticatedImagePreviewGroup>:<div className="order-photo-empty"><Images size={24}/><span>暂无{title}</span></div>}
   </section>;
 }

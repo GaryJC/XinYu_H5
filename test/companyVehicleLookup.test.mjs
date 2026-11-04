@@ -181,3 +181,21 @@ test("company vehicle lookup rejects an empty identifier", async () => {
     (error) => error instanceof HttpError && error.status === 400
   );
 });
+
+test("production reference queries fail closed when Runfeng is unconfigured", async () => {
+  const keys = ["APP_ENV", "SQLSERVER_HOST", "SQLSERVER_DATABASE", "SQLSERVER_USER", "SQLSERVER_PASSWORD"];
+  const previous = keys.map(key => process.env[key]);
+  try {
+    process.env.APP_ENV = "production";
+    for (const key of keys.slice(1)) delete process.env[key];
+    for (const query of [
+      () => lookupVehicleInCompanySystem({ plate: "辽A12345" }),
+      () => searchCompanyVehicleReferences({ kind: "model", query: "大众" }),
+      () => searchCompanyVehicleReferences({ kind: "organization", query: "水务" }),
+      () => checkCompanyVehicleReferenceCode({ kind: "model", code: "ADA6" }),
+      () => checkCompanyVehicleReferenceCode({ kind: "organization", code: "NEWCODE" })
+    ]) await assert.rejects(query, error => error.status === 503);
+  } finally {
+    keys.forEach((key, i) => { if (previous[i] === undefined) delete process.env[key]; else process.env[key] = previous[i]; });
+  }
+});

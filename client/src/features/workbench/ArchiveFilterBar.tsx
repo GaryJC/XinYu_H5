@@ -29,21 +29,22 @@ export function ArchiveFilterBar({ archive, isMobile }: { archive: ArchiveFilter
     <label>结束日期<DatePicker classNames={{ popup: { root: "archive-date-popup" } }} aria-label="创建结束日期" inputReadOnly={isMobile} value={value.to ? dayjs(value.to) : null} onChange={date => onChange({ ...value, to: date ? date.format("YYYY-MM-DD") : "" })} /></label>
     {archiveDateError(value) && <Alert type="warning" title={archiveDateError(value)} />}
   </div>;
-  const count = filters.statuses.length + filters.advisors.length + filters.technicians.length;
+  const shortcuts = ranges.filter(range => !isMobile || range.value !== 'custom');
+  const count = filters.statuses.length + filters.advisors.length + filters.technicians.length + (filters.range === 'custom' ? 1 : 0);
+  const hasFilters = filters.range !== 'all' || filters.baiyuanOnly || Boolean(filters.search) || count > 0 || filters.sort !== 'updated-desc';
   return <section className="archive-filter-bar" aria-label="委托单筛选">
     <div className="archive-filter-toolbar">
       <span>创建日期</span>
-      <div className="archive-date-shortcuts">{ranges.map(range => <Button key={range.value} size="small" type={filters.range === range.value ? 'primary' : 'default'} onClick={() => {
+      <div className="archive-date-shortcuts">{shortcuts.map(range => <Button key={range.value} size="small" type="text" autoInsertSpace={false} aria-pressed={filters.range === range.value} className={filters.range === range.value ? 'is-selected' : undefined} onClick={() => {
         if (range.value === 'custom') {
-          if (isMobile) { setDraft({ ...filters, range: 'custom' }); setOpen(true); }
-          else { setCustomDraft({ ...filters, range: 'custom' }); setCustomOpen(true); }
+          setCustomDraft({ ...filters, range: 'custom' }); setCustomOpen(true);
         } else { update({ range: range.value, from: '', to: '' }); setCustomOpen(false); }
       }}>{range.label}</Button>)}</div>
       <div className="archive-list-controls">
       <Select size="small" className="archive-sort" aria-label="委托单排序" value={filters.sort} options={sorts} onChange={sort => update({ sort })} />
       <Checkbox checked={filters.baiyuanOnly} onChange={event=>update({baiyuanOnly:event.target.checked})}>百援门店单</Checkbox>
       {isMobile && <Button size="small" onClick={() => { setDraft(filters); setOpen(true); }}>更多筛选{count ? `（${count}）` : ''}</Button>}
-      <Button size="small" type="link" onClick={() => { reset(); setCustomOpen(false); }}>重置</Button>
+      {hasFilters && <Button size="small" type="text" onClick={() => { reset(); setCustomOpen(false); }}>重置</Button>}
       </div>
     </div>
     {!isMobile && customOpen && <div className="archive-custom-dates">
