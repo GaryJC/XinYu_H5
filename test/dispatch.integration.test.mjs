@@ -105,7 +105,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await assert.rejects(()=>db.signWorkOrderByToken(signature.token,{name:'旧预览'},signature.file),e=>[404,409,410].includes(e.status));
       const renewed=await db.createSignatureTokenForOrder(order.id,advisor.name);
       assert.notEqual(renewed.signatureToken,signature.token);signature.token=renewed.signatureToken;
-      const pending=await db.signWorkOrderByToken(signature.token,{name:'车主',signedAt:new Date().toISOString()},signature.file);
+      const pending=await db.signWorkOrderByToken(signature.token,'车主',signature.file);
       await assert.rejects(()=>db.updateWorkOrder({...edited,vehicle:{...edited.vehicle,plate:'鲁B00000'}},advisor.name,'旧页面提交',advisor),e=>e.status===409);
       assert.equal((await pool.query('select 1 from legacy_sync_outbox where order_id=$1',[order.id])).rowCount,0);
       assert.equal((await db.findWorkOrderById(pool,order.id)).vehicle.plate,'鲁B862P7');
@@ -126,7 +126,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.deepEqual(direct.dispatchPlan.itemAssignments,directDraft.dispatchPlan.itemAssignments);
       assert.deepEqual(direct.dispatchPlan.technicianIds,[tech.id,tech2.id]);
       const directSignature=await prepareSignature(direct);
-      await db.signWorkOrderByToken(directSignature.token,{name:'车主'},directSignature.file);
+      await db.signWorkOrderByToken(directSignature.token,'车主',directSignature.file);
       assert.equal((await pool.query('select 1 from dispatch_tasks where order_id=$1',[direct.id])).rowCount,0);
       await db.confirmCustomerSignature(direct.id,advisor);
       const directTask=(await service.dispatchDetail(advisor,direct.id)).task;
@@ -140,7 +140,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       const fallback=await db.createWorkOrder(draft,advisor.name,advisor);
       const secondSignature=await prepareSignature(fallback);
       await pool.query("update users set active=false where id=$1",[tech.id]);
-      await db.signWorkOrderByToken(secondSignature.token,{name:'车主'},secondSignature.file);
+      await db.signWorkOrderByToken(secondSignature.token,'车主',secondSignature.file);
       const saved=await db.confirmCustomerSignature(fallback.id,advisor);
       assert.equal(saved.status,'已委托');assert.ok(saved.dispatchPlan.activationError);
       assert.equal((await pool.query("select 1 from dispatch_notifications where order_id=$1 and kind<>'需确认用户签字'",[fallback.id])).rowCount,0);
@@ -809,7 +809,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
     await t.test('my repair category counts match each list and exclude other technicians',async()=>{
       const counts=await service.myRepairCounts(tech);
       for(const [key,stage] of [['pendingAccept','待接单'],['inProgress','进行中'],['inspection','待检验'],['completed','维修完成']]) {
-        assert.equal(counts[key],(await service.queryDispatchTasks(tech,{stage})).length);
+        assert.equal(counts[key],(await service.queryDispatchTasks(tech,{stage,personal:'true'})).length);
       }
       await assert.rejects(()=>service.myRepairCounts(manager),e=>e.status===403);
       await assert.rejects(()=>service.myRepairCounts({...tech,active:false}),e=>e.status===403);
@@ -1195,6 +1195,132 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         assert.equal(current.stage,'待检验');
         await run(inspector,'claim-inspection');await run(inspector,'inspect');
         assert.equal(current.stage,'维修完成');assert.equal(current.orderStatus,'待结算');
+      }
+    });
+    await t.test('partial personal preparation starts its worker independently and preserves later history',async()=>{
+      const warehouse={id:'warehouse',name:'仓管',role:'warehouse',shopId:'shop-hq',active:true};
+      for(const personalFirst of [false,true]) {
+        const id=`mixed-parts-${personalFirst}`;await seed(id);
+        const initial=await repo.getDispatchTask(pool,id,manager);
+        const parts={mode:'list',items:[{name:'配件',quantity:1,unit:'个'}],photoIds:[]};
+        Object.assign(initial,{stage:'待开工',acceptedAt:new Date().toISOString(),technicianIds:[tech.id,tech2.id],technicianId:tech.id,
+          partsRequirement:structuredClone(parts),partsRequests:[{ownerId:tech.id,mode:'none',items:[],photoIds:[]},{ownerId:tech2.id,...structuredClone(parts)}],
+          items:initial.items.map((item,index)=>({...item,status:'待开工',responsibleId:index?tech2.id:tech.id,responsibleName:index?tech2.name:tech.name}))});
+        initial.partsRequests[1].items.push({name:'稍后备齐的配件',quantity:1,unit:'个'});
+        await repo.saveDispatchTask(pool,initial);
+        const prepare=async(owner,index=0)=>{
+          const current=await repo.getDispatchTask(pool,id,manager);
+          return (await service.executeDispatchAction(warehouse,id,{action:'confirm-parts',requestId:randomUUID(),expectedVersion:current.version,
+            ...(owner?{partsOwnerId:owner}:{}),partsPreparation:[{index,recipientId:owner||tech.id}]})).task;
+        };
+        const first=await prepare(personalFirst?tech2.id:undefined);
+        assert.deepEqual(first.items.map(item=>item.status),personalFirst?['待开工','维修中']:['维修中','待开工']);
+        assert.equal(first.items[personalFirst?0:1].startAt,null);
+        const final=await prepare(personalFirst?undefined:tech2.id);
+        assert.ok(final.items.every(item=>item.status==='维修中'));assert.equal(final.items[1].startedBy,tech2.id);
+        assert.equal(final.partsRequests.find(parts=>parts.ownerId===tech2.id).preparedAt,undefined);
+        const finishedPreparation=await prepare(tech2.id,1);
+        assert.ok(finishedPreparation.partsRequests.find(parts=>parts.ownerId===tech2.id).preparedAt);
+        assert.deepEqual(finishedPreparation.items,final.items);
+        const saved=(await pool.query('select status from repair_items where order_id=$1 order by item_no',[id])).rows;
+        assert.ok(saved.every(item=>item.status==='维修中'));
+      }
+    });
+    await t.test('mixed personal progress keeps warehouse requests actionable and aligns personal counts and inspection photo access',async()=>{
+      const id='review-personal-warehouse';await seed(id);
+      const warehouse={id:'warehouse',name:'仓管',role:'warehouse',shopId:'shop-hq',active:true};
+      const initialCounts=await service.myRepairCounts(tech);
+      let current=(await service.dispatchDetail(advisor,id)).task;
+      const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+      const partsRequirement={mode:'list',items:[{name:'滤芯',quantity:1,unit:'个'},{name:'皮带',quantity:1,unit:'条'}]};
+      await run(advisor,'assign',{technicianIds:[tech.id,tech2.id],dueAt,repairItems:current.items.map((item,index)=>({...item,responsibleId:index?tech2.id:tech.id}))});
+      await run(tech,'accept',{partsRequirement});await run(tech2,'record-parts',{partsRequirement});
+      const rows=async(user,stage)=>service.queryDispatchTasks(user,{search:id,stage,personal:'true',page:'1'});
+      const requests=()=>service.queryDispatchTasks(warehouse,{search:id,partsStatus:'all',page:'1'});
+      await run(warehouse,'confirm-parts',{preparationGroups:[{partsOwnerId:tech.id,items:[{index:0,recipientId:tech.id}]}]});
+      let partsPage=await requests();assert.equal(partsPage.counts['部分备齐'],1);assert.equal(partsPage.counts['待备料'],1);
+      assert.equal((await rows(tech2,'待开工')).items.length,1);
+      await run(tech2,'edit-repair-items',{repairItems:[{id:2,name:'项目2'},{name:'待备料的新项目'}]});
+      assert.ok(current.items.filter(item=>item.responsibleId===tech2.id).every(item=>item.status==='待开工'&&!item.startAt));
+      await run(warehouse,'confirm-parts',{partsOwnerId:tech.id,partsPreparation:[{index:1,recipientId:tech.id}]});
+      const photo=await progressPhoto(id);await run(tech,'submit-order');
+      assert.equal(current.stage,'维修中');assert.equal(current.inspectorId,undefined);
+      await assertFileReadAccess(photo,inspector);await assertFileReadAccess(photo,warehouse);
+      assert.equal((await rows(tech,'待检验')).counts['待检验'],1);
+      assert.equal((await rows(tech,'进行中')).items.length,0);assert.equal((await rows(tech2,'待检验')).items.length,0);
+      assert.equal((await service.myRepairCounts(tech)).inspection,initialCounts.inspection+1);
+      assert.equal((await service.queryDispatchTasks(inspector,{search:id,stage:'待检验'})).length,1);
+      partsPage=await requests();assert.equal(partsPage.counts['待备料'],1);assert.equal(partsPage.counts['备料完成'],1);
+      const request={action:'confirm-parts',expectedVersion:current.version,requestId:randomUUID(),preparationGroups:[{partsOwnerId:tech2.id,items:[{index:0,recipientId:tech2.id}]}]};
+      const aBefore=structuredClone(current.items.find(item=>item.responsibleId===tech.id));
+      current=(await service.executeDispatchAction(warehouse,id,request)).task;
+      await service.executeDispatchAction(warehouse,id,request);
+      assert.deepEqual(current.items.find(item=>item.responsibleId===tech.id),aBefore);
+      assert.ok(current.items.filter(item=>item.responsibleId===tech2.id).every(item=>item.status==='维修中'&&item.startedBy===tech2.id));
+      partsPage=await requests();assert.equal(partsPage.counts['部分备齐'],1);assert.equal(partsPage.counts['备料完成'],1);
+      const pickup=(await pool.query("select recipient_id from dispatch_notifications where order_id=$1 and kind='配件可领取'",[id])).rows;
+      assert.equal(pickup.filter(row=>row.recipient_id===tech2.id).length,1);
+      await run(inspector,'claim-inspection');await run(inspector,'inspect');
+      assert.equal(current.stage,'维修中');assert.equal((await rows(tech,'已完成')).items.length,1);
+      assert.equal((await rows(tech2,'进行中')).items.length,1);
+      assert.equal((await service.myRepairCounts(tech)).completed,initialCounts.completed+1);
+      await run(warehouse,'confirm-parts',{partsOwnerId:tech2.id,partsPreparation:[{index:1,recipientId:tech2.id}]});
+      partsPage=await requests();assert.equal(partsPage.counts['备料完成'],2);assert.equal(partsPage.counts['部分备齐'],0);
+    });
+    await t.test('review additions persist as unstarted until personal parts permit work',async()=>{
+      const id='review-parts-start-guard';await seed(id);
+      const warehouse={id:'warehouse',name:'仓管',role:'warehouse',shopId:'shop-hq',active:true};
+      let current=(await service.dispatchDetail(advisor,id)).task;
+      const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+      await run(advisor,'assign',{technicianIds:[tech.id,tech2.id],dueAt,repairItems:current.items.map((item,index)=>({...item,responsibleId:index?tech2.id:tech.id}))});
+      await run(tech,'accept',{partsRequirement:{mode:'none'}});await run(tech2,'record-parts',{partsRequirement:{mode:'none'}});
+      await progressPhoto(id);const photo=await progressPhoto(id);await pool.query('update files set uploaded_by=$1 where id=$2',[tech2.id,photo]);
+      await run(tech,'submit-order');await run(tech2,'submit-order');await run(inspector,'send-review');
+      await run(tech2,'record-parts',{partsRequirement:{mode:'list',items:[{name:'滤芯',quantity:1,unit:'个'},{name:'皮带',quantity:1,unit:'条'}]}});
+      await run(tech,'submit-review');const submitted=structuredClone(current.items[0]);
+      await run(tech2,'edit-repair-items',{repairItems:[{id:2,name:'项目2'},{name:'未备料回审增项'}]});
+      const added=current.items.at(-1);assert.equal(added.status,'待开工');assert.ok(!added.startAt);
+      assert.equal((await pool.query('select status from repair_items where order_id=$1 and client_item_id=$2',[id,added.id])).rows[0].status,'待开工');
+      await assert.rejects(()=>run(tech2,'start-order'),e=>e.status===409);
+      await run(warehouse,'confirm-parts',{partsOwnerId:tech2.id,partsPreparation:[{index:0,recipientId:tech2.id}]});
+      await run(tech2,'start-order');assert.equal(current.stage,'回审');assert.equal(current.items.at(-1).status,'维修中');
+      assert.deepEqual(current.items[0],submitted);
+      await assert.rejects(()=>run(tech2,'submit-review'),e=>e.status===409);
+      await run(warehouse,'confirm-parts',{partsOwnerId:tech2.id,partsPreparation:[{index:1,recipientId:tech2.id}]});
+      await run(tech2,'submit-review');assert.equal(current.stage,'待检验');
+    });
+    await t.test('assigning repair work to a claimed inspector releases the claim and notifies independent replacements exactly once',async()=>{
+      const dual={id:'followup-dual',name:'兼任维修与检验',role:'inspector',roles:['inspector','technician'],active:true,shopId:'shop-hq'};
+      await pool.query("insert into users(id,name,role,roles,active,shop_id,legacy_employee_code,legacy_employee_name,legacy_employee_department,legacy_employee_bound_at) values($1,$2,$3,$4,true,'shop-hq','D01',$2,'test',now())",[dual.id,dual.name,dual.role,dual.roles]);
+      for(const route of ['reassign','edit-repair-items','review-add']) {
+        const id=`claim-repair-conflict-${route}`;await seed(id);
+        let current=(await service.dispatchDetail(advisor,id)).task;
+        const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+        const repairRows=()=>current.items.map(({id,name,responsibleId})=>({id,name,responsibleId}));
+        await run(advisor,'assign',{technicianIds:[tech.id,tech2.id],dueAt,repairItems:current.items.map((item,index)=>({...item,responsibleId:index?tech2.id:tech.id}))});
+        await run(tech,'accept',{partsRequirement:{mode:'none'}});await run(tech2,'record-parts',{partsRequirement:{mode:'none'}});
+        await progressPhoto(id);await run(tech,'submit-order');
+        if(route==='review-add') {
+          const photo=await progressPhoto(id);await pool.query('update files set uploaded_by=$1 where id=$2',[tech2.id,photo]);
+          await run(tech2,'submit-order');await run(inspector,'send-review');await run(tech,'submit-review');
+        }
+        await run(dual,'claim-inspection');const submitted=structuredClone(current.items[0]);
+        const repairItems=route==='review-add'?[...repairRows(),{name:'检验员接手维修',responsibleId:dual.id}]
+          :repairRows().filter(row=>route!=='reassign'||row.id===2).map(row=>row.id===2?{...row,responsibleId:dual.id}:row);
+        const request={action:route==='reassign'?'reassign':'edit-repair-items',requestId:randomUUID(),expectedVersion:current.version,repairItems,reason:'专项维修交接',...(route==='reassign'?{reassignItemIds:[2]}:{})};
+        current=(await service.executeDispatchAction(advisor,id,request)).task;
+        assert.equal(current.inspectorId,undefined);assert.equal(current.inspectionClaimedAt,undefined);assert.deepEqual(current.items[0],submitted);
+        const event=(await pool.query('select id from dispatch_events where order_id=$1 and request_id=$2',[id,request.requestId])).rows[0].id;
+        assert.equal((await pool.query('select count(*) from dispatch_inspection_notifications where event_id=$1',[event])).rows[0].count,'1');
+        await service.executeDispatchAction(advisor,id,request);
+        // A later unrelated project edit must not invalidate the replacement notice.
+        await run(advisor,'edit-repair-items',{repairItems:[...repairRows(),{name:'乙的后续检查',responsibleId:tech2.id}]});
+        await drainInspectionNotifications();
+        assert.equal((await pool.query('select status from dispatch_inspection_notifications where event_id=$1',[event])).rows[0].status,'ready');
+        const notices=(await pool.query("select recipient_id from dispatch_notifications where event_id=$1 and kind='待检验'",[event])).rows.map(row=>row.recipient_id);
+        assert.ok(notices.includes(inspector.id));assert.ok(!notices.includes(dual.id));assert.equal(new Set(notices).size,notices.length);
+        await assert.rejects(()=>run(dual,'claim-inspection'),e=>e.status===403);
+        await run(inspector,'claim-inspection');await run(inspector,'inspect');assert.equal(current.items[0].status,'已完工');
       }
     });
     if(process.env.DISPATCH_UI_TEST==='true') await t.test('desktop and mobile UI complete assignment, acceptance, repair and inspection',async()=>{

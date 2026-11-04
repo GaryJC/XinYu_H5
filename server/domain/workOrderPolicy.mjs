@@ -28,6 +28,19 @@ export function assertDraftEditable(status,order={status}) {
   if (!isUnsignedOrderEditable(order)) throw new HttpError(409, `当前状态“${status}”不能修改委托单内容`);
 }
 
+export function normalizeDraftRepairItems(items) {
+  if (!Array.isArray(items)) throw new HttpError(400, "维修项目参数必须是数组");
+  if (items.some(item => !item || typeof item !== "object" || Array.isArray(item)
+      || typeof item.name !== "string" || item.name.length > 100)) {
+    throw new HttpError(400, "维修项目名称须为文本，每项不能超过 100 个字符");
+  }
+  // Drafts may retain blank rows, but never silently trim historical names.
+  return items.map((item, index) => ({
+    ...item, id: Number(item.id || index + 1), owner: "待派工",
+    startAt: "", finishAt: "", inspector: "待检验", status: "待派工"
+  }));
+}
+
 export function assertOrderReadyForSignature(order) {
   const missing = [];
   if (!order.department?.code?.trim() || !order.department?.name?.trim()) missing.push("部门");
@@ -41,6 +54,7 @@ export function assertOrderReadyForSignature(order) {
   if (!order.customer?.phone?.trim()) missing.push("联系电话");
   const requestedItems=[...(order.repairItems||[]),...(order.pendingRepairs||[]).filter(p=>p.state!=='declined'&&!p.scheduled)];
   if (!requestedItems.length || requestedItems.some(item=>!item.name?.trim())) missing.push("维修项目");
+  if ((order.repairItems || []).some(item => item.name?.length > 100)) throw new HttpError(400, "维修项目每项不能超过 100 个字符，请修改后再发起签字");
   const hasLicense=(order.files||[]).some(file=>file.kind==='vehicle_license'&&!(order.inspection?.replacedPhotoIds||[]).includes(file.id));
   if(!order.vehicle?.isMilitary&&!hasLicense&&!isCurrentLicenseException(order.vehicleLicenseException,order.vehicle))missing.push('行驶证照片（无法提供时请填写理由并备案）');
   if (missing.length) throw new HttpError(400, `请完善必填项：${missing.join("、")}`);

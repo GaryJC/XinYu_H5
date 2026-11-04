@@ -1,17 +1,18 @@
 import { Tag } from 'antd';
 import {PartsReferencePhotos} from './PartsReferencePhotos';
-import {isSupplementalParts} from './partsProgress';
+import {isSupplementalParts,partsStatus} from './partsProgress';
 import { AuthenticatedImage } from '../../shared/ui/AuthenticatedImage';
 import type { PartsRequirement } from '../../../../shared/types';
 import { displayTime } from './dispatchLabels';
 import './parts-summary.css';
 
-export function PartsRequirementSummary({value}:{value?:PartsRequirement}) {
+export function PartsRequirementSummary({value,title='所需配件'}:{value?:PartsRequirement;title?:string}) {
  const supplemental=value&&isSupplementalParts(value);
- const status=!value?'尚未登记':value.mode==='none'?'无需配件':value.issuedAt?(supplemental?'补料已出库':'已出库'):value.preparedAt?'可领取':'待仓库备料';
+ const partial=partsStatus(value)==='部分备齐';
+ const status=!value?'尚未登记':value.mode==='none'?'无需配件':value.issuedAt?(supplemental?'补料已出库':'已出库'):value.preparedAt?'可领取':partial?'部分备齐':'待仓库备料';
  const color=value?.mode==='none'||!value?undefined:value.issuedAt?'green':value.preparedAt?'blue':'gold';
- return <section className="parts-summary" aria-label="所需配件">
-  <header className="parts-summary-heading"><h3>所需配件{value?.mode==='list'&&<span className="parts-summary-count">{value.items.length} 项</span>}</h3><Tag color={color}>{status}</Tag></header>
+ return <section className="parts-summary" aria-label={title}>
+  <header className="parts-summary-heading"><h3>{title}{value?.mode==='list'&&<span className="parts-summary-count">{value.items.length} 项</span>}</h3><Tag color={color}>{status}</Tag></header>
   {value&&<>
    {value.mode==='list'?<ul className="parts-summary-list">{value.items.map((item,index)=>{
     const issued=item.issuedAt||value.issuedAt;

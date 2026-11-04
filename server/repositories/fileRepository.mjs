@@ -1,4 +1,6 @@
 import {getDispatchTask} from './dispatchRepository.mjs';
+import {canInspect} from '../domain/dispatchPolicy.mjs';
+import {hasPendingInspection} from '../../shared/repairProgress.mjs';
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import { pool, transaction } from "../database/pool.mjs";
 import { createId, formatDate, nowString } from "../domain/workOrderModel.mjs";
@@ -91,7 +93,8 @@ export async function assertFileReadAccess(fileId, user, database = pool) {
   }
   if (["vehicle_nameplate_photo", "repair_completed_photo", "repair_parts_photo", "repair_progress_photo", "repair_order_photo", "damage_photo", "other"].includes(file.kind)) {
     if ((hasAnyRole(user, ["technician","outsourcing"])||user.outsourcingRoleMember) && (file.technician_id === user.id || file.technician_ids?.includes(user.id))) return;
-    if (hasRole(user, 'inspector') && user.inspectorRoleMember!==false && (file.inspector_id === user.id || file.stage==='待检验' && ![file.technician_id,...(file.technician_ids||[]),...(file.participant_ids||[])].includes(user.id) && !(file.items||[]).some(i=>i.startedBy===user.id || i.finishedBy===user.id))) return;
+    const inspectionTask={shopId:file.shop_id,stage:file.stage,executionMode:file.execution_mode,needsReview:file.needs_review,technicianIds:[file.technician_id,...(file.technician_ids||[])].filter(Boolean),participantIds:file.participant_ids,items:file.items||[]};
+    if (user.active && hasRole(user, 'inspector') && user.inspectorRoleMember!==false && (file.inspector_id === user.id || hasPendingInspection(inspectionTask)&&canInspect(inspectionTask,user))) return;
   }
   throw new HttpError(403, "无权查看该文件");
 }
@@ -108,7 +111,7 @@ export async function assertFileAccess(fileId, user, database = pool) {
 async function findFileAccess(fileId, database) {
   const { rows } = await database.query(
     `
-      select f.uploaded_by, f.order_id, f.kind, wo.advisor, wo.status, wo.paper_order, coalesce(wo.shop_id,u.shop_id) as shop_id, dt.technician_id, dt.data->'technicianIds' as technician_ids, dt.inspector_id, dt.stage, dt.data->'participantIds' as participant_ids, dt.data->'items' as items
+      select f.uploaded_by, f.order_id, f.kind, wo.advisor, wo.status, wo.paper_order, coalesce(wo.shop_id,u.shop_id) as shop_id, dt.technician_id, dt.data->'technicianIds' as technician_ids, dt.inspector_id, dt.stage, dt.data->'participantIds' as participant_ids, dt.data->'items' as items, dt.data->>'executionMode' as execution_mode, dt.data->'needsReview' as needs_review
       from files f
       left join work_orders wo on wo.id = f.order_id
       left join users u on u.id=f.uploaded_by

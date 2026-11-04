@@ -344,7 +344,9 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       await Promise.all([service.executeDispatchAction(warehouse,'batch-parts',request),service.executeDispatchAction(warehouse,'batch-parts',request)]);
       const prepared=await detail();assert.equal(prepared.task.version,version+1);
       assert.ok(prepared.task.partsRequests.find(p=>p.ownerId==='t').preparedAt);assert.equal(prepared.task.partsRequests.find(p=>p.ownerId==='u').preparedAt,undefined);
-      assert.deepEqual(prepared.task.items.map(i=>i.status),['维修中','待开工']);
+      // Both workers now have ready material in their own application; partial
+      // readiness permits starting, while the remaining lines still block submission.
+      assert.deepEqual(prepared.task.items.map(i=>i.status),['维修中','维修中']);
       const batchEvents=prepared.events.filter(event=>event.detail.preparationGroups);assert.equal(batchEvents.length,1);assert.equal(batchEvents[0].detail.preparationGroups.length,2);
       const notices=(await pool.query("select * from dispatch_notifications where order_id='batch-parts' and kind='配件可领取' order by recipient_id")).rows;
       assert.deepEqual(notices.map(n=>n.recipient_id),['t','u']);assert.equal(notices[0].payload.preparationGroups.length,2);

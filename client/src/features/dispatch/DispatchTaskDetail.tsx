@@ -19,6 +19,7 @@ import { RepairPhotoPanel } from './RepairPhotoPanel';
 import { DispatchSheetSummary } from './DispatchSheetSummary';
 import { PartsRequirementDialog } from './PartsRequirementDialog';
 import { PartsRequirementSummary } from './PartsRequirementSummary';
+import { TaskPartsSummary } from './TaskPartsSummary';
 import { RepairRoundHistory } from './RepairRoundHistory';
 import { executionLabels,executionTextFields,executionTimeFields } from './DispatchExecutionFields';
 import { useRef, useState } from 'react';
@@ -118,8 +119,7 @@ export function DispatchTaskDetail({controller,user,readyForFocus=true}:{control
     </div>
     <div ref={recordsRef} tabIndex={-1} className="task-section-anchor" role="region" aria-label="配件与处理记录">
     <RepairWritebackStatus controller={controller} admin={hasRole(user, 'manager')}/>
-    <PartsRequirementSummary value={task.partsRequirement}/>
-    {outsourced?task.partsRequests?.map(parts=><section key={parts.ownerId}><h3>历史配件申请 · {parts.ownerName}</h3><PartsRequirementSummary value={parts}/></section>):null}
+    <TaskPartsSummary task={task}/>
     {outsourced&&waitingForParts?<Alert type="info" showIcon title="配件尚未全部备齐，请等待仓库确认后再开工或登记完工。"/>:null}
     {owner||partsApplicant?<RepairPhotoPanel controller={controller} editable={!unsigned&&!task.needsReview&&(['待开工','维修中','暂停','回审'].includes(task.stage)||outsourced&&task.stage==='待检验')} onBlocked={setPhotoBlocked}/>:null}
     {partsApplicant&&!unsigned&&!task.needsReview&&['待开工','维修中','暂停','回审'].includes(task.stage)?<Button onClick={()=>setPartsDialog(true)} disabled={controller.busy}>{(task.partsRequirement?.issuedAt||task.partsRequirement?.preparedAt)?"追加配件申请":"补充／修改配件需求"}</Button>:null}

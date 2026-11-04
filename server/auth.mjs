@@ -60,6 +60,7 @@ function developmentPersona(persona) {
     advisor: { id: "u_dev_advisor", name: "张三（测试）", role: "advisor", active: true, shopId: "shop-hq", homeRoute: "order-create" },
     manager: { id: "u_dev_manager", name: "Gary（测试）", role: "manager", active: true, shopId: "shop-hq", homeRoute: "workbench" },
     technician: { id: "u_dev_technician", name: "李富强", role: "technician", active: true, shopId: "shop-hq", homeRoute: "workbench" },
+    "technician-peer": { id: "u_demo_parts_technician_b", name: "维修工乙（模拟）", role: "technician", active: true, shopId: "shop-hq", homeRoute: "workbench" },
     warehouse: { id: "u_dev_warehouse", name: "仓管（测试）", role: "warehouse", active: true, shopId: "shop-hq", homeRoute: "workbench" },
     inspector: { id: "u_dev_inspector", name: "检验员（测试）", role: "inspector", active: true, shopId: "shop-hq", homeRoute: "workbench" },
     employee: { id: "u_dev_employee", name: "普通员工（测试）", role: "employee", active: true, shopId: "shop-hq", homeRoute: "vehicle-trips" },

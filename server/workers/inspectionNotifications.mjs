@@ -24,7 +24,10 @@ export async function processInspectionNotifications({database=pool,runTransacti
       const {rows:current}=await client.query('select lease_id from dispatch_inspection_notifications where event_id=$1 for update',[job.event_id]);
       if(current[0]?.lease_id!==lease) return;
       const task=mapTask({...parents[0],...tasks[0],order_id:job.order_id,order_status:parents[0]?.status,repair_items:[]});
-      const {rows:events}=await client.query("select max(id) as id from dispatch_events where order_id=$1 and action in ('submit-order','submit-review','retry-inspection-notifications')",[job.order_id]);
+      // Claim release also queues inspection work. Only a newer inspection job
+      // supersedes this one; unrelated edits must not cancel an actionable notice.
+      const {rows:events}=await client.query(`select max(id) as id from dispatch_events where order_id=$1
+        and exists(select 1 from dispatch_inspection_notifications n where n.event_id=dispatch_events.id)`,[job.order_id]);
       if(!hasPendingInspection(task) || task.inspectorId || String(events[0]?.id)!==String(job.event_id)) {
         await client.query("update dispatch_inspection_notifications set status='obsolete',locked_until=null,lease_id=null where event_id=$1",[job.event_id]);return;
       }

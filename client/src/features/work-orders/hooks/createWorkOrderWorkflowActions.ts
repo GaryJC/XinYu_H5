@@ -1,6 +1,7 @@
 import { type Dispatch, type SetStateAction } from "react";
 import { RoleKey, WorkOrder, WorkOrderDraft } from "../../../../../shared/types";
 import { workOrderApi } from "../api/workOrderApi";
+import { saveOnsiteSignature } from '../../signature/saveOnsiteSignature';
 
 type ActionLoading = "save" | "signature" | "delete" | "";
 
@@ -80,15 +81,9 @@ export function createWorkOrderWorkflowActions({
   }
 
   async function completeSignature(order: WorkOrder, token: string, signatureImage: string) {
-    const signatureFile = await workOrderApi.uploadFile({
-      orderId: order.id,
-      kind: "signature_image",
-      fileName: `signature-${order.id}.png`,
-      mimeType: "image/png",
-      imageBase64: signatureImage
-    });
-    const signed = await workOrderApi.signByToken(token, order.customer.name || "客户签名", signatureFile.id);
-    await loadOrders(role, signed.id);
+    const signed = await saveOnsiteSignature(order, token, signatureImage);
+    try { await loadOrders(role, signed.id); }
+    catch { setFormErrors(['签字已保存，列表刷新失败，请刷新页面查看。']); }
     return signed;
   }
 

@@ -15,10 +15,12 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
   const name = `vehicle_trips_${process.pid}_${Date.now()}`;
   const uploads = await fs.mkdtemp(path.join(os.tmpdir(), 'trip-uploads-'));
   let pool, server;
+  const connectionsClosed=[];
   try {
     await admin.query(`create database "${name}"`); url.pathname = `/${name}`;
     Object.assign(process.env, { DATABASE_URL: url.toString(), APP_ENV: 'development', DISPATCH_NOTIFICATION_MODE: 'mock', ENABLE_DEV_AUTH: 'true', JWT_SECRET: 'isolated-vehicle-trip-test-secret', FILE_STORAGE_PROVIDER: 'local', LOCAL_UPLOAD_ROOT: uploads });
     pool = (await import('../server/database/pool.mjs')).pool;
+    pool.on('connect',client=>connectionsClosed.push(new Promise(resolve=>client.once('end',resolve))));
     for (const file of (await fs.readdir('supabase/migrations')).filter(f => f.endsWith('.sql') && f !== '202608070005_remove_obsolete_runfeng_sync_role.sql').sort()) await pool.query(await fs.readFile(`supabase/migrations/${file}`, 'utf8'));
     const { vehicleTripService: svc, prepareTripImage } = await import('../server/services/vehicleTripService.mjs');
     const { loginForDevelopment } = await import('../server/auth.mjs');
@@ -162,7 +164,7 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
     assert.equal((await pool.query('select 1 from vehicle_trip_operations where actor_id=$1 and request_id=$2',[employee.id,rollback.requestId])).rowCount,0);
     await pool.query('drop trigger trip_notification_test_failure on vehicle_trip_notification_jobs');
 
-    // Exercise real HTTP middleware: basic users and unbound technicians must reach trips, but not legacy business routes.
+    // All employees may use trips and order entry; dispatch still requires its own permissions/binding.
     const { handleApiRequest } = await import('../server/routes/apiRouter.mjs');
     const { serveStatic } = await import('../server/http/staticFiles.mjs');
     const { createTokenForUser } = await import('../server/auth.mjs');
@@ -178,9 +180,11 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
     const get = (route, bearer = token) => fetch(base + route, { headers: { Authorization: `Bearer ${bearer}` } });
     assert.equal((await get('/api/vehicle-trip-requests')).status, 200);
     assert.equal((await get('/api/company-vehicles', techToken)).status, 200);
-    assert.equal((await get('/api/work-orders')).status, 403);
-    assert.equal((await get('/api/users')).status, 403);
-    assert.equal((await get('/api/work-orders', techToken)).status, 403);
+    assert.equal((await get('/api/work-orders')).status, 200);
+    assert.equal((await get('/api/users')).status, 200);
+    assert.equal((await get('/api/work-orders', techToken)).status, 200);
+    assert.equal((await get('/api/dispatch/tasks')).status, 403);
+    assert.equal((await get('/api/dispatch/tasks', techToken)).status, 403);
     assert.equal((await get(`/api/files/${photo.fileId}/content`)).status, 200);
     assert.equal((await get(`/api/files/${photo.fileId}/content`, await tokenFor(other))).status, 404);
     assert.equal((await get(`/api/files/${photo.fileId}/content`, await tokenFor(stranger))).status, 404);
@@ -222,6 +226,7 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
   } finally {
     if (server) await new Promise(resolve => server.close(resolve));
     if (pool) await pool.end();
+    await Promise.all(connectionsClosed);
     await admin.query(`drop database if exists "${name}" with (force)`); await admin.end();
     await fs.rm(uploads, { recursive: true, force: true });
   }

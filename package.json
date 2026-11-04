@@ -6,6 +6,7 @@
     "migrate": "node --env-file-if-exists=.env.production --env-file-if-exists=.env.local scripts/migrate.mjs",
     "mock:technician": "APP_ENV=development node --env-file=.env.local scripts/seed-technician-mock.mjs",
     "mock:team-repair": "APP_ENV=development node --env-file=.env.local scripts/seed-team-repair-demo.mjs",
+    "mock:multi-repair": "APP_ENV=development node --env-file=.env.local scripts/seed-multi-repair-states.mjs",
     "mock:runfeng": "node --env-file-if-exists=.env.production --env-file-if-exists=.env.local scripts/seed-runfeng-mock.mjs",
     "mock:runfeng:refresh": "node --env-file-if-exists=.env.production --env-file-if-exists=.env.local scripts/seed-runfeng-mock.mjs --refresh",
     "db:clear-work-orders": "node --env-file-if-exists=.env.production --env-file-if-exists=.env.local scripts/clear-work-orders.mjs",

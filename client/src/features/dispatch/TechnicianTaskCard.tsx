@@ -3,7 +3,8 @@ import { Clock3, Package } from 'lucide-react';
 import type { DispatchTask } from '../../../../shared/types';
 import { individualRepair, personalTask } from './individualRepair';
 import { partsStatus } from './partsProgress';
-import { displayTaskTime, taskStatusLabel } from './dispatchLabels';
+import { displayTaskTime } from './dispatchLabels';
+import { technicianTaskStatus } from './technicianTaskStatus';
 import { RepairStatusTag } from './RepairStatusTag';
 
 export function TechnicianTaskCard({ task, userId, onOpen }: { task: DispatchTask; userId: string; onOpen: () => void }) {
@@ -19,7 +20,7 @@ export function TechnicianTaskCard({ task, userId, onOpen }: { task: DispatchTas
         onOpen();
       }
     }}>
-    <div className="technician-card-heading"><h3>{task.plate || '未填写车牌'}</h3><RepairStatusTag status={taskStatusLabel(own)} /></div>
+    <div className="technician-card-heading"><h3>{task.plate || '未填写车牌'}</h3><RepairStatusTag status={technicianTaskStatus(task,userId)} /></div>
     <p className="technician-card-reference"><span>{task.dispatchNo ? '派工号' : '委托单号'}</span>{task.dispatchNo || task.orderId}</p>
     <div className="technician-flags">
       {!!task.inspectionDeferredCount && <Tag color="orange">待定 × {task.inspectionDeferredCount}</Tag>}
@@ -35,7 +36,6 @@ export function TechnicianTaskCard({ task, userId, onOpen }: { task: DispatchTas
       {['待开工', '维修中', '暂停', '回审'].includes(own.stage) ? <div><Package size={15} aria-hidden="true" /><span>配件</span><strong>{own.partsRequirement ? partsStatus(own.partsRequirement) : '未登记需求'}</strong></div> : null}
       <div><Clock3 size={15} aria-hidden="true" /><span>预计完工</span><strong>{displayTaskTime(task.dueAt)}</strong></div>
     </div>
-    {individual && own.items.length > 0 && submitted === own.items.length && task.stage === '维修中' ? <Tag color="green">本人已提交 · 等待其他项目</Tag> : null}
     <div className="technician-card-footer">
       <div><span>已提报或通过</span><strong>{submitted}<small> / {own.items.length}</small></strong></div>
     </div>

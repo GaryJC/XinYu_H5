@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>多人维修复查与仓管影响</title>
+<style>
+body{margin:0;background:#f4f7fb;color:#22324a;font:16px/1.75 system-ui,-apple-system,sans-serif}main{max-width:980px;margin:auto;padding:28px 20px 48px}h1{font-size:28px;line-height:1.4}h2{font-size:20px;margin-top:0}section{background:white;border:1px solid #dce5f0;border-radius:14px;padding:22px;margin-top:20px}.muted{color:#65748b}table{width:100%;min-width:620px;border-collapse:collapse;font-size:15px}th,td{text-align:left;padding:12px;border-bottom:1px solid #e0e7f0;vertical-align:top}th{background:#eef4fb}.scroll{overflow-x:auto}li{margin:8px 0}code{overflow-wrap:anywhere}@media(max-width:600px){main{padding:20px 14px}section{padding:16px}h1{font-size:24px}}
+</style>
+<main><p class="muted">本地代码与数据库复查 · 2026-11-04</p>
+<h1>个人进度独立推进，仓管继续处理每份申请</h1>
+<p>本次复查修复了新增项目绕过备料、个人分类与卡片不一致，以及分批提检时照片预览被拒绝的问题。未发现这些修复让仓管漏掉待处理配件或误启动其他维修工的问题。</p>
+<section><h2>已修复的问题</h2><ol>
+<li><strong>乙未备料，却借用了甲的“维修中”状态。</strong>原来乙新增项目时，新项目会直接变为维修中。现在新增项目也检查乙自己的可用配件；未准备时保持待开工，仓管后续备齐至少一项才推进。已开工记录与个人暂停保持不变。</li>
+<li><strong>个人卡片与列表分类不一致。</strong>甲提检或检验通过后，卡片已显示待检验／维修完成，但列表仍按整单归入进行中。现在“我的维修”的卡片、分类、数量共用个人进度，完成日期按本人的项目检验时间计算。管理端按员工筛选仍查询整单。</li>
+<li><strong>部分项目提检时，检验员照片预览报 403。</strong>整单仍在维修中时，原权限仅认整单待检验。现在存在待检项目即可按既有检验资格预览；继续校验门店、角色和维修参与关系，不允许本人自检。领取、提交检验的操作权限不变。</li>
+</ol><p>同时移除了提交弹窗中“全部维修工完成后统一交检”的过时说明。</p></section>
+<section><h2>仓管看到什么</h2><div class="scroll"><table><thead><tr><th>场景</th><th>仓管的申请状态</th><th>仓管还能做什么</th></tr></thead><tbody>
+<tr><td>甲备齐一项，乙一项未齐</td><td>甲：部分备齐；乙：待备料</td><td>继续勾选甲、乙的剩余配件。甲开工不会隐藏乙的申请。</td></tr>
+<tr><td>甲全部备齐并提检，乙仍待料</td><td>甲：备料完成；乙：待备料</td><td>继续处理乙的申请，检验员可以同时检查甲。</td></tr>
+<tr><td>甲已检验通过，乙部分备齐</td><td>甲：备料完成；乙：部分备齐</td><td>继续处理乙的剩余配件；不改写甲的检验或开工记录。</td></tr>
+<tr><td>甲个人暂停期间到料</td><td>甲的备料状态正常更新</td><td>可以备料；甲仍保持暂停，需要本人恢复。</td></tr>
+<tr><td>照片清单</td><td>按整份申请确认</td><td>照片没有逐项明细，继续保留整份确认规则。</td></tr>
+</tbody></table></div><p>备料与出库记录仍分别保留。批量备料只记录本次选中的明细，重复请求不会重复创建领料通知；已处理的明细不能重复勾选。</p></section>
+<section><h2>实际核对</h2><ul>
+<li>仓管搜索 DUMMY-MP：12 份申请，其中待备料 5、部分备齐 4、备料完成 3。</li>
+<li>DUMMY-MP-02：甲 1／3 项已备齐，乙 0／3；备料弹窗保留 5 项可选，已备齐的一项不可重复选择。</li>
+<li>李富强搜索 DUMMY-MP：进行中 4、待检验 1、已完成 1，与各卡片一致。</li>
+<li>维修工乙搜索同一组数据：进行中 6、待检验 0、已完成 0；04 单仍显示待开工、待备料。</li>
+<li>DUMMY-MP-04：领取检验前，3 张测试照片均正常加载；甲的 2 个待检项目可见，乙仍待开工。</li>
+<li>本地隔离 PostgreSQL 回归 44 项通过，覆盖保存后重新读取、分人分类、仓管批量备料、请求重放、通知接收人和照片权限。</li>
+<li>最终 npm run check 通过：853 项通过、22 项环境依赖测试跳过；TypeScript 与生产构建通过，仍有原有图表／PDF 大包提示。git diff --check 通过。</li>
+</ul><p class="muted">只在本地审查和测试。现有六张测试单的业务进度未修改；没有线上依赖审计、润丰写入、部署或 Git 推送。未进行真实钉钉设备测试。新增查询字段复用原查询，不增加数据库往返或表结构。</p></section>
+</main></html>

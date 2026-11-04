@@ -2,6 +2,7 @@ import {repairStatusLabel} from '../../../../../shared/repairCompletion.mjs';
 import { RepairItem, RoleKey, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "../../../../../shared/types";
 import { dispatchEnabled } from "../../dispatch/dispatchAvailability";
 import { filterEmptyRepairItems } from "./repairItems";
+import { pendingRepairNameMaxLength } from "../../../../../shared/pendingRepairLimits.mjs";
 
 const shopProfile = {
   id: "shop-hq",
@@ -99,9 +100,11 @@ export function validateWorkOrderDraft(draft: WorkOrderDraft) {
   if (!draft.vehicle.model.trim()) errors.push("车型必填");
   if (!draft.customer.name.trim()) errors.push("车主名称/所属单位必填");
   if (!draft.customer.phone.trim()) errors.push("联系电话必填");
-  const repairItems = [...filterEmptyRepairItems(draft.repairItems), ...(draft.pendingRepairs||[]).filter(p=>p.state!=='declined'&&!p.scheduled)];
+  const pendingRepairs = (draft.pendingRepairs||[]).filter(p=>p.state!=='declined'&&!p.scheduled);
+  const repairItems = [...filterEmptyRepairItems(draft.repairItems), ...pendingRepairs];
   if (!repairItems.length || repairItems.some((item) => !item.name.trim())) errors.push("维修项目不能为空");
-  if (repairItems.some((item) => item.name.length > 200)) errors.push("维修项目每项不能超过 200 个字符");
+  if (draft.repairItems.some((item) => item.name.length > 100)) errors.push("维修项目每项不能超过 100 个字符");
+  if (pendingRepairs.some((item) => item.name.length > pendingRepairNameMaxLength)) errors.push(`待定维修项目每项不能超过 ${pendingRepairNameMaxLength} 个字符`);
   if(draft.dispatchPlan) {
     if(!draft.dispatchPlan.dueAt || !Number.isFinite(Date.parse(draft.dispatchPlan.dueAt))) errors.push("直接派工预计完工时间必填");
     if(draft.dispatchPlan.itemAssignments && (!draft.repairItems.length || draft.repairItems.some(item=>!draft.dispatchPlan?.itemAssignments?.some(row=>row.itemId===item.id&&row.technicianId)))) errors.push("直接派工须为每个非待定维修项目选择负责人");

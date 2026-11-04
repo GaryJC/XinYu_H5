@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>其他模块审查 · 2026-11-04</title>
+<style>
+body{margin:0;background:#f5f7fb;color:#172b43;font:16px/1.7 system-ui,-apple-system,"PingFang SC",sans-serif}main{max-width:960px;margin:auto;padding:30px 20px 60px}h1{font-size:28px;line-height:1.4}h2{font-size:20px}section{background:#fff;border:1px solid #dbe3ee;border-radius:14px;padding:20px;margin:18px 0}.table{overflow:auto}table{border-collapse:collapse;min-width:620px;width:100%}td,th{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid #e4eaf2}th,footer{color:#53677f}li{margin:9px 0}code{font-size:13px;overflow-wrap:anywhere}.ok{color:#167547;font-weight:650}
+</style>
+<main>
+<h1>其他模块审查</h1>
+<p>2026-11-04 · 复核上一轮通知、签字和状态修复后，继续检查出车、开单、补签与同步恢复。以下结论基于本地代码和可运行回归。</p>
+<section><h2>本轮修复</h2><div class="table"><table>
+<thead><tr><th>问题</th><th>触发条件</th><th>修复结果</th></tr></thead>
+<tbody>
+<tr><td>同车重复出车</td><td>同一车辆的两张申请先后或同时登记出车，都能变为“用车中”。</td><td>在车辆锁内检查现有占用，只允许一单出车。允许多张申请等待审批或出车；车辆归还后下一单可正常出车。</td></tr>
+<tr><td>资料更正后旧补签页仍可提交</td><td>客户打开补签页后，门店更正工单单位或车型；旧页仍能签字。</td><td>更正资料与撤销未使用签字链接在同一事务中完成。失败回滚；无变化保存和已签署历史证据保持原样。</td></tr>
+<tr><td>已保存的现场签字显示失败或错误确认状态</td><td>签字已提交但网络响应丢失，或随后列表刷新失败；另一设备切为远程签字后，旧现场弹窗还可能误报“已确认”。</td><td>失败后只读核实同一签字会话的保存结果。已保存则停止重复提交，按服务端真实状态区分“已确认”和“待核对确认”；列表刷新失败单独提示。</td></tr>
+<tr><td>开单名称限制与后续维修不一致</td><td>普通开单接受 101–200 字项目，进入维修后原名称却被 100 字校验拒绝。</td><td>新建、草稿保存、签字前校验及输入框统一普通项目 100 字符；待定项目继续 96 字符。已有历史长名称不截断、不静默改写。</td></tr>
+<tr><td>模拟写回补齐绑定后仍无法重试</td><td>本地模拟因员工绑定缺失失败，补齐绑定后仍沿用旧失败快照。</td><td>恢复结果写入独立模拟表并用于下一次模拟。真实任务快照、状态、错误和次数不变；合法历史快照不被当前绑定覆盖。</td></tr>
+</tbody></table></div></section>
+<section><h2>验证</h2>
+<p id="verification"><span class="ok">验证通过</span>：<code>npm run check</code> 共 894 项通过、26 项环境相关测试跳过、0 失败；类型检查和构建通过。启用本地 PostgreSQL 的 10 个回归文件共 100 项通过、0 跳过、0 失败。<code>git diff --check</code> 通过。</p>
+<p>覆盖同车真实并发、拒绝回滚、归还后重试、补签页失效、新链接显示新资料、历史签名保留、现场签字响应丢失、远程待确认状态、项目名称 100/101 字符边界，以及模拟与真实写回数据隔离。</p>
+<p>更新旧出车集成测试的权限预期：普通员工和未绑定维修工已获授权使用开单入口；派工接口仍验证权限及员工绑定。</p></section>
+<p>验证使用临时数据库，结束后自动删除；浏览器和真实钉钉设备未在本轮操作。构建仍有原有图表/PDF 分包体积提示。</p>
+<section><h2>范围与影响</h2>
+<p>无数据库结构变更。出车增加一次在已有车辆锁内的占用查询；资料更正增加一次未使用令牌失效更新；签字恢复仅在失败时增加查询，正常成功不增加请求。本轮未做生产规模压测。</p>
+<p>润丰项目字段仍按此前只读核实的 200 字节处理；这不等于 200 个中文字符。正式写回的恢复行为保留，新增修复针对本地模拟。</p>
+<p>未更改已有 dummy data 进度，未访问真实润丰、发送真实钉钉通知或执行线上依赖扫描，未部署或推送。</p></section>
+<footer>这是本轮已覆盖范围的审查结果，不代表所有模块已无缺陷。细节与测试注意事项已记录在 HANDOFF.MD。</footer>
+</main>
+</html>

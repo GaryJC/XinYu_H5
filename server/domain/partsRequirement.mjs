@@ -1,4 +1,4 @@
-import {hasUnpreparedParts} from '../../shared/repairProgress.mjs';
+import {hasUnpreparedParts,canStartRepairWithParts} from '../../shared/repairProgress.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 export function validatePartsRequirement(value) {
   if(!value || !['none','list','photo'].includes(value.mode)) throw new HttpError(400,'请登记所需配件，或选择无需配件');
@@ -9,21 +9,36 @@ export function validatePartsRequirement(value) {
   if(value.mode==='none'&&(items.length||photoIds.length)||value.mode==='list'&&(!items.length||photoIds.length)||value.mode==='photo'&&(!photoIds.length||items.length)) throw new HttpError(400,'配件登记方式与内容不一致');
   return {mode:value.mode,items:items.map(i=>({name:i.name.trim(),quantity:i.quantity,unit:i.unit.trim()})),photoIds,...(referencePhotoIds.length?{referencePhotoIds:[...referencePhotoIds]}:{})};
 }
-export function beginPendingItems(next,actor,now) {
-  if(next.executionMode==='outsourced'&&hasUnpreparedParts(next))return;
+export function beginPendingItems(next,actor,now,sharedPartsRequirement) {
+  const pending=next.items.filter(item=>['待开工','待派工','待领料'].includes(item.status)
+    && canStartRepairWithParts(next,item.responsibleId||next.technicianId,sharedPartsRequirement));
+  if(!pending.length) {
+    // Accepting a handover resumes existing progress without rewriting its history.
+    if(canStartRepairWithParts(next,actor?.id,sharedPartsRequirement)&&next.items.some(item=>['维修中','待检验','已完工'].includes(item.status)))next.stage='维修中';
+    return;
+  }
   if(!actor?.id)throw new HttpError(409,'维修负责人未明确，请联系服务顾问核对后再开工');
-  for(const item of next.items) if(['待开工','待派工','待领料'].includes(item.status)) {
-    item.status='维修中';item.startAt ||= now;item.startedBy=actor.id;delete item.finishAt;
+  const starters=new Set();
+  for(const item of pending) {
+    const starter=next.executionMode==='outsourced'?actor.id:item.responsibleId||actor.id;
+    item.status='维修中';item.startAt ||= now;item.startedBy=starter;delete item.finishAt;
+    starters.add(starter);
+    if(next.workerPauses?.[starter])next.workerPauses[starter].resumeStage='维修中';
   }
   if(!next.startHistoryUnknown)next.firstStartedAt ||= now;
-  next.participantIds=[...new Set([...(next.participantIds||[]),actor.id])];
+  next.participantIds=[...new Set([...(next.participantIds||[]),...starters])];
   next.stage='维修中';
 }
 
-// Preserve legacy tasks; current requests must be issued before starting or completing.
+// Completion and material handover still require the complete request to be ready.
 export function assertPartsIssued(task) {
   if(hasUnpreparedParts(task))
-    throw new HttpError(409,'请等待仓管确认配件备齐后再开工或提交完工');
+    throw new HttpError(409,'请等待仓管确认配件备齐后再提交完工或确认领料');
+}
+
+export function assertPartsReadyToStart(task,ownerId,sharedPartsRequirement) {
+  if(!canStartRepairWithParts(task,ownerId,sharedPartsRequirement))
+    throw new HttpError(409,task.executionMode==='outsourced'?'请等待仓管确认配件备齐后再开工':'请等待仓管确认配件备齐（至少一项）后再开工');
 }
 
 // Match each handled line once; audit fields always come from the saved request.

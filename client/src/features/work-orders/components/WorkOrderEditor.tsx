@@ -1,4 +1,5 @@
 import {useDirectDispatch} from '../hooks/useDirectDispatch';
+import { pendingRepairNameMaxLength } from '../../../../../shared/pendingRepairLimits.mjs';
 import {VehicleLicenseHistoryPrompt} from '../../vehicle-license-history/VehicleLicenseHistoryPrompt';
 import { useRepairConfirmationRows } from "../hooks/useRepairConfirmationRows";
 import { CustomerSignatureSection } from "../../signature/CustomerSignatureSection";
@@ -388,7 +389,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 <div className="repair-row" role="row" key={item.key}>
                   <div className="repair-item-content" data-label={`项目 ${index + 1}`}>
                     {draft.dispatchPlan && <Checkbox className="direct-dispatch-select" aria-label={`选择项目 ${index+1}`} disabled={!canEditForm || item.pending} checked={!!item.repair&&directDispatch.selected.includes(item.repair.id)} onChange={event=>item.repair&&directDispatch.select(item.repair.id,event.target.checked)}>项目 {index+1}{item.pending?'（待定，暂不派工）':''}</Checkbox>}
-                    <Input.TextArea className="repair-item-name" autoSize={{ minRows: 2 }} placeholder="例如：检查发动机异响，更换磨损皮带" required aria-required="true" maxLength={200} showCount status={fieldError("维修项目") && (!item.name.trim() || item.name.length > 200) ? "error" : undefined} disabled={!canEditForm} aria-label="项目名称" value={item.name} onChange={event=>confirmationRows.changeName(item,event.target.value)} />
+                    <Input.TextArea className="repair-item-name" autoSize={{ minRows: 2 }} placeholder="例如：检查发动机异响，更换磨损皮带" required aria-required="true" maxLength={item.pending ? pendingRepairNameMaxLength : 100} showCount status={fieldError("维修项目") && (!item.name.trim() || item.name.length > (item.pending ? pendingRepairNameMaxLength : 100)) ? "error" : undefined} disabled={!canEditForm} aria-label="项目名称" value={item.name} onChange={event=>confirmationRows.changeName(item,event.target.value)} />
                     {draft.dispatchPlan && (item.pending ? <p className="dispatch-muted">待定项目确认后再安排派工</p> : <Form.Item label="负责人" required style={{marginTop:12}}>
                       <Select aria-label={`项目 ${index+1} 负责人`} showSearch optionFilterProp="label" disabled={!canEditForm} placeholder="请选择维修工" options={directDispatch.options} value={draft.dispatchPlan.itemAssignments?.find(row=>row.itemId===item.repair?.id)?.technicianId || draft.dispatchPlan.technicianId} onSelect={value=>directDispatch.assign(item.repair!.id,value)} />
                     </Form.Item>)}

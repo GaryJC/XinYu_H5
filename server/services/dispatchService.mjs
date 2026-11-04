@@ -41,14 +41,14 @@ export async function queryDispatchTasks(actor, query={}) {
 }
 export async function myRepairCounts(actor) {
   if(!hasAnyRole(actor, ['technician','outsourcing'])&&!actor.outsourcingRoleMember) throw new HttpError(403,'仅维修工可查看本人任务数量');
-  const tasks=(await listDispatchTasks(actor)).filter(task=>technicianIds(task).includes(actor.id));
-  const range=completionRange();
+  const tasks=await listDispatchTasks(actor);
+  const count=stage=>filterDispatchTasks(tasks,actor,{personal:'true',stage}).length;
   return {
-    pendingAccept:tasks.filter(t=>t.stage==='待接单').length,
-    inProgress:tasks.filter(t=>['待开工','维修中','暂停'].includes(t.stage)).length,
-    inspection:tasks.filter(t=>hasPendingInspection(t)).length,
-    review:tasks.filter(t=>t.stage==='回审').length,
-    completed:tasks.filter(t=>t.stage==='维修完成' && (!t.completedAt || dispatchMetric(t,'completed',range.from,range.to))).length
+    pendingAccept:count('待接单'),
+    inProgress:count('进行中'),
+    inspection:count('待检验'),
+    review:count('回审'),
+    completed:count('维修完成')
   };
 }
 export async function technicianSummaries(actor,query={}) {
@@ -127,6 +127,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
     const {rows:[event]}=await client.query(`insert into dispatch_events(order_id,actor_id,actor_name,request_id,request_body,action,detail) values($1,$2,$3,$4,$5,$6,$7) returning id`,[id,actor.id,actor.name,input.requestId,JSON.stringify(input),input.action,JSON.stringify(detail)]);
     if(input.deferredItemIds?.length)await enqueueDeferredNotifications(client,task,next,event.id,currentActor,'deferred',input.deferredItemIds,input.deferredReason,people,input.requestId);
     if(['inspect','complete-outsourced'].includes(input.action)&&next.stage==='维修完成')await enqueueRepairWriteback(client,next,event.id);
+    if(input.action==='edit-repair-items'&&task.stage!=='维修完成'&&next.stage==='维修完成')await enqueueRepairWriteback(client,next,event.id,{deferValidation:true});
     await client.query('insert into audit_logs(order_id,actor,action) values($1,$2,$3)',[id,actor.name,`派工：${input.action}${input.reason?` · ${input.reason}`:''}`]);
     if(input.action==='retry-scheduler-notifications') {
       if(!input.notificationJobId) throw new HttpError(400,'请选择派工通知任务');
@@ -177,7 +178,8 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
       const payload={orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,actorName:actor.name,reason:input.action==='pause'?[input.pauseReason,input.note].filter(Boolean).join('：'):input.reason||input.note||''};
       await client.query('insert into dispatch_scheduler_notifications(event_id,order_id,kind,payload) values($1,$2,$3,$4)',[event.id,id,schedulerKind,JSON.stringify(payload)]);
     }
-    if(['submit-review','submit-order','retry-inspection-notifications'].includes(input.action)&&hasPendingInspection(next)) {
+    if(hasPendingInspection(next)&&(['submit-review','submit-order','retry-inspection-notifications'].includes(input.action)
+      ||task.inspectorId&&!next.inspectorId)) {
       await client.query(`insert into dispatch_inspection_notifications(event_id,order_id) values($1,$2) on conflict do nothing`,[event.id,id]);
     }
     recipients.push(...partsSubmissionNotifications(task,next,input,actor,people));

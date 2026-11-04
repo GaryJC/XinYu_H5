@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>多人维修：备料、开工与各角色看到的状态</title>
+<style>
+body{margin:0;background:#f5f7fb;color:#243247;font:16px/1.8 system-ui,-apple-system,sans-serif}main{max-width:1050px;margin:36px auto;padding:0 22px 48px}h1{font-size:28px;line-height:1.4}h2{font-size:20px;margin:0 0 12px}section{background:white;border:1px solid #e0e7ef;border-radius:14px;padding:22px;margin:18px 0}p{margin:10px 0}.notice{background:#fff6e6;border-left:4px solid #d59019;padding:14px 18px;border-radius:6px}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:15px;min-width:650px}th,td{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid #e0e7ef}th{background:#f2f5fa}.muted{color:#66768c;font-size:14px}.tag{display:inline-block;padding:1px 8px;border-radius:5px;background:#eaf2ff;color:#215fbc;white-space:nowrap}.pending{background:#fff2da;color:#9c6600}ol,ul{padding-left:24px}code{font-size:13px;background:#f0f3f8;padding:2px 5px;overflow-wrap:anywhere}@media(max-width:600px){main{margin:22px auto;padding:0 14px 28px}section{padding:16px}h1{font-size:24px}}
+</style>
+<main>
+<p class="muted">当前代码核对 · 2026-11-04 · 店内多人维修</p>
+<h1>维修工看本人进度，管理员与检验员看整单进度</h1>
+<p>系统分别保存整单状态、每个维修项目的状态、每位维修工的配件申请状态。有人开工后，整单进入维修中；其他人的项目不会因此自动开工。</p>
+<div class="notice"><strong>两处展示已补齐：</strong>维修工的卡片和详情顶部按本人项目显示进度；管理员、检验员可按姓名查看每人的配件申请。本人配件部分备齐即可开工，无需绑定具体维修项目。</div>
+
+<section><h2>场景：甲备齐一部分，乙一项也没备齐</h2>
+<p class="muted">假设两人已分配项目、均有需要配件的个人申请，未暂停，且乙没有其他已备齐的共同配件可用。</p>
+<div class="table-wrap"><table><thead><tr><th>查看者</th><th>目前顶部显示</th><th>项目进度</th><th>配件与操作</th></tr></thead><tbody>
+<tr><td>维修工甲</td><td><span class="tag">正在维修</span></td><td>甲名下待开工项目转为维修中</td><td>部分备齐；先维修，剩余配件继续待备料</td></tr>
+<tr><td>维修工乙</td><td><span class="tag pending">待开工</span></td><td><span class="tag pending">待开工</span><br>尚无开工时间</td><td>待备料；不能因甲开工而开始自己的任务</td></tr>
+<tr><td>门店管理员</td><td><span class="tag">正在维修</span>（整单）</td><td>能看到全单：甲的项目维修中，乙的项目待开工，以及各自负责人</td><td>配件区按人分组：甲部分备齐，乙待备料；共同申请另列</td></tr>
+<tr><td>检验员</td><td>打开详情时为<span class="tag">正在维修</span>（整单）</td><td>能看到甲、乙各项目进度；此时没有待检项目</td><td>尚无人提检，因此不会出现在默认待检验列表</td></tr>
+<tr><td>仓管</td><td>按配件申请查看备料状态</td><td>维修进度与备料状态分别保留</td><td>甲：部分备齐；乙：待备料。两份未完成申请均可继续处理</td></tr>
+</tbody></table></div>
+</section>
+
+<section><h2>本轮已实现的开工规则</h2><ul>
+<li>本人申请中至少一项被仓管确认备齐或出库，即可先开工；正常待开工流程会自动记录开工。</li>
+<li>各维修工独立推进。甲的个人备料不会把乙的项目一起改为维修中。</li>
+<li>共同申请逐项备料时，按已备齐明细指定的领料人判断；无逐项归属的历史整批确认不会绕过另一份完全未准备的个人申请。</li>
+<li>剩余配件继续保留待备料状态。后续备齐不会改写已有开工时间、开工人或已提交项目。</li>
+<li>已经开工后追加配件，即使新一批全部待备料，也保留维修中，不倒退为待开工。</li>
+<li>个人处于暂停时，备料不会替其恢复维修，仍需本人恢复；明确无需配件的流程可直接开工。照片清单没有逐项备料信息，仍按整份确认。</li>
+</ul></section>
+
+<section><h2>甲先完工，检验员能否先检？</h2><ol>
+<li>甲的相关配件全部备齐，并满足本人本轮维修照片等提交条件后，可提交本人完工；不必等乙的个人申请备齐。</li>
+<li>甲的项目变为“待检验”；乙仍可处于“待开工”或“维修中”。整单仍是“维修中”。</li>
+<li>此时工单会进入待检验筛选。有权限且不属于维修参与人的检验员或管理员可先检查甲的已提交项目，未提交的乙项目不在本次检验范围。</li>
+<li>所有项目均已提交或通过时，整单可进入“待检验”；最终全部检验通过才变为“维修完成”。</li>
+</ol><p>甲提交后，甲的卡片和详情顶部显示“待检验”；甲的项目全部通过后显示“维修完成”。整单仍可处于维修中。“等待其他维修工完成”的重复提示已移除，检验不必等待全员提交。</p>
+<p class="muted">若仍有未备齐的历史共同申请，当前提交规则会继续拦截提交；“部分备齐即可开工”没有放宽完工提交条件。</p></section>
+
+<section><h2>按维修工本人申报配件判断</h2><p>维修工提报自己所需的配件。按用户确认的规则，本人部分配件备齐后，本人名下符合条件的待开工项目一起转为维修中；无需建立配件与项目的绑定关系。</p><p>当前项目数据仍是每个项目一个负责人，同一维修单支持多位维修工分别推进各自项目。本次未扩展为同一个项目分别记录多人的进度。</p></section>
+
+<section><h2>本次补齐的展示</h2><ol>
+<li><strong>维修工顶部状态按本人项目计算。</strong>卡片和详情使用同一展示规则；暂停、接单、回审等流程状态继续保留，操作权限与服务端状态保持原有规则。</li>
+<li><strong>管理员／检验员详情按人列出配件。</strong>共同配件与个人申请同时保留，纯个人申请不会再出现错误的空汇总。工单全览和历次维修记录共用相同展示。</li>
+</ol><p>后续复查已补齐“我的维修”的分类和数量：按本人进度进入进行中、待检验或已完成，和卡片状态一致。管理员、检验员及仓管保留整单／配件申请口径。个人完成日期使用本人的项目检验时间。</p></section>
+
+<section><h2>核对依据</h2><p>58 项相关测试通过，覆盖真实领域逻辑的部分备齐、本人提检、分批检验，以及卡片和配件汇总渲染。TypeScript 与生产构建通过。浏览器核对了 527 × 679 手机视图、1280 × 800 桌面视图和已有测试单的维修工详情。临时预览已删除，未修改业务数据，未部署或推送。</p><p class="muted"><code>client/src/features/dispatch/technicianTaskStatus.ts</code>；<code>client/src/features/dispatch/TaskPartsSummary.tsx</code>；<code>test/technicianTaskStatus.test.mjs</code>。构建仍有原有的大包体积提示。</p></section>
+</main></html>

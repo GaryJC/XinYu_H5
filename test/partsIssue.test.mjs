@@ -8,7 +8,8 @@ const task=()=>({shopId:'s',orderId:'o',orderStatus:'维修中',version:1,stage:
 const act=(t,extra,actor=w)=>applyDispatchAction(t,{action:'issue-parts',expectedVersion:t.version,requestId:'partial-parts-test',...extra},actor,people,'2026-10-22T06:00:00Z');
 test('selected ready items issue to distinct recipients; remainder stays pending until next issue',()=>{
  const original=task(),first=act(original,{partsIssue:[{index:0,recipientId:'a'}]});
- assert.equal(first.stage,'待开工');assert.equal(first.partsRequirement.issuedAt,undefined);
+ assert.equal(first.stage,'维修中');assert.equal(first.partsRequirement.issuedAt,undefined);
+ assert.deepEqual(first.items.map(item=>item.status),['维修中','待开工']);
  assert.equal(first.partsRequirement.items[0].recipientName,'维修甲');assert.equal(first.partsRequirement.items[0].issuedName,'仓管');assert.equal(first.partsRequirement.items[1].issuedAt,undefined);
  assert.deepEqual(first.partsRequirement.recipientIds,['a']);assert.deepEqual(original,task());
  const last=act(first,{partsIssue:[{index:1,recipientId:'b'}]});

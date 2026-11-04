@@ -60,8 +60,12 @@ test('SQL Server 2000 temporary fixtures replace atomically and recover idempote
   assert.deepEqual(after.items.filter(i=>i.lb.trim()!=='项目'),before.items.filter(i=>i.lb.trim()!=='项目'));
   assert.ok(after.headers.every(h=>Number(h.fyhj)===25&&Number(h.cbhj)===0&&Number(h.xmfy)===0&&Number(h.xmfy0)===0));
   assert.deepEqual(await replaceLegacyRepairItems(snapshot,{source:'temporary-fixture',allowedDispatchNos:null,executeTransaction}),{duplicate:true});assert.deepEqual(await state(),after);
-  await assert.rejects(()=>replaceLegacyRepairItems({...snapshot,eventId:'43',items:[{...snapshot.items[0],name:'测'.repeat(60)}]},{source:'temporary-fixture',allowedDispatchNos:null,executeTransaction}),/字段长度/);
-  assert.deepEqual(await state(),after,'Oversized names must not truncate or delete rows');
+  const name='测'.repeat(100);
+  await replaceLegacyRepairItems({...snapshot,eventId:'43',items:[{...snapshot.items[0],name}]},{source:'temporary-fixture',allowedDispatchNos:null,executeTransaction});
+  const fullNameState=await state();assert.ok(fullNameState.items.filter(i=>i.lb.trim()==='项目').every(i=>i.hh===name));
+  await assert.rejects(()=>replaceLegacyRepairItems({...snapshot,eventId:'oversized-name',items:[{...snapshot.items[0],name:'测'.repeat(101)}]},{source:'temporary-fixture',allowedDispatchNos:null,executeTransaction}),/字段长度/);
+  await assert.rejects(()=>replaceLegacyRepairItems({...snapshot,eventId:'oversized-worker',items:[{...snapshot.items[0],employeeName:'工'.repeat(60)}]},{source:'temporary-fixture',allowedDispatchNos:null,executeTransaction}),/字段长度/);
+  assert.deepEqual(await state(),fullNameState,'Oversized names or employees must not truncate or delete rows');
   // Start with only the internal document; a later external document can be synchronized
   // with the same inspection snapshot without recreating the internal project's rows.
   await query(`delete from ${tables.qxwxb} where wd='1'`);

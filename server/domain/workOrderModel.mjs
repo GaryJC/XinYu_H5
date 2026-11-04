@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { customerVehicleEditEnabled } from "../config/customerVehicleEdit.mjs";
+import { normalizeDraftRepairItems } from "./workOrderPolicy.mjs";
 
 export function workOrderValues(order) {
   const inspection = order.inspection || { belongings: [], fuelLevel: "1/2", exteriorIssues: [] };
@@ -205,15 +206,7 @@ export function createOrderFromDraft(draft) {
       phone: "021-6000-8618"
     },
     department: draft.department || { code: "", name: "" },
-    repairItems: (draft.repairItems || []).map((item, index) => ({
-      ...item,
-      id: Number(item?.id || index + 1),
-      owner: "待派工",
-      startAt: "",
-      finishAt: "",
-      inspector: "待检验",
-      status: "待派工"
-    })),
+    repairItems: normalizeDraftRepairItems(draft.repairItems ?? []),
     signatures: {},
     platformOrderNo: undefined,
     id: createOrderId(),

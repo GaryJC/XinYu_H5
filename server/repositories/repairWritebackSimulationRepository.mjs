@@ -6,23 +6,24 @@ export async function processRepairWritebackSimulations(runTransaction,shouldCon
  if(!repairWritebackSimulationEnabled(env))throw new Error('模拟写回未启用');
  for(let count=0;count<100&&shouldContinue();count++) {
   const processed=await runTransaction(async client=>{
-   const {rows}=await client.query(`select j.*,coalesce(s.attempts,0) as mock_attempts from repair_writebacks j
+   const {rows}=await client.query(`select j.*,coalesce(s.attempts,0) as mock_attempts,s.snapshot as mock_snapshot from repair_writebacks j
     left join repair_writeback_simulations s on s.job_id=j.id
     where j.status in ('pending','failed') and (s.status is null or s.status='pending')
     and not exists(select 1 from repair_writebacks older left join repair_writeback_simulations os on os.job_id=older.id
      where older.order_id=j.order_id and older.id<j.id and older.status not in ('synced','manual') and coalesce(os.status,'pending')<>'synced')
     order by j.id for update of j skip locked limit 1`);
    const job=rows[0];if(!job)return false;
+   const snapshot=job.mock_snapshot??job.snapshot;
    let error='';
    try {
-    validateWritebackSnapshot(job.snapshot);
+    validateWritebackSnapshot(snapshot);
     if(env.RUNFENG_REPAIR_WRITEBACK_MOCK_RESULT==='failure')throw new Error('模拟写回失败（测试注入），可切换成功模式后重试');
    } catch(e) {error=String(e.message||e).slice(0,2000);}
    await client.query(`insert into repair_writeback_simulations(job_id,status,attempts,error,snapshot,synced_at)
     values($1,$2,$3,$4,$5,case when $2='synced' then now() else null end)
     on conflict(job_id) do update set status=excluded.status,attempts=excluded.attempts,error=excluded.error,
      snapshot=excluded.snapshot,synced_at=excluded.synced_at,updated_at=now()`,
-    [job.id,error?'failed':'synced',job.mock_attempts+1,error,JSON.stringify(job.snapshot)]);
+    [job.id,error?'failed':'synced',job.mock_attempts+1,error,JSON.stringify(snapshot)]);
    return true;
   });
   if(!processed)return;
@@ -39,12 +40,17 @@ export async function readRepairWritebackSimulation(client,id) {
  return rows[0]?{...rows[0],simulated:true,enabled:true}:undefined;
 }
 
-export async function retryRepairWritebackSimulation(client,id,actorName) {
+export async function retryRepairWritebackSimulation(client,id,actorName,repairSnapshot=async()=>{}) {
  const job=await readRepairWritebackSimulation(client,id);
  if(!job||!['synced','failed'].includes(job.status))throw new HttpError(409,'仅失败或已完成的模拟任务可以重试');
- const locked=await client.query('select status from repair_writebacks where id=$1 for update',[job.id]);
+ const locked=await client.query(`select status,snapshot,event_id,
+  (select snapshot from repair_writeback_simulations where job_id=repair_writebacks.id) as mock_snapshot
+  from repair_writebacks where id=$1 for update`,[job.id]);
  if(!['pending','failed'].includes(locked.rows[0]?.status))throw new HttpError(409,'此任务已有真实处理结果，不可模拟重试');
- await client.query(`insert into repair_writeback_simulations(job_id,status) values($1,'pending')
-  on conflict(job_id) do update set status='pending',error='',synced_at=null,updated_at=now()`,[job.id]);
+ const snapshot=locked.rows[0].mock_snapshot??locked.rows[0].snapshot;
+ const repaired=job.status==='failed'?await repairSnapshot({...locked.rows[0],id:job.id,snapshot}):undefined;
+ // Mock recovery never changes the real snapshot or its idempotency receipt.
+ await client.query(`insert into repair_writeback_simulations(job_id,status,snapshot) values($1,'pending',$2)
+  on conflict(job_id) do update set status='pending',snapshot=excluded.snapshot,error='',synced_at=null,updated_at=now()`,[job.id,JSON.stringify(repaired??snapshot)]);
  await client.query('insert into audit_logs(order_id,actor,action) values($1,$2,$3)',[id,actorName,'重试测试模拟写回（未写入正式润丰）']);
 }

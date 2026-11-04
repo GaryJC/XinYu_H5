@@ -65,7 +65,7 @@ for(const mode of ['mock','dingtalk']) test(`inspection worker includes independ
   if(sql.includes('select * from dispatch_tasks'))return {rows:[{shop_id:'s',technician_id:'t',stage:'待检验',data:task}]};
   // The worker uses its generated lease to claim and then verify ownership.
   if(sql.includes('select lease_id'))return {rows:[{lease_id:calls[0].params[0]}]};
-  if(sql.includes('select max(id)')){assert.match(sql,/'submit-review'/);return {rows:[{id:99}]};}
+  if(sql.includes('select max(id)')){assert.match(sql,/dispatch_inspection_notifications/);return {rows:[{id:99}]};}
   if(sql.includes('select id,name,role,active,shop_id'))return {rows:audience.map(p=>({...p,shop_id:p.shopId}))};
   return {rows:[],rowCount:1};
  }};

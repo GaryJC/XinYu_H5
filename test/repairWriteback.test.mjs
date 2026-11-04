@@ -101,7 +101,21 @@ test('code page preflight only issues parameterized validation SQL and propagate
  let query,params={};
  await validateLegacyRepairStrings(snapshot,{execute:async(text,configure)=>{query=text;configure({input:(key,type,value)=>{params[key]=value;}},{NVarChar:()=>null});}});
  assert.ok(query.includes('DATALENGTH'));assert.ok(!/insert|delete|update/i.test(query));assert.equal(params.v0,'更换机油');assert.equal(params.v1,'027 李富强');
+ assert.match(query,/DATALENGTH\(CONVERT\(varchar\(8000\),@v0\)\)>200/);
+ assert.match(query,/DATALENGTH\(CONVERT\(varchar\(8000\),@v1\)\)>100/);
  await assert.rejects(()=>validateLegacyRepairStrings(snapshot,{execute:async()=>{throw new Error('不支持字符');}}),/不支持字符/);
+});
+
+test('replacement preserves a 100-Chinese-character project while retaining the employee byte limit',async()=>{
+ const name='检'.repeat(100),mock=sqlHarness();
+ await replaceLegacyRepairItems({...snapshot,items:[{...snapshot.items[0],name}]},{executeTransaction:mock.executeTransaction,source:'test'});
+ const statements=mock.state().statements,validation=statements.find(s=>s.query.startsWith('if DATALENGTH'));
+ assert.match(validation.query,/@name\)\)>200/);assert.match(validation.query,/@worker\)\)>100/);
+ for(const insert of statements.filter(s=>s.query.startsWith('insert into dbo.qxwxmxb'))) {
+  assert.equal(insert.params.name,name);
+  assert.match(insert.query,/CONVERT\(varchar\(200\),@name\)/);
+  assert.match(insert.query,/CONVERT\(varchar\(100\),@worker\)/);
+ }
 });
 
 test('dispatch identity ignores misfilled or missing ACK reid and writes canonical receipt hashes',async()=>{

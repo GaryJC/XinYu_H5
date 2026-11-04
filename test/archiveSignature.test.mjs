@@ -23,6 +23,14 @@ function setup(api = {}, account = user) {
       useRef(value) { return { current: value }; }
     };
     if (name.endsWith("workOrderApi")) return { workOrderApi: api };
+    if (name.endsWith('saveOnsiteSignature')) {
+      const helper = {};
+      const source = ts.transpileModule(readFileSync(new URL('../client/src/features/signature/saveOnsiteSignature.ts', import.meta.url), 'utf8'), {
+        compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022}
+      }).outputText;
+      vm.runInNewContext(source, {exports: helper, require: () => ({workOrderApi: api})});
+      return helper;
+    }
     throw new Error(`Unexpected import ${name}`);
   }});
   const actions = exports.useArchiveSignature(account, order => updates.push(order), () => { summaryRefreshes++; });

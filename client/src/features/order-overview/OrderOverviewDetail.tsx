@@ -5,7 +5,7 @@ import { Alert, Button, Checkbox, Collapse, Descriptions, Empty, Grid, Space, Sp
 import type { OrderPhotoCategory } from '../../../../shared/types';
 import { collectOrderPhotoAlbums, photoAlbumLabels } from '../../../../shared/orderPhotoAlbums.mjs';
 import { OrderDetail } from '../workbench/OrderDetail';
-import { PartsRequirementSummary } from '../dispatch/PartsRequirementSummary';
+import { TaskPartsSummary } from '../dispatch/TaskPartsSummary';
 import { RepairRoundHistory } from '../dispatch/RepairRoundHistory';
 import { dispatchEventLabel, displayTime } from '../dispatch/dispatchLabels';
 import { AuthenticatedImage, AuthenticatedImagePreviewGroup } from '../../shared/ui/AuthenticatedImage';
@@ -58,7 +58,7 @@ export function OrderOverviewDetail({id,onOpenRepairs}:{id:string;onOpenRepairs?
       {title:'开工',render:(_,item)=>displayTime(item.startAt)},{title:'提检',render:(_,item)=>displayTime(item.finishAt)},
       {title:'检验人',dataIndex:'inspectorName'},{title:'检验时间',render:(_,item)=>displayTime(item.inspectedAt)},{title:'退回原因',dataIndex:'rejectionReason'}
     ]}/>
-    {(task.partsRequests?.length?task.partsRequests:[task.partsRequirement]).map((value,index)=><PartsRequirementSummary key={index} value={value}/>)}
+    <TaskPartsSummary task={task}/>
     <RepairRoundHistory detail={dispatch}/>
     <h3>流程记录</h3>
     <ActionHistory title="维修流程记录" emptyText="暂无维修流程记录，开单与签字记录见操作留痕。" items={dispatch.events.map(event=>({key:event.id,title:dispatchEventLabel(event),actor:event.actorName,time:displayTime(event.at),detail:<><p>{event.detail.stage}</p><p>{[event.detail.reason,event.detail.note,event.detail.pauseReason].filter(Boolean).join('；')}</p>{event.detail.technicianName?<p>维修人员：{event.detail.technicianName}</p>:null}</>}))}/>

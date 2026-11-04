@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import ts from 'typescript';
 import {applyDispatchAction} from '../server/domain/dispatchPolicy.mjs';
-const source=readFileSync(new URL('../client/src/features/dispatch/technicianPrimaryAction.ts',import.meta.url),'utf8');
+const source=readFileSync(new URL('../client/src/features/dispatch/technicianPrimaryAction.ts',import.meta.url),'utf8').replace('../../../../shared/repairProgress.mjs',new URL('../shared/repairProgress.mjs',import.meta.url).href);
 const {outputText}=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}});
 const {technicianPrimaryAction:primary}=await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 const actor={id:'t',name:'维修工',shopId:'s',active:true,role:'technician'};
@@ -29,4 +29,13 @@ test('legacy shared parts do not hide resume, but still disable starting and sub
 test('review with returned pending work requires starting before resubmission',()=>{
  assert.equal(primary({...task,stage:'回审'}),'start-order');
  assert.equal(primary({...task,stage:'回审',items:task.items.map(i=>({...i,status:'维修中'}))}),'submit-order');
+});
+
+test('partially ready material permits starting but keeps completion blocked until fully ready',()=>{
+ const partial={...task,partsRequirement:{mode:'list',items:[{name:'滤芯',quantity:1,unit:'个',preparedAt:'ready'},{name:'刹车片',quantity:1,unit:'个'}],photoIds:[]}};
+ assert.equal(primary(partial),'start-order');
+ const started=act(partial,'start-order');
+ assert.equal(started.items[1].status,'维修中');assert.equal(primary(started),undefined);
+ assert.throws(()=>act(started,'submit-order'),/确认配件备齐/);
+ assert.equal(primary(partial,true,true),'start-order');
 });

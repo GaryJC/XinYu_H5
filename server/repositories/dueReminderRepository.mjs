@@ -11,6 +11,15 @@ export async function dueReminderCandidates(client,now) {
       and nullif(dt.data->>'dueAt','')::timestamptz<=$1::timestamptz+interval '48 hours'
       and exists(select 1 from users u where u.active and (u.role='technician' or 'technician'=any(u.roles)) and u.shop_id=wo.shop_id
         and (dt.technician_id=u.id or dt.data->'technicianIds' ? u.id)
+        and not (
+          (coalesce(jsonb_array_length(nullif(dt.data->'technicianIds','null'::jsonb)),0)>1
+            or coalesce(jsonb_array_length(nullif(dt.data->'partsRequests','null'::jsonb)),0)>0
+            or coalesce(nullif(dt.data->'workerPauses','null'::jsonb),'{}'::jsonb)<>'{}'::jsonb)
+          and exists(select 1 from jsonb_array_elements(coalesce(nullif(dt.data->'items','null'::jsonb),'[]'::jsonb)) item
+            where item->>'responsibleId'=u.id
+            having count(*)>0 and bool_and(coalesce(item->>'status','') in ('待检验','已完工'))
+              and (coalesce(jsonb_typeof(dt.data->'workerSubmissions'->u.id)='object',false)
+                or bool_and(coalesce(item->>'status','')='已完工'))))
         and not exists(select 1 from dispatch_due_reminders r where r.order_id=wo.id and r.recipient_id=u.id
           and r.repair_round=coalesce((dt.data->>'repairRound')::integer,0) and r.due_at=(dt.data->>'dueAt')::timestamptz
           and r.lead_minutes=case when (dt.data->>'dueAt')::timestamptz<=$1::timestamptz+interval '1 hour' then 60

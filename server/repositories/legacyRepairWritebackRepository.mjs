@@ -1,5 +1,8 @@
 import {executeSqlServerQuery,executeSqlServerTransaction} from '../database/sqlServerPool.mjs';
 import {validateWritebackSnapshot,writebackHash,writebackDispatchAllowlist} from '../domain/repairWriteback.mjs';
+// Verified column sizes: hh varchar(200), wxr varchar(100). These are bytes,
+// not the H5 character limit; keep both checks on the database's code page.
+const projectNameMaxBytes=200,workerMaxBytes=100;
 export const LEGACY_REPAIR_HEADERS = `select reid,dh,RTRIM(wd) as wd,RTRIM(ch) as plate,RTRIM(bm) as department,
  RTRIM(del) as deleted,RTRIM(jsrq) as settled,RTRIM(shbz) as approved,xmfy,xmfy0,fyhj,cbhj
  from dbo.qxwxb with (updlock,holdlock) where RTRIM(pgd)=@dispatch_no`;
@@ -67,8 +70,8 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
   // Validate every string before any delete, using the legacy database code page.
   for(const item of snapshot.operation==='remove'?[]:snapshot.items) {
    const worker=item.pendingConfirmation?'':`${item.employeeCode.trim()} ${item.employeeName.trim()}`;
-   await execute(`if DATALENGTH(CONVERT(varchar(8000),@name))>100 or CONVERT(nvarchar(200),CONVERT(varchar(8000),@name))<>@name
-      or DATALENGTH(CONVERT(varchar(8000),@worker))>100 or CONVERT(nvarchar(200),CONVERT(varchar(8000),@worker))<>@worker
+   await execute(`if DATALENGTH(CONVERT(varchar(8000),@name))>${projectNameMaxBytes} or CONVERT(nvarchar(200),CONVERT(varchar(8000),@name))<>@name
+      or DATALENGTH(CONVERT(varchar(8000),@worker))>${workerMaxBytes} or CONVERT(nvarchar(200),CONVERT(varchar(8000),@worker))<>@worker
       raiserror(N'维修项目或负责人超出润丰字段长度或包含不支持字符',16,1)`,(req,sql)=>{req.input('name',sql.NVarChar(200),item.name);req.input('worker',sql.NVarChar(200),worker);});
   }
   for(const header of pending) {
@@ -92,7 +95,7 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
    if(Number(header.xmfy||0)!==amount||![0,amount].includes(Number(header.xmfy0||0)))throw new Error('润丰项目费用合计含人工调整，请核对后再替换');
    await execute(`delete from dbo.qxwxmxb where wd=@wd and dh=@dh and lb=N'项目'`,target);
    for(const [index,item] of snapshot.items.entries())await execute(`insert into dbo.qxwxmxb(wd,dh,lb,hh,wxr,Xh)
-    values(@wd,@dh,N'项目',CONVERT(varchar(100),@name),CONVERT(varchar(100),@worker),@xh)`,(req,sql)=>{
+    values(@wd,@dh,N'项目',CONVERT(varchar(${projectNameMaxBytes}),@name),CONVERT(varchar(${workerMaxBytes}),@worker),@xh)`,(req,sql)=>{
      target(req,sql);req.input('name',sql.NVarChar(200),item.name);req.input('worker',sql.NVarChar(200),header.wd===''&&!item.pendingConfirmation?`${item.employeeCode.trim()} ${item.employeeName.trim()}`:'');req.input('xh',sql.SmallInt,index+1);
     });
    await execute(`update dbo.qxwxb set xmfy=0,xmfy0=0,fyhj=isnull(fyhj,0)-@amount,cbhj=isnull(cbhj,0)-@cost where reid=@reid`,(req,sql)=>{
@@ -110,8 +113,11 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
 // Read-only preflight uses the target database's real code page before inspection commits.
 export async function validateLegacyRepairStrings(snapshot,{execute=executeSqlServerQuery}={}) {
  validateWritebackSnapshot(snapshot);
- const values=snapshot.items.flatMap(item=>[item.name,item.pendingConfirmation?'':`${item.employeeCode.trim()} ${item.employeeName.trim()}`]);
+ const values=snapshot.items.flatMap(item=>[
+  {value:item.name,maxBytes:projectNameMaxBytes},
+  {value:item.pendingConfirmation?'':`${item.employeeCode.trim()} ${item.employeeName.trim()}`,maxBytes:workerMaxBytes}
+ ]);
  if(!values.length)return;
- const query=values.map((_,i)=>`if DATALENGTH(CONVERT(varchar(8000),@v${i}))>100 or CONVERT(nvarchar(200),CONVERT(varchar(8000),@v${i}))<>@v${i} raiserror(N'维修项目或负责人超出润丰字段长度或包含不支持字符，请修改后重新检验',16,1)`).join('\n');
- await execute(query,(request,sql)=>values.forEach((value,i)=>request.input(`v${i}`,sql.NVarChar(200),value)));
+ const query=values.map(({maxBytes},i)=>`if DATALENGTH(CONVERT(varchar(8000),@v${i}))>${maxBytes} or CONVERT(nvarchar(200),CONVERT(varchar(8000),@v${i}))<>@v${i} raiserror(N'维修项目或负责人超出润丰字段长度或包含不支持字符，请修改后重新检验',16,1)`).join('\n');
+ await execute(query,(request,sql)=>values.forEach(({value},i)=>request.input(`v${i}`,sql.NVarChar(200),value)));
 }

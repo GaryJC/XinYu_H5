@@ -1,5 +1,6 @@
 import { hasAnyRole } from "../../shared/roles.mjs";
 import { technicianIds } from './dispatchPolicy.mjs';
+import {hasSubmittedPersonalWork} from './individualRepair.mjs';
 export const dueReminderStages=['待接单','待开工','维修中','暂停'];
 // Only the currently applicable window is sent. Missed windows are never backfilled in a burst.
 export function dueReminderWindow(task,now=Date.now()) {
@@ -10,7 +11,8 @@ export function dueReminderWindow(task,now=Date.now()) {
 }
 export function dueReminderRecipients(task,people,now=Date.now()) {
   if(!dueReminderWindow(task,now)) return [];
-  return people.filter(p=>p.active && (hasAnyRole(p, ['technician','outsourcing'])||p.outsourcingRoleMember) && p.shopId===task.shopId && technicianIds(task).includes(p.id));
+  return people.filter(p=>p.active && (hasAnyRole(p, ['technician','outsourcing'])||p.outsourcingRoleMember) && p.shopId===task.shopId && technicianIds(task).includes(p.id)
+    && (!task.items || !hasSubmittedPersonalWork(task,p.id)));
 }
 export function isCurrentDueReminder(task,notification,recipient,now=Date.now()) {
   return (task.repairRound||0)===(notification.payload.repairRound||0) && dueReminderWindow(task,now)===notification.payload.leadMinutes

@@ -22,8 +22,8 @@ test('repair rounds persist independently, serialize concurrent reopen and prese
   const {processNotification}=await import('../server/workers/dispatchNotifications.mjs');
   const {queueDueReminders}=await import('../server/workers/dueReminders.mjs');
   const dueAt=new Date(Date.now()+36*3600000).toISOString();
-  async function seed(id,status) {
-   await pool.query("insert into work_orders(id,status,advisor,technician,inspector,shop_id,old_parts_handling,vehicle_plate,arrival_date,estimated_fee,settlement_amount,dispatch_no) values($1,$2,'顾问','原技师','检验员','shop-hq','客户带走','沪ATEST','2026-10-01',500,500,$3)",[id,status,`A${id==='closed'?100:101}`]);
+  async function seed(id,status,dispatchNo=`A${id==='closed'?100:101}`) {
+   await pool.query("insert into work_orders(id,status,advisor,technician,inspector,shop_id,old_parts_handling,vehicle_plate,arrival_date,estimated_fee,settlement_amount,dispatch_no) values($1,$2,'顾问','原技师','检验员','shop-hq','客户带走','沪ATEST','2026-10-01',500,500,$3)",[id,status,dispatchNo]);
    for(const item of [1,2]) await pool.query("insert into repair_items(order_id,client_item_id,item_no,name,status,owner,start_at,finish_at,inspector,labor_fee) values($1,$2::bigint,$2::integer,$3,'已完工','原技师','2026-10-01','2026-10-02','检验员',250)",[id,item,`原项目${item}`]);
    const task=await repo.getDispatchTask(pool,id,manager);Object.assign(task,{stage:'维修完成',version:1,technicianIds:['t'],technicianId:'t',technicianName:'原技师',participantIds:['t'],workHours:2,workHoursRecordedBy:'a',workHoursRecordedName:'顾问',workHoursRecordedAt:'2026-10-02T00:00:00Z',completedAt:'2026-10-02T00:00:00Z',firstStartedAt:'2026-10-01T00:00:00Z'});await repo.saveDispatchTask(pool,task);
   }
@@ -70,5 +70,21 @@ test('repair rounds persist independently, serialize concurrent reopen and prese
   await createFileRecord({orderId:'unsettled',kind:'repair_progress_photo',storageProvider:'local',bucket:'',objectKey:'fixture',mimeType:'image/png',sizeBytes:4,uploadedBy:tech.id});
   const roundPhoto=(await pool.query("select id from files where order_id='unsettled' and kind='repair_progress_photo'")).rows[0];await pool.query('update files set repair_round=1 where id=$1',[roundPhoto.id]);
   for(const action of ['accept','submit-order'])await act(tech,action,{},'unsettled');await act(inspector,'claim-inspection',{},'unsettled');await act(inspector,'inspect',{},'unsettled');await db.transitionWorkOrder('unsettled','完成',advisor.name,'完结');assert.equal((await pool.query("select status from work_orders where id='unsettled'")).rows[0].status,'完成');
+  await seed('cancelled-addition','待结算','A102');
+  const original=(await svc.dispatchDetail(manager,'cancelled-addition')).task;
+  const rows=t=>t.items.map(({id,name,responsibleId})=>({id,name,responsibleId}));
+  const withExtra=await act(advisor,'edit-repair-items',{repairItems:[...rows(original),{name:'误加检查',responsibleId:newTech.id}]},'cancelled-addition');
+  const deletedId=withExtra.items.at(-1).id;
+  const removal={action:'edit-repair-items',expectedVersion:withExtra.version,requestId:randomUUID(),repairItems:rows(original)};
+  const cancelled=await svc.executeDispatchAction(advisor,'cancelled-addition',removal);
+  assert.equal(cancelled.task.stage,'维修完成');assert.equal(cancelled.task.orderStatus,'待结算');
+  assert.deepEqual(cancelled.task.items,original.items);
+  await svc.executeDispatchAction(advisor,'cancelled-addition',removal);
+  const queued=(await pool.query("select snapshot,status from repair_writebacks where order_id='cancelled-addition'")).rows;
+  assert.equal(queued.length,1);assert.equal(queued[0].status,'pending');
+  assert.deepEqual(queued[0].snapshot.items.map(item=>item.id),original.items.map(item=>item.id));
+  const later=await act(advisor,'reopen-repair',{reason:'新的检查',additionalItems:['后续项目'],technicianIds:[tech.id],dueAt},'cancelled-addition');
+  assert.ok(later.items[0].id<deletedId);assert.equal(later.repairItemIdFloor,later.items[0].id);
+  assert.deepEqual((await svc.dispatchDetail(manager,'cancelled-addition')).repairRounds[0].task.items,original.items);
  } finally {if(pool){await pool.end();await Promise.all(connectionsClosed);}await admin.query(`drop database if exists "${dbName}" with (force)`);await admin.end();}
 });

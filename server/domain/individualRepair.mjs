@@ -30,10 +30,11 @@ export function applyIndividualAction(task,input,actor,people,now,apply,{persona
   if(input.partsOwnerId&&input.partsOwnerId!==ownerId)throw new HttpError(403,'只能操作本人的领料申请');
   const own=task.items.filter(i=>i.responsibleId===ownerId);
   if(!own.length&&!warehouse&&!['accept','record-parts','edit-repair-items'].includes(input.action))throw new HttpError(409,'尚未分配本人维修项目，请联系服务顾问');
+  if(input.action==='pause'&&hasSubmittedPersonalWork(task,ownerId))throw new HttpError(409,'本人项目已提交或完成，不能暂停维修');
   if(input.action==='record-parts'&&own.length&&own.every(i=>['待检验','已完工'].includes(i.status)))throw new HttpError(409,'本人项目已提交，不能再申请领料');
   const requirement=personalParts(task,ownerId);
   if(warehouse&&!requirement)throw new HttpError(409,'领料申请不存在，请刷新');
-  if(scopedRepair&&['start-order','submit-order','start','pick'].includes(input.action)&&task.partsRequirement?.mode!=='none'&&task.partsRequirement&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt)
+  if(scopedRepair&&['submit-order','pick'].includes(input.action)&&task.partsRequirement?.mode!=='none'&&task.partsRequirement&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt)
     throw new HttpError(409,'历史共同配件尚未备齐，请等待仓库确认');
   if(input.repairItems?.some(row=>row.id!==undefined&&!own.some(i=>i.id===row.id)||row.responsibleId&&row.responsibleId!==ownerId))throw new HttpError(403,'只能编辑和提交本人负责的项目');
   if(input.itemId!==undefined&&!own.some(i=>i.id===input.itemId))throw new HttpError(403,'只能操作本人负责的项目');

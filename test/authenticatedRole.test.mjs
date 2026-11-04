@@ -1,4 +1,5 @@
 import * as repairCompletion from '../shared/repairCompletion.mjs';
+import * as pendingRepairLimits from '../shared/pendingRepairLimits.mjs';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -21,6 +22,7 @@ function loadModule(relativePath, dependencies) {
 const { roles } = loadModule("../client/src/features/work-orders/domain/workOrderDomain.ts", {
   "../../dispatch/dispatchAvailability": { dispatchEnabled: false },
   "./repairItems": {},
+  "../../../../../shared/pendingRepairLimits.mjs": pendingRepairLimits,
   "../../../../../shared/repairCompletion.mjs": repairCompletion
 });
 
@@ -71,6 +73,7 @@ test("supported logins still save their token and return the authenticated user"
 
 test('work order cards prioritize active repair stages over legacy settlement labels',()=>{
  const {workOrderDisplayStatus}=loadModule('../client/src/features/work-orders/domain/workOrderDomain.ts',{
+  '../../../../../shared/pendingRepairLimits.mjs':pendingRepairLimits,
   '../../dispatch/dispatchAvailability':{dispatchEnabled:true},'./repairItems':{},'../../../../../shared/repairCompletion.mjs':repairCompletion
  });
  for(const status of ['待结算','完成']){

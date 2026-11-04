@@ -22,6 +22,10 @@ export class VehicleTripRepository {
   async getVehicle(id, lock = false) {
     return vehicle((await this.database.query(`select * from company_vehicles where id=$1${lock ? ' for update' : ''}`, [id])).rows[0]);
   }
+  async isVehicleInUse(vehicleId, exceptTripId) {
+    const {rows}=await this.database.query("select 1 from vehicle_trip_requests where vehicle_id=$1 and status='用车中' and id<>$2 limit 1",[vehicleId,exceptTripId]);
+    return rows.length>0;
+  }
   async saveVehicle(id, shopId, input, existing) {
     const values = [id, shopId, input.plate, input.brand, input.model, input.active];
     const sql = existing

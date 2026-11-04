@@ -77,6 +77,8 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
         if (action === 'depart') {
           const car = await repo.getVehicle(trip.vehicleId, true);
           if (!car?.active) throw new HttpError(409, '车辆已停用，不能出车');
+          // The vehicle lock serializes departures across different applications.
+          if (await repo.isVehicleInUse(trip.vehicleId, id)) throw new HttpError(409, '车辆正在使用中，请等待还车后再出车');
         }
         if (['depart', 'return'].includes(action)) {
           const stage = { depart: 'departure', return: 'return' }[action];

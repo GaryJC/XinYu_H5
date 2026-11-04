@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import type { UserProfile, WorkOrder } from "../../../../shared/types";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
 import type { SignatureSession } from "./WorkOrderSignatureDialog";
+import { saveOnsiteSignature } from './saveOnsiteSignature';
 
 export function useArchiveSignature(user: UserProfile | undefined, onUpdated: (order: WorkOrder) => void, onSigned: () => void) {
   const [session, setSession] = useState<SignatureSession>();
@@ -34,9 +35,7 @@ export function useArchiveSignature(user: UserProfile | undefined, onUpdated: (o
     }
   }
   async function completeSignature(order: WorkOrder, token: string, imageBase64: string) {
-    const file = await workOrderApi.uploadFile({ orderId: order.id, kind: "signature_image",
-      fileName: `signature-${order.id}.png`, mimeType: "image/png", imageBase64 });
-    const signed = await workOrderApi.signByToken(token, order.customer.name || "客户签名", file.id);
+    const signed = await saveOnsiteSignature(order, token, imageBase64);
     onUpdated(signed);
     onSigned();
     return signed;

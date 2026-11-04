@@ -5,9 +5,10 @@ const a={id:'a',name:'甲',role:'technician',active:true,shopId:'s'},b={...a,id:
 const people=[a,b,w];
 const task=()=>({shopId:'s',orderId:'o',orderStatus:'维修中',version:1,stage:'待开工',acceptedAt:'accepted',technicianIds:['a','b'],technicianId:'a',partsRequirement:{mode:'list',items:[{name:'滤芯',quantity:1,unit:'个'},{name:'耗材',quantity:2,unit:'片'}],photoIds:[],recordedBy:'a'},items:[{id:1,name:'保养',status:'待开工',responsibleId:'a'},{id:2,name:'检查',status:'待开工',responsibleId:'b'}]});
 const act=(t,rows,actor=w)=>applyDispatchAction(t,{action:'confirm-parts',expectedVersion:t.version,requestId:'preparation-test',partsPreparation:rows},actor,people,'2026-10-22T06:00:00Z');
-test('partial preparation keeps pending items; final preparation ends warehouse work without issuing',()=>{
+test('partial shared preparation starts only its recipient; remaining material stays pending',()=>{
  const original=task(),first=act(original,[{index:0,recipientId:'a'}]);
- assert.equal(first.stage,'待开工');assert.equal(first.partsRequirement.preparedAt,undefined);
+ assert.equal(first.stage,'维修中');assert.equal(first.partsRequirement.preparedAt,undefined);
+ assert.deepEqual(first.items.map(item=>item.status),['维修中','待开工']);
  assert.equal(first.partsRequirement.items[0].preparedName,'仓管');assert.equal(first.partsRequirement.items[0].recipientName,'甲');assert.equal(first.partsRequirement.items[1].preparedAt,undefined);
  assert.equal(first.partsRequirement.items[0].issuedAt,undefined);assert.deepEqual(original,task());
  const last=act(first,[{index:1,recipientId:'b'}]);
@@ -25,12 +26,12 @@ test('preparation validates selection, actor and recipient; cannot repeat comple
 
 const individual=()=>{const t=task();t.partsRequests=['a','b'].map(id=>({...structuredClone(t.partsRequirement),ownerId:id,ownerName:id}));delete t.partsRequirement;return t;};
 const batch=(t,groups,extra={},actor=w)=>applyDispatchAction(t,{action:'confirm-parts',preparationGroups:groups,expectedVersion:t.version,requestId:'batch-preparation-test',...extra},actor,people,'2026-10-22T06:00:00Z');
-test('atomic multi-person preparation keeps each application and starts only fully prepared workers',()=>{
+test('atomic multi-person preparation starts workers with any ready personal material',()=>{
  const original=individual();
  const next=batch(original,[{partsOwnerId:'a',items:[{index:0,recipientId:'a'},{index:1,recipientId:'a'}]},{partsOwnerId:'b',items:[{index:0,recipientId:'b'}]}]);
  assert.deepEqual(original,individual());assert.equal(next.version,original.version+1);
  assert.ok(next.partsRequests.find(p=>p.ownerId==='a').preparedAt);assert.equal(next.partsRequests.find(p=>p.ownerId==='b').preparedAt,undefined);
- assert.equal(next.items.find(i=>i.responsibleId==='a').status,'维修中');assert.equal(next.items.find(i=>i.responsibleId==='b').status,'待开工');
+ assert.equal(next.items.find(i=>i.responsibleId==='a').status,'维修中');assert.equal(next.items.find(i=>i.responsibleId==='b').status,'维修中');
  assert.equal(next.partsRequests.find(p=>p.ownerId==='b').items[1].preparedAt,undefined);
 });
 test('batch rejects mixed, malformed, duplicate, unauthorized and stale operations without mutation',()=>{

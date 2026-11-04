@@ -1,6 +1,7 @@
 import {inspectionDeferredOwner} from '../../shared/inspectionDeferredOwnership.mjs';
 import {hasAnyRole,hasRole} from '../../shared/roles.mjs';
 import {pendingRepairScheduleBlock} from '../../shared/pendingRepairScheduling.mjs';
+import {hasPendingInspection} from '../../shared/repairProgress.mjs';
 import {HttpError} from '../http/HttpError.mjs';
 import {canInspect,applyDispatchAction,validateDispatchRequest} from '../domain/dispatchPolicy.mjs';
 import {cancelInspectionDeferred} from '../domain/inspectionDeferred.mjs';
@@ -69,12 +70,18 @@ export async function processInspectionDeferred(client,actor,id,input,row) {
   entry.cancelledItem=task.items.find(i=>i.id===entry.itemId)||entry.originalItem;
   entry.state='declined';entry.inspectionState='cancelled';operation='cancel';
  } else throw new HttpError(400,'检验待定项目只允许派工、删除或撤销');
+ if(operation==='schedule'&&next.inspectorId&&hasPendingInspection(next)
+   &&!canInspect(next,people.find(person=>person.id===next.inspectorId))) {
+  delete next.inspectorId;delete next.inspectorName;delete next.inspectionClaimedAt;
+ }
  entry.lastOperationRequestId=input.requestId;
  entry.history.push({action:operation==='schedule'?'检验员直接派工':input.action==='decline'?'删除／不再维修':'撤销维修',actor:current.name,actorId:current.id,at:now,note:input.note||''});
  await writePendingRepairs(client,id,items);
  await saveRepairRound(client,task,next,current,operation==='schedule'&&task.stage==='维修完成'?'reopen-repair':'inspection-deferred');
  await saveDispatchTask(client,next);
  const {rows:[event]}=await client.query('insert into dispatch_events(order_id,actor_id,actor_name,request_id,request_body,action,detail) values($1,$2,$3,$4,$5,$6,$7) returning id',[id,current.id,current.name,input.requestId,JSON.stringify(input),`inspection-deferred-${operation}`,JSON.stringify({stage:next.stage,items:next.items,previousItems:task.items,itemId:entry.itemId,reason:input.note||entry.reason,repairRound:next.repairRound})]);
+ if(hasPendingInspection(next)&&task.inspectorId&&!next.inspectorId)
+  await client.query('insert into dispatch_inspection_notifications(event_id,order_id) values($1,$2) on conflict do nothing',[event.id,id]);
  if(operation==='cancel') {
   // Finishing by cancellation has no later inspection to publish passed work.
   // Keep local cancellation independent from legacy availability/bindings;

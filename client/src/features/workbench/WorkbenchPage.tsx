@@ -109,6 +109,7 @@ export function WorkbenchPage() {
                   ...(dispatchEnabled ? [
                     { value: "warehouse", label: "仓管｜测试" },
                     { value: "technician", label: "李富强｜维修工（测试）" },
+                    { value: "technician-peer", label: "维修工乙｜多人测试" },
                     { value: "inspector", label: "检验员｜测试" }
                   ] : []),
                   { value: "employee", label: "普通员工｜出车申请" },

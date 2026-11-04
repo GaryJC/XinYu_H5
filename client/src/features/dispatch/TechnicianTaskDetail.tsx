@@ -7,6 +7,7 @@ import { TaskDueDateEditor } from './TaskDueDateEditor';
 import {partsHistoryEvents} from './partsHistory';
 import {individualRepair,personalTask,partsController} from './individualRepair';
 import {technicianPrimaryAction} from './technicianPrimaryAction';
+import {technicianTaskStatus} from './technicianTaskStatus';
 import {RepairWritebackStatus} from './RepairWritebackStatus';
 import {RepairItemsEditor} from './RepairItemsEditor';
 import {useRepairItemsEditor} from './useRepairItemsEditor';
@@ -23,8 +24,10 @@ import { EditOutlined } from '@ant-design/icons';
 import type { UserProfile } from '../../../../shared/types';
 import type { DispatchController } from './useDispatchController';
 import { FormDialog } from '../../shared/ui/BusinessForm';
+import {canStartRepairWithParts} from '../../../../shared/repairProgress.mjs';
+import {partsStatus} from './partsProgress';
 import { RepairPhotoPanel } from './RepairPhotoPanel';
-import { dispatchEventLabel,displayTime,taskStatusLabel } from './dispatchLabels';
+import { dispatchEventLabel,displayTime } from './dispatchLabels';
 export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{controller:DispatchController;user:UserProfile;onPhotoBlocked:(blocked:boolean)=>void}) {
   const [actionBar,setActionBar]=useState<HTMLDivElement|null>(null);
   const actionBarHeight=useElementHeight(actionBar);
@@ -39,6 +42,7 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
   const wholeTask=c.detail!.task;
   const individual=individualRepair(wholeTask);
   const task=personalTask(wholeTask,user.id);
+  const status=technicianTaskStatus(wholeTask,user.id);
   const ownController=individual?{...c,detail:{...c.detail!,task}}:c;
   const materialController=partsController(c,individual?user.id:undefined);
   const itemsEditor=useRepairItemsEditor(task,ownController);
@@ -53,9 +57,9 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
   const canPhoto=editable&&!ownDone&&['待开工','维修中','暂停','回审'].includes(task.stage);
   const waitingForParts=Boolean(task.partsRequirement&&task.partsRequirement.mode!=='none'&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt);
   const legacyWaiting=individual&&wholeTask.partsRequirement&&wholeTask.partsRequirement.mode!=='none'&&!wholeTask.partsRequirement.issuedAt&&!wholeTask.partsRequirement.preparedAt;
-  const primaryAction=technicianPrimaryAction(task,Boolean(legacyWaiting));
+  const primaryAction=technicianPrimaryAction(task,Boolean(legacyWaiting),canStartRepairWithParts(wholeTask,user.id));
   const primary=individual&&!ownDone&&task.stage==='维修中'&&task.items.some(i=>i.status==='待检验')&&!waitingForParts&&!legacyWaiting?primaryAction||'submit-order':primaryAction;
-  const partsNotice=waitingForParts&&['待开工','维修中','暂停','回审'].includes(task.stage)?<Alert type="info" showIcon title={task.partsRequirement?.preparedAt?'配件已备齐，请到仓库领取':'等待仓库备料'} description={task.stage==='回审'?'仓管确认本轮配件全部备齐后可提交回审。':'仓管确认本轮配件全部备齐后可提交完工。'}/>:null;
+  const partsNotice=waitingForParts&&['待开工','维修中','暂停','回审'].includes(task.stage)?<Alert type="info" showIcon title={partsStatus(task.partsRequirement)==='部分备齐'?'部分备齐':'等待仓库备料'} description={task.stage==='回审'?'仓管确认本轮配件全部备齐后可提交回审。':'仓管确认本轮配件全部备齐后可提交完工。'}/>:null;
   const label=primary==='accept'?'确认接单':primary==='resume'?'继续维修':primary==='start-order'?(task.rework&&task.rejectedItemIds?.length?'开始返工':'开始维修'):task.stage==='回审'?'提交回审':individual?'提交本人完工':'提交完工';
   const handoverField=itemsEditor.handover?<label className="repair-completion-note"><span>原因 / 交接说明（必填）</span><Input.TextArea aria-label="原因或交接说明" value={itemsEditor.handoverReason} maxLength={2000} rows={3} disabled={c.busy} onChange={e=>itemsEditor.setHandoverReason(e.target.value)}/></label>:null;
   async function confirm() {
@@ -65,7 +69,7 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
   }
   return <div className="technician-detail" style={{paddingBottom:actionBar?Math.max(24,actionBarHeight+16):0}}>
     <RepairWritebackStatus controller={c}/>
-    <TaskOverview task={task} dueEditor={<TaskDueDateEditor key={`${task.orderId}-${user.id}`} controller={c} user={user} blocked={blocked} />}><RepairStatusTag status={taskStatusLabel(task)}/></TaskOverview>
+    <TaskOverview task={task} dueEditor={<TaskDueDateEditor key={`${task.orderId}-${user.id}`} controller={c} user={user} blocked={blocked} />}><RepairStatusTag status={status}/></TaskOverview>
     <nav className="technician-detail-nav" aria-label="维修详情快捷定位">
       <Button icon={<Wrench size={16} aria-hidden="true"/>} onClick={()=>jumpTo(projectsRef.current)}>维修项目</Button>
       <Button icon={<Package size={16} aria-hidden="true"/>} onClick={()=>jumpTo(partsRef.current)}>所需配件</Button>
@@ -79,11 +83,10 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
     {task.repairRound&&task.rework&&['待开工','维修中','暂停'].includes(task.stage)&&task.rejectedItemIds?.length?<Alert type="error" showIcon title="本轮检验退回，请重新维修指定项目" description={task.reworkReason}/>:null}
     {task.rework&&!task.repairRound&&['待开工','维修中','暂停'].includes(task.stage)?<Alert type="warning" title="需要返工" description={task.reworkReason||'请查看退回维修项目'}/>:null}
     {task.stage==='回审'?<Alert type="warning" showIcon title="检验单已发送回审，请核对并编辑维修项目后提交回审"/>:null}
-    {task.stage==='待检验'?<Alert type="info" title={task.inspectorName?`${task.inspectorName}已接手${task.rejectedItemIds?.length?'复检':'检验'}`:task.rejectedItemIds?.length?'返工已提交，等待检验员领取复检':'已提交，等待检验员领取'}/>:null}
+    {status==='待检验'?<Alert type="info" title={task.inspectorName?`${task.inspectorName}已接手${task.rejectedItemIds?.length?'复检':'检验'}`:task.rejectedItemIds?.length?'返工已提交，等待检验员领取复检':'已提交，等待检验员领取'}/>:null}
     {partsNotice}
-    {legacyWaiting?<Alert type="info" title="历史共同配件尚未备齐，请等待仓库确认"/>:null}
+    {legacyWaiting?<Alert type="info" title="历史共同配件尚未全部备齐"/>:null}
 
-    {individual&&task.items.length>0&&task.items.every(i=>['待检验','已完工'].includes(i.status))&&wholeTask.stage!=='待检验'?<Alert type="success" title="本人项目已提交，等待其他维修工完成"/>:null}
     <section ref={projectsRef} tabIndex={-1} className="technician-section-anchor technician-projects" aria-label="维修项目"><div className="repair-items-heading"><h3>{individual?'本人负责项目':'主要作业与增修项目'}</h3>{canEditItems&&!itemsEditor.editing?<Button icon={<EditOutlined/>} disabled={c.busy||blocked} onClick={itemsEditor.begin}>编辑项目</Button>:null}</div>
       <RepairItemsEditor compact technicians={(task.executionMode==='outsourced'?c.people.contractors:c.people.technicians).filter(p=>individual?p.id===user.id:(task.technicianIds??[task.technicianId]).includes(p.id))} items={task.items} rows={itemsEditor.editing&&dialog!=='submit-order'?itemsEditor.rows:task.items} onChange={itemsEditor.setRows} editing={itemsEditor.editing&&dialog!=='submit-order'} disabled={c.busy}/>
       {itemsEditor.editing&&dialog!=='submit-order'?<>{handoverField}<div className="repair-items-save"><Button disabled={c.busy} onClick={itemsEditor.cancel}>取消</Button><Button type="primary" loading={c.busy} disabled={!itemsEditor.valid||itemsEditor.stale||blocked} onClick={()=>void itemsEditor.save()}>保存项目</Button></div>{itemsEditor.stale?<Alert type="warning" title="工单已更新，请重新载入项目后编辑" action={<Button onClick={itemsEditor.begin}>重新载入</Button>}/>:null}</>:null}
@@ -110,7 +113,7 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
       {primary?<Button type="primary" block loading={c.busy} disabled={c.busy||blocked||itemsEditor.editing} onClick={()=>{if(primary==='accept'){setPartsDialog(true);}else if(primary==='submit-order'){itemsEditor.begin();setNote('');setDialog(primary);}else void c.act({action:primary});}}>{label}</Button>:null}</div>{waitingForParts?<span role="status">本轮配件尚未备齐，暂不能{task.stage==='回审'?'提交回审':'提交完工'}</span>:null}{blocked?<span>请等待照片上传完成，或处理失败照片</span>:null}</div>:null}
     {partsDialog?<PartsRequirementDialog controller={materialController} accepting={task.stage==='待接单'} onUploading={photoBlocked} onClose={()=>setPartsDialog(false)}/>:null}
     {dialog?<FormDialog open className="technician-completion-dialog" title={dialog==='submit-order'?(task.stage==='回审'?'确认提交回审？':'确认维修完成？'):dialog==='pause'?'暂停维修':'无法接单'} okText={dialog==='submit-order'?(task.stage==='回审'?'提交回审':'确认提交'):'确认'} onOk={()=>void confirm()} confirmLoading={c.busy} okButtonProps={{disabled:dialog==='submit-order'&&(!hasRepairPhoto||blocked||!itemsEditor.valid||itemsEditor.stale||primary!=='submit-order')}} onCancel={()=>{if(!c.busy){setDialog(undefined);itemsEditor.cancel();}}} cancelButtonProps={{disabled:c.busy}} closable={!c.busy} mask={{closable:false}}>
-      {dialog==='submit-order'?<p>{individual?'提交前须上传至少一张本人本轮维修照片。只提交本人负责项目，全部维修工完成后统一交检。':'提交前须上传至少一张本轮维修照片，完工说明选填。提交后由检验员检查。'}</p>:<Select aria-label="问题原因" style={{width:'100%',marginBottom:16}} value={reason} onChange={setReason} options={(dialog==='pause'?['待配件','待客户确认','技术问题','其他']:['时间冲突','无法维修此项目','其他']).map(value=>({value,label:value}))}/>}
+      {dialog!=='submit-order'?<Select aria-label="问题原因" style={{width:'100%',marginBottom:16}} value={reason} onChange={setReason} options={(dialog==='pause'?['待配件','待客户确认','技术问题','其他']:['时间冲突','无法维修此项目','其他']).map(value=>({value,label:value}))}/>:null}
       {dialog==='submit-order'?<section><h3>{individual?'本人负责项目':'主要作业与增修项目'}</h3><RepairItemsEditor technicians={(task.executionMode==='outsourced'?c.people.contractors:c.people.technicians).filter(p=>individual?p.id===user.id:(task.technicianIds??[task.technicianId]).includes(p.id))} items={task.items} rows={itemsEditor.rows} onChange={itemsEditor.setRows} editing disabled={c.busy}/>{itemsEditor.stale?<Alert type="warning" title="工单已更新，请重新载入项目后编辑" action={<Button onClick={itemsEditor.begin}>重新载入</Button>}/>:null}</section>:null}
       {dialog==='submit-order'?handoverField:null}
       {dialog==='submit-order'&&primary==='start-order'?<Alert type="warning" showIcon title="请先返回并点击开始返工，仅需重新开工未通过的项目"/>:null}

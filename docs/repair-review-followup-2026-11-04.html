@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>继续复查：回审增项与检验交接</title>
+<style>
+body{margin:0;background:#f5f7fb;color:#243247;font:16px/1.8 system-ui,-apple-system,sans-serif}main{max-width:980px;margin:32px auto;padding:0 20px 40px}h1{font-size:28px;line-height:1.4}h2{font-size:20px;margin-top:0}section{background:white;border:1px solid #dce5ef;border-radius:14px;padding:22px;margin:20px 0}.muted{color:#63748a}.scroll{overflow-x:auto}table{width:100%;min-width:650px;border-collapse:collapse}th,td{text-align:left;vertical-align:top;border-bottom:1px solid #e1e8f0;padding:12px}th{background:#f0f5fb}li{margin:8px 0}code{font-size:13px;overflow-wrap:anywhere}@media(max-width:600px){main{padding:0 14px}section{padding:16px}h1{font-size:24px}}
+</style>
+<main><p class="muted">本地复查 · 2026-11-04</p><h1>修复回审增项误开工，以及兼岗检验员的领取冲突</h1>
+<p>本次继续检查多人维修的编辑、备料、改派、暂停和分批检验路径。发现两类可复现的问题，已修复并完成本地回归。</p>
+<section><h2>问题与修复结果</h2><div class="scroll"><table><thead><tr><th>触发场景</th><th>原来的问题</th><th>现在的结果</th></tr></thead><tbody>
+<tr><td>回审期间，乙申请的配件一项未齐，又新增了维修项目。</td><td>普通编辑已检查配件，但回审外层逻辑再次强制把新项目标成维修中，并写入开工时间。</td><td>新项目保持待开工，没有虚构的开工记录。本人部分配件备齐后可以开始维修；完工提交仍要求相关配件全部备齐。</td></tr>
+<tr><td>兼任维修工的检验员已领取甲的待检项目，随后被分配乙的未完成项目或新的维修项目。</td><td>自检检查正确拒绝其检验，但原领取关系仍占用任务，其他检验员无法领取。</td><td>解除失效领取关系，保留甲的待检记录和已有检验历史，由其他独立检验员接手。</td></tr>
+<tr><td>上述交接发生后，需要通知新的检验员。</td><td>原来没有为这类领取解除安排通知；处理程序也只识别提检、重试事件。</td><td>生成接手通知任务，以真正进入检验通知队列的事件判断新旧，排除维修参与人。重复请求不重复生成通知，后续无关编辑不会使通知失效。</td></tr>
+</tbody></table></div></section>
+<section><h2>保留的行为</h2><ul>
+<li>无需配件或本人部分配件备齐时，新增项目仍可按原有规则开工；本人的剩余配件仍由仓管继续处理。</li>
+<li>甲的备料、编辑和提交不改写乙的项目、暂停或已完成记录。</li>
+<li>没有自检冲突的检验领取保持原状；历史检验人及逐项检验记录不会因为后续增项而抹除。</li>
+<li>回审仍通过原有开始维修／提交回审入口推进，没有放宽本人完工、照片和独立检验的要求。</li>
+</ul></section>
+<section><h2>验证结果</h2><ul>
+<li>修复前，5 个新增领域测试中有 4 个失败；随后数据库测试复现了接手通知被误判为过期。</li>
+<li>最终 <code>npm run check</code> 通过：859 项通过、22 项环境依赖测试跳过，TypeScript 和生产构建通过。</li>
+<li>本地 PostgreSQL 的派工、检验待定、维修轮次测试全部通过，共 46 项。覆盖实际保存和重读、配件逐项备齐、改派／普通增项／回审增项、请求重放和通知接收人。</li>
+<li><code>git diff --check</code> 通过。继续保留原有图表和 PDF 构建包大于 500 kB 的提示。</li>
+</ul><p class="muted">没有修改现有 dummy data 的进度，没有向外部发送通知，没有访问或写入润丰，也没有部署或推送。数据库测试使用自动清理的隔离库。未进行真实钉钉设备与消息投递测试。</p></section>
+<section><h2>代码位置</h2><ul>
+<li><code>server/domain/dispatchPolicy.mjs</code>：回审新增项目的开工检查、失效检验领取解除。</li>
+<li><code>server/services/dispatchService.mjs</code>：领取解除后的检验通知入队。</li>
+<li><code>server/workers/inspectionNotifications.mjs</code>：按实际通知任务判断新旧，复用已有数据库查询。</li>
+<li><code>test/repairReviewFollowup.test.mjs</code> 与 <code>test/dispatch.integration.test.mjs</code>：回归测试。</li>
+</ul></section></main></html>

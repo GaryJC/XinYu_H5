@@ -83,16 +83,29 @@ export async function processRepairWritebacks(runTransaction,write,shouldContinu
 }
 
 export async function retryFailedRepairWriteback(client,id,actorName) {
- if(repairWritebackSimulationEnabled())return retryRepairWritebackSimulation(client,id,actorName);
+ if(repairWritebackSimulationEnabled())return retryRepairWritebackSimulation(client,id,actorName,
+  job=>repairInvalidWritebackSnapshot(client,id,job,{checkLegacyStrings:false}));
  const {rows}=await client.query("select id,status,snapshot,event_id from repair_writebacks where order_id=$1 and status<>'manual' order by (status<>'synced') desc,case when status<>'synced' then id end asc,id desc limit 1 for update",[id]);
  if(!rows[0]||!['failed','synced'].includes(rows[0].status))throw new HttpError(409,'仅失败或已完成的同步任务可以重试');
  const job=rows[0];
+ if(job.status==='failed') {
+  const snapshot=await repairInvalidWritebackSnapshot(client,id,job);
+  if(snapshot) {
+   await client.query('update repair_writebacks set snapshot=$2 where id=$1',[job.id,JSON.stringify(snapshot)]);
+   await client.query('insert into audit_logs(order_id,actor,action) values($1,$2,$3)',[id,actorName,`恢复无效润丰写回快照 ${job.id}`]);
+  }
+ }
+ await client.query("update repair_writebacks set status='pending',error='',attempts=0,next_attempt_at=now() where id=$1",[rows[0].id]);
+ await client.query("insert into audit_logs(order_id,actor,action) values($1,$2,'重试润丰检验写回')",[id,actorName]);
+}
+
+async function repairInvalidWritebackSnapshot(client,id,job,{checkLegacyStrings=true}={}) {
  // Only structurally invalid snapshots are safe to repair in place: the writer
  // validates them before opening SQL Server or recording an idempotency receipt.
  // Valid (including synced) snapshots must remain byte-for-byte stable on retry.
  let invalid=false;
  try {validateWritebackSnapshot(job.snapshot);} catch {invalid=true;}
- if(job.status==='failed'&&invalid) {
+ if(invalid) {
   const {rows:events}=await client.query('select action,detail from dispatch_events where id=$1 and order_id=$2',[job.event_id,id]);
   let snapshot;
   if(events[0]?.action==='inspection-deferred-cancel'&&job.snapshot.operation!=='replace') {
@@ -113,14 +126,13 @@ export async function retryFailedRepairWriteback(client,id,actorName) {
   }
   try {
    validateWritebackSnapshot(snapshot);
-   const {rows:orders}=await client.query('select dispatch_no from work_orders where id=$1',[id]);
-   if(snapshot.operation!=='remove'&&writebackAllowed(orders[0]?.dispatch_no))await validateLegacyRepairStrings(snapshot);
+   if(checkLegacyStrings) {
+    const {rows:orders}=await client.query('select dispatch_no from work_orders where id=$1',[id]);
+    if(snapshot.operation!=='remove'&&writebackAllowed(orders[0]?.dispatch_no))await validateLegacyRepairStrings(snapshot);
+   }
   } catch(error) {throw new HttpError(409,`润丰写回校验未通过：${error.message}`);}
-  await client.query('update repair_writebacks set snapshot=$2 where id=$1',[job.id,JSON.stringify(snapshot)]);
-  await client.query('insert into audit_logs(order_id,actor,action) values($1,$2,$3)',[id,actorName,`恢复无效润丰写回快照 ${job.id}`]);
+  return snapshot;
  }
- await client.query("update repair_writebacks set status='pending',error='',attempts=0,next_attempt_at=now() where id=$1",[rows[0].id]);
- await client.query("insert into audit_logs(order_id,actor,action) values($1,$2,'重试润丰检验写回')",[id,actorName]);
 }
 
 export async function resolveFailedRepairWriteback(client,orderId,actor,input) {

@@ -35,6 +35,7 @@ import {
   assertRepairItemAction,
   assertSettlementAllowed,
   assertStatusTransition,
+  normalizeDraftRepairItems,
   sanitizeTransitionPatch
 } from "./domain/workOrderPolicy.mjs";
 import { enqueueLegacySyncEvent } from "./repositories/legacySyncOutboxRepository.mjs";
@@ -277,7 +278,8 @@ export async function signWorkOrderByToken(token, signature, signatureFileId, cr
       signatureFileId = file.id;
       signature = order.customer.name || "客户签名";
     }
-    if (!signatureFileId) throw new HttpError(400, "请完成手写签名");
+    if (typeof signature !== "string" || !signature.trim()) throw new HttpError(400, "客户签字人不能为空");
+    if (typeof signatureFileId !== "string" || !signatureFileId.trim()) throw new HttpError(400, "请完成手写签名");
     const signatureFile = await client.query(
       "select id from files where id = $1 and order_id = $2 and kind = 'signature_image'",
       [signatureFileId, order.id]
@@ -297,10 +299,11 @@ export async function signWorkOrderByToken(token, signature, signatureFileId, cr
       await client.query("insert into signatures(order_id,signer_type,signer_name) values($1,'customer',$2) on conflict(order_id,signer_type) do update set signer_name=excluded.signer_name,signed_at=now()", [order.id, signature]);
       await client.query("update work_orders set updated_at=now() where id=$1", [order.id]);
     } else await upsertWorkOrder(client, next);
-    await client.query(
-      "update signatures set file_id = $3 where order_id = $1 and signer_type = $2",
+    const savedSignature = await client.query(
+      "update signatures set file_id = $3 where order_id = $1 and signer_type = $2 returning file_id",
       [order.id, "customer", signatureFileId]
     );
+    if (savedSignature.rowCount !== 1) throw new HttpError(409, "客户签字记录未保存，请重新提交");
     await client.query("update signature_tokens set used = true, used_at = now() where token = $1", [token]);
     await addAudit(client, order.id, order.customer.name || "车主", "客户完成电子签名");
     // Only the authenticated staff endpoint may attest to an onsite signature.
@@ -659,19 +662,6 @@ async function replaceRepairItems(client, orderId, items) {
       ]
     );
   }
-}
-
-function normalizeDraftRepairItems(items) {
-  if (!Array.isArray(items)) throw new HttpError(400, "维修项目参数必须是数组");
-  return items.map((item, index) => ({
-    ...item,
-    id: Number(item?.id || index + 1),
-    owner: "待派工",
-    startAt: "",
-    finishAt: "",
-    inspector: "待检验",
-    status: "待派工"
-  }));
 }
 
 async function replaceSignatures(client, orderId, signatures) {

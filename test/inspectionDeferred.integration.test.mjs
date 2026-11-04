@@ -4,14 +4,15 @@ import pg from 'pg';
 import fs from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 const adminUrl=process.env.DISPATCH_TEST_ADMIN_URL;
-test('inspection deferred lifecycle persists atomically, dispatches directly and cancels with writeback and notifications',{skip:!adminUrl,timeout:120000},async()=>{
+test('inspection deferred lifecycle persists atomically, dispatches directly and cancels with writeback and notifications',{skip:!adminUrl,timeout:120000},async t=>{
  const url=new URL(adminUrl);assert.ok(['localhost','127.0.0.1','[::1]'].includes(url.hostname));
  const admin=new pg.Client({connectionString:adminUrl});await admin.connect();
- const dbName=`deferred_test_${process.pid}_${Date.now()}`;let pool;
+ const dbName=`deferred_test_${process.pid}_${Date.now()}`,connectionsClosed=[];let pool;
  try {
   await admin.query(`create database "${dbName}"`);url.pathname=`/${dbName}`;
   process.env.DATABASE_URL=url.toString();process.env.APP_ENV='test';process.env.DISPATCH_NOTIFICATION_MODE='mock';process.env.RUNFENG_REPAIR_WRITEBACK_ENABLED='false';
   pool=(await import('../server/database/pool.mjs')).pool;
+  pool.on('connect',client=>connectionsClosed.push(new Promise(resolve=>client.once('end',resolve))));
   for(const file of (await fs.readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')&&f!=='202608070005_remove_obsolete_runfeng_sync_role.sql').sort())await pool.query(await fs.readFile(`supabase/migrations/${file}`,'utf8'));
   const tech={id:'deferred-t',name:'维修工',role:'technician',shopId:'shop-hq',active:true},inspector={...tech,id:'deferred-i',name:'检验员',role:'inspector'},manager={...tech,id:'deferred-m',role:'manager'},warehouse={...tech,id:'deferred-w',role:'warehouse'};
   for(const p of [tech,inspector,manager,warehouse])await pool.query('insert into users(id,name,role,shop_id,active) values($1,$2,$3,$4,true)',[p.id,p.name,p.role,p.shopId]);
@@ -101,5 +102,37 @@ test('inspection deferred lifecycle persists atomically, dispatches directly and
   task=await getDispatchTask(pool,third,manager);assert.equal(task.stage,'维修完成');assert.equal(task.inspectionDeferredCount,0);
   assert.equal(await validateDeferredNotification(externalNotice[0],inspector,pool),false);
 
- } finally {await pool?.end();await admin.query(`drop database if exists "${dbName}" with (force)`);await admin.end();}
+  const dual={...inspector,id:'deferred-dual',name:'兼任检验维修',roles:['inspector','technician']};
+  const peer={...tech,id:'deferred-peer',name:'维修乙'};
+  for(const p of [dual,peer])await pool.query("insert into users(id,name,role,roles,shop_id,active,legacy_employee_code,legacy_employee_name,legacy_employee_department,legacy_employee_bound_at) values($1,$2,$3,$4,'shop-hq',true,$5,$6,'test',now())",[p.id,p.name,p.role,p.roles||[p.role],p===dual?'D02':'D03',p.name]);
+  for(const assignee of [dual,peer])await t.test(`deferred scheduling to ${assignee.id} reconciles pending inspection ownership`,async()=>{
+   const id=`deferred-claim-${assignee.id}`;
+   const original={id:3,name:'重新安排的待定维修',status:'待检验',responsibleId:tech.id};
+   const entry={id:'deferred-entry',itemId:3,name:original.name,reason:'等待材料',source:'inspection',sourceInspectorId:inspector.id,sourceInspectorName:inspector.name,state:'pending',scheduled:false,inspectionState:'pending',originalItem:original,history:[]};
+   await pool.query("insert into work_orders(id,status,advisor,technician,inspector,shop_id,old_parts_handling,vehicle_plate,arrival_date,pending_repairs) values($1,'维修中','顾问','维修工','检验员','shop-hq','客户带走','沪DTEST','2026-10-27',$2)",[id,JSON.stringify([entry])]);
+   const before={orderId:id,shopId:'shop-hq',orderStatus:'维修中',stage:'维修中',plate:'沪DTEST',version:1,technicianIds:[tech.id,peer.id],technicianId:tech.id,inspectorId:dual.id,inspectorName:dual.name,inspectionClaimedAt:'2026-10-27T00:00:00Z',items:[{id:1,name:'已提检',status:'待检验',responsibleId:tech.id},{id:2,name:'尚未开工',status:'待开工',responsibleId:peer.id}],deferredItems:[original]};
+   await saveDispatchTask(pool,before);
+   const pending=await pendingRepairList(inspector,id);
+   const command={action:'schedule',id:entry.id,expectedVersion:pending.version,requestId:randomUUID(),technicianId:assignee.id,dueAt:new Date(Date.now()+86400000).toISOString()};
+   await pendingRepairCommand(inspector,id,command);
+   const after=await getDispatchTask(pool,id,inspector);
+   assert.deepEqual(after.items[0],before.items[0]);assert.equal(after.items[2].status,'待开工');
+   assert.equal(after.inspectorId,assignee===dual?undefined:dual.id);
+   assert.equal(after.inspectionClaimedAt,assignee===dual?undefined:before.inspectionClaimedAt);
+   await pendingRepairCommand(inspector,id,command);
+   const jobs=(await pool.query('select event_id from dispatch_inspection_notifications where order_id=$1',[id])).rows;
+   assert.equal(jobs.length,assignee===dual?1:0);
+   if(assignee===dual){
+    const {processInspectionNotifications}=await import('../server/workers/inspectionNotifications.mjs');
+    for(let attempts=0;attempts<20;attempts++)if(!await processInspectionNotifications())break;
+    const recipients=(await pool.query("select recipient_id from dispatch_notifications where event_id=$1 and kind='待检验'",[jobs[0].event_id])).rows.map(row=>row.recipient_id);
+    assert.ok(recipients.includes(inspector.id));assert.ok(!recipients.includes(dual.id));
+    await transaction(c=>executeDispatchActionInTransaction(c,inspector,id,{action:'claim-inspection',expectedVersion:after.version,requestId:randomUUID()}));
+    const claimed=await getDispatchTask(pool,id,inspector);
+    await transaction(c=>executeDispatchActionInTransaction(c,inspector,id,{action:'inspect',expectedVersion:claimed.version,requestId:randomUUID()}));
+    assert.equal((await getDispatchTask(pool,id,inspector)).items[0].status,'已完工');
+   }
+  });
+
+ } finally {await pool?.end();await Promise.all(connectionsClosed);await admin.query(`drop database if exists "${dbName}" with (force)`);await admin.end();}
 });

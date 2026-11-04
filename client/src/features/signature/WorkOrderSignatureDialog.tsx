@@ -47,16 +47,23 @@ export function WorkOrderSignatureDialog({ session, completeSignature, onClose, 
     if (!signatureSession || !signatureImage) return;
     setSignatureSubmitting(true);
     try {
-      await completeSignature(signatureSession.order, signatureSession.token, signatureImage);
-      feedback.success("签字已保存并确认");
-      setSignatureCompleted(true);
-      setSignatureResult(supplemental ? "现场补充签名已保存并确认。" : "现场签字已确认，已提交润丰同步及后续流程。");
+      const saved = await completeSignature(signatureSession.order, signatureSession.token, signatureImage);
+      showSavedSignature(saved);
     } catch (error) {
       feedback.error(error);
       setSignatureResult(error instanceof Error ? error.message : "签字保存失败");
     } finally {
       setSignatureSubmitting(false);
     }
+  }
+
+  function showSavedSignature(order: WorkOrder) {
+    const confirmed = order.customerSignatureReview?.state === 'confirmed';
+    feedback.success(confirmed ? '签字已保存并确认' : '签字已保存，待核对确认');
+    setSignatureCompleted(true);
+    setSignatureResult(confirmed
+      ? supplemental ? '现场补充签名已保存并确认。' : '现场签字已确认，已提交润丰同步及后续流程。'
+      : '客户签字已保存，待服务顾问或管理员核对确认。');
   }
 
   function closeSignatureModal() {
@@ -99,9 +106,7 @@ export function WorkOrderSignatureDialog({ session, completeSignature, onClose, 
                 {!signatureCompleted && (supplemental || remote) && <SignatureShare session={signatureSession} onRenew={setSignatureSession} onUpdated={order => {
                   onOrderUpdated(order);
                   if (order.customerSignatureFileId) {
-                    feedback.success("签字已保存并确认");
-      setSignatureCompleted(true);
-                    setSignatureResult("客户已完成签字，需确认用户签字。请关闭弹窗后核对并确认。");
+                    showSavedSignature(order);
                   }
                 }} />}
                 <div className="summary-grid">

@@ -1,5 +1,5 @@
 import { ActionHistory } from "../../shared/ui/ActionHistory";
-import { PartsRequirementSummary } from './PartsRequirementSummary';
+import { TaskPartsSummary } from './TaskPartsSummary';
 import { AuthenticatedImage } from '../../shared/ui/AuthenticatedImage';
 import { Collapse, Descriptions, Image, Tag } from 'antd';
 import type { DispatchDetail } from '../../../../shared/types';
@@ -18,7 +18,7 @@ export function RepairRoundHistory({detail}:{detail:DispatchDetail}) {
       {key:'end',label:'维修完成',children:displayTime(round.completedAt)},
       {key:'hours',label:round.round?'本轮实际工时':'实际工时',children:round.task.workHours===undefined?'未记录':`${round.task.workHours} 小时`}
     ]}/>
-    <PartsRequirementSummary value={round.task.partsRequirement}/>
+    <TaskPartsSummary task={round.task}/>
     <ul className="repair-round-items">{round.task.items.map(item=><li key={item.id}><div><strong>{item.name}</strong> <Tag>{item.status}</Tag></div><small>开工：{displayTime(item.startAt)} · 提检：{displayTime(item.finishAt)}<br/>检验：{item.inspectorName||'未记录'} · {displayTime(item.inspectedAt)}</small></li>)}</ul>
     <Image.PreviewGroup><div className="repair-photo-grid">{detail.files.filter(f=>['repair_progress_photo','repair_completed_photo'].includes(f.kind)&&(f.repairRound||0)===round.round).map(f=><div key={f.id}><AuthenticatedImage fileId={f.id} alt={`${round.round?`${round.task.roundKind==='additional'?'追加维修第':'返工第'} ${round.round} 轮`:'原维修'}照片`} width="100%" height={100}/><small>{f.uploadedName||'维修人员'} · {displayTime(f.createdAt)}</small></div>)}</div></Image.PreviewGroup>
     <ActionHistory title="本轮操作记录" items={detail.events.filter(e=>(e.detail.repairRound||0)===round.round).map(e=>({key:e.id,title:dispatchEventLabel(e),actor:e.actorName,time:displayTime(e.at),detail:<><p>{e.detail.stage}</p>{e.detail.reason?<p>{e.detail.reason}</p>:null}{e.detail.previousTechnicianName&&e.detail.previousTechnicianName!==e.detail.technicianName?<p>{e.detail.previousTechnicianName} → {e.detail.technicianName||'待派工'}</p>:null}</>}))}/>

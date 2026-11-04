@@ -7,10 +7,11 @@ const adminUrl=process.env.DISPATCH_TEST_ADMIN_URL;
 test('pending repairs persist, enforce ownership, schedule once, and preserve closed-order followups',{skip:!adminUrl,timeout:120000},async()=>{
  const url=new URL(adminUrl);assert.ok(['localhost','127.0.0.1','[::1]'].includes(url.hostname));
  const admin=new pg.Client({connectionString:adminUrl});await admin.connect();
- const name=`pending_test_${process.pid}_${Date.now()}`;let pool;
+ const name=`pending_test_${process.pid}_${Date.now()}`,connectionsClosed=[];let pool;
  try{
   await admin.query(`create database "${name}"`);url.pathname=`/${name}`;process.env.DATABASE_URL=url.toString();process.env.APP_ENV='test';process.env.DISPATCH_NOTIFICATION_MODE='mock';
   pool=(await import('../server/database/pool.mjs')).pool;
+  pool.on('connect',client=>connectionsClosed.push(new Promise(resolve=>client.once('end',resolve))));
   for(const file of (await fs.readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')&&f!=='202608070005_remove_obsolete_runfeng_sync_role.sql').sort())await pool.query(await fs.readFile(`supabase/migrations/${file}`,'utf8'));
   const manager={id:'p-manager',name:'顾问',role:'manager',active:true,shopId:'shop-hq'},tech={id:'p-tech',name:'维修工',role:'technician',active:true,shopId:'shop-hq'};
   for(const p of [manager,tech])await pool.query('insert into users(id,name,role,shop_id,active) values($1,$2,$3,$4,true)',[p.id,p.name,p.role,p.shopId]);
@@ -243,5 +244,5 @@ test('pending repairs persist, enforce ownership, schedule once, and preserve cl
   }
 
 
- }finally{if(pool)await pool.end();await admin.query(`drop database if exists "${name}" with (force)`);await admin.end();}
+ }finally{if(pool)await pool.end();await Promise.all(connectionsClosed);await admin.query(`drop database if exists "${name}" with (force)`);await admin.end();}
 });
