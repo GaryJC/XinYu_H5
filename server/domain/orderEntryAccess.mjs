@@ -10,6 +10,6 @@ export function isOrderEntryRequest(method, path) {
   if (method === 'GET' && path === '/api/vehicle-licenses/preview') return true;
   if (['GET', 'PUT', 'DELETE'].includes(method) && /^\/api\/work-orders\/[^/]+$/.test(path)) return true;
   if (method === 'GET' && /^\/api\/files\/[^/]+\/content$/.test(path)) return true;
-  if (method === 'POST' && /^\/api\/(?:files\/[^/]+\/attach|work-orders\/[^/]+\/(?:license-exception|signature-token|ocr-records|paper-order\/(?:resolve|submit))|ocr-records\/[^/]+\/confirm)$/.test(path)) return true;
+  if (method === 'POST' && /^\/api\/(?:files\/[^/]+\/attach|work-orders\/[^/]+\/(?:license-exception|signature-token|print-pdf|ocr-records|paper-order\/(?:resolve|submit))|ocr-records\/[^/]+\/confirm)$/.test(path)) return true;
   return (method === 'GET' && /^\/api\/signatures\/[^/]+$/.test(path)) || (method === 'POST' && /^\/api\/signatures\/[^/]+\/sign$/.test(path));
 }

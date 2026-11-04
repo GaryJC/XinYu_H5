@@ -6,14 +6,20 @@ import { createHash,randomBytes,randomUUID } from 'node:crypto';
 import { pool,transaction } from '../database/pool.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 import * as repo from '../repositories/procurementRepository.mjs';
-import { procurementAccess,supplierInput,tenderInput,quoteInput,uuid,text,settlement,dateRange,effectiveStatus } from '../domain/procurement.mjs';
+import { procurementAccess,supplierInput,tenderInput,quoteInput,quoteRequestInput,uuid,text,settlement,dateRange,effectiveStatus } from '../domain/procurement.mjs';
 import { analyze,supplierReport } from './procurementAnalytics.mjs';
 export const hashToken=value=>createHash('sha256').update(value).digest('hex');
 const iso=value=>new Date(value).toISOString();
 const missing=()=>new HttpError(404,'记录不存在或不属于本门店');
 const same=isDeepStrictEqual;
 async function actor(user,db) {const fresh=await repo.currentActor(user,db);procurementAccess(fresh);if(fresh.shopId!==user.shopId)throw new HttpError(403,'门店权限已变更，请重新登录');return fresh;}
-async function ownedTender(user,id,db) {const row=await repo.lockTender(uuid(id),db);if(!row||row.shop_id!==user.shopId)throw missing();await repo.freezeDue(db,id);return (await repo.readTenders(user.shopId,{id},db))[0];}
+async function ownedTender(user,id,db,{checkVersion=false,expectedVersion}={}) {
+  const row=await repo.lockTender(uuid(id),db);if(!row||row.shop_id!==user.shopId)throw missing();
+  // Readers already display an elapsed deadline as closed. Compare the version
+  // they read before persisting that automatic transition in this transaction.
+  if(checkVersion&&expectedVersion!==row.version)throw new HttpError(409,'询价或报价资格已变化，请刷新后重新确认');
+  await repo.freezeDue(db,id);return (await repo.readTenders(user.shopId,{id},db))[0];
+}
 async function newLink(db,{invitationId,reportId,tenderId,supplierName,readOnly=false}) {
   const token=randomBytes(32).toString('base64url'),expiresAt=new Date(Date.now()+(reportId||readOnly?30:90)*86400000).toISOString();
   await repo.saveLink(db,{id:randomUUID(),invitationId,reportId,tenderId,hash:hashToken(token),expiresAt,token});return {supplierName,token,expiresAt};
@@ -43,7 +49,7 @@ export async function publishTender(user,body) {
 }
 export async function tenderAction(user,id,body) {
   procurementAccess(user);
-  return transaction(async db=>{const fresh=await actor(user,db);const tender=await ownedTender(user,id,db);
+  return transaction(async db=>{const fresh=await actor(user,db);const tender=await ownedTender(user,id,db,{checkVersion:body.action==='settle',expectedVersion:body.expectedVersion});
     if(['submit-approval','approve-purchase','reject-purchase'].includes(body.action)) {
       const approval=purchaseApproval(tender,fresh,body);
       await repo.savePurchaseApproval(db,id,approval);
@@ -73,7 +79,9 @@ export async function tenderAction(user,id,body) {
     } else if(body.action==='invalidate') {
       if(!['open','closed'].includes(tender.status))throw new HttpError(409,'询价已结标');
       const inv=tender.invitations.find(i=>i.id===body.invitationId);if(!inv)throw missing();
-      await repo.invalidate(db,inv.id,text(body.reason??'','报价失效原因',1000,false),user);
+      const reason=text(body.reason??'','报价失效原因',1000,false);
+      if(inv.invalidReason===reason)return repo.detail(user.shopId,id,db);
+      await repo.invalidate(db,inv.id,reason,user);
     } else if(['settle','cancel'].includes(body.action)) {
       const result=settlement(tender,body);await repo.settleTender(db,id,result);
      } else if(['share-link','revoke-shared-link'].includes(body.action)) {
@@ -159,9 +167,10 @@ export async function quote(session,body) {
   const initial=await repo.sessionLink(pool,hashToken(session||''));if(!initial?.invitation_id)throw new HttpError(401,'报价访问已失效');
   return transaction(async db=>{const raw=await repo.lockTender(initial.tender_id,db);const {link,supplier}=await portalContext(db,session);
     if(link.invitation_id!==initial.invitation_id||body.invitationId!==link.invitation_id)throw new HttpError(409,'报价页面已切换，请刷新后重试');
+    const request=quoteRequestInput(body);
+    const prior=await repo.quoteRequest(db,link.invitation_id,request.requestId);
+    if(prior){if(!same(quoteRequestInput(prior.data),request))throw new HttpError(409,'请求编号已被不同报价使用');return {ok:true};}
     const input=quoteInput(body,raw.data);
-    const prior=await repo.quoteRequest(db,link.invitation_id,input.requestId);
-    if(prior){if(!same(prior.data,input))throw new HttpError(409,'请求编号已被不同报价使用');return {ok:true};}
     if(input.termsVersion!==raw.terms_version)throw new HttpError(409,'采购要求已修改，请刷新页面后按新要求重新报价');
     const now=await repo.databaseClock(db);
     if(effectiveStatus(raw,Date.parse(now))!=='open')throw new HttpError(409,'报价已结束，不能提交或修改');

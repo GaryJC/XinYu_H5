@@ -1,6 +1,15 @@
 import {hasRole} from '../../shared/roles.mjs';
 const metrics=['unfinished','working','waiting','parts','pickup','paused','inspection','overdue'];
 const empty=()=>Object.fromEntries(metrics.map(key=>[key,0]));
+function materialProgress(parts,ownerId,shared=false) {
+ if(!parts||parts.mode==='none'||parts.issuedAt)return {waiting:false,pickup:false};
+ // Shared lines concern their recipient; unallocated legacy lines remain shared.
+ const items=(parts.items||[]).filter(item=>!shared||!item.recipientId||item.recipientId===ownerId);
+ if(parts.items?.length&&!items.length)return {waiting:false,pickup:false};
+ if(!items.length)return {waiting:!parts.preparedAt,pickup:!!parts.preparedAt};
+ return {waiting:items.some(item=>!item.issuedAt&&!item.preparedAt&&!parts.preparedAt),
+  pickup:items.some(item=>!item.issuedAt&&(item.preparedAt||parts.preparedAt))};
+}
 export function buildOperationsDashboard(tasks,people,now=new Date()) {
  const projects=[],workers=new Map();let uncertain=0;
  for(const p of people)if(p.active&&hasRole(p,'technician'))workers.set(p.id,{id:p.id,name:p.name,assignable:true,vehicles:0,counts:empty()});
@@ -15,10 +24,9 @@ export function buildOperationsDashboard(tasks,people,now=new Date()) {
    const person=people.find(p=>p.id===ownerId);
    const ownerName=external?`外包 · ${task.contractor||'未记录'}`:person?.name||item.responsibleName||'待指定';
    const pause=ownerId&&task.workerPauses?.[ownerId];
-   const parts=(task.partsRequests||[]).filter(p=>p.ownerId===ownerId);
-   if(task.partsRequirement)parts.push(task.partsRequirement);
-   const relevant=parts.filter(p=>p.mode!=='none'&&!p.issuedAt);
-   const waitingParts=relevant.filter(p=>!p.preparedAt);
+   const parts=(task.partsRequests||[]).filter(p=>external||p.ownerId===ownerId).map(p=>({...materialProgress(p,ownerId),recordedAt:p.recordedAt}));
+   if(task.partsRequirement)parts.push({...materialProgress(task.partsRequirement,ownerId,!external),recordedAt:task.partsRequirement.recordedAt});
+   const waitingParts=parts.filter(p=>p.waiting),pickup=parts.some(p=>p.pickup);
    const inspection=item.status==='待检验';
    const flags=['unfinished'];
    if(inspection)flags.push('inspection');
@@ -27,10 +35,10 @@ export function buildOperationsDashboard(tasks,people,now=new Date()) {
     else if(item.status==='维修中')flags.push('working');
     else flags.push('waiting');
     if(waitingParts.length)flags.push('parts');
-    if(relevant.some(p=>p.preparedAt))flags.push('pickup');
+    if(pickup)flags.push('pickup');
    }
    if(task.dueAt&&Date.parse(task.dueAt)<now.getTime())flags.push('overdue');
-   const note=inspection?'等待检验':pause?.pauseReason|| (task.stage==='暂停'?task.pauseReason:'') || (waitingParts.length?'等待仓库备料':flags.includes('pickup')?'已备齐，等待出库':task.stage==='待接单'?'等待接单':'');
+   const note=inspection?'等待检验':pause?.pauseReason|| (task.stage==='暂停'?task.pauseReason:'') || (waitingParts.length?(pickup?'部分备齐，等待出库':'等待仓库备料'):pickup?'已备齐，等待出库':task.stage==='待接单'?'等待接单':'');
    const waitingSince=inspection?item.finishAt:pause?.pausedAt||(task.stage==='暂停'?task.pausedAt:undefined)||waitingParts.map(p=>p.recordedAt).filter(Boolean).sort()[0]|| (task.stage==='待接单'?task.assignedAt:undefined);
    projects.push({key:`${task.orderId}:${task.repairRound||0}:${item.id}`,orderId:task.orderId,plate:task.plate,dispatchNo:task.dispatchNo,name:item.name,ownerId,ownerName,status:inspection?'待检验':flags.includes('paused')?'暂停':item.status,dueAt:task.dueAt,flags,waitingSince,note});
    if(ownerId&&!workers.has(ownerId))workers.set(ownerId,{id:ownerId,name:ownerName,assignable:!!person?.active&&hasRole(person,'technician'),vehicles:0,counts:empty()});

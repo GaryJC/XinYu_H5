@@ -28,3 +28,26 @@ test('prepared parts are pending outbound and issued parts are no longer a block
 test('uncertain historical tasks are counted separately without invented workload',()=>{
  const result=build([{...task,needsReview:true}],people,now);assert.equal(result.uncertain,1);assert.equal(result.projects.length,0);
 });
+test('partially prepared personal requests show both remaining preparation and pending outbound',()=>{
+ const result=build([{...task,partsRequests:[{ownerId:'b',mode:'list',recordedAt:'2026-11-01T00:00:00Z',items:[{name:'滤芯',preparedAt:'2026-11-02T00:00:00Z'},{name:'刹车片'}]}]}],people,now);
+ const b=result.workers.find(w=>w.id==='b');
+ assert.equal(b.counts.working,1);assert.equal(b.counts.parts,1);assert.equal(b.counts.pickup,1);
+ assert.equal(result.projects.find(p=>p.ownerId==='b').note,'部分备齐，等待出库');
+});
+test('shared material follows recipients without blocking or crediting coworkers',()=>{
+ const result=build([{...task,items:task.items.map(i=>({...i,status:'维修中'})),partsRequirement:{mode:'list',items:[{name:'滤芯',recipientId:'a',preparedAt:'2026-11-02T00:00:00Z'},{name:'刹车片',recipientId:'b'}]}}],people,now);
+ const a=result.workers.find(w=>w.id==='a'),b=result.workers.find(w=>w.id==='b');
+ assert.equal(a.counts.parts,0);assert.equal(a.counts.pickup,1);
+ assert.equal(b.counts.parts,1);assert.equal(b.counts.pickup,0);
+});
+test('issued shared lines no longer count as a recipient blocker while others wait',()=>{
+ const result=build([{...task,items:task.items.map(i=>({...i,status:'维修中'})),partsRequirement:{mode:'list',items:[{name:'滤芯',recipientId:'a',issuedAt:'2026-11-02T00:00:00Z'},{name:'刹车片',recipientId:'b'}]}}],people,now);
+ const a=result.workers.find(w=>w.id==='a');assert.equal(a.counts.parts,0);assert.equal(a.counts.pickup,0);
+ assert.equal(result.workers.find(w=>w.id==='b').counts.parts,1);
+});
+test('unallocated and photo-only material keeps batch-level visibility; outsourced includes inherited requests',()=>{
+ const base={...task,items:task.items.map(i=>({...i,status:'维修中'})),partsRequirement:{mode:'photo',items:[],preparedAt:'2026-11-02T00:00:00Z'}};
+ assert.equal(build([base],people,now).counts.pickup,2);
+ const external=build([{...task,executionMode:'outsourced',partsRequests:[{ownerId:'a',mode:'list',items:[{name:'旧维修工申报',preparedAt:'2026-11-02T00:00:00Z'}]}]}],people,now);
+ assert.equal(external.counts.pickup,1);
+});

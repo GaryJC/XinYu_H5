@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>采购、导出与看板复核 · 2026-11-04</title>
+<style>
+body{margin:0;background:#f5f7fb;color:#172b43;font:16px/1.7 system-ui,-apple-system,"PingFang SC",sans-serif}main{max-width:1000px;margin:auto;padding:30px 20px 60px}h1{font-size:28px;line-height:1.4}h2{font-size:20px}section{background:white;border:1px solid #dbe3ee;border-radius:14px;padding:20px;margin:18px 0}.table{overflow:auto}table{border-collapse:collapse;min-width:640px;width:100%}td,th{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid #e4eaf2}th,footer{color:#53677f}code{font-size:13px;overflow-wrap:anywhere}.ok{color:#167547;font-weight:650}
+</style>
+<main>
+<h1>采购、导出与看板复核</h1>
+<p>2026-11-04 · 本轮继续检查采购报价与定标、供应商门户、打印与照片导出、门店看板及分页筛选。问题均先用本地回归复现，再修复。</p>
+<section><h2>本轮修复</h2><div class="table"><table>
+<thead><tr><th>问题</th><th>触发条件</th><th>修复结果</th></tr></thead><tbody>
+<tr><td>旧弹窗确认了新金额</td><td>甲打开定标确认后，乙重开询价、改数量并重新收价、结束报价。甲仍能按旧确认定标新金额；报价被撤销后还可能将“确认中标”变成流标。</td><td>定标携带读取时的版本，在锁内核对。报价资格变化也更新版本。旧页面须刷新后重新确认，不自动改变用户确认的结果。</td></tr>
+<tr><td>报价成功后重试误报冲突</td><td>报价保存但响应丢失，采购员随后修改数量。原请求重试时按新数量重算总价，被误判为不同报价。</td><td>先核对已保存请求的原始报价内容。相同请求只恢复既有结果，不重算历史总价、不重复写入；新报价仍须使用当前采购要求。</td></tr>
+<tr><td>供应商重复报价显示成功却未更新</td><td>一个设备成功报价后，另一设备放弃或改价；原设备再次确认相同金额，复用已成功的旧请求编号。</td><td>成功响应后立即清除旧请求编号。新的确认产生新报价；仅结果不明的网络重试沿用原编号。</td></tr>
+<tr><td>不同供应商共用验证次数限制</td><td>通过文档所示的本机 Nginx 代理访问，服务端只看到代理地址，所有客户共用 60 次／15 分钟的上限。</td><td>仅信任本机环回代理追加的最后一个合法 IP。公网直连忽略转发头；无效头回退连接地址，保留同一客户的限流。</td></tr>
+<tr><td>导出失败让旧链接也失效</td><td>本人重新生成 PDF 或照片 DOCX，缓存容量不足返回失败，却提前删除了上一份尚有效文件。</td><td>先检查替换后的容量，成功后才撤销旧文件。失败时保留本人旧链接和其他人的文件。</td></tr>
+<tr><td>普通员工手机打印被拦截</td><td>员工能打开本人委托单，手机 PDF 回传接口却未列入开单权限。</td><td>开放该打印准备接口，继续核对同店、本人订单权限。没有扩大派工或照片文档导出权限。</td></tr>
+<tr><td>看板漏算部分备齐、混算他人配件</td><td>仅部分配件备齐时漏计待出库；共享清单按整批计算，甲的配件状态也会计入乙。</td><td>按申报人和共享配件领用人计算待备料、待出库；部分备齐可同时出现两项，已出库不再占用。实际维修状态仍取本人项目进度。</td></tr>
+</tbody></table></div></section>
+<section><h2>角色与状态保持一致</h2>
+<p>甲有本人配件备齐即可开工，乙本人全部未备齐仍待开工。门店看板显示各自实际项目状态，并分别显示剩余待备料和可出库配件。配件仍按维修工申报判断，不绑定维修项目；个人暂停、已提检和已完工状态不变。</p>
+</section>
+<section><h2>验证</h2><p id="verification"><span class="ok">验证通过</span>：<code>npm run check</code> 共 909 项通过、27 项环境相关测试跳过、0 失败；类型检查和构建通过。另启用本地 PostgreSQL 的采购原有集成、新增采购回归与分页集成，共 22 项通过、0 跳过、0 失败。<code>git diff --check</code> 通过。</p><p>新增回归覆盖旧定标弹窗、报价资格撤销与恢复、自动截止、重复请求、跨设备改价、代理限流、缓存容量拒绝、员工打印权限和看板逐人配件统计。采购和看板修复完成独立交叉复核。</p><p>本轮未操作浏览器或真实钉钉设备；客户端使用真实 hook 和确认回调代码检查及受控响应测试。构建仍有原有图表/PDF 分包超过 500 kB 的提示。</p></section>
+<section><h2>范围</h2><p>无数据库结构变更。本轮使用本地测试和隔离数据库；现有 dummy data 进度保留。未运行线上依赖扫描、访问真实润丰、发送真实通知、部署或推送。</p><p>定标校验复用已有行锁和版本字段；报价重试复用已有查重查询。看板按内存中已读取的配件逐行计算，代理地址解析不增加网络或数据库请求。未做生产规模压测。</p></section>
+<footer>报告说明本轮已覆盖路径和修复，不代表所有模块都已无缺陷。实现边界与测试注意事项记录于 HANDOFF.MD。</footer>
+</main></html>

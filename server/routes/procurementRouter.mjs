@@ -2,6 +2,7 @@ import {uploadProcurementPhoto,procurementPhoto} from '../services/procurementPh
 import {readStoredFile} from '../storage.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 import { readJson,sendJson } from '../http/response.mjs';
+import {localProxyClientAddress} from '../http/localProxyClientAddress.mjs';
 import * as service from '../services/procurementService.mjs';
 function sendPhoto(res,file) {res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Content-Type',file.record.mimeType);res.end(file.body);}
 const cookieName='procurement_supplier';
@@ -19,7 +20,7 @@ export async function handleSupplierPortal(req,res,url) {
     if(req.headers['sec-fetch-site']==='cross-site')throw new HttpError(403,'不允许跨站提交');
   }
   if(req.method==='POST'&&url.pathname==='/api/supplier-portal/verify') {
-    const result=await service.verifyPortal(await readInput(req),req.socket.remoteAddress||'unknown');
+    const result=await service.verifyPortal(await readInput(req),localProxyClientAddress(req));
     const secure=process.env.APP_ENV==='production'||req.socket.encrypted;
     res.setHeader('Set-Cookie',`${cookieName}=${result.session}; HttpOnly; SameSite=Strict; Path=/api/supplier-portal; Max-Age=${result.maxAge}${secure?'; Secure':''}`);
     sendJson(res,200,{ok:true});return true;

@@ -31,11 +31,12 @@ export async function prepareOrderPhotoExport(id, input, user) {
       catch { throw new HttpError(502,'部分照片读取失败，未生成不完整文档，请稍后重试'); }
     });
     prune();
-    for (const [key,value] of downloads) if (value.userId===user.id) downloads.delete(key);
-    if ([...downloads.values()].reduce((sum,file)=>sum+file.body.length,body.length) > 96*1024*1024) throw new HttpError(503,'文件服务繁忙，请稍后重试');
+    const retainedBytes = [...downloads.values()].reduce((sum,file)=>sum+(file.userId===user.id?0:file.body.length),0);
+    if (retainedBytes+body.length > 96*1024*1024) throw new HttpError(503,'文件服务繁忙，请稍后重试');
     const token = randomBytes(32).toString('hex');
     const expiresAt = Date.now()+5*60000;
     const fileName = `${order.vehicle.plate || order.id}-${categories.length===Object.keys(photoAlbumLabels).length?'全部照片':categories.map(key=>photoAlbumLabels[key]).join('-')}.docx`.replace(/[\r\n/\\]/g,'_');
+    for (const [key,value] of downloads) if (value.userId===user.id) downloads.delete(key);
     downloads.set(token,{body,fileName,expiresAt,userId:user.id});
     return {path:`/api/order-photo-documents/${token}.docx`,fileName,expiresAt:new Date(expiresAt).toISOString(),photoCount:photos.length};
   } finally {running.delete(user.id);}

@@ -25,13 +25,17 @@ export function createPrintPdfStore({ now = Date.now, ttl = 5 * 60_000, maxBytes
       const body = Buffer.from(pdfBase64, "base64");
       if (body.subarray(0, 5).toString() !== "%PDF-") throw new HttpError(400, "仅支持 PDF 文件");
       // Keep one outstanding handoff per user; never evict another user's file.
-      for (const [token, entry] of entries) if (entry.userId === userId) remove(token);
-      if (bytes + body.length > maxBytes) throw new HttpError(503, "文件服务繁忙，请稍后重试");
+      const previous = [...entries].filter(([, entry]) => entry.userId === userId);
+      const retainedBytes = bytes - previous.reduce((sum, [, entry]) => sum + entry.body.length, 0);
+      if (retainedBytes + body.length > maxBytes) throw new HttpError(503, "文件服务繁忙，请稍后重试");
       const token = randomBytes(32).toString("hex");
       const expiresAt = now() + ttl;
-      entries.set(token, { body, userId, expiresAt, fileName: String(fileName || "机动车修理委托书.pdf").replace(/[\r\n/\\]/g, "_").slice(0, 160) });
+      const entry = { body, userId, expiresAt, fileName: String(fileName || "机动车修理委托书.pdf").replace(/[\r\n/\\]/g, "_").slice(0, 160) };
+      const result = { path: `/api/print-pdfs/${token}.pdf`, expiresAt: new Date(expiresAt).toISOString() };
+      for (const [previousToken] of previous) remove(previousToken);
+      entries.set(token, entry);
       bytes += body.length;
-      return { path: `/api/print-pdfs/${token}.pdf`, expiresAt: new Date(expiresAt).toISOString() };
+      return result;
     },
     get(token) {
       prune();

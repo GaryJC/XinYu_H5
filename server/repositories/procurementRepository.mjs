@@ -98,8 +98,12 @@ export async function settleTender(db,id,result) {
   await db.query('update procurement_tenders set status=$2,version=version+1,winner_id=$3,reason=$4,winner_ids=$5,closed_at=coalesce(closed_at,clock_timestamp()),settled_at=clock_timestamp() where id=$1',[id,result.status,result.winnerId,result.reason,result.winnerIds||[]]);
   await db.query(`update procurement_links set expires_at=least(expires_at,now()+interval '30 days') where invitation_id in (select id from procurement_invitations where tender_id=$1)`,[id]);
 }
-export async function invalidate(db,invitationId,reason,user) {await db.query(`insert into procurement_invalidations(invitation_id,reason,actor_id) values($1,$2,$3)
- on conflict(invitation_id) do update set reason=excluded.reason,actor_id=excluded.actor_id,at=now()`,[invitationId,reason,user.id]);}
+export async function invalidate(db,invitationId,reason,user) {await db.query(`with changed as (
+ insert into procurement_invalidations(invitation_id,reason,actor_id) values($1,$2,$3)
+ on conflict(invitation_id) do update set reason=excluded.reason,actor_id=excluded.actor_id,at=now()
+ where procurement_invalidations.reason is distinct from excluded.reason returning invitation_id)
+ update procurement_tenders t set version=version+1 from procurement_invitations i,changed c
+ where t.id=i.tender_id and i.id=c.invitation_id`,[invitationId,reason,user.id]);}
 export async function submitQuote(db,invitationId,input) {
   const prior=(await db.query('select * from procurement_quotes where invitation_id=$1 and request_id=$2',[invitationId,input.requestId])).rows[0];
   if(prior)return {prior};

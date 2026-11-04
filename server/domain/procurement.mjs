@@ -44,16 +44,21 @@ export function tenderInput(input,now=Date.now()) {
     deliveryBy,paymentTerms:text(input.paymentTerms??'','发票及付款要求',500,false),
     qualityRequirements:text(input.qualityRequirements??'','质量要求',1000,false),imageUrls}};
 }
-export function quoteInput(input,terms) {
+export function quoteRequestInput(input) {
   const termsVersion=input.termsVersion??1;
   if(!Number.isSafeInteger(termsVersion)||termsVersion<1)throw new HttpError(400,'采购要求版本无效，请刷新页面');
   const result={termsVersion,requestId:uuid(input.requestId),note:text(input.note??'','报价备注',1000,false),declined:input.declined===true};
   if(result.declined) return result;
   for(const key of ['unitPriceFen','freightFen']) if(!Number.isSafeInteger(input[key])||input[key]<0||input[key]>10000000000||(key==='unitPriceFen'&&input[key]===0)) throw new HttpError(400,'请填写有效含税单价和运费');
-  const totalFen=procurementTotalFen(input.unitPriceFen,terms.quantity,input.freightFen);
-  if(!Number.isSafeInteger(totalFen)||totalFen<=0||totalFen>100000000000) throw new HttpError(400,'报价总额超出范围');
   if(typeof input.meetsRequirements!=='boolean') throw new HttpError(400,'请确认是否满足采购要求');
-  return {...result,unitPriceFen:input.unitPriceFen,freightFen:input.freightFen,totalFen,deliveryAt:instant(input.deliveryAt,'承诺交货时间'),meetsRequirements:input.meetsRequirements};
+  return {...result,unitPriceFen:input.unitPriceFen,freightFen:input.freightFen,deliveryAt:instant(input.deliveryAt,'承诺交货时间'),meetsRequirements:input.meetsRequirements};
+}
+export function quoteInput(input,terms) {
+  const result=quoteRequestInput(input);
+  if(result.declined)return result;
+  const totalFen=procurementTotalFen(result.unitPriceFen,terms.quantity,result.freightFen);
+  if(!Number.isSafeInteger(totalFen)||totalFen<=0||totalFen>100000000000) throw new HttpError(400,'报价总额超出范围');
+  return {...result,totalFen};
 }
 export function effectiveStatus(tender,now=Date.now()) {return tender.status==='open'&&tender.deadline&&Date.parse(tender.deadline)<=now?'closed':tender.status;}
 export function latestQuote(invitation) {return invitation.quotes[0];}
@@ -66,6 +71,7 @@ export function settlement(tender,input) {
   if(input.action==='cancel') {if(!['open','closed'].includes(tender.status)) throw new HttpError(409,'询价已经结束');if(!reason) throw new HttpError(400,'取消必须填写原因');return {status:'cancelled',winnerId:null,reason};}
   if(tender.status!=='closed') throw new HttpError(409,'请先结束报价收集');
   const valid=tender.invitations.filter(i=>validQuote(tender,i));
+  if(!valid.length&&(input.winnerIds?.length||input.winnerId))throw new HttpError(409,'所选报价已失效，请刷新后重新确认');
   if(!valid.length) return {status:'failed',winnerId:null,reason:reason||'没有有效报价'};
   const minimum=Math.min(...valid.map(i=>latestQuote(i).totalFen));
   const tied=valid.filter(i=>latestQuote(i).totalFen===minimum);

@@ -93,9 +93,9 @@ test('procurement PostgreSQL, supplier isolation, concurrency, reports and notif
       await Promise.all([s.quote(sessions[0].session,input),s.quote(sessions[0].session,input)]);
       assert.equal((await s.portal(sessions[0].session)).quotes.length,2);
       await assert.rejects(()=>s.quote(sessions[0].session,{...input,unitPriceFen:1}),e=>e.status===409);
-      await s.tenderAction(warehouse,created.tender.id,{action:'close'});
+      const closed=(await s.tenderAction(warehouse,created.tender.id,{action:'close'})).tender;
       await assert.rejects(()=>s.quote(sessions[0].session,quote(8000,own.invitationId)),e=>e.status===409);
-      const outcomes=await Promise.allSettled([s.tenderAction(manager,created.tender.id,{action:'settle'}),s.tenderAction(warehouse,created.tender.id,{action:'settle'})]);
+      const outcomes=await Promise.allSettled([s.tenderAction(manager,created.tender.id,{action:'settle',expectedVersion:closed.version}),s.tenderAction(warehouse,created.tender.id,{action:'settle',expectedVersion:closed.version})]);
       assert.equal(outcomes.filter(x=>x.status==='fulfilled').length,1);
       assert.equal((await s.tenderDetail(manager,created.tender.id)).tender.winnerId,sessions[0].supplier.id);
       assert.match((await s.portal(sessions[0].session)).result,/已中标/);assert.match((await s.portal(sessions[1].session)).result,/未中标/);
@@ -130,15 +130,16 @@ test('procurement PostgreSQL, supplier isolation, concurrency, reports and notif
       await pool.query("update procurement_tenders set deadline=now()-interval '1 second' where id=$1",[timed.tender.id]);
       await assert.rejects(()=>s.quote(v.session,quote(1,own.invitationId)),e=>e.status===409);
       assert.equal((await s.portal(v.session)).status,'closed');
-      assert.equal((await s.tenderAction(warehouse,timed.tender.id,{action:'settle'})).tender.status,'failed');
+      const current=(await s.tenderDetail(warehouse,timed.tender.id)).tender;
+      assert.equal((await s.tenderAction(warehouse,timed.tender.id,{action:'settle',expectedVersion:current.version})).tender.status,'failed');
     });
     await t.test('anonymized report snapshot, preview/publication, expiry, revocation and feedback',async()=>{
       // Create five comparable completed tenders with >=5 distinct competitors in aggregate.
       for(let n=0;n<5;n++){
         const all=await s.publishTender(manager,{...body(),supplierIds:suppliers.map(v=>v.id),requestId:randomUUID()});
         for(const inv of all.tender.invitations){const q=quote(inv.supplierId===suppliers[0].id?12000:10000,inv.id);await repo.submitQuote(pool,inv.id,{...q,totalFen:q.unitPriceFen*2});}
-        await s.tenderAction(manager,all.tender.id,{action:'close'});
-        await s.tenderAction(warehouse,all.tender.id,{action:'settle',winnerId:suppliers[1].id,reason:'同价选择交期更好'});
+        const closed=(await s.tenderAction(manager,all.tender.id,{action:'close'})).tender;
+        await s.tenderAction(warehouse,all.tender.id,{action:'settle',expectedVersion:closed.version,winnerId:suppliers[1].id,reason:'同价选择交期更好'});
       }
       const range={from:new Date(Date.now()-86400000).toISOString(),to:future(1)};
       const r=await s.createReport(manager,{supplierId:suppliers[0].id,...range,note:'请改善价格'});
@@ -198,8 +199,8 @@ test('procurement PostgreSQL, supplier isolation, concurrency, reports and notif
       await assert.rejects(()=>s.tenderAction(warehouse,current.id,{...current.data,action:'update',deadline:null,expectedVersion:current.version}),e=>e.status===409);
       current=(await s.tenderAction(warehouse,current.id,{...current.data,action:'update',deadline:null,expectedVersion:current.version,reopen:true})).tender;
       assert.equal(current.status,'open');assert.equal(current.closedAt,null);assert.equal(current.termsVersion,2);
-      await s.tenderAction(manager,current.id,{action:'close'});
-      current=(await s.tenderAction(manager,current.id,{action:'settle'})).tender;
+      current=(await s.tenderAction(manager,current.id,{action:'close'})).tender;
+      current=(await s.tenderAction(manager,current.id,{action:'settle',expectedVersion:current.version})).tender;
       assert.equal(current.winnerId,suppliers[0].id);
       await assert.rejects(()=>s.tenderAction(warehouse,current.id,{...current.data,action:'update',deadline:null,expectedVersion:current.version}),e=>e.status===409);
       const events=(await s.tenderDetail(manager,current.id)).audit.filter(a=>a.action==='修改询价');
@@ -293,13 +294,13 @@ test('procurement PostgreSQL, supplier isolation, concurrency, reports and notif
         const supplier=suppliers[n],session=(await s.verifyPortal({token:published.sharedLink.token,phone:supplier.phone,identity:supplier.name},'multi-award')).session;
         const view=await s.portal(session);await s.quote(session,{...quote(100*(n+1),view.invitationId),termsVersion:1});entries.push(session);
       }
-      await s.tenderAction(manager,published.tender.id,{action:'close'});
+      const closed=(await s.tenderAction(manager,published.tender.id,{action:'close'})).tender;
       const winners=[suppliers[1].id,suppliers[2].id];
-      const result=await s.tenderAction(manager,published.tender.id,{action:'settle',winnerIds:winners,reason:'供应能力，分开采购，数量线下确认'});
+      const result=await s.tenderAction(manager,published.tender.id,{action:'settle',expectedVersion:closed.version,winnerIds:winners,reason:'供应能力，分开采购，数量线下确认'});
       assert.deepEqual(result.tender.winnerIds,winners);assert.equal(result.tender.winnerId,null);
       assert.match((await s.portal(entries[0])).result,/未中标/);
       for(const session of entries.slice(1))assert.match((await s.portal(session)).result,/您已中标.*线下确认/);
-      await assert.rejects(()=>s.tenderAction(manager,published.tender.id,{action:'settle',winnerIds:[suppliers[0].id]}),e=>e.status===409);
+      await assert.rejects(()=>s.tenderAction(manager,published.tender.id,{action:'settle',expectedVersion:result.tender.version,winnerIds:[suppliers[0].id]}),e=>e.status===409);
       const {analyze,supplierReport}=await import('../server/services/procurementAnalytics.mjs');
       const metrics=analyze([result.tender],{});assert.equal(metrics.awarded,1);assert.equal(metrics.awardAmountFen,0);
       assert.equal(metrics.suppliers.reduce((n,m)=>n+m.awarded,0),2);assert.ok(metrics.suppliers.every(m=>m.priceLost===0));
