@@ -9,7 +9,7 @@ import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import {validatePartsIssue,issueParts,prepareParts} from './partsIssue.mjs';
 import {applyIndividualAction} from './individualRepair.mjs';
 import {resolveRepairResponsibilities,transferUnfinishedResponsibilities} from './repairResponsibilities.mjs';
-import {validateProjectReassignment,reassignProjects} from './projectReassignment.mjs';
+import {validateProjectReassignment,reassignProjects,assertPersonalPartsHandover} from './projectReassignment.mjs';
 import {validateRepairItemEdits,editRepairItems} from './repairItemEditing.mjs';
 import { validatePartsRequirement,preserveHandledParts,beginPendingItems,assertPartsIssued,assertPartsReadyToStart } from './partsRequirement.mjs';
 import { reopenRepairTask,validateReopenItems } from './repairRounds.mjs';
@@ -399,6 +399,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     const handover=task.items.some(item=>item.responsibleId&&next.items.some(edited=>edited.id===item.id&&edited.responsibleId!==item.responsibleId));
     if(handover)reason();
   }
+  if(['reassign','edit-repair-items'].includes(action))assertPersonalPartsHandover(task,next);
   if(['reassign','edit-repair-items'].includes(action)&&next.workerPauses) {
     const retained=new Set(technicianIds(next));
     next.workerPauses=Object.fromEntries(Object.entries(next.workerPauses).filter(([id])=>retained.has(id)));

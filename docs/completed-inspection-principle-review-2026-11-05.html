@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>完工核对：检验通过口径复查 · 2026-11-05</title>
+<style>body{margin:0;background:#f4f6fa;color:#243247;font:16px/1.75 system-ui,sans-serif}main{max-width:960px;margin:auto;padding:28px 22px}article{background:#fff;border:1px solid #dae2ed;border-radius:14px;padding:22px;margin:18px 0}h1{font-size:28px;line-height:1.4}h2{font-size:20px;line-height:1.5}code{background:#eef2f8;padding:2px 5px;overflow-wrap:anywhere}.priority{color:#af3028}small{color:#61718a}table{border-collapse:collapse;width:100%}td,th{padding:10px;text-align:left;border-bottom:1px solid #e2e8f0}p{overflow-wrap:anywhere}@media(max-width:560px){main{padding:18px 12px}article{padding:16px}table{font-size:14px}}</style>
+<main>
+<h1>完工核对：本人本月已完工且通过检验</h1>
+<p>2026-11-05 · 继续审查，未修改业务逻辑。正常内修统计路径符合核心要求；新增确认 1 个与严格检验口径不符的问题。</p>
+<article>
+<h2><span class="priority">P2</span> 未经检验的项目会经外包完工进入个人月度核对</h2>
+<p>位置：<code>server/domain/technicianCompletedProjects.mjs:19–22</code>。当前只检查项目归属和“已完工”，日期允许使用外包 finishAt 或整单 completedAt，未区分“检验通过”和“外包直接登记完工”。</p>
+<p>真实状态转换复现：甲、乙共同内修 → 甲提交本人完工，项目待检验 → 管理员将整单改为外包 → 登记外包完工。甲的待检验项目仍保留甲的归属，被直接改成已完工，inspectedAt、inspectedBy 都为空，但甲本月统计从 0 变为 1。</p>
+<p>这个结果也通过实际 PostgreSQL repository 查询复现，确认并非只在模拟数组里出现。完整状态转换函数与查询均使用当前代码，数据库夹具只存在于事务临时表中，结束后回滚。</p>
+<p>影响：完工核对可能包含维修工未经过检验的项目，直接违背本次强调的“个人已完工并通过检验”。外包直接完工原先被旧测试明确接纳，因此已有测试全部通过也不能说明当前口径正确。</p>
+<p>修复方向：以项目级检验通过证据认定资格；外包直接登记完工不能代替内修检验。不能简单排除整个外包工单，因为改外包之前已经真正检验通过的个人项目仍应保留。历史内部检验记录的 completedAt / completionRecordedAt 兼容也要结合来源保留，不能无差别要求所有旧项目必须有 inspectedAt。</p>
+<small>状态转换复现：/tmp/completed-project-inspection-lifecycle-repro.mjs<br>SQL 复现：/tmp/completed-project-inspection-sql-repro.mjs<br>对应输出均为同名 .log。</small>
+</article>
+<article>
+<h2>已验证的统计边界</h2>
+<table>
+<tr><th>场景</th><th>实际结果</th></tr>
+<tr><td>甲已检验通过、乙仍维修，整单未完成</td><td>甲计入，乙不计入</td></tr>
+<tr><td>甲只提交完工，尚未检验</td><td>不计入</td></tr>
+<tr><td>甲被退回、乙通过</td><td>甲不计入，乙计入</td></tr>
+<tr><td>检验员将项目待定</td><td>不计入</td></tr>
+<tr><td>回审中甲重新通过、乙仍处理</td><td>甲计入；整单回审不挡住个人统计</td></tr>
+<tr><td>甲 10 月提交、北京时间 11 月 1 日检验通过</td><td>只计入 11 月</td></tr>
+<tr><td>乙 11 月提交、北京时间 12 月 1 日通过</td><td>只计入 12 月；先前 11 月已通过的甲仍保留在 11 月</td></tr>
+<tr><td>北京时间月末 23:59:59.999 / 次月 00:00:00.000</td><td>前者属于本月，后者属于次月</td></tr>
+<tr><td>维修工后来离开当前维修名单</td><td>已通过项目仍按检验时保留的项目归属计入原维修工</td></tr>
+<tr><td>名单第一人不是本人</td><td>不影响本人项目计数，不存在整单主要负责人前提</td></tr>
+<tr><td>历史维修轮次与当前轮次存档副本</td><td>历史轮次保留，当前轮次副本不重复；同一编号在不同轮次分开计数</td></tr>
+<tr><td>同一工单有多项、多轮维修</td><td>先筛选排序，再按工单分组分页；顶部为项目总数，分页为工单总数</td></tr>
+<tr><td>切换用户、月份、日期、排序</td><td>旧响应失效，不串入新列表；关闭详情保留原筛选</td></tr>
+</table>
+<p>月份使用北京时间的项目检验通过时间。当前轮次发送回审会撤销先前的通过状态，重新检验通过前不计入。默认按所选月份统计；此前用户要求的今天、近 7 天、自定义日期继续保留，显式日期范围覆盖月份，并在总计旁显示真实范围。</p>
+</article>
+<article>
+<h2>验证与限制</h2>
+<p>现有完工核对、API 参数与分页测试共 <strong>21 项通过</strong>。本地 PostgreSQL 的完工快照查询和维修轮次两组隔离集成测试均通过，<strong>2 项通过、0 跳过</strong>。另有真实状态转换、人员归属/轮次、月份边界及实际 SQL 误计数复现，均执行成功。</p>
+<p>日志：<code>/tmp/completed-principle-unit.log</code>、<code>/tmp/completed-principle-integration.log</code>、<code>/tmp/completed-project-month-boundary-review.log</code>、<code>/tmp/completed-project-inspection-sql-repro.log</code>。轮次测试自动删除临时数据库，快照测试使用事务临时表并回滚，未修改现有业务记录。</p>
+<p>没有执行生产操作、发送真实通知、部署或推送。本轮未修改业务代码，未重新跑全量构建或真机验收。历史未知归属、未知完成日期仍不补造；先前已记录的历史详情权限和详情多余请求问题未重复列为本轮新问题。</p>
+<small>answer-me-with-html skill 当前未找到，沿用独立 HTML 审查报告。</small>
+</article>
+</main></html>

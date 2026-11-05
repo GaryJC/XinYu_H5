@@ -24,7 +24,7 @@ import {
 import { roles, sumLabor, validateWorkOrderDraft } from "../work-orders/domain/workOrderDomain";
 import { canCreateOrder } from "../work-orders/domain/permissions";
 import { getDingTalkAuthCode } from "../../integrations/dingtalk/auth";
-import { clearAuthToken } from "../../shared/api/httpClient";
+import { clearAuthToken, confirmAuthSession, subscribeAuthSession } from "../../shared/api/httpClient";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
 import { useWorkOrderDraft } from "../work-orders/hooks/useWorkOrderDraft";
 import { createWorkOrderWorkflowActions } from "../work-orders/hooks/createWorkOrderWorkflowActions";
@@ -58,6 +58,10 @@ export function useWorkbenchController() {
   const [actionLoading, setActionLoading] = useState<"save" | "signature" | "delete" | "">("");
   const [devLoginLoading, setDevLoginLoading] = useState(false);
   const sessionGeneration = useRef(0);
+  const restoreAttempt = useRef(0);
+  const loginPending = useRef(false);
+  const authenticatedUser = useRef<UserProfile | undefined>(undefined);
+  if (currentUser) authenticatedUser.current = currentUser;
 
   const archive = useArchiveFilters(currentUser, activeNav === '工单全览', ['工作台','工单全览'].includes(activeNav));
   const orders = archive.items, setOrders = archive.setItems, ordersLoading = archive.loading;
@@ -128,6 +132,17 @@ export function useWorkbenchController() {
     requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo(0,homeScroll.current)));
   }
 
+
+  useEffect(() => subscribeAuthSession((reason) => {
+    resetAuthenticatedState(reason === "storage");
+    if (reason === "storage") {
+      setAuthLoading(true);
+      void restoreStoredSession().finally(() => setAuthLoading(false));
+    } else if (reason === "expired") {
+      setSyncLabel("登录已失效");
+      setApiError("登录已失效，请重新进入钉钉应用");
+    }
+  }), []);
 
   useEffect(() => {
     void bootstrapAuth().finally(() => setAuthLoading(false));
@@ -222,9 +237,7 @@ export function useWorkbenchController() {
       try {
         const authCode = await getDingTalkAuthCode();
         const result = await workOrderApi.loginWithDingTalk(authCode);
-        setCurrentUser(result.user);
-        applyAuthenticatedUser(result.user);
-        setSyncLabel(`钉钉组织已同步：${result.user.name}`);
+        if (applyAuthenticatedUser(result.user)) setSyncLabel(`钉钉组织已同步：${result.user.name}`);
         return;
       } catch (error) {
         setApiError(error instanceof Error ? error.message : "钉钉免登失败");
@@ -232,16 +245,22 @@ export function useWorkbenchController() {
       }
     }
 
+    await restoreStoredSession();
+  }
+
+  async function restoreStoredSession() {
+    const attempt = ++restoreAttempt.current;
+    const previousUser = authenticatedUser.current;
     try {
       const user = await workOrderApi.me();
-      setCurrentUser(user);
-      applyAuthenticatedUser(user);
-      setSyncLabel(`已登录：${user.name}`);
+      if (attempt !== restoreAttempt.current) return;
+      if (applyAuthenticatedUser(user, sameEditingIdentity(previousUser, user))) setSyncLabel(`已登录：${user.name}`);
       return;
     } catch (error) {
       // No local session yet. In plain browser development we keep the role switcher.
-      if ((error as { status?: number })?.status !== 401) {
-        setApiError(actionError(error, "恢复登录失败，请重新登录"));
+      if (attempt === restoreAttempt.current) {
+        resetAuthenticatedState();
+        if ((error as { status?: number })?.status !== 401) setApiError(actionError(error, "恢复登录失败，请重新登录"));
       }
     }
 
@@ -261,36 +280,65 @@ export function useWorkbenchController() {
     const url=new URL(location.href);url.searchParams.delete('workOrder');url.searchParams.delete('paperOrder');history.replaceState(null,'',url);
   }
 
-  function applyAuthenticatedUser(user: UserProfile) {
+  function applyAuthenticatedUser(user: UserProfile, preserveEditor = false) {
+    if (!confirmAuthSession()) return false;
+    if (!preserveEditor) resetAuthenticatedState();
+    authenticatedUser.current = user;
+    setCurrentUser(user);
     const nextRole = user.role;
     setRole(nextRole);
     const params=new URLSearchParams(location.search);
     const paperLink=params.has('paperOrder'),orderLink=params.has('workOrder'),dispatchLink=params.has('dispatchOrder');
     const procurementLink=params.has('procurementTender')||params.has('procurementReport');
     const landing=params.has('vehicleTrip')?'出车申请':nextRole==='employee'||(hasRole(user,'technician')&&!user.legacyEmployeeCode)?'出车申请':procurementLink&&['manager','warehouse'].includes(nextRole)?'配件竞价':(paperLink||orderLink)&&['advisor','manager'].includes(nextRole)?'工作台':nextRole==='warehouse'?'配件申请':nextRole==='technician'?'我的维修':nextRole==='inspector'?'检验任务':dispatchLink&&['advisor','manager'].includes(nextRole)?'派工台':user.homeRoute==='order-create'?'委托开单':'工作台';
-    setActiveNav(!dispatchEnabled && isDispatchNavigation(landing) ? "工作台" : landing);
+    if (!preserveEditor) setActiveNav(!dispatchEnabled && isDispatchNavigation(landing) ? "工作台" : landing);
     setDraft((current) => ({ ...current, advisor: user.name }));
+    return true;
   }
 
   async function loginForDevelopment(persona: DevelopmentPersonaKey) {
-    sessionGeneration.current += 1;
+    if (loginPending.current) return;
+    loginPending.current = true;
     clearAuthToken();
-    setCurrentUser(undefined);
-    setOrders([]);
-    setSelectedId(null);
-    setDashboard(undefined);
-    setApiError("");
+    resetAuthenticatedState();
     setDevLoginLoading(true);
     try {
       const result = await workOrderApi.loginForDevelopment(persona);
-      setCurrentUser(result.user);
-      applyAuthenticatedUser(result.user);
-      setSyncLabel(`测试身份：${result.user.name}`);
+      if (applyAuthenticatedUser(result.user)) setSyncLabel(`测试身份：${result.user.name}`);
     } catch (error) {
       setSyncLabel("测试身份未登录");
       setApiError(error instanceof Error ? error.message : "测试身份登录失败");
     } finally {
+      loginPending.current = false;
       setDevLoginLoading(false);
+    }
+  }
+
+  function resetAuthenticatedState(preserveEditor = false) {
+    sessionGeneration.current += 1;
+    restoreAttempt.current += 1;
+    setCurrentUser(undefined);
+    setOrders([]);
+    setLinkedOrderDetail(undefined);
+    setDashboard(undefined);
+    setUsers([]);
+    setDepartments([]);
+    setDepartmentError("");
+    setApiError("");
+    setFormErrors([]);
+    setActionLoading("");
+    if (!preserveEditor) {
+      authenticatedUser.current = undefined;
+      setSelectedId(null);
+      setSelectedRecord(undefined);
+      exceptionRequest.current = undefined;
+      resetDraft();
+    }
+    preRepairPhotos.reset();
+    paperPhotos.reset();
+    if (!preserveEditor) {
+      resetOcr();
+      resetVehicleIdentityRecognition();
     }
   }
 
@@ -558,6 +606,16 @@ export function useWorkbenchController() {
 }
 
 export type WorkbenchController = ReturnType<typeof useWorkbenchController>;
+
+function sameEditingIdentity(previous: UserProfile | undefined, next: UserProfile) {
+  if (!previous) return false;
+  const identity = (user: UserProfile) => JSON.stringify({
+    id: user.id, name: user.name, shopId: user.shopId, active: user.active, role: user.role,
+    roles: [...(user.roles || [user.role])].sort(), legacyEmployeeCode: user.legacyEmployeeCode,
+    inspectorRoleMember: user.inspectorRoleMember, outsourcingRoleMember: user.outsourcingRoleMember
+  });
+  return identity(previous) === identity(next);
+}
 
 function actionError(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;

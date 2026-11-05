@@ -1,4 +1,5 @@
 import {HttpError} from '../http/HttpError.mjs';
+import {allWorkersHaveItems} from '../../shared/repairProgress.mjs';
 
 export function validateInspectionDeferred(input) {
  if(input.deferredItemIds===undefined&&input.deferredReason===undefined)return;
@@ -26,7 +27,7 @@ export function reconcileInspectionDeferred(pending,task,next,input,actor,now) {
  return items;
 }
 
-export function cancelInspectionDeferred(task,entry,actor,note,now) {
+export function cancelInspectionDeferred(task,entry,actor,note,now,people=[]) {
  if(!['pending','scheduled'].includes(entry.inspectionState))throw new HttpError(409,'待定项目已处理，请刷新');
  if(typeof note!=='string'||!note.trim()||note.length>2000)throw new HttpError(400,'请填写不再维修原因，最多 2000 字');
  const next=structuredClone(task),item=next.items.find(item=>item.id===entry.itemId);
@@ -36,9 +37,13 @@ export function cancelInspectionDeferred(task,entry,actor,note,now) {
  if(archived)next.deferredItems=[...(next.deferredItems||[]).filter(i=>i.id!==entry.itemId),structuredClone(archived)];
  if(item) {
   next.participantIds=[...new Set([...(next.participantIds||[]),item.responsibleId,item.startedBy,item.finishedBy].filter(Boolean))];
-  next.technicianIds=(next.technicianIds||[next.technicianId]).filter(id=>id&&next.items.some(item=>item.responsibleId===id));
+  const originalOwners=new Set(task.items.map(item=>item.responsibleId));
+  // Cancellation only removes the worker who lost their last registered job.
+  // Assigned coworkers who have not registered work yet still need to finish.
+  next.technicianIds=(next.technicianIds||[next.technicianId]).filter(id=>id&&(!originalOwners.has(id)||next.items.some(item=>item.responsibleId===id)));
   next.technicianId=next.technicianIds[0];
-  next.technicianName=next.executionMode==='outsourced'?next.contractor:[...new Set(next.items.map(i=>i.responsibleName).filter(Boolean))].join('、');
+  if(next.workerPauses)next.workerPauses=Object.fromEntries(Object.entries(next.workerPauses).filter(([id])=>next.technicianIds.includes(id)));
+  next.technicianName=next.executionMode==='outsourced'?next.contractor:next.technicianIds.map(id=>people.find(person=>person.id===id)?.name||next.items.find(item=>item.responsibleId===id)?.responsibleName||id).join('、');
  }
  if(next.rejectedItemIds)next.rejectedItemIds=next.rejectedItemIds.filter(id=>id!==entry.itemId);
  // External item completion still needs the separate whole-order completion checks.
@@ -46,8 +51,9 @@ export function cancelInspectionDeferred(task,entry,actor,note,now) {
   next.version=task.version+1;
   return next;
  }
- if(next.items.every(item=>item.status==='已完工'))Object.assign(next,{stage:'维修完成',completedAt:task.stage==='维修完成'?task.completedAt:now,rework:false});
- else if(next.items.every(item=>['待检验','已完工'].includes(item.status)))next.stage='待检验';
+ const workersCovered=allWorkersHaveItems(next);
+ if(workersCovered&&next.items.every(item=>item.status==='已完工'))Object.assign(next,{stage:'维修完成',completedAt:task.stage==='维修完成'?task.completedAt:now,rework:false});
+ else if(workersCovered&&next.items.every(item=>['待检验','已完工'].includes(item.status)))next.stage='待检验';
  else if(next.stage==='待检验')next.stage='维修中';
  next.version=task.version+1;
  return next;

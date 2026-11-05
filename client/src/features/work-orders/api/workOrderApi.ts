@@ -96,7 +96,7 @@ export const workOrderApi: WorkOrderApi = {
     return result;
   },
   async me() {
-    return validateAuthenticatedUser(await request<UserProfile>("/api/auth/me"));
+    return validateAuthenticatedUser(await request<UserProfile>("/api/auth/me", { restoreSession: true }));
   },
   list: (_role) => request<WorkOrder[]>("/api/work-orders"),
   page: query => request<PageResult<WorkOrder>>(`/api/work-orders?${new URLSearchParams(Object.entries(query).map(([key,value])=>[key,String(value)]))}`),

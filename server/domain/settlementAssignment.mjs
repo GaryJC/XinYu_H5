@@ -10,6 +10,11 @@ export function prepareSettlementAssignment(next,input) {
       throw new HttpError(409,'已检验项目不可修改、删除或重新分配负责人，只能新增项目并分配');
   }
   if(!input.repairItems?.some(row=>row.id===undefined))throw new HttpError(409,'请新增维修项目并分配负责人');
+  // Preserve the known legacy completion date before reopening the order.
+  for(const item of next.items) {
+    if(item.status==='已完工'&&!item.inspectedAt&&!item.completionRecordedAt&&next.completedAt)
+      item.completionRecordedAt=next.completedAt;
+  }
   next.stage='维修中';next.orderStatus='维修中';next.settlementAssignment=true;
   for(const key of ['completedAt','completedBy','inspectorId','inspectorName','inspectionClaimedAt','submittedAt','submissionNote','workHours','workHoursRecordedBy','workHoursRecordedName','workHoursRecordedAt'])delete next[key];
 }

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>多人维修继续审查 · 2026-11-05</title>
+<style>
+body{margin:0;background:#f4f6fa;color:#243247;font:16px/1.75 system-ui,sans-serif}main{max-width:960px;margin:auto;padding:28px 22px}article{background:#fff;border:1px solid #dae2ed;border-radius:14px;padding:22px;margin:18px 0}h1{font-size:28px;line-height:1.35}h2{font-size:20px;line-height:1.5}code{background:#eef2f8;padding:2px 5px;overflow-wrap:anywhere}.priority{color:#a75115;font-weight:700}.critical{color:#af3028}small{color:#61718a}table{border-collapse:collapse;width:100%}td,th{padding:10px;text-align:left;border-bottom:1px solid #e2e8f0}a{color:#155ac3}p{overflow-wrap:anywhere}@media(max-width:560px){main{padding:18px 12px}article{padding:16px}table{font-size:14px}}
+</style>
+<main>
+<h1>多人维修：新增确认 3 个问题</h1>
+<p>2026-11-05 · 本轮只审查，没有修改业务逻辑。按用户最新说明，多人维修没有整单“主要负责人”；各维修工平等，进度和配件申请按本人处理。文中的项目负责人与配件申请人均不代表整单主负责人。</p>
+<article>
+<h2><span class="priority critical">P1</span> 改派后丢失原有个人配件约束</h2>
+<p>位置：<code>server/domain/projectReassignment.mjs:29</code>；整单改派也受影响，见 <code>server/domain/dispatchPolicy.mjs:144</code>。个人申请选择在 <code>server/domain/individualRepair.mjs:35</code>。</p>
+<p>甲为“换滤芯”申请了尚未备齐的滤芯，本来不能开工。项目改派给丙后，申请仍保留在甲名下，而开工和提检只查丙的个人申请。丙查不到申请，被视为没有配件限制，能够开工并把该项目提交到待检验。</p>
+<p>另一入口也能复现：整单从甲、乙改派给丙，丙选择“无需配件”接单，所有项目进入维修中并能整单提检，甲的未备料申请仍然保留。两种入口属于同一个交接漏洞，不重复计数。</p>
+<p>修复方向：改派时显式处置或交接仍有效的个人配件申请，保留原申请、已备料和已出库证据；不要因更换维修工而把未处理申请隐式视为无需配件。不能简单改为所有人的申请阻塞所有人，否则会破坏个人独立维修。</p>
+<p>复现边界：使用实际 domain 状态转换；HTTP 服务另有维修照片校验，本复现聚焦配件门槛。仓管并未卡死，任务仍在处理时可以继续备齐甲的申请并指定丙领取；甲离组后本人不能再维护申请。</p>
+<small>脚本：/tmp/multiworker-parts-reassignment-review.mjs · 输出：/tmp/multiworker-parts-reassignment-review.log</small>
+</article>
+<article>
+<h2><span class="priority">P2</span> 本人已提交或检验通过，仍被算作回审待处理</h2>
+<p>位置：<code>shared/repairProgress.mjs:11</code>。整单为回审时直接返回回审，没有继续判断本人的实际项目状态。</p>
+<p>实际操作链：检验员将甲、乙的单发送回审 → 甲提交回审，乙仍在处理 → 检验员单独检验通过甲。甲的项目分别已是待检验、已完工，但两个阶段里甲的个人状态始终是回审。</p>
+<table><tr><th>甲的项目</th><th>实际个人分类数量</th><th>应有分类</th></tr><tr><td>已提交回审，待检验</td><td>待处理 1，回审 1，待检验 0</td><td>待检验</td></tr><tr><td>已检验通过</td><td>待处理 1，回审 1，已完成 0</td><td>已完成</td></tr></table>
+<p>详情页的 ownDone 已隐藏甲的操作按钮，却仍提示继续回审，容易让维修工反复打开无法处理的任务。这是“我的维修”分类、数量和状态展示问题；不据此声称独立的完工核对记录丢失。</p>
+<p>修复方向：个人展示先识别已提交、已完工，只有本人仍待处理时保留回审。整单工作流阶段继续保持回审，不能用个人展示阶段替换后台动作阶段。</p>
+<small>脚本：/tmp/multiworker-review-status-repro.mjs · 输出：/tmp/multiworker-review-status-repro.log</small>
+</article>
+<article>
+<h2><span class="priority">P2</span> 撤销最后一个项目后，旧暂停会带入后来新增的项目</h2>
+<p>位置：<code>server/domain/inspectionDeferred.mjs:43–45</code>；服务入口 <code>server/services/inspectionDeferredService.mjs:69</code> 调用后直接保存结果。</p>
+<p>实际操作链：甲、乙多人维修 → 甲暂停 → 检验员撤销甲唯一的已安排待定项目 → 甲离开当前维修名单，但 workerPauses 仍保留甲 → 顾问新增另一项目并分给甲。甲没有再次暂停，新项目却显示暂停，开工返回 409“当前暂停不能执行该操作”。</p>
+<p>修复方向：人员因取消最后项目退出本单时，同步清理其当前暂停状态。已有普通改派和编辑项目在 <code>server/domain/dispatchPolicy.mjs:402–404</code> 做了相同清理；保留仍在单内人员的暂停与历史操作记录。</p>
+<small>脚本：/tmp/multiworker-cancel-pause-repro.mjs · 输出：/tmp/multiworker-cancel-pause-repro.log</small>
+</article>
+<article>
+<h2>“主要负责人”残留检查</h2>
+<p>本次核查的个人操作权限与项目范围使用维修名单或项目 responsibleId，没有发现名单第一人获得额外操作权限。technicianId 仍作为兼容字段保留；不应据此把首位维修工解释为主管或主负责人。</p>
+<p>界面仍有旧称呼：<code>DispatchSheetSummary.tsx:17</code> 和 <code>WarehouseVehicleInfo.tsx:17</code> 用“主修人”显示整组维修人员。建议整单文案统一为“维修人员”；项目上的人员可称“维修工”或“项目负责人”。委托单历史表格与打印模板中也有“主修人”表头，本轮仅记录，没有改版。</p>
+</article>
+<article>
+<h2>验证与范围</h2>
+<p>现有 17 个相关测试文件共 <strong>163 项通过，0 失败、0 跳过</strong>；日志为 <code>/tmp/multiworker-review-existing-tests.log</code>。另外执行上述 3 个纯内存复现脚本，均通过对当前错误行为的断言，覆盖两个改派入口、回审提交/检验通过，以及暂停退出/重新加入。</p>
+<p>检查了个人动作、改派、配件、暂停、回审、部分检验、照片权限及人员兼容字段。本轮没有启用数据库集成测试、浏览器真机验收、生产操作或外部消息发送；没有修改业务代码，也没有重新运行全量构建。上一轮已发现的两条返工分类问题仍未修复，不在本报告重复计数。</p>
+<small>answer-me-with-html skill 在当前环境未找到，沿用独立 HTML 报告。这里只陈述本轮已验证的问题，不代表其他路径不存在缺陷。</small>
+</article>
+</main>
+</html>

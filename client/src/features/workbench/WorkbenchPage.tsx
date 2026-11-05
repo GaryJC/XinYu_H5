@@ -13,6 +13,8 @@ import { OrdersArchive } from "./OrdersArchive";
 import { dispatchEnabled, isDispatchNavigation } from "../dispatch/dispatchAvailability";
 import { useWorkbenchController } from "./useWorkbenchController";
 
+const TechnicianCompletedProjects = lazy(() => import('../dispatch/TechnicianCompletedProjects').then(m => ({ default: m.TechnicianCompletedProjects })));
+
 const BusinessAnalyticsPage = lazy(() => import('../business-analytics/BusinessAnalyticsPage').then(m=>({default:m.BusinessAnalyticsPage})));
 const VehicleTripsPage = lazy(() => import('../vehicle-trips/VehicleTripsPage').then(m => ({ default: m.VehicleTripsPage })));
 const CompanyVehiclesPage = lazy(() => import('../company-vehicles/CompanyVehiclesPage').then(m => ({ default: m.CompanyVehiclesPage })));
@@ -98,6 +100,7 @@ export function WorkbenchPage() {
                 aria-label="切换本地测试身份"
                 placeholder="选择测试身份"
                 loading={devLoginLoading}
+                disabled={devLoginLoading}
                 value={devPersona}
                 onChange={(value: DevelopmentPersonaKey) => {
                   setDevPersona(value);
@@ -134,7 +137,7 @@ export function WorkbenchPage() {
         {!dispatchEnabled && ["technician", "inspector", "warehouse"].includes(role) ? <Alert type="info" showIcon title="维修与检验功能暂未开放" /> : null}
 
         {controller.todoEntry?.nav===activeNav?<Button icon={<ArrowLeft size={16} aria-hidden="true" />} onClick={controller.returnFromTodo}>返回工作台</Button>:null}
-        {!bindingRequired && activeNav === "工作台" && (dispatchEnabled || !["technician", "inspector", "warehouse"].includes(role)) ? (
+        {!bindingRequired && currentUser && activeNav === "工作台" && (dispatchEnabled || !["technician", "inspector", "warehouse"].includes(role)) ? (
           <>
             {controller.todoError?<Alert type="warning" title={controller.todoError}/>:null}
             <TodoOverview key={currentUser?.id} counters={counters} canApprove={!!currentUser&&hasRole(currentUser,'manager')} onTodo={controller.openTodo} onApprovals={()=>{setTripScope('pending');setActiveNav('出车申请');}}/>
@@ -151,17 +154,19 @@ export function WorkbenchPage() {
 
         {!bindingRequired && activeNav === "工单全览" && currentUser && hasAnyRole(currentUser, ["advisor", "manager"]) ? <OrdersArchive key={currentUser.id} controller={controller} overview/> : null}
 
-        {!bindingRequired && activeNav === "委托开单" ? (
+        {!bindingRequired && currentUser && activeNav === "委托开单" ? (
           <Suspense fallback={<LoadingState label="正在加载委托开单…" />}>
             <WorkOrderEditor controller={controller} />
           </Suspense>
         ) : null}
 
-        {!bindingRequired && dispatchEnabled && currentUser && isDispatchNavigation(activeNav) ? (
+        {!bindingRequired && dispatchEnabled && currentUser && activeNav !== "完工核对" && isDispatchNavigation(activeNav) ? (
           <Suspense fallback={<LoadingState label="正在加载派工模块…" />}>
             <DispatchPage key={`${currentUser.id}-${activeNav}-${controller.todoEntry?.key||0}`} user={currentUser} view={activeNav} initialStage={controller.todoEntry?.nav===activeNav?controller.todoEntry.stage:undefined}/>
           </Suspense>
         ) : null}
+
+        {!bindingRequired && dispatchEnabled && activeNav === "完工核对" && currentUser && hasAnyRole(currentUser, ["technician", "outsourcing"]) && <Suspense fallback={<LoadingState label="正在加载完工项目…" />}><TechnicianCompletedProjects key={currentUser.id} user={currentUser}/></Suspense>}
 
         {!bindingRequired && activeNav === "配件竞价" && currentUser && hasAnyRole(currentUser, ["manager","warehouse"]) ? (
           <Suspense fallback={<LoadingState label="正在加载配件竞价…" />}><ProcurementPage key={currentUser.id} user={currentUser}/></Suspense>
@@ -169,7 +174,7 @@ export function WorkbenchPage() {
 
         {!bindingRequired && activeNav === "数据看板" && currentUser && hasRole(currentUser,'manager') && <Suspense fallback={<LoadingState label="正在加载运营看板…"/>}><BusinessAnalyticsPage key={currentUser.id}/></Suspense>}
 
-        {!bindingRequired && (activeNav === "权限设置") ? (
+        {!bindingRequired && currentUser && (activeNav === "权限设置") ? (
           <Suspense fallback={<LoadingState label="正在加载功能模块…" />}>
             <ModulePanel activeNav={activeNav} orders={orders} dashboard={dashboard} users={users} />
           </Suspense>

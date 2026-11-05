@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>会话、附件与完工衔接复核 · 2026-11-04</title>
+<style>
+body{margin:0;background:#f5f7fb;color:#172b43;font:16px/1.7 system-ui,-apple-system,"PingFang SC",sans-serif}main{max-width:1000px;margin:auto;padding:30px 20px 60px}h1{font-size:28px;line-height:1.4}h2{font-size:20px}section{background:white;border:1px solid #dbe3ee;border-radius:14px;padding:20px;margin:18px 0}.table{overflow:auto}table{border-collapse:collapse;min-width:640px;width:100%}td,th{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid #e4eaf2}th,footer{color:#53677f}code{font-size:13px;overflow-wrap:anywhere}.ok{color:#167547;font-weight:650}
+</style>
+<main>
+<h1>会话、附件与完工衔接复核</h1>
+<p>2026-11-04 · 继续检查登录身份切换、照片增删、检验待定项目取消、归档反向更新，以及写回队列恢复。以下问题已建立本地复现和回归。</p>
+<section><h2>本轮修复</h2><div class="table"><table>
+<thead><tr><th>问题</th><th>触发与影响</th><th>修复后的行为</th></tr></thead><tbody>
+<tr><td>旧补签页面确认刷新后的内容</td><td>客户已打开补签页，门店随后从润丰刷新费用、项目名称等内容，原链接仍允许签字。</td><td>实际内容变化时，在刷新事务内撤销尚未使用的链接。新链接显示新内容；无变化刷新、审核标记变化、已签署证据保持原样，失败完整回滚。</td></tr>
+<tr><td>取消待定项目让整单提前完工</td><td>甲的剩余项目已检验通过，乙已被分配但尚未登记项目；取消甲的待定项后，整单被直接推进完工或待检验。已派工待定项取消还可能把乙从名单中移除。</td><td>保留本来尚未登记项目的已分配维修工，满足人员项目条件后才推进状态。乙仍能补登记自己的项目；正常单人取消最后一项仍能结束本轮。</td></tr>
+<tr><td>照片已保存，界面仍提示失败</td><td>补传或替换已提交，但 HTTP 回复丢失；界面保留旧图，再试可能生成重复附件或遇到替换冲突。</td><td>失败后只读核对同一订单、新文件、槽位及替换记录。能够确认已保存才恢复成功，不重发写请求；读取失败保留原错误。</td></tr>
+<tr><td>照片已删除，重复删除又冲突</td><td>批量删除成功后回复丢失，界面仍保留待删除选择。</td><td>核对全部目标的删除记录。只有全部已删除才恢复成功，部分删除或其他订单不能误报成功。保存成功后的界面回调失败单独提示。</td></tr>
+<tr><td>切换身份后残留旧表单及迟到响应</td><td>同页切换测试身份时仍保留旧草稿、OCR 或选中记录；另一页签切换账号后，当前页面可能以新账号提交旧表单。旧请求的回复也可能污染新会话。</td><td>会话变化清理编辑状态；跨页签变化先恢复当前身份。旧会话请求和响应受到拦截，旧请求的 401 不会清除新账号令牌，不自动重试写入。</td></tr>
+</tbody></table></div></section>
+<section><h2>不变的业务规则</h2><p>维修工按本人申报的配件独立开工，部分备齐即可开工；取消项目不会跳过仍待登记的同事。已有维修时间、检验记录和客户签名证据保留，配件不绑定具体维修项目。</p></section>
+<section><h2>验证</h2><p id="verification">最终验证进行中。</p></section>
+<section><h2>范围</h2><p>仅本地验证，无数据库结构变更。润丰读取使用固定测试数据；数据库回归创建并清理隔离库。没有修改已有 dummy data 的进度，没有操作真实润丰或发送通知，没有线上依赖扫描、部署或推送。</p><p>照片正常成功路径不增加查询；结果不明时才增加只读核实。归档实际内容变化时增加一次令牌失效更新；取消项目复用已加载的人员与项目。会话检查使用本地状态，跨页签切换时重新读取身份。未做生产规模压测。</p></section>
+<footer>结论适用于本轮覆盖的路径，不代表全部模块已无缺陷。实现约束与验证结果已记录于 HANDOFF.MD。</footer>
+</main></html>

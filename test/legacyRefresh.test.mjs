@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildLegacyRefresh, legacyDate } from "../server/domain/legacyRefresh.mjs";
+import { buildLegacyRefresh, legacyDate, legacyRefreshChangesContent } from "../server/domain/legacyRefresh.mjs";
 import { readLegacyWorkOrder, LEGACY_ITEMS_QUERY, LEGACY_ORDER_QUERY, LEGACY_DISPATCH_ORDER_QUERY } from "../server/repositories/legacyWorkOrderRepository.mjs";
 
 function snapshot() {
@@ -114,4 +114,17 @@ test("Runfeng approval flag is imported independently of repair status and clear
     assert.equal(change.fields.legacy_approved, expected);
     assert.ok(!('status' in change.fields));
   }
+});
+test('refresh identifies signing content changes independently of source identities and approval metadata',()=>{
+  const source=snapshot(),items=[{...item,labor_fee:'120.00'}],change=buildLegacyRefresh(source,items,true);
+  const order={...change.fields,estimated_fee:'120.00'};
+  assert.equal(legacyRefreshChangesContent(order,change,items),false);
+  assert.equal(legacyRefreshChangesContent(order,{...change,fields:{...change.fields,legacy_approved:true}},items),false);
+  for(const key of ['vehicle_plate','vehicle_vin','vehicle_mileage','fault_description','estimated_delivery_at','customer_address']) {
+    assert.equal(legacyRefreshChangesContent(order,{...change,fields:{...change.fields,[key]:'已修改'}},items),true,key);
+  }
+  assert.equal(legacyRefreshChangesContent(order,{...change,fields:{...change.fields,estimated_fee:121}},items),true);
+  assert.equal(legacyRefreshChangesContent(order,{...change,items:[{...change.items[0],name:'新项目'}]},items),true);
+  assert.equal(legacyRefreshChangesContent(order,{...change,items:[{...change.items[0],laborFee:0}]},items),true);
+  assert.equal(legacyRefreshChangesContent(order,{...change,items:[]},items),true);
 });

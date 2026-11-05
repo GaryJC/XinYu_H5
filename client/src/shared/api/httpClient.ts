@@ -6,27 +6,84 @@ const imageCacheLimit = 16 * 1024 * 1024;
 let imageCacheBytes = 0;
 let imageCacheToken = "";
 let imageCacheGeneration = 0;
+let sessionToken = window.localStorage.getItem(authTokenKey) || "";
+let sessionGeneration = 0;
+let sessionReady = true;
+
+type SessionChange = "changed" | "storage" | "expired";
+const sessionChangedEvent = "repair-h5-auth-token-changed";
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   skipAuth?: boolean;
+  restoreSession?: boolean;
 };
 
 export function setAuthToken(token: string) {
-  clearImageCache();
   window.localStorage.setItem(authTokenKey, token);
-  window.dispatchEvent(new Event("repair-h5-auth-token-changed"));
+  changeSession(token, "changed");
 }
 
 export function getAuthToken() {
-  return window.localStorage.getItem(authTokenKey) || "";
+  return sessionToken;
 }
 
 export function clearAuthToken() {
-  clearImageCache();
   window.localStorage.removeItem(authTokenKey);
-  window.dispatchEvent(new Event("repair-h5-auth-token-changed"));
+  changeSession("", "changed");
+}
+
+export function confirmAuthSession() {
+  const generation = sessionGeneration;
+  syncStoredSession();
+  if (generation !== sessionGeneration) return false;
+  sessionReady = true;
+  return true;
+}
+
+export function subscribeAuthSession(listener: (reason: SessionChange) => void) {
+  const changed = (event: Event) => listener((event as CustomEvent<SessionChange>).detail);
+  window.addEventListener(sessionChangedEvent, changed);
+  return () => window.removeEventListener(sessionChangedEvent, changed);
+}
+
+function changeSession(token: string, reason: SessionChange) {
+  if (token === sessionToken && reason !== "expired") return;
+  sessionToken = token;
+  sessionGeneration += 1;
+  sessionReady = reason !== "storage";
+  clearImageCache();
+  window.dispatchEvent(new CustomEvent(sessionChangedEvent, { detail: reason }));
+}
+
+function syncStoredSession() {
+  const stored = window.localStorage.getItem(authTokenKey) || "";
+  if (stored !== sessionToken) changeSession(stored, "storage");
+}
+
+window.addEventListener("storage", (event) => {
+  if (event.storageArea === window.localStorage && (event.key === authTokenKey || event.key === null)) syncStoredSession();
+});
+
+function changedSessionError() {
+  return Object.assign(new Error("登录身份已变更，请重新查看当前数据"), { status: 409 });
+}
+
+function captureSession(restore = false) {
+  const generation = sessionGeneration;
+  syncStoredSession();
+  if (generation !== sessionGeneration || (!sessionReady && !restore)) throw changedSessionError();
+  return { token: sessionToken, generation: sessionGeneration };
+}
+
+function checkSession(session: { token: string; generation: number }, status?: number) {
+  syncStoredSession();
+  if (session.generation !== sessionGeneration) throw changedSessionError();
+  if (status === 401 && session.token) {
+    window.localStorage.removeItem(authTokenKey);
+    changeSession("", "expired");
+  }
 }
 
 function clearImageCache() {
@@ -38,7 +95,9 @@ function clearImageCache() {
 }
 
 export function requestCachedImage(path: string): Promise<Blob> {
-  const token = getAuthToken();
+  let session: ReturnType<typeof captureSession>;
+  try { session = captureSession(); } catch (error) { return Promise.reject(error); }
+  const { token } = session;
   if (imageCacheToken !== token) {
     clearImageCache();
     imageCacheToken = token;
@@ -62,9 +121,11 @@ export function requestCachedImage(path: string): Promise<Blob> {
     .then(async (response) => {
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
+        checkSession(session, response.status);
         throw Object.assign(new Error(payload?.error ?? `API request failed: ${response.status}`), { status: response.status });
       }
       const blob = await response.blob();
+      checkSession(session);
       const durationMs = Math.round(performance.now() - started);
       if (durationMs > 1000) console.info("[image-load]", {
         variant: path.includes("size=thumbnail") ? "thumbnail" : "original",
@@ -98,7 +159,8 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     const headers: Record<string, string> = {};
     if (options.body !== undefined) headers["Content-Type"] = "application/json";
 
-    const token = options.skipAuth ? "" : getAuthToken();
+    const session = options.skipAuth ? undefined : captureSession(options.restoreSession);
+    const token = session?.token || "";
     if (token) headers.Authorization = `Bearer ${token}`;
 
     response = await fetch(path, {
@@ -108,6 +170,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     });
 
     const payload = await response.json().catch(() => null);
+    if (session) checkSession(session, response.status);
     if (!response.ok) {
       throw Object.assign(new Error(payload?.error ?? `API request failed: ${response.status}`), { status: response.status });
     }
@@ -124,14 +187,18 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 }
 
 export async function requestBlob(path: string): Promise<Blob> {
-  const token = getAuthToken();
+  const session = captureSession();
+  const { token } = session;
   const response = await fetch(path, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined
   });
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
+    checkSession(session, response.status);
     throw Object.assign(new Error(payload?.error ?? `API request failed: ${response.status}`), { status: response.status });
   }
-  return response.blob();
+  const blob = await response.blob();
+  checkSession(session);
+  return blob;
 }

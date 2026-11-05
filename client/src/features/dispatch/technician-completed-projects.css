@@ -1,0 +1,29 @@
+.completed-projects-toolbar,.completed-project-header,.completed-projects-total{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.completed-projects-toolbar{margin-bottom:20px}
+.completed-projects-total{padding:20px;background:#edf4ff;border-radius:16px;color:#25456c;margin-bottom:16px}
+.completed-projects-total>span{min-width:0;line-height:1.6;overflow-wrap:anywhere}
+.completed-projects-total strong{flex-shrink:0;white-space:nowrap;font-size:30px;color:#1677ff;font-variant-numeric:tabular-nums}
+.completed-projects-total small{font-size:14px;font-weight:400}
+.completed-projects-list{list-style:none;padding:0;margin:0;display:grid;gap:16px}
+.completed-project-card{display:block;width:100%;text-align:left;font:inherit;cursor:pointer;color:inherit;padding:20px;background:#fff;border:1px solid #dfe6ef;border-radius:16px}
+.completed-project-identifier{display:block;min-width:0}
+.completed-project-number-label{display:block;font-size:12px;color:#61748d;margin-bottom:4px}
+.completed-project-header strong{display:block;font-size:20px;line-height:1.3;font-weight:750;color:#1757ac;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.completed-project-count{font-size:14px;color:#61748d;white-space:nowrap}
+.completed-project-plate{display:block;font-size:15px;color:#405571;margin-top:8px}
+.completed-project-rows{display:block;margin-top:16px;border-top:1px solid #e6ebf2}
+.completed-project-row{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:13px 0;border-bottom:1px solid #eef1f5}
+.completed-project-row:last-child{border-bottom:0;padding-bottom:0}
+.completed-project-name{min-width:0;font-size:15px;overflow-wrap:anywhere}
+.completed-project-round{display:block;color:#61748d;font-size:12px;margin-top:3px}
+.completed-project-row time{font-size:13px;color:#61748d;font-variant-numeric:tabular-nums;white-space:nowrap;line-height:24px}
+.completed-project-card:hover{border-color:#1677ff}
+.completed-project-card:focus-visible{outline:2px solid #1677ff;outline-offset:3px}
+.completed-project-filters{padding:14px;background:#fff;border:1px solid #dfe6ef;border-radius:14px;margin-bottom:16px}
+.completed-filter-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;color:#66788f;font-size:13px}
+.completed-filter-heading .ant-select{width:184px}
+.completed-date-shortcuts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;background:#f1f4f8;padding:3px;border-radius:10px}
+.completed-date-shortcuts .ant-btn{padding-inline:2px;min-height:40px;font-size:13px;color:#66788f}
+.completed-date-shortcuts .is-selected{background:#fff;color:#2563eb;font-weight:600}
+.completed-custom-dates{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.completed-custom-dates .ant-picker{flex:1;min-width:130px}

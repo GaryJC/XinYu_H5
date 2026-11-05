@@ -48,3 +48,73 @@ test('inspector, manager worker filters and warehouse requests keep whole-order 
  assert.throws(()=>own(task(),a,'进行中',{technicianId:'b'}),e=>e.status===403);
  assert.throws(()=>own(task(),warehouse,'进行中'),e=>e.status===403);
 });
+
+ test('actionable category includes all personal in-progress states and review, with matching search counts',()=>{
+ const stages=['待接单','待开工','维修中','暂停','待检验','回审','维修完成'];
+ const tasks=stages.map(stage=>({...task(),orderId:stage,stage,technicianIds:['a'],partsRequests:undefined}));
+ assert.deepEqual(filterDispatchTasks(tasks,a,{personal:'true',stage:'待处理'}).map(t=>t.stage),['回审','待开工','维修中','暂停']);
+ assert.equal(countDispatchTaskStatuses(tasks,a,{personal:'true'})['待处理'],4);
+ assert.equal(countDispatchTaskStatuses(tasks,a,{personal:'true',search:'回审'})['待处理'],1);
+ assert.equal(own(task('已完工'),a,'待处理').length,0);
+ assert.equal(own(task(),b,'待处理').length,1);
+ assert.equal(own(task('维修中'),a,'待处理').length,1);
+ });
+
+test('assigned date range uses Shanghai inclusive dates across statuses and counts',()=>{
+ const dates=['2026-10-31T15:59:59Z','2026-10-31T16:00:00Z','2026-11-01T15:59:59Z','2026-11-01T16:00:00Z',undefined];
+ const tasks=dates.map((assignedAt,i)=>({...task('维修中'),orderId:String(i),assignedAt}));
+ const query={personal:'true',stage:'待处理',assignedFrom:'2026-11-01',assignedTo:'2026-11-01'};
+ assert.deepEqual(filterDispatchTasks(tasks,a,query).map(t=>t.orderId),['1','2']);
+ assert.equal(countDispatchTaskStatuses(tasks,a,query)['待处理'],2);
+ assert.equal(filterDispatchTasks(tasks,a,{...query,assignedFrom:undefined}).length,3);
+ assert.equal(filterDispatchTasks(tasks,a,{...query,assignedTo:undefined}).length,3);
+ assert.equal(filterDispatchTasks(tasks,a,{...query,assignedFrom:undefined,assignedTo:undefined}).length,5);
+ const completed={...tasks[1],stage:'维修完成',completedAt:'2026-12-02T00:00:00Z'};
+ assert.equal(filterDispatchTasks([completed],a,{...query,stage:'已完成'}).length,1);
+ assert.throws(()=>filterDispatchTasks(tasks,a,{...query,assignedTo:'2026-10-30'}),e=>e.status===400);
+ assert.throws(()=>filterDispatchTasks(tasks,a,{...query,assignedFrom:'2026-02-30'}),e=>e.status===400);
+});
+
+ test('actionable review priority is stable before pagination and leaves other categories unchanged',async()=>{
+ const {pageResult}=await import('../server/domain/pagination.mjs');
+ const working=Array.from({length:22},(_,i)=>({...task('维修中'),orderId:`w${i}`}));
+ const review=[0,1].map(i=>({...task('维修中'),stage:'回审',orderId:`r${i}`}));
+ const tasks=[...working, ...review],before=structuredClone(tasks);
+ const result=filterDispatchTasks(tasks,a,{personal:'true',stage:'待处理'});
+ assert.deepEqual(result.map(t=>t.orderId),[...review,...working].map(t=>t.orderId));
+ assert.deepEqual(pageResult(result,{page:'1',pageSize:'20'}).items.slice(0,2),review);
+ assert.deepEqual(filterDispatchTasks(tasks,a,{personal:'true',includeCompleted:'true'}),tasks);
+ assert.deepEqual(tasks,before);
+ });
+
+test('actionable ranks review then rework then others, including waiting and paused work',()=>{
+ const make=(id,stage,extra={})=>({...task(),orderId:id,technicianIds:['a'],partsRequests:undefined,stage,...extra});
+ const tasks=[make('normal','维修中'),make('additional','待开工',{repairRound:2,roundKind:'additional'}),make('legacy','暂停',{rework:true}),make('round','待开工',{repairRound:1}),make('review','回审',{repairRound:1,roundKind:'rework'}),make('paused','暂停'),make('inspection','待检验',{rework:true})];
+ const query={personal:'true',stage:'待处理'};
+ assert.deepEqual(filterDispatchTasks(tasks,a,query).map(t=>t.orderId),['review','legacy','round','normal','additional','paused']);
+ const counts=countDispatchTaskStatuses(tasks,a,query);
+ assert.equal(counts['待处理'],counts['回审']+counts['待开工']+counts['维修中']+counts['暂停']);
+ assert.equal(own({...task('维修中'),workerPauses:{a:{resumeStage:'维修中'}}},a,'待处理').length,1);
+});
+
+test('detailed technician categories preserve personal stages and identify active rework only',()=>{
+ const base=(id,stage,extra={})=>({...task(),orderId:id,stage,technicianIds:['a'],partsRequests:undefined,...extra});
+ const tasks=[base('waiting','待开工'),base('working','维修中'),base('paused','暂停'),base('legacy','维修中',{rework:true}),base('round','待接单',{repairRound:1}),base('additional','维修中',{repairRound:1,roundKind:'additional'}),base('done','维修完成',{repairRound:1}),base('inspection','待检验',{repairRound:1})];
+ const query={personal:'true'};
+ assert.deepEqual(filterDispatchTasks(tasks,a,{...query,stage:'返工'}).map(t=>t.orderId),['legacy','round','inspection']);
+ const counts=countDispatchTaskStatuses(tasks,a,query);
+ assert.equal(counts['待开工'],1);assert.equal(counts['维修中'],3);assert.equal(counts['暂停'],1);assert.equal(counts['返工'],3);
+ assert.equal(own({...task('已完工'),repairRound:1},a,'返工').length,0);
+ assert.equal(own({...task('维修中'),repairRound:1,workerPauses:{a:{resumeStage:'维修中'}}},a,'暂停').length,1);
+ assert.equal(countDispatchTaskStatuses(tasks,a,{...query,search:'legacy'})['返工'],1);
+});
+
+test('review and working category only includes personal review or working states',()=>{
+ const base=(id,stage)=>({...task(),orderId:id,stage,technicianIds:['a'],partsRequests:undefined});
+ const tasks=['待接单','待开工','维修中','暂停','待检验','回审','维修完成'].map(stage=>base(stage,stage));
+ const query={personal:'true',stage:'回审&维修中'};
+ assert.deepEqual(filterDispatchTasks(tasks,a,query).map(t=>t.orderId),['回审','维修中']);
+ const counts=countDispatchTaskStatuses(tasks,a,{personal:'true'});
+ assert.equal(counts['回审&维修中'],counts['回审']+counts['维修中']);
+ assert.equal(own({...task('维修中'),workerPauses:{a:{resumeStage:'维修中'}}},a,'回审&维修中').length,0);
+});

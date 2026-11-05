@@ -1,6 +1,20 @@
 import { hasRole } from "../../shared/roles.mjs";
 import {HttpError} from '../http/HttpError.mjs';
 
+// Applications belong to workers, not individual projects. Do not silently
+// detach outstanding material from work when changing its owner.
+export function assertPersonalPartsHandover(previous,next) {
+  // Outsourced workflows already check all inherited requests. Moving back to
+  // personal workflows must not discard those outstanding requirements either.
+  if(next.executionMode==='outsourced')return;
+  const changedOwners=new Set(previous.items.filter(item=>item.responsibleId
+    &&next.items.some(current=>current.id===item.id&&current.responsibleId!==item.responsibleId))
+    .map(item=>item.responsibleId));
+  const pending=previous.partsRequests?.find(parts=>(previous.executionMode==='outsourced'||changedOwners.has(parts.ownerId))
+    &&parts.mode!=='none'&&!parts.preparedAt&&!parts.issuedAt);
+  if(pending)throw new HttpError(409,`${pending.ownerName||'原维修工'}仍有未备齐配件，请先处理该申请后再改派项目`);
+}
+
 export function validateProjectReassignment(input) {
   if(input.reassignItemIds===undefined)return;
   const ids=input.reassignItemIds;

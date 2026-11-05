@@ -3,7 +3,7 @@ import { transaction } from '../database/pool.mjs';
 import { findWorkOrderById, upsertWorkOrder } from '../db.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 import { assertOrderReadyForSignature } from '../domain/workOrderPolicy.mjs';
-import { buildLegacyRefresh } from '../domain/legacyRefresh.mjs';
+import { buildLegacyRefresh, legacyRefreshChangesContent } from '../domain/legacyRefresh.mjs';
 import { readLegacyWorkOrder } from '../repositories/legacyWorkOrderRepository.mjs';
 import { applyLegacyRefresh, readRefreshItems } from '../repositories/workOrderRefreshRepository.mjs';
 import { lockPaperOrder, setPaperMode, assertLegacyLinkAvailable, attachPaperPhotos, markPaperLegacySynced, auditPaperSubmission } from '../repositories/paperOrderRepository.mjs';
@@ -44,7 +44,9 @@ export async function resolvePaperOrder(id, input, actor, dependencies={}) {
         customer_contact:text(snapshot.header.lxr || snapshot.header.sxr),customer_phone:text(snapshot.header.lxdh),
         department_code:text(snapshot.header.bm),department_name:text(snapshot.header.department_name)
       });
-      await applyLegacyRefresh(client,row,change,snapshot.header,actor);
+      await applyLegacyRefresh(client,row,change,snapshot.header,actor,{
+        invalidateSignature:legacyRefreshChangesContent(row,change,items)
+      });
       if (isDraft) await saveDispatchPlan(client, { id }, actor, null);
       await setPaperMode(client,id,'runfeng','已委托',actor);
       await markPaperLegacySynced(client,id);

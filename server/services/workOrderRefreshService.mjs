@@ -3,7 +3,7 @@ import { transaction } from "../database/pool.mjs";
 import { findWorkOrderById } from "../db.mjs";
 import { readLegacyWorkOrder } from "../repositories/legacyWorkOrderRepository.mjs";
 import { lockRefreshOrder, readRefreshItems, applyLegacyRefresh } from "../repositories/workOrderRefreshRepository.mjs";
-import { buildLegacyRefresh } from "../domain/legacyRefresh.mjs";
+import { buildLegacyRefresh, legacyRefreshChangesContent } from "../domain/legacyRefresh.mjs";
 
 export async function refreshWorkOrderFromLegacy(id, actor, dependencies = {}) {
   const { runTransaction = transaction, readSource = readLegacyWorkOrder, readResult = findWorkOrderById } = dependencies;
@@ -16,7 +16,9 @@ export async function refreshWorkOrderFromLegacy(id, actor, dependencies = {}) {
     const snapshot={...source,items:source.items.filter(i=>!pendingNames.has(String(i.hh||'').trim()))};
     const { items, hasExecution } = await readRefreshItems(client, id);
     const change = buildLegacyRefresh(snapshot, items, hasExecution);
-    await applyLegacyRefresh(client, order, change, snapshot.header, actor);
+    await applyLegacyRefresh(client, order, change, snapshot.header, actor, {
+      invalidateSignature: legacyRefreshChangesContent(order, change, items)
+    });
     return readResult(client, id);
   });
 }

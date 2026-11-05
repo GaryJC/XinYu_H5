@@ -66,7 +66,7 @@ export async function processInspectionDeferred(client,actor,id,input,row) {
   entry.state='approved';entry.scheduled=true;entry.inspectionState='scheduled';operation='schedule';
  } else if(['decline','cancel'].includes(input.action)) {
   if(input.action==='decline'&&entry.inspectionState!=='pending'||input.action==='cancel'&&entry.inspectionState!=='scheduled')throw new HttpError(409,'待定项目状态已变化');
-  next=cancelInspectionDeferred(task,entry,current,input.note,now);
+  next=cancelInspectionDeferred(task,entry,current,input.note,now,people);
   entry.cancelledItem=task.items.find(i=>i.id===entry.itemId)||entry.originalItem;
   entry.state='declined';entry.inspectionState='cancelled';operation='cancel';
  } else throw new HttpError(400,'检验待定项目只允许派工、删除或撤销');

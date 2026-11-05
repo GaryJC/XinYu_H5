@@ -1,4 +1,4 @@
-import { BarChart3, CarFront, ClipboardCheck, FilePenLine, Files, Gavel, LayoutDashboard, Network, PackagePlus, Route, ShieldCheck, Wrench } from "lucide-react";
+import { ListChecks, BarChart3, CarFront, ClipboardCheck, FilePenLine, Files, Gavel, LayoutDashboard, Network, PackagePlus, Route, ShieldCheck, Wrench } from "lucide-react";
 import { RoleKey } from "../../../../shared/types";
 
 export const primaryNavByRole: Record<RoleKey, string> = {
@@ -13,6 +13,7 @@ export const primaryNavByRole: Record<RoleKey, string> = {
 
 export const navItems: Array<{ label: string; icon: typeof LayoutDashboard; roles: RoleKey[] }> = [
   { label: "工作台", icon: LayoutDashboard, roles: ["advisor", "manager"] },
+  { label: "完工核对", icon: ListChecks, roles: ["technician", "outsourcing"] },
   { label: "委托开单", icon: FilePenLine, roles: ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] },
   { label: "派工台", icon: Network, roles: ["advisor", "manager"] },
   { label: "检验任务", icon: ClipboardCheck, roles: ["inspector", "manager"] },

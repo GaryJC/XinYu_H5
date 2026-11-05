@@ -20,7 +20,7 @@ export async function readRefreshItems(client, id) {
     or exists(select 1 from outbound_orders where order_id=$1) as active`, [id]);
   return { items: items.rows, hasExecution: execution.rows[0]?.active };
 }
-export async function applyLegacyRefresh(client, order, change, header, actor) {
+export async function applyLegacyRefresh(client, order, change, header, actor, { invalidateSignature = false } = {}) {
   const fields = Object.entries(change.fields);
   const params = [order.id, ...fields.map(([,value]) => value), Number(header.reid), Number(header.dh)];
   // Keys originate exclusively from the domain allowlist, never HTTP input.
@@ -43,6 +43,7 @@ export async function applyLegacyRefresh(client, order, change, header, actor) {
         where (entry->>'id')::bigint=ri.client_item_id limit 1
       ) previous on true where ri.order_id=$1),'[]'::jsonb)) end,
     version=version+1,updated_at=now() where order_id=$1`, [order.id]);
+  if (invalidateSignature) await client.query("update signature_tokens set expires_at=clock_timestamp() where order_id=$1 and not used", [order.id]);
   await client.query("insert into audit_logs(order_id,actor,action) values($1,$2,$3)",
     [order.id,actor.name,`从润丰更新归档内容（派工号 ${change.fields.dispatch_no}，维修项目 ${change.items.length} 项）`]);
 }

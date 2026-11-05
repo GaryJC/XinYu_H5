@@ -17,6 +17,7 @@ test('repair rounds persist independently, serialize concurrent reopen and prese
   for(const p of [manager,advisor,tech,newTech,inspector,outside])await pool.query('insert into users(id,name,role,shop_id,active,dingtalk_user_id) values($1,$2,$3,$4,true,$1)',[p.id,p.name,p.role,p.shopId]);
   await pool.query("update users set legacy_employee_code=case when id='t' then '027' else '028' end,legacy_employee_name=name,legacy_employee_department='test',legacy_employee_bound_at=now() where role='technician'");
   const svc=await import('../server/services/dispatchService.mjs'),repo=await import('../server/repositories/dispatchRepository.mjs'),db=await import('../server/db.mjs');
+  const {myCompletedProjects}=await import('../server/services/technicianCompletedProjectsService.mjs');
   const {uploadRepairPhoto}=await import('../server/services/repairPhotoService.mjs');
   const {createFileRecord,assertFileReadAccess}=await import('../server/repositories/fileRepository.mjs');
   const {processNotification}=await import('../server/workers/dispatchNotifications.mjs');
@@ -62,6 +63,11 @@ test('repair rounds persist independently, serialize concurrent reopen and prese
   assert.equal(task.orderStatus,'完成');assert.equal(task.stage,'维修完成');assert.equal((await svc.technicianSummaries(manager)).find(p=>p.id==='t2').completed,1);
   const detail=await svc.dispatchDetail(manager,'closed');assert.equal(detail.repairRounds.length,2);assert.ok(detail.repairRounds.every(r=>r.closed));const firstRound=detail.repairRounds[1];
   const second=await svc.executeDispatchAction(manager,'closed',{...reopen,expectedVersion:task.version,requestId:randomUUID(),reworkItemIds:[2],additionalItems:['下一轮检查'],technicianIds:['t']});assert.equal(second.task.repairRound,2);assert.ok(second.task.items.some(i=>i.id===-2));assert.equal(second.task.items[0].id,2);
+  const month=new Date(Date.parse(firstRound.completedAt)+8*3600000).toISOString().slice(0,7);
+  const completed=(await myCompletedProjects(newTech,{month})).items.filter(item=>item.orderId==='closed');
+  assert.deepEqual(completed.map(item=>item.key).sort(),['closed:1:-1','closed:1:1']);
+  const originalCompletedProjects=(await myCompletedProjects(tech,{month:'2026-10'})).items.filter(item=>item.orderId==='closed');
+  assert.deepEqual(originalCompletedProjects.map(item=>item.key).sort(),['closed:0:1','closed:0:2']);
   assert.deepEqual(second.repairRounds[1],firstRound);await assert.rejects(()=>uploadRepairPhoto(newTech,'closed',body,{save}),e=>e.status===403);
   const after=(await pool.query("select * from work_orders where id='closed'")).rows[0];delete before.updated_at;delete after.updated_at;assert.deepEqual(after,before);assert.deepEqual((await pool.query("select * from repair_items where order_id='closed' order by item_no")).rows,itemsBefore);
   assert.equal((await pool.query("select count(*) from settlement_statements where order_id='closed'")).rows[0].count,'1');assert.equal((await pool.query("select count(*) from legacy_sync_outbox where order_id='closed'")).rows[0].count,'0');
@@ -78,13 +84,14 @@ test('repair rounds persist independently, serialize concurrent reopen and prese
   const removal={action:'edit-repair-items',expectedVersion:withExtra.version,requestId:randomUUID(),repairItems:rows(original)};
   const cancelled=await svc.executeDispatchAction(advisor,'cancelled-addition',removal);
   assert.equal(cancelled.task.stage,'维修完成');assert.equal(cancelled.task.orderStatus,'待结算');
-  assert.deepEqual(cancelled.task.items,original.items);
+  const originalItemsWithCompletion=original.items.map(item=>({...item,completionRecordedAt:original.completedAt}));
+  assert.deepEqual(cancelled.task.items,originalItemsWithCompletion);
   await svc.executeDispatchAction(advisor,'cancelled-addition',removal);
   const queued=(await pool.query("select snapshot,status from repair_writebacks where order_id='cancelled-addition'")).rows;
   assert.equal(queued.length,1);assert.equal(queued[0].status,'pending');
   assert.deepEqual(queued[0].snapshot.items.map(item=>item.id),original.items.map(item=>item.id));
   const later=await act(advisor,'reopen-repair',{reason:'新的检查',additionalItems:['后续项目'],technicianIds:[tech.id],dueAt},'cancelled-addition');
   assert.ok(later.items[0].id<deletedId);assert.equal(later.repairItemIdFloor,later.items[0].id);
-  assert.deepEqual((await svc.dispatchDetail(manager,'cancelled-addition')).repairRounds[0].task.items,original.items);
+  assert.deepEqual((await svc.dispatchDetail(manager,'cancelled-addition')).repairRounds[0].task.items,originalItemsWithCompletion);
  } finally {if(pool){await pool.end();await Promise.all(connectionsClosed);}await admin.query(`drop database if exists "${dbName}" with (force)`);await admin.end();}
 });

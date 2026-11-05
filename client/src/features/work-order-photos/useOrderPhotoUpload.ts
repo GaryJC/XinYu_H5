@@ -23,6 +23,26 @@ export function useOrderPhotoUpload(orderId: string, userId: string | undefined,
     return () => { generation.current++; };
   }, [orderId, userId]);
 
+  async function saveWithRecovery(save: () => Promise<WorkOrder>, saved: (order: WorkOrder) => boolean) {
+    try { return await save(); }
+    catch (cause) {
+      // A committed attachment change can lose its response. Verify the exact
+      // persisted result before inviting a duplicate upload or deletion.
+      try {
+        const current = await workOrderApi.get(orderId);
+        if (current.id === orderId && saved(current)) return current;
+      } catch { /* Keep the original failure if recovery is unavailable. */ }
+      throw cause;
+    }
+  }
+
+  async function publishUpdated(order: WorkOrder, message: string, session: number) {
+    try { await onUpdated(order); }
+    catch {
+      if (session === generation.current) setError(`${message}，页面更新失败，请重新打开委托单核对。`);
+    }
+  }
+
   async function uploadMany(slot: WorkOrderPhotoUpdate["slot"], files: File[], replaceFileId?: string) {
     if (running.current || !files.length) return false;
     const session = generation.current;
@@ -38,9 +58,18 @@ export function useOrderPhotoUpload(orderId: string, userId: string | undefined,
         const kind: StoredFile["kind"] = slot === "vehicleLicense" ? "vehicle_license" : slot === "other" ? "other" : "repair_order_photo";
         const stored = await workOrderApi.uploadFile({kind, ...image});
         if (session !== generation.current) return false;
-        const updated = await workOrderApi.updatePhoto(orderId, {slot, fileId:stored.id, replaceFileId});
+        const updated = await saveWithRecovery(() => workOrderApi.updatePhoto(orderId, {slot, fileId:stored.id, replaceFileId}), current => {
+          const replaced = current.inspection.replacedPhotoIds || [];
+          if (replaced.includes(stored.id) || replaceFileId && !replaced.includes(replaceFileId)
+              || !current.files?.some(photo => photo.id === stored.id && photo.orderId === orderId && photo.kind === kind)) return false;
+          if (slot === "vehicleLicense") return current.inspection.vehicleLicenseFileId === stored.id;
+          if (slot === "other") return true;
+          const photos = current.inspection.preRepairPhotos;
+          return slot === "extra" ? Boolean(photos?.extra?.includes(stored.id)) : photos?.[slot] === stored.id;
+        });
         if (session !== generation.current) return false;
-        onUpdated(updated);
+        await publishUpdated(updated, "照片已保存", session);
+        if (session !== generation.current) return false;
         completed++; setProgress({ completed, total: files.length });
       }
       setSuccess(true); setSuccessMessage(replaceFileId ? "已更换" : "已添加");
@@ -57,9 +86,12 @@ export function useOrderPhotoUpload(orderId: string, userId: string | undefined,
     const session = generation.current;
     running.current = true; setUploading("delete"); setError(""); setSuccess(false); setSuccessMessage("");
     try {
-      const updated = await workOrderApi.deletePhotos(orderId, { fileIds });
+      const updated = await saveWithRecovery(() => workOrderApi.deletePhotos(orderId, { fileIds }),
+        current => fileIds.every(id => current.inspection.replacedPhotoIds?.includes(id)));
       if (session !== generation.current) return false;
-      onUpdated(updated); setSuccess(true); setSuccessMessage("已删除");
+      await publishUpdated(updated, "照片已删除", session);
+      if (session !== generation.current) return false;
+      setSuccess(true); setSuccessMessage("已删除");
       return true;
     } catch (cause) {
       if (session === generation.current) setError(cause instanceof Error ? cause.message : "照片删除失败，请重试");

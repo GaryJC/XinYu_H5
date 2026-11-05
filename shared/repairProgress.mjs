@@ -8,9 +8,14 @@ export const isIndividualRepair = task => task.executionMode!=='outsourced' && (
 export function personalRepairStage(task,ownerId) {
  if(!isIndividualRepair(task)||task.needsReview||!['待开工','维修中','待检验','回审','暂停'].includes(task.stage))return task.stage;
  if(task.workerPauses?.[ownerId])return '暂停';
- if(['回审','暂停'].includes(task.stage))return task.stage;
+ if(task.stage==='暂停')return task.stage;
  const own=task.items.filter(item=>item.responsibleId===ownerId);
  if(!own.length)return task.stage;
+ if(task.stage==='回审') {
+  if(own.every(item=>item.status==='已完工'))return '维修完成';
+  if(own.every(item=>['待检验','已完工'].includes(item.status))&&task.workerSubmissions?.[ownerId])return '待检验';
+  return '回审';
+ }
  if(own.some(item=>item.status==='维修中'))return '维修中';
  if(own.some(item=>['待派工','待领料','待开工'].includes(item.status)))return '待开工';
  if(own.every(item=>item.status==='已完工'))return '维修完成';

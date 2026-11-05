@@ -82,7 +82,7 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
     {task.stage==='暂停'?<Alert type="warning" title={`暂停：${task.pauseReason}`} description={task.pauseNote}/>:null}
     {task.repairRound&&task.rework&&['待开工','维修中','暂停'].includes(task.stage)&&task.rejectedItemIds?.length?<Alert type="error" showIcon title="本轮检验退回，请重新维修指定项目" description={task.reworkReason}/>:null}
     {task.rework&&!task.repairRound&&['待开工','维修中','暂停'].includes(task.stage)?<Alert type="warning" title="需要返工" description={task.reworkReason||'请查看退回维修项目'}/>:null}
-    {task.stage==='回审'?<Alert type="warning" showIcon title="检验单已发送回审，请核对并编辑维修项目后提交回审"/>:null}
+    {status==='回审'?<Alert type="warning" showIcon title="检验单已发送回审，请核对并编辑维修项目后提交回审"/>:null}
     {status==='待检验'?<Alert type="info" title={task.inspectorName?`${task.inspectorName}已接手${task.rejectedItemIds?.length?'复检':'检验'}`:task.rejectedItemIds?.length?'返工已提交，等待检验员领取复检':'已提交，等待检验员领取'}/>:null}
     {partsNotice}
     {legacyWaiting?<Alert type="info" title="历史共同配件尚未全部备齐"/>:null}

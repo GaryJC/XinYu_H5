@@ -9,11 +9,13 @@ test('paper order creation, notification, import and signature-free completion t
   const name=`codex_paper_test_${process.pid}_${Date.now()}`;
   const admin=new pg.Client({connectionString:adminUrl});
   let pool;
+  const connectionsClosed=[];
   await admin.connect();
   try {
     await admin.query(`create database "${name}"`);
     url.pathname=`/${name}`;process.env.DATABASE_URL=url.toString();
     ({pool}=await import('../server/database/pool.mjs'));
+    pool.on('connect',client=>connectionsClosed.push(new Promise(resolve=>client.once('end',resolve))));
     for(const file of (await fs.readdir('supabase/migrations')).filter(f=>f.endsWith('.sql') && f!=='202608070005_remove_obsolete_runfeng_sync_role.sql').sort()) await pool.query(await fs.readFile(`supabase/migrations/${file}`,'utf8'));
     const {createWorkOrder,updateWorkOrder,createSignatureTokenForOrder,findWorkOrderById}=await import('../server/db.mjs');
     const {resolvePaperOrder,submitPaperDingTalkOrder}=await import('../server/services/paperOrderService.mjs');
@@ -177,6 +179,7 @@ test('paper order creation, notification, import and signature-free completion t
     });
   } finally {
     if(pool) await pool.end();
+    await Promise.all(connectionsClosed);
     await admin.query(`drop database if exists "${name}" with (force)`);await admin.end();
   }
 });

@@ -36,7 +36,7 @@ test('scheduled cancellation preserves handover, removes only its project and cl
   const entry={itemId:1,inspectionState:'scheduled'};
   const next=cancelInspectionDeferred(t,entry,inspector,'不修','now');
   assert.deepEqual(next.items,[t.items[1]]);assert.deepEqual(next.partsRequests,t.partsRequests);assert.ok(next.participantIds.includes('t'));
-  const last=cancelInspectionDeferred({...t,items:[t.items[0]]},entry,inspector,'不修','now');assert.equal(last.stage,'维修完成');
+  const last=cancelInspectionDeferred({...t,technicianIds:['t'],items:[t.items[0]]},entry,inspector,'不修','now');assert.equal(last.stage,'维修完成');
  }
  assert.throws(()=>cancelInspectionDeferred(task(),{itemId:1,inspectionState:'scheduled'},inspector,'','now'),/原因/);
  assert.throws(()=>cancelInspectionDeferred({...task(),items:[{id:1,status:'已完工'}]},{itemId:1,inspectionState:'scheduled'},inspector,'不修','now'),/已检验通过/);
@@ -56,7 +56,7 @@ test('deleting an unresolved deferred item preserves an already completed round 
  const original={...task(),stage:'维修完成',completedAt,items:[{id:2,status:'已完工'}]};
  const next=cancelInspectionDeferred(original,{itemId:1,inspectionState:'pending',originalItem:{id:1}},inspector,'不再维修','2026-10-27T01:00:00Z');
  assert.equal(next.completedAt,completedAt);assert.equal(next.stage,'维修完成');
- const active={...original,stage:'维修中',items:[{id:1,status:'维修中'}]};
+ const active={...original,stage:'维修中',technicianIds:['t'],items:[{id:1,status:'维修中',responsibleId:'t'}]};
  assert.equal(cancelInspectionDeferred(active,{itemId:1,inspectionState:'scheduled'},inspector,'不再维修','now').completedAt,'now');
 });
 

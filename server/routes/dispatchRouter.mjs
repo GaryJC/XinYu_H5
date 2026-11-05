@@ -1,3 +1,4 @@
+import { myCompletedProjects } from '../services/technicianCompletedProjectsService.mjs';
 import {dispatchWorkload} from '../services/operationsDashboardService.mjs';
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import {resolveRepairWriteback,retryRepairWriteback} from '../services/repairWritebackService.mjs';
@@ -12,6 +13,7 @@ export async function handleDispatchRequest(req,res,url,actor) {
   if(!url.pathname.startsWith('/api/dispatch/')) return false;
   requireAnyRole(actor,DISPATCH_ROLES);
   const query=Object.fromEntries(url.searchParams);
+  if(req.method==='GET' && url.pathname==='/api/dispatch/my-completed-projects') {sendJson(res,200,await myCompletedProjects(actor,query));return true;}
   if(req.method==='GET' && url.pathname==='/api/dispatch/workload') {sendJson(res,200,await dispatchWorkload(actor));return true;}
   if(req.method==='GET' && url.pathname==='/api/dispatch/my-counts') {sendJson(res,200,await myRepairCounts(actor));return true;}
   if(req.method==='GET' && url.pathname==='/api/dispatch/tasks') { sendJson(res,200,await queryDispatchTasks(actor,query)); return true; }

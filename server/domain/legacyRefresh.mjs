@@ -16,6 +16,14 @@ const money = value => {
   if (!Number.isFinite(n) || n < 0 || n >= 1e10) throw new HttpError(409, "润丰金额无效，原数据未修改");
   return n;
 };
+// Linking source IDs or updating approval metadata does not change what the
+// customer signs. Content edits must invalidate any still-open signing page.
+export function legacyRefreshChangesContent(order, change, existingItems) {
+  const fieldsChanged = Object.entries(change.fields).some(([key, value]) => key !== 'legacy_approved'
+    && (typeof value === 'number' ? Number(order[key] ?? 0) !== value : String(order[key] ?? '') !== value));
+  return fieldsChanged || existingItems.length !== change.items.length || change.items.some((item, index) =>
+    item.name !== existingItems[index]?.name || item.laborFee !== Number(existingItems[index]?.labor_fee ?? 0));
+}
 export function buildLegacyRefresh(snapshot, existingItems, hasExecution) {
   const { header: h, vehicle: v, customer: c } = snapshot;
   if (!/^[A-Z][0-9]+$/.test(text(h.pgd))) throw new HttpError(409, "润丰派工号无效");

@@ -438,7 +438,7 @@ export type DispatchItem = {
   id: number; name: string; status: RepairItemStatus;
   responsibleId?: string; responsibleName?: string;
   startAt?: string; finishAt?: string; startedBy?: string; finishedBy?: string;
-  inspectorName?: string; inspectedBy?: string; inspectedAt?: string; pickedAt?: string; rejectionReason?: string;
+  inspectorName?: string; inspectedBy?: string; inspectedAt?: string; completionRecordedAt?: string; pickedAt?: string; rejectionReason?: string;
 };
 export type RepairPhotoDeleteRequest = { fileIds: string[] };
 export type RepairPhotoDeleteResponse = { ids: string[] };
@@ -683,7 +683,7 @@ export interface WorkOrderListQuery {
 export interface ArchiveOptions { statuses: Array<{value: string; label: string}>; advisors: Array<{value: string; label: string}>; technicians: Array<{value: string; label: string}>; }
 
 export type WorkloadState = "working" | "waiting" | "paused" | "inspection" | "unfinished";
-export type DispatchFilters = {personal?:'true';includeCompleted?:string;workloadState?:WorkloadState;partsStatus?:string;partsSort?:string;executionMode?:string;search?:string;technicianId?:string;stage?:string;metric?:string;urgent?:string;overdue?:string;from?:string;to?:string};
+export type DispatchFilters = {sort?:'assigned-asc'|'assigned-desc'|'due-asc'|'due-desc';assignedFrom?:string;assignedTo?:string;personal?:'true';includeCompleted?:string;workloadState?:WorkloadState;partsStatus?:string;partsSort?:string;executionMode?:string;search?:string;technicianId?:string;stage?:string;metric?:string;urgent?:string;overdue?:string;from?:string;to?:string};
 
 export type OperationsMetric = 'unfinished'|'working'|'waiting'|'parts'|'pickup'|'paused'|'inspection'|'overdue';
 export type OperationsProject = {
@@ -712,3 +712,15 @@ export type BusinessAnalytics = {
   aging:AnalyticsCount[];cycleBuckets:AnalyticsCount[];execution:AnalyticsCount[];liveCount:number;
   quality:{missingCompletion:number;missingVehicle:number;invalidCreated:number};
 };
+
+export type TechnicianCompletedProject = {
+  key: string; orderId: string; dispatchNo: string; plate: string; round: number;
+  itemId: number; name: string; completedAt: string;
+};
+
+export type TechnicianCompletedOrder = {
+  key: string; orderId: string; dispatchNo: string; plate: string;
+  projects: TechnicianCompletedProject[];
+};
+
+export type CompletedProjectFilters = {from?:string;to?:string;sort?:'completed-asc'|'completed-desc'};

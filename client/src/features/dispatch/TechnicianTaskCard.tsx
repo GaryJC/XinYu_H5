@@ -21,9 +21,8 @@ export function TechnicianTaskCard({ task, userId, onOpen }: { task: DispatchTas
       }
     }}>
     <div className="technician-card-heading"><h3>{task.plate || '未填写车牌'}</h3><RepairStatusTag status={technicianTaskStatus(task,userId)} /></div>
-    <p className="technician-card-reference"><span>{task.dispatchNo ? '派工号' : '委托单号'}</span>{task.dispatchNo || task.orderId}</p>
+    <p className="technician-card-reference"><span>{task.dispatchNo ? '派工号' : '委托单号'}</span>{task.dispatchNo ? <strong className="technician-card-dispatch-number">{task.dispatchNo}</strong> : task.orderId}</p>
     <div className="technician-flags">
-      {!!task.inspectionDeferredCount && <Tag color="orange">待定 × {task.inspectionDeferredCount}</Tag>}
       {task.urgent ? <Tag color="red">加急</Tag> : null}
       {task.overdue ? <Tag color="red">超期</Tag> : null}
       {task.repairRound ? <Tag color="orange">{task.roundKind === 'additional' ? '追加维修第' : '返工第'} {task.repairRound} 轮</Tag> : task.rework ? <Tag color="orange">返工</Tag> : null}
