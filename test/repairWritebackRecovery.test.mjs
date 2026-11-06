@@ -21,13 +21,14 @@ test('recovery rejects incomplete input and any job that is no longer failed',as
 
 const {retryFailedRepairWriteback,processRepairWritebacks}=await import('../server/repositories/repairWritebackRepository.mjs');
 const validSnapshot={orderId:'o',plate:'沪ATEST',items:[{id:1,name:'已检验项目',responsibleId:'t',employeeCode:'001',employeeName:'甲'}]};
-function recoveryClient({snapshot=validSnapshot,status='failed',users=[],event,baseline}={}) {
+function recoveryClient({snapshot=validSnapshot,status='failed',users=[],event,baseline,rounds=[]}={}) {
  const calls=[];
  const job={id:'12',event_id:'24',order_id:'o',status,snapshot:structuredClone(snapshot),attempts:5};
  return {calls,job,query:async(sql,values)=>{
   calls.push({sql,values});
   if(sql.startsWith('select id,status,snapshot'))return {rows:[job]};
   if(sql.startsWith('select action,detail'))return {rows:event?[event]:[]};
+  if(sql.startsWith('select * from dispatch_repair_rounds'))return {rows:rounds};
   if(sql.startsWith('select snapshot'))return {rows:baseline?[{snapshot:baseline}]:[]};
   if(sql.startsWith('select u.id'))return {rows:users};
   if(sql.startsWith('select dispatch_no'))return {rows:[{dispatch_no:'B1',legacy_document_no:1,vehicle_plate:'沪ATEST'}]};
@@ -78,4 +79,16 @@ test('retry of a cancellation-completed round repairs its full snapshot instead 
  await retryFailedRepairWriteback(client,'o','管理员');
  assert.equal(client.job.snapshot.operation,'replace');assert.equal(client.job.snapshot.items[0].employeeCode,'002');
  assert.equal(client.job.status,'pending');
+});
+
+test('retry of an old invalid mixed-round snapshot only publishes items from its inspection event',async()=>{
+ const internal=validSnapshot.items[0];
+ const job=recoveryClient({
+  snapshot:{...validSnapshot,repairRound:1,operation:'replace',items:[{id:9,name:'外包项目'},internal]},
+  rounds:[{round_no:0,snapshot:{executionMode:'outsourced'}}],
+  event:{action:'edit-repair-items',detail:{repairRound:1,items:[{...internal,status:'已完工'}]}}
+ });
+ await retryFailedRepairWriteback(job,'o','管理员');
+ assert.equal(job.job.snapshot.operation,'write-round');
+ assert.deepEqual(job.job.snapshot.items,[internal]);
 });

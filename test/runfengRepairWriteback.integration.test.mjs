@@ -6,7 +6,7 @@ import {executeSqlServerQuery,executeSqlServerTransaction,closeSqlServerPool} fr
 // No real work order, receipt table, inventory or employee data is modified.
 test('SQL Server 2000 temporary fixtures replace atomically and recover idempotently',{skip:process.env.RUNFENG_WRITEBACK_SQL_TEST!=='true'},async()=>{
  const suffix=`${process.pid}_${Date.now()}`;
- const names=['qxwxb','qxwxmxb','qxpgmxb','cljgb','skxcb','qxthb','h5_repair_writeback_receipts'];
+ const names=['qxwxb','qxwxmxb','qxpgmxb','cljgb','skxcb','qxthb','h5_repair_writeback_receipts','h5_repair_round_items'];
  const tables=Object.fromEntries(names.map((name,index)=>[name,`##h5_writeback_${suffix}_${index}`]));
  const query=executeSqlServerQuery;
  function rewrite(text) {
@@ -18,9 +18,10 @@ test('SQL Server 2000 temporary fixtures replace atomically and recover idempote
  const state=async()=>({headers:(await query(`select reid,wd,xmfy,xmfy0,fyhj,cbhj from ${tables.qxwxb} order by reid`)).recordset,items:(await query(`select reid,wd,lb,hh,wxr,sl,dj,je,cb,gs,ywyje,uddec1,uddec2 from ${tables.qxwxmxb} order by reid`)).recordset});
  const executeTransaction=work=>executeSqlServerTransaction(execute=>work((text,configure)=>execute(rewrite(text),configure)));
  try {
-  for(const name of names.filter(n=>n!=='h5_repair_writeback_receipts'))await query(`select top 0 ${['qxwxb','qxwxmxb'].includes(name)?'*':'pgd'} into ${tables[name]} from dbo.${name}`);
+  for(const name of names.filter(n=>!n.startsWith('h5_')))await query(`select top 0 ${['qxwxb','qxwxmxb'].includes(name)?'*':'pgd'} into ${tables[name]} from dbo.${name}`);
   for(const column of ['sl','dj','je','cb','gs','ywyje','uddec1','uddec2'])await query(`alter table ${tables.qxwxmxb} add default (0) for ${column}`);
   await query(`create table ${tables.h5_repair_writeback_receipts}(event_key varchar(150) primary key,payload_hash char(64),dispatch_no varchar(20))`);
+  await query(`create table ${tables.h5_repair_round_items}(item_key char(64) primary key,detail_reid int not null unique)`);
   for(const wd of ['','1']) {
    await query(`insert into ${tables.qxwxb}(wd,dh,pgd,ch,bm,xmfy,xmfy0,fyhj,cbhj) values('${wd}',90123,'Z99999998','测B12345','TEST',100,100,125,10)`);
    await query(`insert into ${tables.qxwxmxb}(wd,dh,lb,hh,wxr,je,cb,gs) values('${wd}',90123,N'项目',N'【测试】旧项目',N'旧维修人',100,10,2)`);
@@ -77,6 +78,22 @@ test('SQL Server 2000 temporary fixtures replace atomically and recover idempote
   await replaceLegacyRepairItems(single,{source:'temporary-fixture',allowedDispatchNos:null,executeTransaction});
   const withExternal=await state();assert.deepEqual(withExternal.items.filter(i=>i.wd.trim()===''),internalRows);
   const external=withExternal.items.filter(i=>i.wd.trim()==='1');assert.equal(external.length,1);assert.equal(external[0].hh,snapshot.items[0].name);assert.equal(external[0].wxr,'');
+
+  const round={...snapshot,operation:'write-round',eventId:'50',repairRound:1};
+  await query(`update ${tables.qxwxmxb} set cb=15,gs=2 where lb=N'项目'`);
+  await query(`update ${tables.qxwxb} set xmfy=30,xmfy0=30,cbhj=15`);
+  const original=await state(),originalIds=new Set(original.items.map(i=>i.reid));
+  const submit=payload=>replaceLegacyRepairItems(payload,{source:'temporary-fixture',allowedDispatchNos:null,executeTransaction});
+  await submit(round);
+  assert.deepEqual(await submit(round),{duplicate:true});
+  const changed={...round,eventId:'51',items:[{...round.items[0],employeeCode:'032'}]};
+  await submit(changed);
+  const mixed=await state();
+  assert.deepEqual(mixed.headers,original.headers);
+  assert.deepEqual(mixed.items.filter(i=>originalIds.has(i.reid)),original.items);
+  assert.deepEqual(mixed.items.filter(i=>!originalIds.has(i.reid)).map(i=>i.wxr.trim()),['032 李富强','']);
+  await submit({...round,repairRound:2,eventId:'52'});
+  assert.equal((await state()).items.length,originalIds.size+4);
  } finally {
   for(const table of Object.values(tables).reverse())await query(`if object_id('tempdb..${table}') is not null drop table ${table}`).catch(()=>{});
   await closeSqlServerPool();

@@ -12,10 +12,11 @@ export const LEGACY_REPAIR_DOWNSTREAM = `select
  (select count(*) from dbo.skxcb with (holdlock) where RTRIM(pgd)=@dispatch_no) as payments,
  (select count(*) from dbo.qxthb with (holdlock) where RTRIM(pgd)=@dispatch_no) as returns`;
 // Check each row, not sums: positive and negative entries must not cancel out.
+const protectedProjectValues=`isnull(dj,0)<>0 or isnull(je,0)<>0 or isnull(cb,0)<>0 or isnull(gs,0)<>0
+ or isnull(ywyje,0)<>0 or isnull(uddec1,0)<>0 or isnull(uddec2,0)<>0`;
 export const LEGACY_PROTECTED_PROJECTS = `select count(*) as protected_count
  from dbo.qxwxmxb with (updlock,holdlock) where wd=@wd and dh=@dh and lb=N'项目'
- and (isnull(dj,0)<>0 or isnull(je,0)<>0 or isnull(cb,0)<>0 or isnull(gs,0)<>0
- or isnull(ywyje,0)<>0 or isnull(uddec1,0)<>0 or isnull(uddec2,0)<>0)`;
+ and (${protectedProjectValues})`;
 export function assertLegacyRepairHeaders(rows,snapshot,{checkMutable=true}={}) {
  if(!snapshot.departmentCode?.trim())throw new Error('缺少润丰部门编码，请管理员核对');
  if(rows.length<1||rows.length>2||rows.filter(r=>r.wd==='').length!==1||rows.filter(r=>r.wd==='1').length>1||rows.some(r=>!['','1'].includes(r.wd)))throw new Error('派工号内单缺失或内外单重复，禁止替换维修项目');
@@ -60,7 +61,7 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
   if(Object.values(downstream.recordset?.[0]||{}).some(n=>Number(n)>0))throw new Error('润丰已有派工明细、竣工、收款或退回记录，请人工核对后处理');
   // Validate both documents before mutating either, including an already receipted
   // internal document when a newly created external document needs synchronization.
-  for(const header of headers) {
+  if(snapshot.operation!=='write-round')for(const header of headers) {
    if([header.xmfy,header.xmfy0].some(value=>Number(value??0)!==0))throw new Error('润丰已录入非零项目费用，禁止覆盖维修项目，请在润丰人工处理');
    const protectedRows=await execute(LEGACY_PROTECTED_PROJECTS,(req,sql)=>{req.input('wd',sql.Char(1),header.wd);req.input('dh',sql.Int,Number(header.dh));});
    const count=Number(protectedRows.recordset?.[0]?.protected_count);
@@ -76,7 +77,9 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
   }
   for(const header of pending) {
    const target=(req,sql)=>{req.input('wd',sql.Char(1),header.wd);req.input('dh',sql.Int,Number(header.dh));};
-   if(snapshot.operation==='remove') {
+   if(snapshot.operation==='write-round') {
+    await writeInternalRound(execute,target,source,snapshot,header);
+   } else if(snapshot.operation==='remove') {
     // Without a published position, the original row may not yet carry the
     // deferred prefix. Match both exact names, require uniqueness, and treat
     // an absent row as already removed. This also recovers old queued removals
@@ -108,6 +111,40 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
   }
   return {duplicate:false};
  });
+}
+
+// A Runfeng project name or position cannot identify an H5 item: outsourced
+// and internal work can share both the name and the H5 item ID across rounds.
+async function writeInternalRound(execute,target,source,snapshot,header) {
+ for(const item of snapshot.items) {
+  const itemKey=writebackHash([source,snapshot.orderId,snapshot.repairRound,item.id,Number(header.reid)]);
+  const worker=header.wd===''?`${item.employeeCode.trim()} ${item.employeeName.trim()}`:'';
+  await execute(`declare @detail int, @position int
+   select @detail=detail_reid from dbo.h5_repair_round_items with (updlock,holdlock) where item_key=@item_key
+   if @detail is null
+   begin
+    select @position=isnull(max(cast(Xh as int)),0)+1 from dbo.qxwxmxb with (updlock,holdlock)
+     where wd=@wd and dh=@dh and lb=N'项目'
+    if @position<1 or @position>32767
+    begin raiserror(N'润丰项目序号超出范围',16,1) return end
+    insert into dbo.qxwxmxb(wd,dh,lb,hh,wxr,Xh) values(@wd,@dh,N'项目',@name,@worker,@position)
+    insert into dbo.h5_repair_round_items(item_key,detail_reid) values(@item_key,convert(int,scope_identity()))
+   end
+   else
+   begin
+    if not exists(select 1 from dbo.qxwxmxb with (updlock,holdlock) where reid=@detail and wd=@wd and dh=@dh and lb=N'项目')
+    begin raiserror(N'润丰本轮项目行已变动，请人工核对',16,1) return end
+    if exists(select 1 from dbo.qxwxmxb where reid=@detail and (isnull(hh,'')<>@name or isnull(wxr,'')<>@worker))
+    begin
+     if exists(select 1 from dbo.qxwxmxb where reid=@detail and (${protectedProjectValues}))
+     begin raiserror(N'润丰本轮项目已计价，请人工核对后处理',16,1) return end
+     update dbo.qxwxmxb set hh=@name,wxr=@worker where reid=@detail and wd=@wd and dh=@dh and lb=N'项目'
+    end
+   end`,(req,sql)=>{
+   target(req,sql);req.input('item_key',sql.Char(64),itemKey);
+   req.input('name',sql.NVarChar(200),item.name);req.input('worker',sql.NVarChar(200),worker);
+  });
+ }
 }
 
 // Read-only preflight uses the target database's real code page before inspection commits.

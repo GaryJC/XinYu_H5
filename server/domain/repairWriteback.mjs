@@ -10,6 +10,10 @@ export function makeWritebackSnapshot(task,items,users) {
 export function writebackHash(snapshot) {return createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');}
 export function validateWritebackSnapshot(snapshot) {
  if(!snapshot.plate||(!Array.isArray(snapshot.items)||!snapshot.items.length&&!snapshot.allowEmptyRemoval)||snapshot.items.length>200)throw new Error('维修项目快照不完整');
+ if(snapshot.operation&&!['remove','replace','write-round'].includes(snapshot.operation))throw new Error('未知的润丰写回操作');
+ if(snapshot.operation==='write-round'&&(!snapshot.orderId||!Number.isSafeInteger(snapshot.repairRound)||snapshot.repairRound<1||
+   snapshot.items.some(item=>!Number.isSafeInteger(item.id)||item.pendingConfirmation)||new Set(snapshot.items.map(item=>item.id)).size!==snapshot.items.length))
+  throw new Error('本轮润丰维修项目标识无效');
  if(snapshot.operation==='remove') {
   const target=snapshot.removeItem;
   if(!Number.isSafeInteger(target?.id)||!target.name?.trim()||target.name.length>100||

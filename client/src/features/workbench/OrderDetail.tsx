@@ -1,4 +1,5 @@
 import { RepairStatusTag } from "../dispatch/RepairStatusTag";
+import { orderAuditLabel } from "./orderAuditLabel";
 import { ActionHistory } from "../../shared/ui/ActionHistory";
 import './workbench.css';
 import './order-detail.css';
@@ -154,7 +155,7 @@ function DetailTable<T extends object>({ title, rowKey, dataSource, columns, onO
 }
 
 function OrderAuditHistory({order,title}:{order:WorkOrder;title?:string}) {
-  return <ActionHistory title={title} items={order.auditLog.map((item,index)=>({key:index,title:item.action,actor:item.actor,time:item.at}))}/>;
+  return <ActionHistory title={title} items={order.auditLog.map((item,index)=>({key:index,title:orderAuditLabel(item.action),actor:item.actor,time:item.at}))}/>;
 }
 
 function OrderEventHistory({order,kind,title}:{order:WorkOrder;kind:'ocr'|'sync'|'settlement';title?:string}) {

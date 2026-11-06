@@ -278,3 +278,28 @@ test('an old positionless removal no longer blocks the following complete writeb
  await processRepairWritebacks(fn=>fn(client),payload=>replaceLegacyRepairItems(payload,{executeTransaction:mock.executeTransaction,source:'test'}));
  assert.deepEqual(jobs.map(j=>j.status),['synced','synced']);
 });
+
+test('an internal inspection after outsourcing only queues completed items of this round',async()=>{
+ const {enqueueRepairWriteback,enqueueRepairRemoval}=await import('../server/repositories/repairWritebackRepository.mjs');
+ const history={round_no:0,snapshot:{executionMode:'outsourced',items:[{id:1,name:'外包维修',status:'已完工'}]}};
+ const current={orderId:'o',shopId:'s',plate:'鲁B12345',executionMode:'internal',repairRound:1,
+  items:[{id:1,name:'同项目返工',status:'已完工',responsibleId:'t'},{id:2,name:'内部追加',status:'已完工',responsibleId:'t'}]};
+ const jobs=[];
+ const client={query:async(sql,args)=>{
+  if(sql.includes('from dispatch_repair_rounds'))return {rows:[history,{round_no:1,snapshot:current}]};
+  if(sql.startsWith('select id,legacy_employee_code'))return {rows:[{id:'t',legacy_employee_code:'027',legacy_employee_name:'甲'}]};
+  if(sql.startsWith('select dispatch_no'))return {rows:[{dispatch_no:'A123'}]};
+  assert.ok(sql.startsWith('insert into repair_writebacks'),sql);
+  jobs.push({snapshot:JSON.parse(args[2]),status:args[3]});return {rows:[]};
+ }};
+ await enqueueRepairWriteback(client,current,1);
+ assert.equal(jobs[0].status,'pending');assert.equal(jobs[0].snapshot.operation,'write-round');
+ assert.deepEqual(jobs[0].snapshot.items.map(i=>i.name),['同项目返工','内部追加']);
+ const unbound={...current,items:[{...current.items[1],responsibleId:'other'}]};
+ await assert.rejects(()=>enqueueRepairWriteback(client,unbound,2),/内部追加.*绑定/);
+ await enqueueRepairWriteback(client,unbound,3,{deferValidation:true});
+ assert.equal(jobs[1].status,'failed');assert.equal(jobs[1].snapshot.operation,'write-round');
+ await enqueueRepairRemoval(client,current,4,{itemId:3,name:'外包维修'});
+ await enqueueRepairWriteback(client,{...current,items:[]},5,{deferValidation:true});
+ assert.equal(jobs.length,2);
+});

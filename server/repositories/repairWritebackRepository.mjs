@@ -7,25 +7,42 @@ import {readRepairRounds} from './repairRoundRepository.mjs';
 import {repairWritebackSimulationEnabled} from '../domain/repairWritebackSimulation.mjs';
 import {readRepairWritebackSimulation,retryRepairWritebackSimulation} from './repairWritebackSimulationRepository.mjs';
 export async function enqueueRepairWriteback(client,task,eventId,{deferValidation=false}={}) {
- // Replacement must include prior completed rounds, not just the current rework subset.
- const all=new Map();
- for(const round of await readRepairRounds(client,task.orderId))for(const item of round.task.items){const ids=round.task.technicianIds??(round.task.technicianId?[round.task.technicianId]:[]);all.set(item.id,{...item,responsibleId:item.responsibleId||(ids.length===1?ids[0]:undefined)});}
- for(const item of task.items)all.set(item.id,item);
+ const rounds=await readRepairRounds(client,task.orderId);
+ const roundOnly=task.executionMode!=='outsourced'&&hasEarlierOutsourcedRound(rounds,task.repairRound);
  const {rows:users}=await client.query('select id,legacy_employee_code,legacy_employee_name from users where shop_id=$1',[task.shopId]);
- const pending=await readPendingRepairs(client,task.orderId);
- const snapshot=makeWritebackSnapshot(task,mergePendingWriteback([...all.values()],pending.items),users);
- if(!snapshot.items.length&&pending.items.some(p=>p.source==='inspection'&&p.inspectionState==='cancelled'))snapshot.allowEmptyRemoval=true;
+ let snapshot;
+ if(roundOnly) {
+  const completed=task.items.filter(item=>item.status==='已完工');
+  if(!completed.length)return;
+  snapshot={...makeWritebackSnapshot(task,completed,users),operation:'write-round'};
+ } else {
+  const all=new Map();
+  for(const round of rounds) {
+   const ids=round.task.technicianIds??(round.task.technicianId?[round.task.technicianId]:[]);
+   for(const item of round.task.items)all.set(item.id,{...item,responsibleId:item.responsibleId||(ids.length===1?ids[0]:undefined)});
+  }
+  for(const item of task.items)all.set(item.id,item);
+  const pending=await readPendingRepairs(client,task.orderId);
+  snapshot=makeWritebackSnapshot(task,mergePendingWriteback([...all.values()],pending.items),users);
+  if(!snapshot.items.length&&pending.items.some(p=>p.source==='inspection'&&p.inspectionState==='cancelled'))snapshot.allowEmptyRemoval=true;
+  if(deferValidation)snapshot.operation='replace';
+ }
  let validationError='';
- if(deferValidation)snapshot.operation='replace';
  if(task.executionMode!=='outsourced')try{validateWritebackSnapshot(snapshot);
   const {rows:orders}=await client.query('select dispatch_no from work_orders where id=$1',[task.orderId]);
   if(!deferValidation&&writebackAllowed(orders[0]?.dispatch_no))await validateLegacyRepairStrings(snapshot);
  }catch(error){if(!deferValidation)throw new HttpError(409,`润丰写回校验未通过：${error.message}`);validationError=String(error.message);}
  await client.query('insert into repair_writebacks(event_id,order_id,snapshot,status,error) values($1,$2,$3,$4,$5) on conflict(event_id) do nothing',[eventId,task.orderId,JSON.stringify(snapshot),task.executionMode==='outsourced'?'manual':validationError?'failed':'pending',task.executionMode==='outsourced'?'外包任务需人工在润丰登记维修项目及维修人':validationError]);
 }
+function hasEarlierOutsourcedRound(rounds,currentRound) {
+ return rounds.some(round=>round.round<currentRound&&round.task.executionMode==='outsourced');
+}
 // Keep the last published positions: removing a row must never publish active work
 // or renumber the remaining legacy rows. FIFO execution orders this after its baseline.
 export async function enqueueRepairRemoval(client,task,eventId,entry) {
+ // Mixed rounds publish completed items only. A deferred item has no new row
+ // to remove, and an earlier manual row can share its name or position.
+ if(task.repairRound&&hasEarlierOutsourcedRound(await readRepairRounds(client,task.orderId),task.repairRound))return;
  const {rows}=await client.query('select snapshot from repair_writebacks where order_id=$1 order by id desc limit 1',[task.orderId]);
  const baseline=rows[0]?.snapshot||await readInitialRemovalBaseline(client,task.orderId);
  // A complete prior replacement proves this ID was never published. Avoid a
@@ -65,10 +82,17 @@ export async function processRepairWritebacks(runTransaction,write,shouldContinu
      order by j.id for update of j skip locked limit 1`,[writebackDispatchAllowlist()]);
    if(!rows[0])return false;
    const job=rows[0];
-   const {rows:orders}=await client.query('select dispatch_no,department_code,legacy_reid,legacy_document_no,vehicle_plate from work_orders where id=$1',[job.order_id]);
+   // A still-queued pre-upgrade replacement may already have a SQL receipt.
+   // Keep its payload immutable and prevent it from replacing outsourced work.
+   const legacyRound=job.snapshot.operation!=='write-round'&&job.snapshot.repairRound>0?job.snapshot.repairRound:0;
+   const {rows:orders}=await client.query(`select dispatch_no,department_code,legacy_reid,legacy_document_no,vehicle_plate,
+    exists(select 1 from dispatch_repair_rounds where order_id=$1 and round_no<$2
+     and snapshot->>'executionMode'='outsourced') as protects_outsourced
+    from work_orders where id=$1`,[job.order_id,legacyRound]);
    try {
     const order=orders[0];
     if(!order?.dispatch_no||!order.legacy_document_no){await client.query("update repair_writebacks set error='等待润丰开单回填派工号及内部编号',next_attempt_at=now()+interval '1 minute' where id=$1",[job.id]);return true;}
+    if(order.protects_outsourced)throw new Error('旧版写回任务涉及历史外包项目，请管理员在润丰核对并人工登记本轮项目');
     if(order.vehicle_plate!==job.snapshot.plate)throw new Error('工单车牌已变化，请管理员核对');
     await write({...job.snapshot,eventId:String(job.event_id),dispatchNo:order.dispatch_no,departmentCode:order.department_code,legacyReid:Number(order.legacy_reid),documentNo:Number(order.legacy_document_no)});
     await client.query("update repair_writebacks set status='synced',error='',synced_at=now(),attempts=attempts+1 where id=$1",[job.id]);
@@ -108,7 +132,7 @@ async function repairInvalidWritebackSnapshot(client,id,job,{checkLegacyStrings=
  if(invalid) {
   const {rows:events}=await client.query('select action,detail from dispatch_events where id=$1 and order_id=$2',[job.event_id,id]);
   let snapshot;
-  if(events[0]?.action==='inspection-deferred-cancel'&&job.snapshot.operation!=='replace') {
+  if(events[0]?.action==='inspection-deferred-cancel'&&!['replace','write-round'].includes(job.snapshot.operation)) {
    const {rows:previous}=await client.query('select snapshot from repair_writebacks where order_id=$1 and id<$2 order by id desc limit 1',[id,job.id]);
    const itemId=events[0].detail?.itemId;
    const target=events[0].detail?.previousItems?.find(item=>item.id===itemId);
@@ -117,8 +141,21 @@ async function repairInvalidWritebackSnapshot(client,id,job,{checkLegacyStrings=
    snapshot=makeRemovalSnapshot(job.snapshot,previous[0]?.snapshot||await readInitialRemovalBaseline(client,id),{itemId,name:target?.name||baselineTarget.name});
   } else {
    if(!Array.isArray(job.snapshot?.items))throw new HttpError(409,'维修项目快照不完整，请人工核对');
+   snapshot=job.snapshot;
+   if(!['write-round','remove'].includes(snapshot.operation)&&snapshot.repairRound>0&&
+      hasEarlierOutsourcedRound(await readRepairRounds(client,id),snapshot.repairRound)) {
+    const detail=events[0]?.detail;
+    if(detail?.repairRound!==snapshot.repairRound||!Array.isArray(detail.items))throw new HttpError(409,'缺少本轮检验记录，请人工核对');
+    const published=new Map(snapshot.items.map(item=>[item.id,item]));
+    const completed=detail.items.filter(item=>item.status==='已完工').map(item=>{
+     const original=published.get(item.id);
+     if(!original||original.pendingConfirmation||original.name!==item.name)throw new HttpError(409,'本轮检验记录与写回项目不一致，请人工核对');
+     return original;
+    });
+    snapshot={...snapshot,operation:'write-round',items:completed,...(!completed.length?{allowEmptyRemoval:true}:{})};
+   }
    const {rows:users}=await client.query('select u.id,u.legacy_employee_code,u.legacy_employee_name from users u join work_orders w on w.shop_id=u.shop_id where w.id=$1',[id]);
-   snapshot={...job.snapshot,items:job.snapshot.items.map(item=>{
+   snapshot={...snapshot,items:snapshot.items.map(item=>{
     if(item.pendingConfirmation||item.employeeCode?.trim()&&item.employeeName?.trim())return item;
     const person=users.find(user=>user.id===item.responsibleId);
     return {...item,employeeCode:person?.legacy_employee_code||null,employeeName:person?.legacy_employee_name||null};

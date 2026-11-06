@@ -17,3 +17,21 @@ test('worker writes with dispatch and document identity even when ACK header id 
  assert.ok(queries.some(q=>q.sql.includes("status='synced'")));
  assert.ok(!queries.some(q=>q.sql.includes('等待润丰')));
 });
+
+test('a queued legacy replacement cannot erase outsourced history after upgrade',async()=>{
+ let available=true,failure;
+ const client={query:async(sql,args)=>{
+  if(sql.startsWith('select j.*')){
+   const rows=available?[{id:1,event_id:10,order_id:'o',attempts:4,snapshot:{repairRound:1,plate:'鲁B12345'}}]:[];
+   available=false;return {rows};
+  }
+  if(sql.startsWith('select dispatch_no')){
+   assert.deepEqual(args,['o',1]);
+   return {rows:[{dispatch_no:'A123',legacy_document_no:20,vehicle_plate:'鲁B12345',protects_outsourced:true}]};
+  }
+  failure=args;return {rows:[]};
+ }};
+ let writes=0;
+ await processRepairWritebacks(work=>work(client),async()=>{writes++;});
+ assert.equal(writes,0);assert.equal(failure[1],'failed');assert.match(failure[2],/历史外包/);
+});
