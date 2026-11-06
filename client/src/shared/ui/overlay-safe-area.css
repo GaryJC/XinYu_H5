@@ -25,3 +25,9 @@
     height: env(safe-area-inset-bottom, 0px);
   }
 }
+
+@media (max-width: 767px), (pointer: coarse) {
+  html.detail-scroll-locked body { position: fixed; top: var(--detail-list-top); left: 0; right: 0; }
+  .ant-drawer-body { min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; }
+  .ant-drawer-mask, .ant-modal-mask { touch-action: none; }
+}

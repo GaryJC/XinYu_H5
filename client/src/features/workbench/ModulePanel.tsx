@@ -1,7 +1,9 @@
+import {compareDispatchNumbers, dispatchNumberSortOptions, type DispatchNumberSort} from '../../../../shared/dispatchNumberSort.mjs';
+import {useState} from 'react';
 import {repairCategory} from '../../../../shared/repairCompletion.mjs';
 import { AccessSettingsPage } from "../access/AccessSettingsPage";
 import { DashboardSummary, UserProfile, WorkOrder } from "../../../../shared/types";
-import { Card } from "antd";
+import { Card, Select } from "antd";
 
 export function ModulePanel({
   activeNav,
@@ -58,11 +60,12 @@ function ChartBlock({ title, data }: { title: string; data: Record<string, numbe
 }
 
 function SettlementList({ orders }: { orders: WorkOrder[] }) {
+  const [sort,setSort]=useState<DispatchNumberSort>('dispatch-desc');
   return (
     <Card className="panel module-panel">
-      <div className="panel-header"><h2>结算清单匹配</h2></div>
+      <div className="panel-header"><h2>结算清单匹配</h2><Select aria-label="结算清单匹配排序" value={sort} onChange={setSort} options={dispatchNumberSortOptions}/></div>
       <div className="compact-grid">
-        {orders.flatMap((order) => order.settlementStatements).map((item) => (
+        {orders.flatMap((order) => order.settlementStatements).sort((a,b)=>compareDispatchNumbers(a,b,sort)).map((item) => (
           <div className="mini-card" key={item.id}>
             <strong>{item.dispatchNo} · {item.plate}</strong>
             <span>{item.technician} · ¥{item.amount} · {item.matchStatus}</span>
@@ -74,11 +77,12 @@ function SettlementList({ orders }: { orders: WorkOrder[] }) {
 }
 
 function OutboundList({ orders }: { orders: WorkOrder[] }) {
+  const [sort,setSort]=useState<DispatchNumberSort>('dispatch-desc');
   return (
     <Card className="panel module-panel">
-      <div className="panel-header"><h2>出库单 / 领料</h2></div>
+      <div className="panel-header"><h2>出库单 / 领料</h2><Select aria-label="出库单 / 领料排序" value={sort} onChange={setSort} options={dispatchNumberSortOptions}/></div>
       <div className="compact-grid">
-        {orders.flatMap((order) => order.outboundOrders).map((item) => (
+        {orders.flatMap((order) => order.outboundOrders).sort((a,b)=>compareDispatchNumbers(a,b,sort)).map((item) => (
           <div className="mini-card" key={item.id}>
             <strong>{item.id}</strong>
             <span>{item.dispatchNo} · {item.technician} · {item.status}</span>
@@ -90,10 +94,11 @@ function OutboundList({ orders }: { orders: WorkOrder[] }) {
 }
 
 function TechnicianTaskList({ orders }: { orders: WorkOrder[] }) {
-  const tasks = orders.flatMap((order) => order.repairItems.map((item) => ({ order, item })));
+  const [sort,setSort]=useState<DispatchNumberSort>('dispatch-desc');
+  const tasks = [...orders].sort((a,b)=>compareDispatchNumbers(a,b,sort)).flatMap((order) => order.repairItems.map((item) => ({ order, item })));
   return (
     <Card className="panel module-panel">
-      <div className="panel-header"><h2>维修项目任务</h2></div>
+      <div className="panel-header"><h2>维修项目任务</h2><Select aria-label="维修项目任务排序" value={sort} onChange={setSort} options={dispatchNumberSortOptions}/></div>
       <div className="compact-grid">
         {tasks.map(({ order, item }) => (
           <div className="mini-card" key={`${order.id}-${item.id}`}>

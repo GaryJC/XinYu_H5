@@ -6292,3 +6292,4 @@ Visit https://react.dev/link/error-boundaries to learn more about error boundari
 [619440355ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/@fs/Users/gary/repair-h5-dingtalk/node_modules/.vite/deps/client--C8cioMw.js?v=3630e295:14335
 [619440757ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5174/api/auth/me:0
 [619440758ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5174/api/auth/me:0
+[672598646ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5174/@vite/client:992

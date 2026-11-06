@@ -168,6 +168,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               history={vehicleHistory}
               historyLoading={vehicleHistoryLoading}
               historyError={vehicleHistoryError}
+              onConfirmPlate={controller.confirmPlateChoice}
               onRetry={() => void controller.lookupDraftVehicle(draft.vehicle)}
               onScan={scanVehicleIdentifier}
               onManualLicenseLookup={lookupVehicleLicenseForDevelopment}

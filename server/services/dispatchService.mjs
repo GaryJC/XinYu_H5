@@ -34,7 +34,7 @@ export async function queryDispatchTasks(actor, query={}) {
     const requests=warehouseRequests(filtered);
     const counts=Object.fromEntries(['待备料','部分备齐','备料完成'].map(status=>[status,requests.filter(task=>matchesPartsStatus(task,status)).length]));
     if(query.search||query.partsStatus==='all')counts.all=requests.filter(task=>matchesPartsStatus(task,'all')).length;
-    const items=sortWarehouseRequests(requests.filter(task=>matchesPartsStatus(task,query.partsStatus)),query.partsSort==='oldest'?'oldest':'newest')
+    const items=sortWarehouseRequests(requests.filter(task=>matchesPartsStatus(task,query.partsStatus)),query.partsSort)
       .map(task=>({...task,partsRequests:undefined}));
     return {...pageResult(items,query),counts};
   }

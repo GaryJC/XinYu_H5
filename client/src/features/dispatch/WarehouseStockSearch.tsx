@@ -1,4 +1,6 @@
-import {Alert,Button,Card,Empty,Input,Spin,Tag} from 'antd';
+import {compareDispatchNumbers, dispatchNumberSortOptions, type DispatchNumberSort} from '../../../../shared/dispatchNumberSort.mjs';
+import {useState} from 'react';
+import {Alert,Button,Card,Empty,Input,Select,Spin,Tag} from 'antd';
 import type {PartsRequirement} from '../../../../shared/types';
 import {CopyTextButton} from '../../shared/ui/CopyTextButton';
 import {useWarehouseVehicleHistory} from './useWarehouseVehicleHistory';
@@ -6,6 +8,7 @@ import {WarehouseStockResults} from './WarehouseStockResults';
 import './warehouse-stock.css';
 
 export function WarehouseStockSearch({orderId,requirement}:{orderId:string;requirement?:PartsRequirement}) {
+  const [sort,setSort]=useState<DispatchNumberSort>('dispatch-desc');
   const c=useWarehouseVehicleHistory(orderId,requirement?.mode==='list'?requirement.items[0]?.name||'':'');
   return <Card size="small" title="本车历史用料" className="warehouse-stock" extra={<Button size="small" loading={c.loading} disabled={c.stockLoading} onClick={c.reload}>刷新历史</Button>}>
     {c.loading?<div className="warehouse-stock-loading" role="status"><Spin/> 正在按车牌查询维修历史…</div>:null}
@@ -16,8 +19,9 @@ export function WarehouseStockSearch({orderId,requirement}:{orderId:string;requi
       <p className="warehouse-muted">车牌 {c.history.plate} · 同名配件仅显示最近一次维修实际登记的型号。先核对上次所用规格，再按原货号查库存。</p>
       {requirement?.mode==='list'?<div className="warehouse-stock-demands" aria-label="按所需配件筛选历史"><Button size="small" type={!c.filter?'primary':'default'} onClick={()=>c.setFilter('')}>全部最新型号</Button>{requirement.items.map((item,i)=><Button key={i} size="small" type={c.filter===item.name?'primary':'default'} onClick={()=>c.setFilter(item.name)}>{item.name}</Button>)}</div>:null}
       <Input aria-label="筛选本车历史配件" placeholder="筛选本车历史名称、货号或规格" allowClear value={c.filter} maxLength={100} onChange={e=>c.setFilter(e.target.value)}/>
+      <Select aria-label="本车历史用料排序" value={sort} onChange={setSort} options={dispatchNumberSortOptions}/>
       {!c.items.length?<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="本车历史没有对应的用料型号，可查看全部最新型号；不自动改用其他车辆型号"/>:null}
-      <div className="warehouse-stock-results warehouse-vehicle-history">{c.items.map((part,index)=><article key={index} className="warehouse-stock-result" aria-label={`历史用料 ${part.name} ${part.specification}`}>
+      <div className="warehouse-stock-results warehouse-vehicle-history">{[...c.items].sort((a,b)=>compareDispatchNumbers(a,b,sort)).map((part,index)=><article key={index} className="warehouse-stock-result" aria-label={`历史用料 ${part.name} ${part.specification}`}>
         <div className="warehouse-stock-title"><strong>{part.name||'未填写品名'}</strong><Tag>{part.unit||'单位未填'}</Tag></div>
         <dl className="warehouse-stock-meta"><div><dt>上次规格</dt><dd><strong>{part.specification||'未记录'}</strong></dd></div>{part.manufacturer?<div><dt>厂家</dt><dd>{part.manufacturer}</dd></div>:null}<div><dt>上次用量</dt><dd>{part.quantity} {part.unit}</dd></div><div><dt>维修日期</dt><dd>{part.lastUsedAt||'未记录'}</dd></div><div><dt>历史派工号</dt><dd>{part.dispatchNo||'未记录'}</dd></div></dl>
         <div className="warehouse-stock-code"><code>{part.code||'历史未记录货号'}</code>{part.code?<CopyTextButton key={part.code} text={part.code} label={`复制历史货号 ${part.code}`}/>:null}</div>

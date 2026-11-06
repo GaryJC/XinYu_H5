@@ -1,10 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import ts from 'typescript';
-const source=readFileSync(new URL('../client/src/features/dispatch/warehouseRequestSort.ts',import.meta.url),'utf8');
-const {outputText}=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}});
-const {sortWarehouseRequests}=await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
+import {sortWarehouseRequests} from '../shared/warehouseRequests.mjs';
 const task=(orderId,recordedAt)=>({orderId,partsRequirement:{recordedAt}});
 test('warehouse requests sort by application time in either direction without changing source',()=>{
  const tasks=[task('old','2026-10-20T08:00:00Z'),task('new','2026-10-22T08:00:00Z'),task('middle','2026-10-21T08:00:00Z')];

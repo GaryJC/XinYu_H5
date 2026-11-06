@@ -1,4 +1,4 @@
-import { workOrderPageRows, archiveMetadata, refreshTargetIds } from './repositories/workOrderListRepository.mjs';
+import { archiveQuery, workOrderPageRows, archiveMetadata, refreshTargetIds } from './repositories/workOrderListRepository.mjs';
 import { saveDraftPendingRepairs } from './repositories/pendingRepairsRepository.mjs';
 import { userRoles, hasRole, hasAnyRole } from "../shared/roles.mjs";
 import { queueCustomerSignatureReview } from "./repositories/customerSignatureReviewRepository.mjs";
@@ -56,7 +56,7 @@ export async function listWorkOrders(role = "manager", user, query = {}) {
     const orders = await hydrateOrders(rows);
     return { ...result, items: sanitizeVisibleOrders(orders.map((order, index) => ({ ...order, dispatchStage: rows[index].dispatch_stage || undefined })), role, user) };
   }
-  const { where, params } = roleFilter(role, user);
+  const { where, params, order } = archiveQuery(scope, {sort:query.sort});
   const { rows } = await pool.query(
     `
       select wo.*, (select stage from dispatch_tasks where order_id=wo.id) as dispatch_stage, st.token as signature_token, st.used as signature_token_used
@@ -69,7 +69,7 @@ export async function listWorkOrders(role = "manager", user, query = {}) {
         limit 1
       ) st on true
       ${where}
-      order by wo.updated_at desc, wo.created_at desc
+      order by ${order}
     `,
     params
   );

@@ -75,6 +75,7 @@ export function useWorkbenchController() {
     resetVehicleIdentityRecognition,
     scanVehicleIdentifier,
     lookupDraftVehicle,
+    confirmPlateChoice,
     lookupVehicleLicense,
     lookupVehicleLicenseForDevelopment,
     selectVehicleReference
@@ -612,6 +613,7 @@ export function useWorkbenchController() {
     confirmVehicleLicenseOcr,
     scanVehicleIdentifier,
     lookupDraftVehicle,
+    confirmPlateChoice,
     resetVehicleIdentityRecognition,
     lookupVehicleLicenseForDevelopment,
     selectVehicleReference,

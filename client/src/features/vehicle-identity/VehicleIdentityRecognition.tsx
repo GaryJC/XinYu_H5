@@ -1,6 +1,6 @@
 import { VehicleScanIllustration } from "./VehicleScanIllustration";
 import { useState } from "react";
-import { Alert, Button, Input, Spin } from "antd";
+import { Alert, Button, Input, Modal, Spin } from "antd";
 import { VehicleHistoryLookupResult, VehicleLookupInput } from "../../../../shared/types";
 import { ImageSourcePicker } from "../../shared/ui/ImageSourcePicker";
 import { IdentifierKind, IdentifierRecognitionState } from "./useVehicleIdentityRecognition";
@@ -12,12 +12,15 @@ type Props = {
   history?: VehicleHistoryLookupResult;
   historyLoading: boolean;
   historyError: string;
+  onConfirmPlate: (plate: string) => void;
   onRetry: () => void;
   onScan: (kind: IdentifierKind, file: File) => Promise<void>;
   onManualLicenseLookup: (input: VehicleLookupInput) => Promise<void>;
 };
 
-export function VehicleIdentityRecognition({ disabled, recognition, history, historyLoading, historyError, onRetry, onScan, onManualLicenseLookup }: Props) {
+export function VehicleIdentityRecognition({ disabled, recognition, history, historyLoading, historyError, onConfirmPlate, onRetry, onScan, onManualLicenseLookup }: Props) {
+  const [dismissedChoices, setDismissedChoices] = useState<string[]>();
+  const choices = history?.plateChoices;
   const [testLicense, setTestLicense] = useState<VehicleLookupInput>({ plate: "", vin: "", model: "", owner: "" });
 
   async function submitTestLicense() {
@@ -73,7 +76,20 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
         </details>
       ) : null}
       {historyLoading ? <div className="vehicle-history-loading"><Spin size="small" />正在查询公司系统车辆档案…</div> : null}
-      {history ? (
+      {choices?.length ? (
+        <>
+          <Modal title="请选择润丰档案中的车牌原文" open={dismissedChoices !== choices}
+            centered footer={null} onCancel={() => setDismissedChoices(choices)}>
+            <div aria-label="润丰车牌候选">
+              {choices.map(plate => (
+                <Button key={plate} disabled={disabled || historyLoading} style={{ whiteSpace: "pre", margin: 4 }}
+                  onClick={() => onConfirmPlate(plate)}>{plate}</Button>
+              ))}
+            </div>
+          </Modal>
+          {dismissedChoices === choices && <Button disabled={disabled} onClick={() => setDismissedChoices(undefined)}>选择润丰车牌</Button>}
+        </>
+      ) : history ? (
         <Alert
           showIcon
           type={history.status === "conflict" ? "error" : history.found ? "success" : "info"}

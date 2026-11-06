@@ -1,3 +1,4 @@
+import {dispatchNumberSortOptions} from '../../../../shared/dispatchNumberSort.mjs';
 import dayjs from 'dayjs';
 import { useState } from 'react';
 import { Alert, Button, Checkbox, Drawer, DatePicker, Select, Tag } from 'antd';
@@ -7,7 +8,7 @@ import type { ArchiveFilterController } from './useArchiveFilters';
 const ranges: Array<{ value: ArchiveFilters['range']; label: string }> = [
   { value: 'all', label: '全部' }, { value: 'today', label: '今天' }, { value: 'yesterday', label: '昨天' }, { value: 'week', label: '近7天' }, { value: 'custom', label: '自定义' }
 ];
-const sorts = [
+const sorts = [...dispatchNumberSortOptions,
   { value: 'updated-desc', label: '更新时间最新' }, { value: 'updated-asc', label: '更新时间最早' },
   { value: 'created-desc', label: '创建时间最新' }, { value: 'created-asc', label: '创建时间最早' }
 ];
@@ -31,7 +32,7 @@ export function ArchiveFilterBar({ archive, isMobile }: { archive: ArchiveFilter
   </div>;
   const shortcuts = ranges.filter(range => !isMobile || range.value !== 'custom');
   const count = filters.statuses.length + filters.advisors.length + filters.technicians.length + (filters.range === 'custom' ? 1 : 0);
-  const hasFilters = filters.range !== 'all' || filters.baiyuanOnly || Boolean(filters.search) || count > 0 || filters.sort !== 'updated-desc';
+  const hasFilters = filters.range !== 'all' || filters.baiyuanOnly || Boolean(filters.search) || count > 0 || filters.sort !== 'dispatch-desc';
   return <section className="archive-filter-bar" aria-label="委托单筛选">
     <div className="archive-filter-toolbar">
       <span>创建日期</span>

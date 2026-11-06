@@ -1,9 +1,10 @@
+import {compareDispatchNumbers} from '../../shared/dispatchNumberSort.mjs';
 import {personalRepairStage} from '../../shared/repairProgress.mjs';
 import {HttpError} from '../http/HttpError.mjs';
 
 export function sortDispatchTasks(tasks,actor,query={}) {
- const sort=query.sort||(query.personal==='true'?'assigned-asc':undefined);
- if(!sort)return tasks;
+ const sort=query.sort || 'dispatch-desc';
+ if(sort==='dispatch-desc'||sort==='dispatch-asc')return [...tasks].sort((a,b)=>compareDispatchNumbers(a,b,sort));
  if(!['assigned-asc','assigned-desc','due-asc','due-desc'].includes(sort))throw new HttpError(400,'排序方式无效');
  const field=sort.startsWith('assigned-')?'assignedAt':'dueAt';
  const direction=sort.endsWith('-desc')?-1:1;

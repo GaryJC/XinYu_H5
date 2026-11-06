@@ -1,3 +1,4 @@
+import { useDetailScrollLock } from '../../shared/ui/useDetailScrollLock';
 import { useState } from 'react';
 import { Alert, Drawer, Grid } from 'antd';
 import type { UserProfile } from '../../../../shared/types';
@@ -9,6 +10,7 @@ import './technician-repair.css';
 
 export function TechnicianProjectDetail({ user, orderId, onClose }: { user: UserProfile; orderId: string; onClose: () => void }) {
   const controller = useDispatchController(user, '我的维修', orderId);
+  useDetailScrollLock(true);
   const mobile = !Grid.useBreakpoint().md;
   const [photoBlocked, setPhotoBlocked] = useState(false);
   const blocked = controller.busy || photoBlocked;

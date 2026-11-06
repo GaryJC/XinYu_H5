@@ -1,3 +1,4 @@
+import {dispatchNumberSortOptions} from '../../../../shared/dispatchNumberSort.mjs';
 import {Alert,Button,Checkbox,Drawer,Input,Select,Tabs,theme} from 'antd';
 import {ClockCircleOutlined,FilterOutlined,ThunderboltOutlined} from '@ant-design/icons';
 import type {DispatchController} from './useDispatchController';
@@ -17,6 +18,7 @@ export function DispatchFilterBar({controller:c,inspection}:{controller:Dispatch
    <Tabs className="dispatch-status-tabs" aria-label="工单状态筛选" activeKey={c.filters.stage||(c.filters.includeCompleted==='true'?'all':'')} type="line" tabBarGutter={0} onChange={stage=>c.setFilters(current=>selectStatusFilters(current,stage))} items={statuses.map(({value,label})=>({key:value,label:<span className="dispatch-status-label"><span>{label}</span><strong className="dispatch-status-count">{c.list.counts?.[value]??'—'}</strong></span>}))}/>
    <p className="dispatch-status-scroll-hint">左右滑动查看更多状态 ↔</p>
    <div className="dispatch-quick-filters">
+    <Select aria-label="派工任务排序" value={c.filters.sort || "dispatch-desc"} onChange={sort=>c.setFilters(current=>({...current,sort}))} options={dispatchNumberSortOptions}/>
     <Button icon={<FilterOutlined/>} color={advanced?'primary':'default'} variant="outlined" aria-label={advanced?`筛选，${advanced} 项已生效`:'筛选'} onClick={f.begin}>筛选{advanced?` · ${advanced}`:''}</Button>
     <Button icon={<ThunderboltOutlined/>} aria-label="加急" aria-pressed={c.filters.urgent==='true'} color={c.filters.urgent==='true'?'primary':'default'} variant={c.filters.urgent==='true'?'filled':'outlined'} onClick={()=>c.setFilters(current=>({...current,urgent:current.urgent==='true'?undefined:'true'}))}>加急</Button>
     <Button icon={<ClockCircleOutlined/>} aria-label="超期" aria-pressed={c.filters.overdue==='true'} color={c.filters.overdue==='true'?'primary':'default'} variant={c.filters.overdue==='true'?'filled':'outlined'} onClick={()=>c.setFilters(current=>({...current,overdue:current.overdue==='true'?undefined:'true'}))}>超期</Button>

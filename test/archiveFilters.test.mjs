@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { rowToWorkOrder } from '../server/domain/workOrderModel.mjs';
 const source = readFileSync(new URL('../client/src/features/workbench/archiveFilters.ts', import.meta.url), 'utf8');
-const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace("from '../../../../shared/repairCompletion.mjs'",`from '${new URL('../shared/repairCompletion.mjs',import.meta.url).href}'`);
+const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace("from '../../../../shared/dispatchNumberSort.mjs'",`from '${new URL('../shared/dispatchNumberSort.mjs',import.meta.url).href}'`).replace("from '../../../../shared/repairCompletion.mjs'",`from '${new URL('../shared/repairCompletion.mjs',import.meta.url).href}'`);
 const { defaultArchiveFilters, archiveTimestamp, archiveBounds, archiveDateError, filterArchiveOrders, archivePerson } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const now = Date.parse('2026-10-22T04:00:00Z');
 const filter = patch => ({ ...defaultArchiveFilters(), ...patch });

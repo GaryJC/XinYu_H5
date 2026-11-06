@@ -1,3 +1,4 @@
+import { useDetailScrollLock } from '../../shared/ui/useDetailScrollLock';
 import { ListPagination } from '../../shared/ui/ListPagination';
 import { OrderDetail, OrderLegacySyncStatus } from "./OrderDetail";
 
@@ -48,6 +49,7 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
   const [detailOrderId, setLocalDetailOrderId] = useState<string | undefined>(()=>new URLSearchParams(location.search).get("paperOrder") || undefined);
   const setDetailOrderId=(id?:string)=>{setLocalDetailOrderId(id);if(!id)controller.clearLinkedOrder();};
   const detailOrder = controller.orders.find(order => order.id === detailOrderId) || (controller.selectedOrder?.id === detailOrderId ? controller.selectedOrder : undefined) || ((!detailOrderId || controller.linkedOrderDetail?.id === detailOrderId) ? controller.linkedOrderDetail : undefined);
+  useDetailScrollLock(Boolean(detailOrder));
   const legacyRefresh = useArchiveLegacyRefresh(currentUser, controller.acceptRefreshedOrder, controller.refreshArchiveSummary);
   const listedOrders = searchedOrders.filter(order => !overview || order.shop.id === currentUser?.shopId);
   const refreshReport = legacyRefresh.report ? <Alert style={{ marginBottom: 12 }} showIcon
@@ -180,6 +182,7 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
 
       <Modal
         rootClassName="archive-detail-modal"
+        transitionName={isMobile ? "" : undefined}
         open={Boolean(detailOrder)}
         title="委托单详情"
         width={isMobile ? "calc(100vw - 16px)" : 1080}

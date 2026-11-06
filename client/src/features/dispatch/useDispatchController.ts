@@ -11,7 +11,7 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
   const feedback = useActionFeedback();
   const manager=hasAnyRole(user, ['manager','advisor']);
   const inspectionLead=manager || view==='检验任务' && hasRole(user, 'inspector');
-  const [filters,setFilters]=useState<DispatchFilters>({...(view==='配件申请'?{partsStatus:'待备料',partsSort:'newest'}:{}),stage:initialStage ?? (view==='检验任务'?'待检验':view==='我的维修'?'回审&维修中':undefined)});
+  const [filters,setFilters]=useState<DispatchFilters>({...(view==='配件申请'?{partsStatus:'待备料',partsSort:'dispatch-desc'}:{}),stage:initialStage ?? (view==='检验任务'?'待检验':view==='我的维修'?'回审&维修中':undefined)});
   const [taskCounts,setTaskCounts]=useState<RepairTaskCounts>();
   const mobile=!Grid.useBreakpoint().md;
   const list=usePagedList(JSON.stringify({user:user.id,view,filters}),page=>dispatchApi.page(view==='我的维修'?{...filters,personal:'true',technicianId:user.id}:filters,page),mobile,true,task=>`${task.orderId}-${task.partsRequirement?.ownerId||''}`);

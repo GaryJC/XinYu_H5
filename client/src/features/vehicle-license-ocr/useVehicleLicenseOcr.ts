@@ -75,8 +75,8 @@ export function useVehicleLicenseOcr({ actor, draft, setDraft, onRecognized }: O
       const recognized = await workOrderApi.recognizeVehicleLicense({ fileId: uploadedFile.id });
       if (session !== generation.current) return;
       const result = { ...recognized };
-      const normalize = (value:string) => value.replace(/\s/g, '').toUpperCase();
       for (const key of ['plate','vin'] as const) {
+        const normalize = (value: string) => (key === 'plate' ? value.trim() : value.replace(/\s/g, '')).toUpperCase();
         const existing = draftRef.current.vehicle[key];
         if (existing && result[key] && normalize(existing) !== normalize(result[key])) {
           const useRecognized = await new Promise<boolean>(resolve => Modal.confirm({

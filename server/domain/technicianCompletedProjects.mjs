@@ -1,3 +1,4 @@
+import {compareDispatchNumbers} from '../../shared/dispatchNumberSort.mjs';
 import {completionRange} from './dispatchPolicy.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 
@@ -45,8 +46,19 @@ export function groupCompletedProjectsByOrder(projects) {
   return [...orders.values()];
 }
 
-export function filterCompletedProjects(projects,query={}) {
- if(query.sort&&!['completed-asc','completed-desc'].includes(query.sort))throw new HttpError(400,'排序方式无效');
- const range=query.from||query.to?completionRange(query.from,query.to):undefined;
- return projects.filter(p=>!range||(p.completedAt>=range.from&&p.completedAt<range.to)).sort((a,b)=>(query.sort==='completed-asc'?1:-1)*a.completedAt.localeCompare(b.completedAt)||a.key.localeCompare(b.key));
+export function filterCompletedProjects(projects, query = {}) {
+  const sort = query.sort || 'dispatch-desc';
+  if (!['dispatch-desc', 'dispatch-asc', 'completed-asc', 'completed-desc'].includes(sort)) {
+    throw new HttpError(400, '排序方式无效');
+  }
+  const range = query.from || query.to ? completionRange(query.from, query.to) : undefined;
+  const filtered = projects.filter(p => !range || (p.completedAt >= range.from && p.completedAt < range.to));
+  return filtered.sort((a, b) => {
+    if (sort.startsWith('dispatch-')) {
+      const byNumber = compareDispatchNumbers(a, b, sort);
+      if (byNumber) return byNumber;
+    }
+    const byTime = a.completedAt.localeCompare(b.completedAt);
+    return (sort === 'completed-asc' ? byTime : -byTime) || a.key.localeCompare(b.key);
+  });
 }

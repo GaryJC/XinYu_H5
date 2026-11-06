@@ -9,7 +9,7 @@ test("normalizes the nested Aliyun license plate response", () => {
       data: { data: { 车牌: "辽 A12345" } },
       prism_keyValueInfo: [{ key: "车牌", value: "辽 A12345", valueProb: 99 }]
     })),
-    { value: "辽A12345", confidence: 0.99 }
+    { value: "辽 A12345", confidence: 0.99 }
   );
 });
 

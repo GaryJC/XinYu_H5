@@ -1,3 +1,4 @@
+import {dispatchNumberSortOptions} from '../../../../shared/dispatchNumberSort.mjs';
 import {useState} from 'react';
 import type {Dispatch,SetStateAction} from 'react';
 import {Alert,Button,Drawer,Input,Select} from 'antd';
@@ -12,8 +13,8 @@ export function TechnicianDateFilter({filters,setFilters}:{filters:DispatchFilte
  function apply(){if(invalid)return;setFilters(current=>({...current,assignedFrom:from||undefined,assignedTo:to||undefined}));setOpen(false);}
  return <>
   <div className="technician-date-filter" role="group" aria-label="派工日期筛选">
-   <div className="technician-date-heading"><span className="technician-date-label">派工日期</span>
-      <Select className="technician-sort" size="small" aria-label="维修任务排序" value={filters.sort||'assigned-asc'} onChange={sort=>setFilters(current=>({...current,sort}))} options={[
+   <div className="technician-date-heading"><span className="technician-date-label">排序方式</span>
+      <Select className="technician-sort" size="small" aria-label="维修任务排序" value={filters.sort||'dispatch-desc'} onChange={sort=>setFilters(current=>({...current,sort}))} options={[...dispatchNumberSortOptions,
         {value:'assigned-asc',label:'派工时间：早 → 晚'},
         {value:'assigned-desc',label:'派工时间：晚 → 早'},
         {value:'due-asc',label:'预计完工：早 → 晚'},

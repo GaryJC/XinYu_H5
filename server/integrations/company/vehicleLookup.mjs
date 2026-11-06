@@ -26,8 +26,8 @@ const mockOrganizations = [
   { value: "青岛水务发展有限公司", code: "QDSWFZ", usageCount: 5 }
 ];
 
-export async function lookupVehicleInCompanySystem({ plate, vin, model, owner } = {}) {
-  const normalizedPlate = normalizeIdentifier(plate);
+export async function lookupVehicleInCompanySystem({ plate, vin, model, owner, confirmedPlate } = {}) {
+  const normalizedPlate = plateSearchKey(plate);
   const normalizedVin = normalizeIdentifier(vin);
   if (!normalizedPlate && !normalizedVin) {
     throw new HttpError(400, "请提供车牌号或 VIN 码");
@@ -37,13 +37,14 @@ export async function lookupVehicleInCompanySystem({ plate, vin, model, owner } 
   const candidates = configured
     ? await findLegacyVehicle({ plate: normalizedPlate, vin: normalizedVin })
     : findMockVehicles(normalizedPlate, normalizedVin);
-  const vehicleResolution = resolveVehicleCandidates(candidates, normalizedPlate, normalizedVin);
+  const vehicleResolution = resolveVehicleCandidates(candidates, normalizedPlate, normalizedVin, confirmedPlate);
 
   if (vehicleResolution.status === "conflict") {
     return {
       found: false,
       status: "conflict",
       conflicts: vehicleResolution.conflicts,
+      plateChoices: vehicleResolution.plateChoices,
       message: vehicleResolution.message || "车牌和 VIN 分别匹配到不同车辆，已停止自动回填，请核对行驶证"
     };
   }
@@ -155,12 +156,32 @@ export async function createCompanyVehicleReference({ kind, name, code } = {}, c
   return { kind, ...result };
 }
 
-export function resolveVehicleCandidates(candidates, normalizedPlate, normalizedVin) {
-  const plateMatch = normalizedPlate ? candidates.find((item) => item.plateMatched ?? normalizeIdentifier(item.plate) === normalizedPlate) : undefined;
+function plateSearchKey(plate) {
+  return normalizeIdentifier(plate).replace(/[·•.－—–]/g, "");
+}
+
+export function resolveVehicleCandidates(candidates, normalizedPlate, normalizedVin, confirmedPlate) {
+  const vinRows = normalizedVin ? candidates.filter(row => normalizeIdentifier(row.vin) === normalizedVin) : [];
+  const keys = new Set(normalizedPlate && candidates.some(row => plateSearchKey(row.plate) === normalizedPlate)
+    ? [normalizedPlate] : vinRows.map(row => plateSearchKey(row.plate)));
+  const plateChoices = [...new Set(candidates.filter(row => keys.has(plateSearchKey(row.plate))).map(row => row.plate).filter(Boolean))];
+  if (confirmedPlate !== undefined || plateChoices.length > 1) {
+    if (!plateChoices.includes(confirmedPlate)) {
+      return { status: "conflict", plateChoices, message: "请选择润丰档案中的车牌原文" };
+    }
+    candidates = candidates.filter(row => row.plate === confirmedPlate);
+    if (normalizedVin && candidates.some(row => normalizeIdentifier(row.vin)) &&
+        !candidates.some(row => normalizeIdentifier(row.vin) === normalizedVin)) {
+      return { status: "conflict", plateChoices, message: "所选车牌与当前 VIN 不符，请核对车牌或 VIN" };
+    }
+    normalizedPlate = plateSearchKey(confirmedPlate);
+    candidates = candidates.map(row => ({ ...row, plateMatched: true }));
+  }
+  const plateMatch = normalizedPlate ? candidates.find((item) => item.plateMatched ?? plateSearchKey(item.plate) === normalizedPlate) : undefined;
   const vinMatch = normalizedVin ? candidates.find((item) => item.vinMatched ?? normalizeIdentifier(item.vin) === normalizedVin) : undefined;
   const exact = normalizedPlate && normalizedVin && candidates.find(row =>
-    normalizeIdentifier(row.plate) === normalizedPlate && normalizeIdentifier(row.vin) === normalizedVin);
-  const plateVins = new Set(candidates.filter(row => normalizeIdentifier(row.plate) === normalizedPlate)
+    plateSearchKey(row.plate) === normalizedPlate && normalizeIdentifier(row.vin) === normalizedVin);
+  const plateVins = new Set(candidates.filter(row => plateSearchKey(row.plate) === normalizedPlate)
     .map(row => normalizeIdentifier(row.vin)).filter(Boolean));
   if (!exact && plateMatch && (vinMatch || plateVins.size > 1)) {
     return {
@@ -179,7 +200,7 @@ export function resolveVehicleCandidates(candidates, normalizedPlate, normalized
   const models = new Map();
   for (const row of candidates) {
     const rowVin = normalizeIdentifier(row.vin);
-    const sameVehicle = rowVin ? rowVin === vin : normalizeIdentifier(row.plate) === normalizeIdentifier(vehicle.plate) && plateVins.size <= 1;
+    const sameVehicle = rowVin ? rowVin === vin : plateSearchKey(row.plate) === plateSearchKey(vehicle.plate) && plateVins.size <= 1;
     if (!sameVehicle) continue;
     const modelCode = row.modelLegacyCode?.trim();
     if (modelCode && !models.has(modelCode.toUpperCase())) {
@@ -204,12 +225,12 @@ export function resolveReference(input, candidates, requireUniqueCode) {
 function findMockVehicles(normalizedPlate, normalizedVin) {
   return mockVehicles
     .filter((item) =>
-      (normalizedPlate && normalizeIdentifier(item.plate) === normalizedPlate) ||
+      (normalizedPlate && plateSearchKey(item.plate) === normalizedPlate) ||
       (normalizedVin && normalizeIdentifier(item.vin) === normalizedVin)
     )
     .map((item) => ({
       ...item,
-      plateMatched: Boolean(normalizedPlate && normalizeIdentifier(item.plate) === normalizedPlate),
+      plateMatched: Boolean(normalizedPlate && plateSearchKey(item.plate) === normalizedPlate),
       vinMatched: Boolean(normalizedVin && normalizeIdentifier(item.vin) === normalizedVin)
     }));
 }

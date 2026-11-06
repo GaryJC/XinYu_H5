@@ -1,3 +1,4 @@
+import type { DispatchNumberSort } from './dispatchNumberSort.mjs';
 export type RoleKey = "employee" | "outsourcing" | "warehouse" | "advisor" | "technician" | "inspector" | "manager";
 export type DevelopmentPersonaKey = RoleKey | "technician-peer" | "unassigned" | "disabled";
 
@@ -78,6 +79,7 @@ export type VehicleReferenceResolution = {
 };
 
 export type VehicleLookupInput = {
+  confirmedPlate?: string;
   plate?: string;
   vin?: string;
   model?: string;
@@ -85,6 +87,7 @@ export type VehicleLookupInput = {
 };
 
 export type VehicleHistoryLookupResult = {
+  plateChoices?: string[];
   models?: Array<{ code: string; name: string }>;
   organizations?: Array<{ code: string; name: string }>;
   found: boolean;
@@ -672,7 +675,7 @@ export interface PageResult<T> { counts?: Record<string,number>; items: T[]; tot
 export interface ArchiveFilters {
   search: string; baiyuanOnly: boolean; range: 'all' | 'today' | 'yesterday' | 'week' | 'custom';
   from: string; to: string; statuses: string[]; advisors: string[]; technicians: string[];
-  sort: 'updated-desc' | 'updated-asc' | 'created-desc' | 'created-asc';
+  sort: DispatchNumberSort | 'updated-desc' | 'updated-asc' | 'created-desc' | 'created-asc';
 }
 export interface WorkOrderListQuery {
   page: number; pageSize: number; search?: string; baiyuanOnly?: string; from?: string; to?: string;
@@ -681,7 +684,8 @@ export interface WorkOrderListQuery {
 export interface ArchiveOptions { statuses: Array<{value: string; label: string}>; advisors: Array<{value: string; label: string}>; technicians: Array<{value: string; label: string}>; }
 
 export type WorkloadState = "working" | "waiting" | "paused" | "inspection" | "unfinished";
-export type DispatchFilters = {sort?:'assigned-asc'|'assigned-desc'|'due-asc'|'due-desc';assignedFrom?:string;assignedTo?:string;personal?:'true';includeCompleted?:string;workloadState?:WorkloadState;partsStatus?:string;partsSort?:string;executionMode?:string;search?:string;technicianId?:string;stage?:string;metric?:string;urgent?:string;overdue?:string;from?:string;to?:string};
+export type WarehouseRequestSort = DispatchNumberSort | 'newest' | 'oldest';
+export type DispatchFilters = {sort?:DispatchNumberSort | 'assigned-asc'|'assigned-desc'|'due-asc'|'due-desc';assignedFrom?:string;assignedTo?:string;personal?:'true';includeCompleted?:string;workloadState?:WorkloadState;partsStatus?:string;partsSort?:WarehouseRequestSort;executionMode?:string;search?:string;technicianId?:string;stage?:string;metric?:string;urgent?:string;overdue?:string;from?:string;to?:string};
 
 export type OperationsMetric = 'unfinished'|'working'|'waiting'|'parts'|'pickup'|'paused'|'inspection'|'overdue';
 export type OperationsProject = {
@@ -721,4 +725,4 @@ export type TechnicianCompletedOrder = {
   projects: TechnicianCompletedProject[];
 };
 
-export type CompletedProjectFilters = {from?:string;to?:string;sort?:'completed-asc'|'completed-desc'};
+export type CompletedProjectFilters = {from?:string;to?:string;sort?:DispatchNumberSort | 'completed-asc'|'completed-desc'};

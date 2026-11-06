@@ -1,3 +1,4 @@
+import {dispatchNumberSortOptions} from '../../../../shared/dispatchNumberSort.mjs';
 import { searchAllFilters } from './useDispatchFilterDraft';
 import { ListPagination } from '../../shared/ui/ListPagination';
 import { Grid } from 'antd';
@@ -5,7 +6,7 @@ import { LoadingState } from "../../shared/ui/LoadingState";
 import {PartsPreparationDialog} from './PartsPreparationDialog';
 import {CopyTextButton} from '../../shared/ui/CopyTextButton';
 import {displayTime} from './dispatchLabels';
-import {type WarehouseRequestSort} from './warehouseRequestSort';
+import type {WarehouseRequestSort} from '../../../../shared/types';
 import {partsController,warehouseRequests} from './individualRepair';
 import {WarehouseDispatchNumber} from './WarehouseDispatchNumber';
 import {WarehouseWorkOrderDrawer} from './WarehouseWorkOrderDrawer';
@@ -22,7 +23,7 @@ export function WarehousePartsPage({controller:source}:{controller:DispatchContr
   const status=source.filters.partsStatus||'待备料';
   const setStatus=(partsStatus:string)=>source.setFilters(filters=>({...filters,partsStatus}));
   const [workOrderId,setWorkOrderId]=useState<string>();
-  const sortOrder=(source.filters.partsSort||'newest') as WarehouseRequestSort;
+  const sortOrder=source.filters.partsSort||'dispatch-desc';
   const setSortOrder=(partsSort:WarehouseRequestSort)=>source.setFilters(filters=>({...filters,partsSort}));
   const [selectedOwner,setSelectedOwner]=useState<string>();
   const available=source.detail?warehouseRequests([source.detail.task]):[];
@@ -42,7 +43,7 @@ export function WarehousePartsPage({controller:source}:{controller:DispatchContr
     <div className="warehouse-filters">
       <Input.Search aria-label="搜索配件申请" placeholder="车牌 / 委托单号 / 派工号" allowClear onSearch={search=>c.setFilters({...searchAllFilters(search),partsStatus:search.trim()?'all':'待备料',partsSort:sortOrder})}/>
       <label className="warehouse-sort">排序
-        <Select aria-label="配件申请排序" value={sortOrder} onChange={setSortOrder} options={[
+        <Select aria-label="配件申请排序" value={sortOrder} onChange={setSortOrder} options={[...dispatchNumberSortOptions,
           {value:'newest',label:'申请时间：最新在前'},
           {value:'oldest',label:'申请时间：最早在前'}
         ]}/>

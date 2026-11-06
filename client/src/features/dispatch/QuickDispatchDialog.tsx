@@ -1,3 +1,4 @@
+import { useDetailScrollLock } from '../../shared/ui/useDetailScrollLock';
 import { useRef } from 'react';
 import { Alert, Spin } from 'antd';
 import { FormDialog } from '../../shared/ui/BusinessForm';
@@ -8,6 +9,7 @@ import './dispatch.css';
 
 export function QuickDispatchDialog({orderId,user,onClose}:{orderId:string;user:UserProfile;onClose:()=>void}) {
   const controller=useDispatchController(user,'派工台',orderId);
+  useDetailScrollLock(true);
   const task=controller.detail?.task;
   const ready=useRef(false);
   if(task && !controller.loading) ready.current=true;

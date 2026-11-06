@@ -1,8 +1,14 @@
 import { executeSqlServerQuery, executeSqlServerTransaction } from "../database/sqlServerPool.mjs";
 
+// Only the search key drops separators. The selected plate comes from the original ch column.
+const plateSearchExpression = [" ", "-", "·", "•", ".", "－", "—", "–", "　"].reduce(
+  (expression, separator) => `REPLACE(${expression}, N'${separator}', '')`,
+  "UPPER(CONVERT(nvarchar(100), RTRIM(ch)))"
+);
+
 export const FIND_LEGACY_VEHICLE_QUERY = `
   with vehicles as (
-    select vehicle.*, REPLACE(REPLACE(UPPER(RTRIM(ch)), ' ', ''), '-', '') as plate_key,
+    select vehicle.*, ${plateSearchExpression} as plate_key,
       REPLACE(REPLACE(UPPER(RTRIM(sbdm)), ' ', ''), '-', '') as vin_key
     from dbo.qxclxxb vehicle
   )
@@ -16,6 +22,7 @@ export const FIND_LEGACY_VEHICLE_QUERY = `
     RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.qc), RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.mc))
   left join dbo.khxxb customer on customer.bm = vehicle.ssdw
   where (@plate <> '' and plate_key = @plate) or (@vin <> '' and vin_key = @vin)
+    or (@vin <> '' and plate_key <> '' and plate_key in (select plate_key from vehicles where vin_key = @vin))
     or (@plate <> '' and @vin = '' and vin_key <> '' and vin_key in
       (select vin_key from vehicles where plate_key = @plate))
   order by vehicle.reid desc

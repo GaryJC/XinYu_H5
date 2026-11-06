@@ -26,9 +26,9 @@ export function useDispatchFilterDraft(filters:DispatchFilters,setFilters:Dispat
  useEffect(()=>{setSearch(filters.search||'');},[filters.search]);
  function begin(){setDraft({...filters});setError('');setOpen(true);}
  function cancel(){setOpen(false);setError('');}
- function reset(){setDraft({search:filters.search,includeCompleted:filters.includeCompleted});setError('');}
+ function reset(){setDraft({sort:filters.sort,search:filters.search,includeCompleted:filters.includeCompleted});setError('');}
  function confirm(){const message=filterDateError(draft);setError(message);if(message)return;setSearch(draft.search||'');setFilters({...draft});setOpen(false);}
- function submitSearch(value:string){if(composing.current)return;setSearch(value.trim());setFilters(searchAllFilters(value));}
- function clear(){setSearch('');setFilters({});}
+ function submitSearch(value:string){if(composing.current)return;setSearch(value.trim());setFilters(current=>({...searchAllFilters(value),sort:current.sort}));}
+ function clear(){setSearch('');setFilters(current=>({sort:current.sort}));}
  return {open,draft,setDraft,search,setSearch,error,setError,composing,begin,cancel,reset,confirm,submitSearch,clear};
 }

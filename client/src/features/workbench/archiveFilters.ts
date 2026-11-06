@@ -1,9 +1,10 @@
+import {compareDispatchNumbers} from '../../../../shared/dispatchNumberSort.mjs';
 import {repairCategory} from '../../../../shared/repairCompletion.mjs';
 import type { WorkOrder } from '../../../../shared/types';
 
 import type { ArchiveFilters } from '../../../../shared/types';
 export type { ArchiveFilters } from '../../../../shared/types';
-export const defaultArchiveFilters = (): ArchiveFilters => ({ search: '', baiyuanOnly: false, range: 'all', from: '', to: '', statuses: [], advisors: [], technicians: [], sort: 'updated-desc' });
+export const defaultArchiveFilters = (): ArchiveFilters => ({ search: '', baiyuanOnly: false, range: 'all', from: '', to: '', statuses: [], advisors: [], technicians: [], sort: 'dispatch-desc' });
 const DAY = 86400000;
 const OFFSET = 8 * 3600000;
 export const beijingDay = (time = Date.now()) => new Date(time + OFFSET).toISOString().slice(0, 10);
@@ -54,6 +55,7 @@ export function filterArchiveOrders(orders: WorkOrder[], filters: ArchiveFilters
       && matches(filters.advisors, archivePerson(order.advisor))
       && (!filters.technicians.length || archiveTechnicians(order.technician).some(name => filters.technicians.includes(name))); 
   }).sort((a, b) => {
+    if (filters.sort === "dispatch-desc" || filters.sort === "dispatch-asc") return compareDispatchNumbers(a,b,filters.sort) || a.id.localeCompare(b.id);
     const x = orderTimestamp(a, field), y = orderTimestamp(b, field);
     if (Number.isFinite(x) !== Number.isFinite(y)) return Number.isFinite(x) ? -1 : 1;
     if (Number.isFinite(x) && x !== y) return (x - y) * (direction === 'asc' ? 1 : -1);

@@ -92,7 +92,8 @@ function assertOcrInput(imageBase64, label) {
 function normalizeIdentifierResult(data, keys) {
   const parsed = parseAliyunData(data);
   const flat = flattenValues(parsed);
-  const value = pickValue(flat, keys).replace(/\s/g, "").toUpperCase();
+  const raw = pickValue(flat, keys).trim().toUpperCase();
+  const value = keys === VIN_KEYS ? raw.replace(/\s/g, "") : raw;
   if (!value) throw new HttpError(422, "未识别到有效内容，请调整拍摄角度后重试");
   return { value, confidence: confidence(flat) };
 }

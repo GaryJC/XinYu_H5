@@ -212,3 +212,23 @@ test("collects organizations by VIN, deduplicates codes and excludes reused plat
   assert.equal(result.vehicle.vin,"A");
   assert.deepEqual(result.organizations.map(item=>item.code),["org","org2"]);
 });
+
+test("plate, VIN and license lookups require the original Runfeng plate before resolving references", () => {
+  const rows = ["鲁BQ6362", "鲁B Q6362", "鲁B-Q6362"].map((plate, i) => ({
+    plate, vin: "VIN1", model: "车型" + i, modelLegacyCode: "M" + i,
+    organization: {code: "O" + i, name: "单位" + i}
+  }));
+  for (const [plate, vin] of [["鲁BQ6362",""], ["","VIN1"], ["鲁BQ6362","VIN1"]]) {
+    const pending = resolveVehicleCandidates(rows, plate, vin);
+    assert.deepEqual(pending.plateChoices, rows.map(row => row.plate));
+    assert.equal(pending.vehicle, undefined);
+    for (const row of rows) {
+      const confirmed = resolveVehicleCandidates(rows, plate, vin, row.plate);
+      assert.equal(confirmed.vehicle.plate, row.plate);
+      assert.deepEqual(confirmed.models.map(model => model.code), [row.modelLegacyCode]);
+      assert.deepEqual(confirmed.organizations, [row.organization]);
+    }
+  }
+  assert.equal(resolveVehicleCandidates(rows,"鲁BQ6362","","伪造车牌").status,"conflict");
+  assert.equal(resolveVehicleCandidates(rows,"鲁BQ6362","OTHER","鲁B Q6362").status,"conflict");
+});

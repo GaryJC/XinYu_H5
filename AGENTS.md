@@ -45,3 +45,4 @@
 4. Use the Codex browser and Chrome by default. Ask before controlling Vivaldi.
 5. For tasks involving releases, deployment, or production environments, include performance overhead in the design and acceptance criteria.
 6. For UI work, avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.
+7. For UI changes, check padding inside messages, cards, and panels, and spacing between adjacent blocks. Verify the rendered mobile layout with wrapped text before marking the work complete.

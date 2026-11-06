@@ -35,9 +35,10 @@ export function archiveQuery(scope, query = {}) {
     if (key === 'advisors') clauses.push(`(${person('wo.advisor')})=any(${bind(values)}::text[])`);
     if (key === 'technicians') clauses.push(`exists(select 1 from regexp_split_to_table(coalesce(wo.technician,''),'[、,，;；]') name where (${person('name')})=any(${bind(values)}::text[]))`);
   }
-  const sorts = { 'updated-desc':'wo.updated_at desc', 'updated-asc':'wo.updated_at asc', 'created-desc':'wo.created_at desc', 'created-asc':'wo.created_at asc' };
-  if (query.sort && !sorts[query.sort]) throw new HttpError(400, '排序参数无效');
-  return { where: `where ${clauses.map(c => `(${c})`).join(' and ')}`, params, order: `${sorts[query.sort] || sorts['updated-desc']} nulls last, wo.id asc` };
+  const dispatchOrder = direction => `substring(trim(wo.dispatch_no) from '[0-9]+$')::numeric ${direction} nulls last, nullif(upper(trim(wo.dispatch_no)), '') collate "C" ${direction}`;
+  const sorts = { 'dispatch-desc':dispatchOrder('desc'), 'dispatch-asc':dispatchOrder('asc'), 'updated-desc':'wo.updated_at desc', 'updated-asc':'wo.updated_at asc', 'created-desc':'wo.created_at desc', 'created-asc':'wo.created_at asc' };
+  if (query.sort && !Object.hasOwn(sorts,query.sort)) throw new HttpError(400, '排序参数无效');
+  return { where: `where ${clauses.map(c => `(${c})`).join(' and ')}`, params, order: `${sorts[query.sort] || sorts['dispatch-desc']} nulls last, wo.id asc` };
 }
 
 export async function workOrderPageRows(scope, query, database = pool) {

@@ -31,6 +31,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
   const [vehicleHistoryLoading, setVehicleHistoryLoading] = useState(false);
   const [vehicleHistoryError, setVehicleHistoryError] = useState("");
 
+  const pendingPlateChoice = useRef<{ input: VehicleLookupInput; organization?: string; model?: string } | undefined>(undefined);
   const generation = useRef(0);
   useEffect(() => () => { generation.current += 1; }, []);
 
@@ -46,6 +47,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
 
   function resetVehicleIdentityRecognition() {
     generation.current += 1;
+    pendingPlateChoice.current = undefined;
     setIdentifierRecognition(initialRecognitionState);
     setVehicleHistory(undefined);
     setVehicleHistoryLoading(false);
@@ -68,7 +70,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
         ? await workOrderApi.recognizeLicensePlate(imageBase64)
         : await workOrderApi.recognizeVin(imageBase64);
       if (current !== generation.current) return;
-      value = normalizeIdentifier(result.value);
+      value = kind === "plate" ? result.value.trim().toUpperCase() : normalizeIdentifier(result.value);
       setIdentifierRecognition((current) => ({
         ...current,
         [kind]: { status: "已识别", value }
@@ -99,7 +101,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
 
   async function lookupVehicleLicense(result: VehicleLicenseOcrResult) {
     const current = beginRequest();
-    const plate = normalizeIdentifier(result.plate);
+    const plate = result.plate.trim().toUpperCase();
     const vin = normalizeIdentifier(result.vin);
     setIdentifierRecognition((current) => ({
       plate: plate ? { status: "已识别", value: plate } : current.plate,
@@ -110,7 +112,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
 
   async function lookupVehicleLicenseForDevelopment(input: VehicleLookupInput) {
     const current = beginRequest();
-    const plate = normalizeIdentifier(input.plate || "");
+    const plate = (input.plate || "").trim().toUpperCase();
     const vin = normalizeIdentifier(input.vin || "");
     setIdentifierRecognition((current) => ({
       plate: plate ? { status: "已识别", value: plate } : current.plate,
@@ -161,6 +163,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
     try {
       const history = await workOrderApi.lookupVehicle(input);
       if (current !== generation.current) return;
+      pendingPlateChoice.current = history.plateChoices?.length ? { input, organization: savedOrganizationCode, model: savedModelCode } : undefined;
       setVehicleHistory(history);
       if (history.status !== "conflict") setDraft((current) => applyVehicleLookup(current, history, savedOrganizationCode, savedModelCode));
     } catch (error) {
@@ -178,6 +181,12 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
     resetVehicleIdentityRecognition,
     scanVehicleIdentifier,
     lookupDraftVehicle,
+    confirmPlateChoice(plate: string) {
+      const pending = pendingPlateChoice.current;
+      if (pending && vehicleHistory?.plateChoices?.includes(plate)) {
+        void runVehicleLookup({ ...pending.input, confirmedPlate: plate }, beginRequest(), pending.organization, pending.model);
+      }
+    },
     lookupVehicleLicense,
     lookupVehicleLicenseForDevelopment,
     selectVehicleReference

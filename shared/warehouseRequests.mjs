@@ -1,3 +1,4 @@
+import {compareDispatchNumbers} from './dispatchNumberSort.mjs';
 export function warehouseRequests(tasks) {
   return tasks.flatMap(task => [...(task.partsRequirement ? [task] : []), ...(task.partsRequests || []).map(parts => ({...task, partsRequirement: parts}))]);
 }
@@ -11,12 +12,13 @@ export function matchesPartsStatus(task,status) {
   if(status==='all')return Boolean(task.partsRequirement && task.partsRequirement.mode!=='none');
   return (['待备料','部分备齐'].includes(status)?canProcessParts(task):true) && partsStatus(task.partsRequirement)===status;
 }
-export function sortWarehouseRequests(tasks,order) {
+export function sortWarehouseRequests(tasks,order = 'dispatch-desc') {
   const time=task=>Date.parse(task.partsRequirement?.recordedAt||'');
   return [...tasks].sort((a,b)=>{
+    if (order === 'dispatch-desc' || order === 'dispatch-asc') return compareDispatchNumbers(a,b,order);
     const left=time(a),right=time(b);
     if(!Number.isFinite(left))return Number.isFinite(right)?1:0;
     if(!Number.isFinite(right))return -1;
-    return (left-right)*(order==='newest'?-1:1) || a.orderId.localeCompare(b.orderId) || (a.partsRequirement?.ownerId||'').localeCompare(b.partsRequirement?.ownerId||'');
+    return (left-right)*(order==='oldest'?1:-1) || a.orderId.localeCompare(b.orderId) || (a.partsRequirement?.ownerId||'').localeCompare(b.partsRequirement?.ownerId||'');
   });
 }

@@ -1,3 +1,4 @@
+import { useDetailScrollLock } from '../../shared/ui/useDetailScrollLock';
 import { ChevronRight, RefreshCw } from 'lucide-react';
 import { ListPagination } from '../../shared/ui/ListPagination';
 import { LoadingState } from "../../shared/ui/LoadingState";
@@ -18,6 +19,7 @@ import { displayTime,metrics,statusFilters,taskStatusLabel,personDisplayName } f
 import './dispatch.css';
 export function DispatchPage({user,view,initialStage}:{user:UserProfile;view:string;initialStage?:string}) {
   const c=useDispatchController(user,view,undefined,initialStage), mobile=!Grid.useBreakpoint().md;
+  useDetailScrollLock(Boolean(c.selectedId));
   const update=(key:string,value:string|undefined)=>c.setFilters(f=>({...f,[key]:value}));
   const taskHeading=useRef<HTMLHeadingElement>(null);
   const [drawerReady,setDrawerReady]=useState(false);
@@ -33,8 +35,8 @@ export function DispatchPage({user,view,initialStage}:{user:UserProfile;view:str
     <div className="dispatch-heading"><div>{c.updatedAt&&<p>更新于 {c.updatedAt}</p>}</div><Button icon={<RefreshCw size={16} aria-hidden="true" />} onClick={()=>{c.setError('');void c.refresh();}} loading={c.loading}>刷新</Button></div>
     {c.error?<Alert type="error" showIcon closable title={c.error} onClose={()=>c.setError('')}/>:null}
     <DispatchFilterBar controller={c} inspection={inspection}/>
-    {c.manager&&view==='派工台'?<DispatchWorkloadChart refreshKey={c.updatedAt} filters={c.filters} onClear={clearWorkload} onSelect={(technicianId,workloadState)=>c.setFilters(f=>({search:f.search,includeCompleted:f.includeCompleted,technicianId,workloadState}))}/>:c.inspectionLead?<DispatchWorkloadBoard summaries={c.summaries} filters={c.filters} onSelect={(technicianId,metric)=>{
-      c.setFilters(f=>({search:f.search,includeCompleted:f.includeCompleted,from:f.from,to:f.to,technicianId,metric}));
+    {c.manager&&view==='派工台'?<DispatchWorkloadChart refreshKey={c.updatedAt} filters={c.filters} onClear={clearWorkload} onSelect={(technicianId,workloadState)=>c.setFilters(f=>({sort:f.sort,search:f.search,includeCompleted:f.includeCompleted,technicianId,workloadState}))}/>:c.inspectionLead?<DispatchWorkloadBoard summaries={c.summaries} filters={c.filters} onSelect={(technicianId,metric)=>{
+      c.setFilters(f=>({sort:f.sort,search:f.search,includeCompleted:f.includeCompleted,from:f.from,to:f.to,technicianId,metric}));
       if(mobile) taskHeading.current?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
     }}/>:null}
     <div className="dispatch-heading"><h3 ref={taskHeading} className="dispatch-task-heading">{chosen?`${personDisplayName(chosen,c.summaries)} · `:''}{c.filters.workloadState?workloadLabels[c.filters.workloadState]:c.filters.metric?(c.filters.metric==='current'?'当前任务':metrics[c.filters.metric as DispatchMetric]):(c.filters.includeCompleted==='true'&&!c.filters.stage?'全部工单':statusFilters.find(option=>option.value===(c.filters.stage||''))?.label||'维修任务')}（{c.list.total}{c.filters.workloadState?' 单':''}）</h3>{c.filters.workloadState?<Button onClick={clearWorkload}>清除负荷筛选</Button>:c.filters.metric?<Button onClick={()=>update('metric',undefined)}>清除数量筛选</Button>:null}</div>

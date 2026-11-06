@@ -27,3 +27,8 @@
 .completed-date-shortcuts .is-selected{background:#fff;color:#2563eb;font-weight:600}
 .completed-custom-dates{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .completed-custom-dates .ant-picker{flex:1;min-width:130px}
+
+.completed-projects .completed-projects-notice {
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}

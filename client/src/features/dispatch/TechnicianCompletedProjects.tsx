@@ -25,9 +25,10 @@ export function TechnicianCompletedProjects({ user }: { user: UserProfile }) {
     </div>
     <CompletedProjectFilterBar filters={filters} setFilters={setFilters}/>
     <div className="completed-projects-total"><span>{user.name} · {filters.from||filters.to?`${filters.from||'不限'} 至 ${filters.to||'不限'}`:dayjs(`${month}-01`).format('YYYY年M月')} · 已完工项目</span><strong>{list.error || list.loading && !list.items.length ? '—' : list.counts?.projects ?? 0}<small> 项</small></strong></div>
+    <Alert className="completed-projects-notice" type="info" showIcon role="note" title="仅统计所选时间范围内本人已完工并检验通过项目。" />
     {list.error && <Alert type="error" title={list.error} />}
     {list.loading && <LoadingState label="正在加载维修项目…" />}
-    {!list.loading && !list.error && !list.items.length && <Empty description="该月暂无已完工项目" />}
+    {!list.loading && !list.error && !list.items.length && <Empty description="所选时段暂无已完工项目" />}
     <ol className="completed-projects-list">
       {list.items.map(order => <li key={order.key}>
         <button type="button" className="completed-project-card" aria-label={`查看维修单 ${order.dispatchNo || order.orderId} ${order.plate}`} onClick={() => setSelectedOrderId(order.orderId)}>
