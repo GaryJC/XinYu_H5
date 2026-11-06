@@ -23,3 +23,6 @@ vite.config.d.ts
 .releases/
 .deployment.lock
 .dist-next-*/
+
+# Local Playwright console logs
+/.playwright-cli/*.log
