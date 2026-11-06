@@ -9,14 +9,15 @@ type FieldProps = {
   disabled?: boolean;
   required?: boolean;
   error?: string;
+  onBlur?: () => void;
   onChange: (value: string) => void;
 };
 
-export function Field({ label, value, suffix, placeholder, disabled, required, error, onChange }: FieldProps) {
+export function Field({ label, value, suffix, placeholder, disabled, required, error, onBlur, onChange }: FieldProps) {
   const id = useId();
   return (
     <Form.Item className="field" label={label} htmlFor={id} required={required} validateStatus={error ? "error" : undefined} help={error ? <span id={`${id}-error`}>{error}</span> : undefined}>
-      <Input id={id} aria-required={required} aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined} status={error ? "error" : undefined} value={value} placeholder={placeholder} disabled={disabled} suffix={suffix} onChange={(event) => onChange(event.target.value)} />
+      <Input onBlur={onBlur} id={id} aria-required={required} aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined} status={error ? "error" : undefined} value={value} placeholder={placeholder} disabled={disabled} suffix={suffix} onChange={(event) => onChange(event.target.value)} />
     </Form.Item>
   );
 }

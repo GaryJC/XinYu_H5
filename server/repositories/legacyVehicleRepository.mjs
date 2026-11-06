@@ -1,51 +1,24 @@
 import { executeSqlServerQuery, executeSqlServerTransaction } from "../database/sqlServerPool.mjs";
 
 export const FIND_LEGACY_VEHICLE_QUERY = `
-  select * from (
-    select top 1
-      vehicle.reid as id,
-      RTRIM(vehicle.ch) as plate,
-      RTRIM(vehicle.sbdm) as vin,
-      COALESCE(NULLIF(RTRIM(model_ref.qc), ''), NULLIF(RTRIM(model_ref.mc), ''), RTRIM(vehicle.cx)) as model,
-      RTRIM(model_ref.bh) as model_code,
-      RTRIM(vehicle.ssdw) as organization_code,
-      RTRIM(customer.mc) as organization_name,
-      1 as plate_matched,
-      0 as vin_matched
+  with vehicles as (
+    select vehicle.*, REPLACE(REPLACE(UPPER(RTRIM(ch)), ' ', ''), '-', '') as plate_key,
+      REPLACE(REPLACE(UPPER(RTRIM(sbdm)), ' ', ''), '-', '') as vin_key
     from dbo.qxclxxb vehicle
-    left join dbo.cxb model_ref on
-      RTRIM(vehicle.cx) = RTRIM(model_ref.bh)
-      or RTRIM(vehicle.cx) = RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.qc)
-      or RTRIM(vehicle.cx) = RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.mc)
-    left join dbo.khxxb customer on RTRIM(customer.bm) = RTRIM(vehicle.ssdw)
-    where
-      @plate <> ''
-      and REPLACE(REPLACE(UPPER(RTRIM(vehicle.ch)), ' ', ''), '-', '') = @plate
-    order by vehicle.reid desc
-  ) plate_result
-  union all
-  select * from (
-    select top 1
-      vehicle.reid as id,
-      RTRIM(vehicle.ch) as plate,
-      RTRIM(vehicle.sbdm) as vin,
-      COALESCE(NULLIF(RTRIM(model_ref.qc), ''), NULLIF(RTRIM(model_ref.mc), ''), RTRIM(vehicle.cx)) as model,
-      RTRIM(model_ref.bh) as model_code,
-      RTRIM(vehicle.ssdw) as organization_code,
-      RTRIM(customer.mc) as organization_name,
-      0 as plate_matched,
-      1 as vin_matched
-    from dbo.qxclxxb vehicle
-    left join dbo.cxb model_ref on
-      RTRIM(vehicle.cx) = RTRIM(model_ref.bh)
-      or RTRIM(vehicle.cx) = RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.qc)
-      or RTRIM(vehicle.cx) = RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.mc)
-    left join dbo.khxxb customer on RTRIM(customer.bm) = RTRIM(vehicle.ssdw)
-    where
-      @vin <> ''
-      and REPLACE(REPLACE(UPPER(RTRIM(vehicle.sbdm)), ' ', ''), '-', '') = @vin
-    order by vehicle.reid desc
-  ) vin_result
+  )
+  select vehicle.reid as id, RTRIM(vehicle.ch) as plate, RTRIM(vehicle.sbdm) as vin,
+    COALESCE(NULLIF(RTRIM(model_ref.qc), ''), NULLIF(RTRIM(model_ref.mc), ''), RTRIM(vehicle.cx)) as model,
+    RTRIM(model_ref.bh) as model_code, RTRIM(vehicle.ssdw) as organization_code, RTRIM(customer.mc) as organization_name,
+    case when @plate <> '' and plate_key = @plate then 1 else 0 end as plate_matched,
+    case when @vin <> '' and vin_key = @vin then 1 else 0 end as vin_matched
+  from vehicles vehicle
+  left join dbo.cxb model_ref on RTRIM(vehicle.cx) in (RTRIM(model_ref.bh),
+    RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.qc), RTRIM(model_ref.bh) + ' ' + RTRIM(model_ref.mc))
+  left join dbo.khxxb customer on customer.bm = vehicle.ssdw
+  where (@plate <> '' and plate_key = @plate) or (@vin <> '' and vin_key = @vin)
+    or (@plate <> '' and @vin = '' and vin_key <> '' and vin_key in
+      (select vin_key from vehicles where plate_key = @plate))
+  order by vehicle.reid desc
 `;
 
 export const FIND_LEGACY_MODEL_CANDIDATES_QUERY = `

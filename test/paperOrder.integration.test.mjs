@@ -141,9 +141,7 @@ test('paper order creation, notification, import and signature-free completion t
     await t.test('imported paper corrections enqueue an update at revision one and ACK the original source',async()=>{
       const {updateCustomerVehicle}=await import('../server/services/customerVehicleUpdateService.mjs');
       assert.equal(imported.legacySyncRevision,0);
-      imported=await updateCustomerVehicle(imported.id,{expectedRevision:0,contact:'更正联系人',phone:'13000000002',
-        model:'润丰车型',modelLegacyCode:'MODEL',organization:'润丰单位',organizationLegacyCode:'ORG'},actor,
-        {enabled:true,readReference:async kind=>({value:kind==='model'?'润丰车型':'润丰单位'})});
+      imported=await updateCustomerVehicle(imported.id,{expectedRevision:0,contact:'更正联系人',phone:'13000000002'},actor,{enabled:true});
       assert.equal(imported.legacySyncRevision,1);assert.equal(imported.legacySyncStatus,'pending');
       assert.ok(imported.customerVehicleUpdatedAt);
       const events=(await pool.query('select * from legacy_sync_outbox where order_id=$1',[imported.id])).rows;

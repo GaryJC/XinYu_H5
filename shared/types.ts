@@ -85,6 +85,8 @@ export type VehicleLookupInput = {
 };
 
 export type VehicleHistoryLookupResult = {
+  models?: Array<{ code: string; name: string }>;
+  organizations?: Array<{ code: string; name: string }>;
   found: boolean;
   status: "found" | "new" | "conflict";
   vehicle?: {
@@ -532,10 +534,6 @@ export type WorkOrderCustomerVehicleUpdate = {
   expectedRevision: number;
   contact: string;
   phone: string;
-  model: string;
-  modelLegacyCode: string;
-  organization: string;
-  organizationLegacyCode: string;
 };
 export type RepairTaskCounts = { pendingAccept: number; inProgress: number; inspection: number; review: number; completed: number };
 

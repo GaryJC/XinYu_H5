@@ -32,14 +32,12 @@ export function useCustomerVehicleEditor(order: WorkOrder, user: UserProfile | u
   function open() {
     if (!canEdit) return;
     setError("");
-    setChange({ expectedRevision: order.legacySyncRevision!, contact: order.customer.contact, phone: order.customer.phone,
-      model: order.vehicle.model, modelLegacyCode: order.vehicle.modelLegacyCode,
-      organization: order.customer.name, organizationLegacyCode: order.customer.legacyCode });
+    setChange({ expectedRevision: order.legacySyncRevision!, contact: order.customer.contact, phone: order.customer.phone });
   }
   async function save() {
     if (!change || running.current || !canEdit) return;
-    if (Object.entries(change).some(([key, value]) => key !== "expectedRevision" && !String(value ?? "").trim())) {
-      setError("请填写四项信息，并选择或新增有编码的车型和所属单位");
+    if (!change.contact.trim() || !change.phone.trim()) {
+      setError("请填写联系人和联系电话");
       return;
     }
     running.current = true;
@@ -49,7 +47,7 @@ export function useCustomerVehicleEditor(order: WorkOrder, user: UserProfile | u
     try {
       const updated = await workOrderApi.updateCustomerVehicle(order.id, change);
       if (current !== generation.current) return;
-      feedback.success("客户及车辆信息已保存");
+      feedback.success("联系人和电话已保存");
       onUpdated(updated);
       setChange(undefined);
     } catch (error) {

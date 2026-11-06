@@ -199,3 +199,16 @@ test("production reference queries fail closed when Runfeng is unconfigured", as
     keys.forEach((key, i) => { if (previous[i] === undefined) delete process.env[key]; else process.env[key] = previous[i]; });
   }
 });
+
+test("collects organizations by VIN, deduplicates codes and excludes reused plates", () => {
+  const rows = [
+    {plate:"P", vin:"B", organization:{code:"wrong",name:"其他车"}},
+    {plate:"P", vin:"A", organization:{code:"org",name:"单位"}},
+    {plate:"P", vin:"A", organization:{code:"ORG",name:"单位"}},
+    {plate:"OLD", vin:"A", organization:{code:"org2",name:"其他单位"}}
+  ];
+  assert.equal(resolveVehicleCandidates(rows, "P", "").status, "conflict");
+  const result = resolveVehicleCandidates(rows, "P", "A");
+  assert.equal(result.vehicle.vin,"A");
+  assert.deepEqual(result.organizations.map(item=>item.code),["org","org2"]);
+});

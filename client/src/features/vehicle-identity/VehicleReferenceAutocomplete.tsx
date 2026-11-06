@@ -99,7 +99,7 @@ export function VehicleReferenceAutocomplete({ kind, value, disabled, placeholde
       aria-label={ariaLabel}
       placeholder={placeholder}
       options={options}
-      open={open}
+      open={!disabled && open}
       allowClear
       filterOption={false}
       notFoundContent={loading ? "正在查询车辆档案…" : emptyContent}

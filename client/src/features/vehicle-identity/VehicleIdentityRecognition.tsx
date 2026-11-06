@@ -12,11 +12,12 @@ type Props = {
   history?: VehicleHistoryLookupResult;
   historyLoading: boolean;
   historyError: string;
+  onRetry: () => void;
   onScan: (kind: IdentifierKind, file: File) => Promise<void>;
   onManualLicenseLookup: (input: VehicleLookupInput) => Promise<void>;
 };
 
-export function VehicleIdentityRecognition({ disabled, recognition, history, historyLoading, historyError, onScan, onManualLicenseLookup }: Props) {
+export function VehicleIdentityRecognition({ disabled, recognition, history, historyLoading, historyError, onRetry, onScan, onManualLicenseLookup }: Props) {
   const [testLicense, setTestLicense] = useState<VehicleLookupInput>({ plate: "", vin: "", model: "", owner: "" });
 
   async function submitTestLicense() {
@@ -77,12 +78,15 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
           showIcon
           type={history.status === "conflict" ? "error" : history.found ? "success" : "info"}
           title={history.message}
+          action={history.found && history.vehicle && ((!history.models?.length && (!history.vehicle.model || !history.vehicle.modelLegacyCode))
+            || (!(history.organizations?.length) && (!history.vehicle.organization?.name || !history.vehicle.organization.code)))
+            ? <Button disabled={disabled} onClick={onRetry}>重新查询</Button> : undefined}
           description={history.vehicle
-            ? `车型：${history.vehicle.model || "-"}；所属单位：${history.vehicle.organization?.name || "-"}；VIN：${history.vehicle.vin || "-"}`
+            ? `车型：${(history.models?.length ?? 0) > 1 ? `${history.models?.length} 个可选车型` : history.vehicle.model || "-"}；所属单位：${(history.organizations?.length ?? 0) > 1 ? `${history.organizations?.length} 个可选单位` : history.vehicle.organization?.name || "-"}；VIN：${history.vehicle.vin || "-"}`
             : undefined}
         />
       ) : null}
-      {historyError ? <Alert showIcon type="warning" title="车辆已识别，但公司系统查询失败" description={historyError} /> : null}
+      {historyError ? <Alert showIcon type="warning" title="车辆已识别，但公司系统查询失败" description={historyError} action={<Button disabled={disabled} onClick={onRetry}>重新查询</Button>} /> : null}
     </div>
   );
 }

@@ -30,14 +30,16 @@ test("existing-plate lookup supplies defaults when no model or organization has 
   assert.equal(result.customer.contact, "送修人"); assert.equal(result.customer.phone, "13000000001");
 });
 
-test("missing Runfeng fields preserve OCR values and their matching codes independently", () => {
+test("missing Runfeng fields clear unrelated OCR names and codes", () => {
   const missingModel = applyVehicleLookup(draft, { ...history, vehicle: { ...history.vehicle, model: " ", modelLegacyCode: "" } });
-  assert.equal(missingModel.vehicle.model, draft.vehicle.model);
-  assert.equal(missingModel.vehicle.modelLegacyCode, draft.vehicle.modelLegacyCode);
+  assert.equal(missingModel.vehicle.model, "");
+  assert.equal(missingModel.vehicle.modelLegacyCode, "");
   assert.equal(missingModel.customer.name, "历史单位");
   const missingOrganization = applyVehicleLookup(draft, { ...history, vehicle: { ...history.vehicle, organization: undefined } });
   assert.equal(missingOrganization.vehicle.model, "历史车型");
-  assert.deepEqual(missingOrganization.customer, draft.customer);
+  assert.equal(missingOrganization.customer.name, "");
+  assert.equal(missingOrganization.customer.legacyCode, "");
+  assert.equal(missingOrganization.customer.contact, draft.customer.contact);
 });
 
 test("Runfeng names without codes never retain codes from different OCR references", () => {
@@ -50,4 +52,23 @@ test("Runfeng names without codes never retain codes from different OCR referenc
 
 test("unmatched vehicles retain recognized fields", () => {
   assert.equal(applyVehicleLookup(draft, { found: false, status: "new" }), draft);
+});
+
+test("multiple Runfeng organizations require a choice, restoring only an allowed saved draft code", () => {
+  const multi = {...history,organizations:[{name:"本车单位一",code:"A"},{name:"本车单位二",code:"B"}]};
+  assert.equal(applyVehicleLookup(draft,multi).customer.legacyCode,"");
+  assert.equal(applyVehicleLookup(draft,multi,"unrelated").customer.name,"");
+  assert.equal(applyVehicleLookup(draft,multi,"B").customer.name,"本车单位二");
+  assert.equal(applyVehicleLookup(draft,multi).vehicle.model,"历史车型");
+});
+
+test("matching an organization keeps a blank contact blank and preserves a manually entered contact", () => {
+  const matchedReference = { found: false, references: { organization: { selected: { value: "历史单位", code: "oldorg" } } } };
+  for (const lookup of [history, matchedReference]) {
+    for (const contact of ["", "送修人"]) {
+      const result = applyVehicleLookup({ ...draft, customer: { ...draft.customer, contact } }, lookup);
+      assert.equal(result.customer.name, "历史单位");
+      assert.equal(result.customer.contact, contact);
+    }
+  }
 });

@@ -275,3 +275,24 @@
 - Cancelling an inspection-deferred item prunes pauses only for workers leaving the current roster, matching ordinary reassignment/edit behavior. Rejoining with a later new project no longer revives the removed pause; coworkers' pauses and pauses for workers with remaining projects are preserved.
 - Added test/multiworkerReviewFixes.test.mjs: the initial six tests reproduced four failures before the fixes; final eight cases cover three reassignment entry points, partial/photo requests, warehouse resolution, mode switching, independent coworkers, review submission/inspection counts, cancellation and rejoining. Fixed a priority-test fixture that incorrectly used already-submitted personal review work as actionable review; it now uses unfinished review items.
 - Final npm run check passed: 979 passing, 30 environment-dependent skips, zero failures, TypeScript/build passed. git diff --check passed. Log: /tmp/multiworker-fix-check.log; initial reproduction: /tmp/multiworker-fix-before.log. Existing large chart/PDF chunk warning remains. No deployment/push or existing business-data changes; no browser or enabled database integration run in this fix pass. The separately reviewed completed-project outsourced/no-inspection mismatch is outside these three fixes and remains open.
+
+## 润丰车辆档案锁定 — 2026-11-06
+
+- 开单的手输车牌和 VIN 原先只更新草稿。现在离开输入框时用当前两个标识查询，修改标识时作废旧请求。重新打开可编辑草稿也要重新匹配，否则档案锁会丢失。
+- 润丰命中时，车型和所属单位连同编码以档案为准。档案缺项须在润丰补全；不能把 OCR 或上一辆车的值留在禁用的输入框。候选、新增及异步新增结果同样须遵守锁定状态。
+
+## 同车多个润丰单位 — 2026-11-06
+
+- 按车辆档案编号取第一条会漏掉同车已有单位。车型沿用匹配档案，所属单位按编码去重；同车牌有多个不同 VIN 时须核对 VIN，避免把其他车辆的单位混入名单。多单位新单默认待选，重新打开草稿只恢复仍在名单中的编码。
+- 鲁B08S3Q 本地车牌手输及相册 OCR 均命中大众和三个单位，分别选中太保E养车与个人（保险）。两条路径均验证单位输入只读、没有新增入口、车型禁用。第一张合成车牌的 Q 被识别成 G，使用 Q 尾部清晰的新图重新走真实 OCR 后正确命中。测试未保存委托。
+
+## 详情联系信息更正 — 2026-11-06
+
+- 原弹窗允许更正四项。现在详情入口和 API 仅允许联系人、电话，SQL 只写这两项业务字段；旧客户端夹带车型或单位会收到 400。更新事件保留原快照和关联，新增 updatedFields 区分历史四项事件与新两项更正，润丰端需识别字段范围。
+
+## 同车多个润丰车型 — 2026-11-06
+
+- 润丰同车牌、同 VIN 也可能有不同车型编码。开单时车型与单位分别按编码去重。多车型新单需明确选择，重开草稿时只恢复仍在本车名单内的车型编码。
+- 鲁B8WF70 的手输及相册车牌 OCR 均出现长安（CA）与铃木-天语（LMTY），新单默认待选。两条路径分别选中不同车型，自由输入均被阻止，均无新增车型入口，未保存委托。
+
+- 新开单时联系人由调度手填。行驶证 OCR 的所有人、润丰历史单位、单位匹配和手选单位都只更新所属单位；回归时需同时检查空白联系人和已经手填的联系人。

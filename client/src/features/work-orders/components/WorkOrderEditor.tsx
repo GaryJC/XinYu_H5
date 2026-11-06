@@ -47,6 +47,15 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
     vehicleHistory, vehicleHistoryLoading, vehicleHistoryError, scanVehicleIdentifier,
     lookupVehicleLicenseForDevelopment, selectVehicleReference, departments, departmentError
   } = controller;
+  const referencesDisabled = !canEditForm || vehicleHistoryLoading || Boolean(vehicleHistoryError)
+    || vehicleHistory?.status === "conflict" || Boolean(vehicleHistory?.found);
+  function editIdentifier(kind: "plate" | "vin", value: string) {
+    controller.resetVehicleIdentityRecognition();
+    updateVehicle(kind, value);
+  }
+  function checkIdentifiers() {
+    if (!vehicleHistory && !vehicleHistoryLoading) void controller.lookupDraftVehicle(draft.vehicle);
+  }
   const confirmationRows=useRepairConfirmationRows(draft,setDraft);
   const directDispatch=useDirectDispatch(draft,setDraft,controller.users,selectedOrder?.id);
   const paperOnly = draft.paperOrder?.mode === "pending";
@@ -159,6 +168,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               history={vehicleHistory}
               historyLoading={vehicleHistoryLoading}
               historyError={vehicleHistoryError}
+              onRetry={() => void controller.lookupDraftVehicle(draft.vehicle)}
               onScan={scanVehicleIdentifier}
               onManualLicenseLookup={lookupVehicleLicenseForDevelopment}
             />
@@ -194,9 +204,9 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             </>}
 
             <div className="field-grid">
-              <Field required error={fieldError("车牌号码")} disabled={!canEditForm} label="车牌号码" value={draft.vehicle.plate} onChange={(value) => updateVehicle("plate", value)} />
+              <Field required error={fieldError("车牌号码")} disabled={!canEditForm} label="车牌号码" value={draft.vehicle.plate} onBlur={checkIdentifiers} onChange={(value) => editIdentifier("plate", value)} />
               <div style={{ marginBottom: 16 }}>
-                <Field required error={fieldError("VIN")} disabled={!canEditForm} label="VIN/底盘号" value={draft.vehicle.vin} onChange={(value) => updateVehicle("vin", value)} />
+                <Field required error={fieldError("VIN")} disabled={!canEditForm} label="VIN/底盘号" value={draft.vehicle.vin} onBlur={checkIdentifiers} onChange={(value) => editIdentifier("vin", value)} />
                 <ImageSourcePicker
                   disabled={!canEditForm || vehicleHistoryLoading}
                   loading={identifierRecognition.vin.status === "识别中"}
@@ -213,10 +223,18 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
               </div>
               <Field required error={fieldError("进厂里程")} disabled={!canEditForm} label="进厂里程" value={draft.vehicle.mileage} suffix="km" onChange={(value) => updateVehicle("mileage", value)} />
               <Form.Item className="field" label="车型" required validateStatus={fieldError("车型") ? "error" : undefined} help={fieldError("车型")}>
+                {(vehicleHistory?.models?.length ?? 0) > 1 ? (
+                  <SavedVehicleChoice label="车型" choices={vehicleHistory!.models!} value={draft.vehicle.modelLegacyCode}
+                    disabled={!canEditForm || Boolean(actionLoading)}
+                    onSelect={item => setDraft(current => ({
+                      ...current, vehicle: { ...current.vehicle, model: item.name, modelLegacyCode: item.code }
+                    }))}
+                  />
+                ) : <>
                 <VehicleReferenceAutocomplete
                   kind="model"
                   ariaLabel="车型"
-                  disabled={!canEditForm}
+                  disabled={referencesDisabled}
                   placeholder="输入至少两个字符查询已有车型"
                   value={draft.vehicle.model}
                   code={draft.vehicle.modelLegacyCode}
@@ -227,7 +245,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 />
                 <VehicleReferenceTags
                   label="车型"
-                  disabled={!canEditForm}
+                  disabled={referencesDisabled}
                   resolution={vehicleHistory?.references?.model}
                   onSelect={(candidate) => selectVehicleReference("model", candidate)}
                 />
@@ -235,41 +253,40 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   kind="model"
                   currentName={draft.vehicle.model}
                   currentCode={draft.vehicle.modelLegacyCode}
-                  disabled={!canEditForm}
+                  disabled={referencesDisabled}
                   openRequest={modelCreateRequest}
                   onCreate={(candidate) => selectVehicleReference("model", candidate)}
                 />
+                </>}
               </Form.Item>
             </div>
             </FormSection>
             <FormSection title="客户联系信息">
             <div className="field-grid">
               <Form.Item className="field" label="车主名称/所属单位" required validateStatus={fieldError("车主名称/所属单位") ? "error" : undefined} help={fieldError("车主名称/所属单位")}>
+                {(vehicleHistory?.organizations?.length ?? 0) > 1 ? (
+                  <SavedVehicleChoice label="车主名称/所属单位" choices={vehicleHistory!.organizations!} value={draft.customer.legacyCode}
+                    disabled={!canEditForm || Boolean(actionLoading)}
+                    onSelect={item => setDraft(current => ({
+                      ...current, customer: { ...current.customer, name: item.name, legacyCode: item.code }
+                    }))}
+                  />
+                ) : <>
                 <VehicleReferenceAutocomplete
                   kind="organization"
                   ariaLabel="车主名称/所属单位"
-                  disabled={!canEditForm}
+                  disabled={referencesDisabled}
                   placeholder="输入至少两个字符查询已有单位"
                   value={draft.customer.name}
                   code={draft.customer.legacyCode}
                   onChange={(value) => updateCustomer("name", value)}
                   onClear={() => updateCustomer("name", "")}
                   onRequestCreate={(name) => setOrganizationCreateRequest({ key: Date.now(), name })}
-                  onSelect={(candidate) => {
-                    setDraft((current) => ({
-                      ...current,
-                      customer: {
-                        ...current.customer,
-                        name: candidate.value,
-                        legacyCode: candidate.code || "",
-                        contact: candidate.value
-                      }
-                    }));
-                  }}
+                  onSelect={(candidate) => selectVehicleReference("organization", candidate)}
                 />
                 <VehicleReferenceTags
                   label="车主名称/所属单位"
-                  disabled={!canEditForm}
+                  disabled={referencesDisabled}
                   resolution={vehicleHistory?.references?.organization}
                   onSelect={(candidate) => selectVehicleReference("organization", candidate)}
                 />
@@ -277,10 +294,11 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   kind="organization"
                   currentName={draft.customer.name}
                   currentCode={draft.customer.legacyCode}
-                  disabled={!canEditForm}
+                  disabled={referencesDisabled}
                   openRequest={organizationCreateRequest}
                   onCreate={(candidate) => selectVehicleReference("organization", candidate)}
                 />
+                </>}
               </Form.Item>
               <Field disabled={!canEditForm} label="联系人" value={draft.customer.contact} onChange={(value) => updateCustomer("contact", value)} />
               <Field required error={fieldError("联系电话")} disabled={!canEditForm} label="联系电话" value={draft.customer.phone} onChange={(value) => updateCustomer("phone", value)} />
@@ -457,4 +475,17 @@ function scrollToFirstFormError() {
     firstError.scrollIntoView({ behavior: "smooth", block: "center" });
     firstError.querySelector<HTMLElement>("input, textarea, [role='combobox']")?.focus({ preventScroll: true });
   }));
+}
+
+function SavedVehicleChoice({ label, choices, value, disabled, onSelect }: {
+  label: string; choices: Array<{ code: string; name: string }>; value: string; disabled: boolean;
+  onSelect: (item: { code: string; name: string }) => void;
+}) {
+  return <Select aria-label={label} placeholder={label === "车型" ? "请选择该车的车型" : "请选择该车的所属单位"}
+    disabled={disabled} showSearch={false} value={value || undefined}
+    options={choices.map(({ code, name }) => ({ value: code, label: name ? `${name}（${code}）` : code }))}
+    onChange={code => {
+      const choice = choices.find(item => item.code === code);
+      if (choice) onSelect(choice);
+    }} />;
 }

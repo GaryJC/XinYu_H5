@@ -22,10 +22,8 @@ test("customer-vehicle correction transactions, concurrency, ordered outbox and 
     const { updateCustomerVehicle: update } = await import("../server/services/customerVehicleUpdateService.mjs");
     const { refreshWorkOrderFromLegacy: refresh } = await import("../server/services/workOrderRefreshService.mjs");
     const actor = { id: "manager", name: "测试管理员", role: "manager", active: true, shopId: "shop-hq" };
-    const input = { expectedRevision: 1, contact: "新联系人", phone: "13000000001", model: "新车型", modelLegacyCode: "NEW",
-      organization: "新单位", organizationLegacyCode: "neworg" };
-    const refs = async kind => ({ value: kind === "model" ? "新车型" : "新单位", code: kind === "model" ? "NEW" : "neworg" });
-    const deps = { enabled: true, readReference: refs };
+    const input = { expectedRevision: 1, contact: "新联系人", phone: "13000000001" };
+    const deps = { enabled: true };
     await pool.query(`insert into work_orders(id,status,advisor,technician,inspector,old_parts_handling,
       legacy_sync_status,legacy_sync_revision,legacy_reid,legacy_document_no,dispatch_no,vehicle_plate,
       vehicle_model,vehicle_model_legacy_code,customer_name,customer_legacy_code,customer_contact,customer_phone,estimated_fee)
@@ -40,17 +38,18 @@ test("customer-vehicle correction transactions, concurrency, ordered outbox and 
     const originalSignature = (await pool.query("select * from signatures")).rows;
     const originalItems = (await pool.query("select * from repair_items")).rows;
     const snapshot = async () => (await pool.query("select * from work_orders")).rows;
-    await t.test("disabled rollout, authorization and failed reference checks never change local data", async () => {
+    await t.test("disabled rollout, authorization and forbidden vehicle fields never change local data", async () => {
       const before = await snapshot();
       await assert.rejects(() => update("test-order", input, actor, { ...deps, enabled: false }), /尚未启用/);
       for (const patch of [{ shopId: "other" }, { role: "technician" }, { active: false }, { role: "advisor", name: "其他顾问" }]) {
         await assert.rejects(() => update("test-order", input, { ...actor, ...patch }, deps), error => error.status === 403);
       }
-      await assert.rejects(() => update("test-order", input, actor, { ...deps, readReference: async () => undefined }), /不一致/);
-      await assert.rejects(() => update("test-order", input, actor, { ...deps, readReference: async () => { throw new Error("Runfeng unavailable"); } }), /unavailable/);
+      for (const patch of [{ model: "新车型" }, { organization: "新单位" }]) {
+        await assert.rejects(() => update("test-order", { ...input, ...patch }, actor, deps), error => error.status === 400);
+      }
       assert.deepEqual(await snapshot(), before);
     });
-    await t.test("outbox failure rolls back correction metadata, audit and all four fields", async () => {
+    await t.test("outbox failure rolls back correction metadata, audit and contact details", async () => {
       const before = await snapshot();
       await pool.query(`create function reject_test_update() returns trigger language plpgsql as $$ begin raise exception 'test outbox failure'; end $$`);
       await pool.query("create trigger reject_test_update before insert on legacy_sync_outbox for each row execute function reject_test_update()");
@@ -69,11 +68,12 @@ test("customer-vehicle correction transactions, concurrency, ordered outbox and 
       assert.equal(event.legacy_reid, "101");
       assert.equal(event.payload.eventType, "updated");
       assert.equal(event.payload.version, 1);
+      assert.deepEqual(event.payload.updatedFields, ["customer.contact","customer.phone"]);
       assert.equal(event.payload.order.dispatchNo, "A123");
       assert.equal(event.payload.order.customer.contact, input.contact);
       assert.equal(event.payload.order.customer.phone, input.phone);
-      assert.equal(event.payload.order.vehicle.model, input.model);
-      assert.equal(event.payload.order.customer.legacyCode, input.organizationLegacyCode);
+      assert.equal(event.payload.order.vehicle.model, "旧车型");
+      assert.equal(event.payload.order.customer.legacyCode, "oldorg");
       assert.equal(event.payload.order.status, "维修中");
       assert.equal(event.payload.order.estimatedFee, 100);
       assert.deepEqual((await pool.query("select * from signatures")).rows, originalSignature);
@@ -115,8 +115,8 @@ test("customer-vehicle correction transactions, concurrency, ordered outbox and 
         vehicle:{model_name:"旧车型",model_code:"OLD",sbdm:"VIN"},customer:{mc:"旧单位"},items:[{reid:301,hh:"检查制动",je:100}] };
       const result = await refresh("test-order", actor, { readSource: async () => source });
       assert.equal(result.customer.contact, input.contact); assert.equal(result.customer.phone, input.phone);
-      assert.equal(result.customer.name, input.organization); assert.equal(result.customer.legacyCode, input.organizationLegacyCode);
-      assert.equal(result.vehicle.model, input.model); assert.equal(result.vehicle.modelLegacyCode, input.modelLegacyCode);
+      assert.equal(result.customer.name, "旧单位"); assert.equal(result.customer.legacyCode, "oldorg");
+      assert.equal(result.vehicle.model, "旧车型"); assert.equal(result.vehicle.modelLegacyCode, "OLD");
     });
     await t.test("each field can be corrected independently without modifying another historical order for the same plate", async () => {
       await pool.query(`insert into work_orders(id,status,advisor,technician,inspector,old_parts_handling,vehicle_plate,customer_contact)
@@ -124,15 +124,11 @@ test("customer-vehicle correction transactions, concurrency, ordered outbox and 
       const history = (await pool.query("select * from work_orders where id='historical-order'")).rows;
       let revision = 2;
       let current = { ...input };
-      for (const patch of [{ contact: "第二位联系人" }, { phone: "0532-12345678" },
-        { model: "另一车型", modelLegacyCode: "OTHER" }, { organization: "另一单位", organizationLegacyCode: "otherorg" }]) {
+      for (const patch of [{ contact: "第二位联系人" }, { phone: "0532-12345678" }]) {
         current = { ...current, ...patch, expectedRevision: revision };
-        const next = await update("test-order", current, actor, { enabled: true, readReference: async kind => ({
-          value: kind === "model" ? current.model : current.organization,
-          code: kind === "model" ? current.modelLegacyCode : current.organizationLegacyCode
-        }) });
+        const next = await update("test-order", current, actor, deps);
         assert.equal(next.customer.contact, current.contact); assert.equal(next.customer.phone, current.phone);
-        assert.equal(next.customer.name, current.organization); assert.equal(next.vehicle.model, current.model);
+        assert.equal(next.customer.name, "旧单位"); assert.equal(next.vehicle.model, "旧车型");
         assert.equal(next.legacySyncRevision, ++revision);
         const event = (await pool.query("select * from claim_legacy_sync_events('test-consumer',20)")).rows[0];
         await pool.query("select acknowledge_legacy_sync_event($1,'test-consumer',101,201,'A123')", [event.event_id]);

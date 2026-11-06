@@ -58,7 +58,6 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
       ...current,
       [kind]: { status: "识别中", value: "" }
     }));
-    setVehicleHistory(undefined);
     setVehicleHistoryError("");
 
     let value: string;
@@ -94,24 +93,8 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
     await runVehicleLookup({ [kind]: value }, current);
   }
 
-  async function lookupVehicleIdentifier(kind: IdentifierKind, rawValue: string) {
-    const current = beginRequest();
-    const value = normalizeIdentifier(rawValue);
-    if (!value) {
-      setVehicleHistory(undefined);
-      setVehicleHistoryError(`请输入${kind === "plate" ? "车牌号码" : "VIN 码"}`);
-      return;
-    }
-
-    setIdentifierRecognition((current) => ({
-      ...current,
-      [kind]: { status: "已识别", value }
-    }));
-    setDraft((current) => ({
-      ...current,
-      vehicle: { ...current.vehicle, [kind]: value }
-    }));
-    await runVehicleLookup({ [kind]: value }, current);
+  async function lookupDraftVehicle({ plate, vin }: VehicleLookupInput, savedOrganizationCode?: string, savedModelCode?: string) {
+    if (plate?.trim() || vin?.trim()) await runVehicleLookup({ plate, vin }, beginRequest(), savedOrganizationCode, savedModelCode);
   }
 
   async function lookupVehicleLicense(result: VehicleLicenseOcrResult) {
@@ -146,8 +129,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
         ? {
             ...current.customer,
             name: input.owner.trim(),
-            legacyCode: "",
-            contact: input.owner.trim()
+            legacyCode: ""
           }
         : current.customer
     }));
@@ -172,7 +154,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
     });
   }
 
-  async function runVehicleLookup(input: VehicleLookupInput, current: number) {
+  async function runVehicleLookup(input: VehicleLookupInput, current: number, savedOrganizationCode?: string, savedModelCode?: string) {
     setVehicleHistory(undefined);
     setVehicleHistoryError("");
     setVehicleHistoryLoading(true);
@@ -180,7 +162,7 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
       const history = await workOrderApi.lookupVehicle(input);
       if (current !== generation.current) return;
       setVehicleHistory(history);
-      if (history.status !== "conflict") setDraft((current) => applyVehicleLookup(current, history));
+      if (history.status !== "conflict") setDraft((current) => applyVehicleLookup(current, history, savedOrganizationCode, savedModelCode));
     } catch (error) {
       if (current === generation.current) setVehicleHistoryError(error instanceof Error ? error.message : "公司系统车辆查询失败");
     } finally {
@@ -195,34 +177,36 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
     vehicleHistoryError,
     resetVehicleIdentityRecognition,
     scanVehicleIdentifier,
-    lookupVehicleIdentifier,
+    lookupDraftVehicle,
     lookupVehicleLicense,
     lookupVehicleLicenseForDevelopment,
     selectVehicleReference
   };
 }
 
-export function applyVehicleLookup(draft: WorkOrderDraft, history: VehicleHistoryLookupResult) {
+export function applyVehicleLookup(draft: WorkOrderDraft, history: VehicleHistoryLookupResult, savedOrganizationCode?: string, savedModelCode?: string) {
   if (history.found && history.vehicle) {
-    const organizationName = history.vehicle.organization?.name?.trim() || "";
-    const model = history.vehicle.model?.trim() || "";
+    const organization = (history.organizations?.length ?? 0) > 1
+      ? history.organizations?.find(item => item.code === savedOrganizationCode)
+      : history.vehicle.organization;
+    const organizationName = organization?.name?.trim() || "";
+    const model = (history.models?.length ?? 0) > 1
+      ? history.models?.find(item => item.code === savedModelCode)
+      : { name: history.vehicle.model, code: history.vehicle.modelLegacyCode };
     return {
       ...draft,
       vehicle: {
         ...draft.vehicle,
         plate: history.vehicle.plate || draft.vehicle.plate,
         vin: history.vehicle.vin || draft.vehicle.vin,
-        model: model || draft.vehicle.model,
-        modelLegacyCode: model ? history.vehicle.modelLegacyCode || "" : draft.vehicle.modelLegacyCode || ""
+        model: model?.name?.trim() || "",
+        modelLegacyCode: model?.code || ""
       },
-      customer: organizationName
-        ? {
-            ...draft.customer,
-            name: organizationName,
-            legacyCode: history.vehicle.organization?.code || "",
-            contact: draft.customer.contact || organizationName
-          }
-        : draft.customer
+      customer: {
+        ...draft.customer,
+        name: organizationName,
+        legacyCode: organization?.code || ""
+      }
     };
   }
 
@@ -250,8 +234,7 @@ function applyReferenceCandidate(draft: WorkOrderDraft, kind: "model" | "organiz
     customer: {
       ...draft.customer,
       name: candidate.value,
-      legacyCode: candidate.code || "",
-      contact: draft.customer.contact || candidate.value
+      legacyCode: candidate.code || ""
     }
   };
 }

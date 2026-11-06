@@ -61,6 +61,7 @@ export function buildLegacySyncPayload({ eventId, revision, eventType, order }) 
     eventId,
     eventType,
     revision,
+    ...(eventType === "updated" ? { updatedFields: ["customer.contact", "customer.phone"] } : {}),
     occurredAt: new Date().toISOString(),
     order: {
       id: order.id,

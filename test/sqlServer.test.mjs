@@ -124,8 +124,8 @@ test("legacy vehicle lookup uses SQL Server 2000 parameters and maps the public 
     async (query, configureRequest) => {
       assert.equal(query, FIND_LEGACY_VEHICLE_QUERY);
       assert.match(query, /dbo\.qxclxxb/i);
-      assert.match(query, /select top 1/i);
-      assert.match(query, /union all/i);
+      assert.doesNotMatch(query, /select top 1/i);
+      assert.match(query, /order by vehicle.reid desc/i);
       assert.match(query, /dbo\.khxxb/i);
       configureRequest({
         input(name, type, value) {

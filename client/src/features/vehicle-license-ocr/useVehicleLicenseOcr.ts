@@ -124,7 +124,6 @@ export function useVehicleLicenseOcr({ actor, draft, setDraft, onRecognized }: O
           ...current.customer,
           name: result.owner || current.customer.name,
           legacyCode: "",
-          contact: result.owner || current.customer.contact,
           address: result.address || current.customer.address
         }
       }));

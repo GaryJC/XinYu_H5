@@ -44,16 +44,26 @@ export async function lookupVehicleInCompanySystem({ plate, vin, model, owner } 
       found: false,
       status: "conflict",
       conflicts: vehicleResolution.conflicts,
-      message: "车牌和 VIN 分别匹配到不同车辆，已停止自动回填，请核对行驶证"
+      message: vehicleResolution.message || "车牌和 VIN 分别匹配到不同车辆，已停止自动回填，请核对行驶证"
     };
   }
 
   if (vehicleResolution.vehicle) {
+    const { vehicle, models, organizations } = vehicleResolution;
+    const choices = [models.length > 1 && "车型", organizations.length > 1 && "所属单位"].filter(Boolean);
     return {
       found: true,
       status: "found",
-      vehicle: publicVehicle(vehicleResolution.vehicle),
-      message: "已匹配到润丰车辆档案，已有车型和所属单位已优先回填；缺失信息请核对补全"
+      vehicle: {
+        ...publicVehicle(vehicle),
+        model: models.length > 1 ? "" : models[0]?.name || vehicle.model,
+        modelLegacyCode: models.length > 1 ? "" : models[0]?.code || vehicle.modelLegacyCode || "",
+        organization: organizations.length > 1 ? undefined : organizations[0] || vehicle.organization
+      },
+      models,
+      organizations,
+      message: choices.length ? `请从该车的润丰档案中选择本次开单的${choices.join("和")}`
+        : "已匹配到润丰车辆档案，车型和所属单位已锁定，如需更正请先更新润丰档案"
     };
   }
 
@@ -148,16 +158,37 @@ export async function createCompanyVehicleReference({ kind, name, code } = {}, c
 export function resolveVehicleCandidates(candidates, normalizedPlate, normalizedVin) {
   const plateMatch = normalizedPlate ? candidates.find((item) => item.plateMatched ?? normalizeIdentifier(item.plate) === normalizedPlate) : undefined;
   const vinMatch = normalizedVin ? candidates.find((item) => item.vinMatched ?? normalizeIdentifier(item.vin) === normalizedVin) : undefined;
-  if (plateMatch && vinMatch && plateMatch.id !== vinMatch.id) {
+  const exact = normalizedPlate && normalizedVin && candidates.find(row =>
+    normalizeIdentifier(row.plate) === normalizedPlate && normalizeIdentifier(row.vin) === normalizedVin);
+  const plateVins = new Set(candidates.filter(row => normalizeIdentifier(row.plate) === normalizedPlate)
+    .map(row => normalizeIdentifier(row.vin)).filter(Boolean));
+  if (!exact && plateMatch && (vinMatch || plateVins.size > 1)) {
     return {
       status: "conflict",
+      message: vinMatch ? undefined : "该车牌对应多个 VIN，请核对并输入 VIN",
       conflicts: [
         { identifier: "plate", plate: plateMatch.plate, vin: plateMatch.vin },
-        { identifier: "vin", plate: vinMatch.plate, vin: vinMatch.vin }
+        ...(vinMatch ? [{ identifier: "vin", plate: vinMatch.plate, vin: vinMatch.vin }] : [])
       ]
     };
   }
-  return { status: plateMatch || vinMatch ? "found" : "new", vehicle: vinMatch || plateMatch };
+  const vehicle = exact || vinMatch || plateMatch;
+  if (!vehicle) return { status: "new" };
+  const vin = normalizeIdentifier(vehicle.vin) || [...plateVins][0];
+  const organizations = new Map();
+  const models = new Map();
+  for (const row of candidates) {
+    const rowVin = normalizeIdentifier(row.vin);
+    const sameVehicle = rowVin ? rowVin === vin : normalizeIdentifier(row.plate) === normalizeIdentifier(vehicle.plate) && plateVins.size <= 1;
+    if (!sameVehicle) continue;
+    const modelCode = row.modelLegacyCode?.trim();
+    if (modelCode && !models.has(modelCode.toUpperCase())) {
+      models.set(modelCode.toUpperCase(), { code: modelCode, name: row.model });
+    }
+    const code = row.organization?.code?.trim().toUpperCase();
+    if (code && !organizations.has(code)) organizations.set(code, row.organization);
+  }
+  return { status: "found", vehicle, models: [...models.values()], organizations: [...organizations.values()] };
 }
 
 export function resolveReference(input, candidates, requireUniqueCode) {

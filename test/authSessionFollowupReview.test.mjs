@@ -135,7 +135,7 @@ function workbench() {
     '../../shared/api/httpClient':http,'../work-orders/api/workOrderApi':{workOrderApi:api},'../work-orders/hooks/useWorkOrderDraft':draft,
     '../work-orders/hooks/createWorkOrderWorkflowActions':{createWorkOrderWorkflowActions:()=>({})},
     '../vehicle-license-ocr/useVehicleLicenseOcr':{useVehicleLicenseOcr:()=>({ocrState:{vehicleLicense:{status:'未识别'}},resetOcr(){resets.ocr++;}})},
-    '../vehicle-identity/useVehicleIdentityRecognition':{useVehicleIdentityRecognition:()=>({resetVehicleIdentityRecognition(){resets.identity++;}})},
+    '../vehicle-identity/useVehicleIdentityRecognition':{useVehicleIdentityRecognition:()=>({lookupDraftVehicle(){},resetVehicleIdentityRecognition(){resets.identity++;}})},
     './workbenchConfig':{navItems:[{label:'委托开单',roles:['advisor','manager']}],primaryNavByRole:{advisor:'委托开单',manager:'委托开单'}},
     '../dispatch/dispatchAvailability':{dispatchEnabled:false,isDispatchNavigation:()=>false}
   };

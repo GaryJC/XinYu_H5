@@ -16,13 +16,11 @@ export async function lockCustomerVehicleOrder(client, id, actor, expectedRevisi
 
 export async function applyCustomerVehicleUpdate(client, order, input, actor) {
   await client.query(`update work_orders set customer_contact=$2,customer_phone=$3,
-    vehicle_model=$4,vehicle_model_legacy_code=$5,customer_name=$6,customer_legacy_code=$7,
-    customer_vehicle_updated_at=now(),customer_vehicle_updated_by=$8,updated_at=now() where id=$1`,
-  [order.id,input.contact,input.phone,input.model,input.modelLegacyCode,input.organization,input.organizationLegacyCode,actor.name]);
-  // An open supplemental-signature page may still show the previous vehicle or
-  // organization. Revoke only unused sessions; existing signatures stay intact.
+    customer_vehicle_updated_at=now(),customer_vehicle_updated_by=$4,updated_at=now() where id=$1`,
+  [order.id,input.contact,input.phone,actor.name]);
+  // An open supplemental-signature page may still show the previous contact details. Revoke only unused sessions; existing signatures stay intact.
   await client.query("update signature_tokens set expires_at=clock_timestamp() where order_id=$1 and not used", [order.id]);
   const { expectedRevision, ...after } = input;
   await client.query("insert into audit_logs(order_id,actor,action) values($1,$2,$3)",
-    [order.id, actor.name, `修改联系及车辆信息：${JSON.stringify({ before: customerVehicleValues(order), after })}`]);
+    [order.id, actor.name, `修改联系人和电话：${JSON.stringify({ before: customerVehicleValues(order), after })}`]);
 }

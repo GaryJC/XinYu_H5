@@ -31,6 +31,8 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
   const [codeEdited, setCodeEdited] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [check, setCheck] = useState<CheckState>({ status: "idle", message: "" });
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
   const requestSequence = useRef(0);
 
   useEffect(() => {
@@ -67,7 +69,11 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
   }, [code, kind, maxLength, name, open]);
 
   useEffect(() => {
-    if (openRequest) showModal(openRequest.name);
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
+  useEffect(() => {
+    if (!disabled && openRequest) showModal(openRequest.name);
   }, [openRequest?.key]);
 
   function showModal(requestedName?: string) {
@@ -93,6 +99,7 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
     setSubmitting(true);
     try {
       const result = await workOrderApi.createVehicleReference(kind, normalizedName, code);
+      if (disabledRef.current) return;
       feedback.success(`${label}已保存并选用`);
       onCreate(result);
       setOpen(false);
@@ -116,7 +123,7 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
       </Button>
       {currentCode ? <span>当前编码：{currentCode}</span> : <span>未选择已有编码时，请新增{label}</span>}
       <FormDialog
-        open={open}
+        open={open && !disabled}
         title={`新增${label}`}
         okText="写入润丰并使用"
         cancelText="取消"

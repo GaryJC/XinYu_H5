@@ -74,7 +74,7 @@ export function useWorkbenchController() {
     vehicleHistoryError,
     resetVehicleIdentityRecognition,
     scanVehicleIdentifier,
-    lookupVehicleIdentifier,
+    lookupDraftVehicle,
     lookupVehicleLicense,
     lookupVehicleLicenseForDevelopment,
     selectVehicleReference
@@ -96,7 +96,11 @@ export function useWorkbenchController() {
   );
   const licenseHistory=useVehicleLicenseHistory({plate:draft.vehicle.plate,vin:draft.vehicle.vin,fileId:vehicleLicenseFileId||draft.inspection.vehicleLicenseFileId,orderId:selectedId||undefined,userId:currentUser?.id,
     enabled:Boolean(currentUser)&&canEditForm&&!draft.vehicle.isMilitary&&ocrState.vehicleLicense.status!=='识别中'&&(!selectedOrder||!vehicleLicenseFileId||vehicleLicenseFileId!==selectedOrder.inspection.vehicleLicenseFileId||draft.vehicle.vin!==selectedOrder.vehicle.vin),
-    onReuse:(fileId,vin)=>{resetOcr([],fileId);setDraft(current=>({...current,vehicle:{...current.vehicle,vin},inspection:{...current.inspection,vehicleLicenseFileId:fileId}}));}});
+    onReuse:(fileId,vin)=>{
+      resetOcr([],fileId);
+      setDraft(current=>({...current,vehicle:{...current.vehicle,vin},inspection:{...current.inspection,vehicleLicenseFileId:fileId}}));
+      if (vin !== draft.vehicle.vin) void lookupDraftVehicle({plate:draft.vehicle.plate,vin});
+    }});
   const totalLabor = useMemo(() => sumLabor(draft.repairItems), [draft.repairItems]);
   const technicianOptions = useMemo(() => users.filter((user) => user.active && hasRole(user, 'technician')).map((user) => user.name), [users]);
   const inspectorOptions = useMemo(() => users.filter((user) => user.active && hasRole(user, 'inspector')).map((user) => user.name), [users]);
@@ -351,6 +355,10 @@ export function useWorkbenchController() {
     paperPhotos.reset();
     resetOcr(order.ocrRecords.filter(record => !order.inspection.replacedPhotoIds?.includes(record.fileId)), order.inspection.vehicleLicenseFileId || order.files?.find(file => file.kind === "vehicle_license" && !order.inspection.replacedPhotoIds?.includes(file.id))?.id);
     resetVehicleIdentityRecognition();
+    if (isUnsignedOrderEditable(order) && canCreateOrder(role) && order.shop.id === currentUser?.shopId
+      && (role === "manager" || order.advisor === currentUser?.name) && order.paperOrder?.mode !== "pending") {
+      void lookupDraftVehicle(order.vehicle, order.customer.legacyCode, order.vehicle.modelLegacyCode);
+    }
   }
 
   function startNewOrder() {
@@ -368,7 +376,12 @@ export function useWorkbenchController() {
     if (errors.length) feedback.warning(errors[0]);
   }
 
+  const vehicleLookupIssue = vehicleHistoryLoading ? "正在查询润丰车辆档案，请稍候"
+    : vehicleHistoryError ? "润丰车辆查询失败，请重新查询后再保存"
+    : vehicleHistory?.status === "conflict" ? vehicleHistory.message : "";
+
   async function saveDraft() {
+    if (vehicleLookupIssue) { showFormErrors([vehicleLookupIssue]); return; }
     if (licenseHistory.busy || preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading()) { showFormErrors(["照片正在上传，请等待上传完成"]); return; }
     if (!canCreateOrder(role)) {
       showFormErrors(["当前角色不能创建或编辑委托单"]);
@@ -401,6 +414,7 @@ export function useWorkbenchController() {
   async function reportMissingVehicleLicense(reason:string) {
     if(!draft.vehicle.plate.trim()||!/^[A-Z0-9]{17}$/i.test(draft.vehicle.vin.trim()))return '请先填写车牌和17位 VIN，再办理行驶证缺失备案';
     if(!canEditForm)return '当前委托单不可编辑，无法办理行驶证缺失备案';
+    if (vehicleLookupIssue) return vehicleLookupIssue;
     if(licenseHistory.busy || preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading())return '照片正在上传或复用，请等待完成后再办理备案';
     setActionLoading('save');showFormErrors([]);
     try {
@@ -428,6 +442,7 @@ export function useWorkbenchController() {
       setSelectedId(null);
       preRepairPhotos.reset();
       paperPhotos.reset();
+      resetVehicleIdentityRecognition();
       resetDraft(undefined, currentUser?.name || "");
       await loadOrders(role, null);
       await loadDashboard(role);
@@ -450,6 +465,7 @@ export function useWorkbenchController() {
       } catch (error) { feedback.error(error); setFormErrors([actionError(error, "恢复客户签字失败")]);return undefined; }
       finally { setActionLoading(""); }
     }
+    if (vehicleLookupIssue) { showFormErrors([vehicleLookupIssue]); return; }
     if (licenseHistory.busy || preRepairPhotos.isUploading() || paperPhotos.isUploading() || isVehicleLicenseUploading()) { showFormErrors(["照片正在上传，请等待上传完成"]); return; }
     const errors = validateBeforeSignature();
     if (errors.length) {
@@ -481,6 +497,7 @@ export function useWorkbenchController() {
     if (paperPhotos.isUploading() || preRepairPhotos.isUploading() || isVehicleLicenseUploading()) {showFormErrors(["照片正在上传，请等待上传完成"]);return;}
     if (!draft.paperOrder?.photoIds.length) {showFormErrors(["请上传纸质委托书照片"]);return;}
     const completing=draft.paperOrder.mode==="dingtalk";
+    if (completing && vehicleLookupIssue) { showFormErrors([vehicleLookupIssue]); return; }
     if(completing) {
       const errors=validateBeforeSignature();
       if(errors.length) {showFormErrors(errors);return;}
@@ -502,10 +519,10 @@ export function useWorkbenchController() {
     const errors = [...validateWorkOrderDraft(draft), ...(draft.paperOrder ? [] : missingPhotoErrors(draft.inspection.preRepairPhotos))];
     if(!draft.vehicle.isMilitary&&!hasLicense&&!isCurrentVehicleLicenseException(draft.vehicleLicenseException,draft.vehicle))errors.push('请上传行驶证照片，或选择“本次无法提供行驶证”并填写理由');
     if (!draft.vehicle.modelLegacyCode.trim()) {
-      errors.push("车型尚未确认，请从搜索结果中选择，或新增车型并确认编码");
+      errors.push((vehicleHistory?.models?.length ?? 0) > 1 ? "请选择这辆车在润丰已有的车型" : vehicleHistory?.found ? "请先在润丰补全该车的车型编码，再重新查询" : "车型尚未确认，请从搜索结果中选择，或新增车型并确认编码");
     }
     if (!draft.customer.legacyCode.trim()) {
-      errors.push("所属单位尚未确认，请从搜索结果中选择，或新增所属单位并确认编码");
+      errors.push((vehicleHistory?.organizations?.length ?? 0) > 1 ? "请选择这辆车在润丰已有的所属单位" : vehicleHistory?.found ? "请先在润丰补全该车的所属单位编码，再重新查询" : "所属单位尚未确认，请从搜索结果中选择，或新增所属单位并确认编码");
     }
     return errors;
   }
@@ -594,7 +611,8 @@ export function useWorkbenchController() {
     scanVehicleLicense,
     confirmVehicleLicenseOcr,
     scanVehicleIdentifier,
-    lookupVehicleIdentifier,
+    lookupDraftVehicle,
+    resetVehicleIdentityRecognition,
     lookupVehicleLicenseForDevelopment,
     selectVehicleReference,
     updateDraft,

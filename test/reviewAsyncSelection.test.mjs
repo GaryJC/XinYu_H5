@@ -80,7 +80,7 @@ test('two reads of the same tender keep the most recent response',async()=>{
 test('vehicle lookup for an old draft must not populate a newly opened draft',async()=>{
  const gate=deferred();let draft={vehicle:{plate:''},customer:{}};
  const render=hook('../client/src/features/vehicle-identity/useVehicleIdentityRecognition.ts','useVehicleIdentityRecognition',{lookupVehicle:()=>gate.promise},[{setDraft:update=>{draft=update(draft);}}]);
- const loading=render().lookupVehicleIdentifier('plate','OLD');render().resetVehicleIdentityRecognition();draft={vehicle:{plate:'NEW'},customer:{}};
+ const loading=render().lookupDraftVehicle({plate:'OLD'});render().resetVehicleIdentityRecognition();draft={vehicle:{plate:'NEW'},customer:{}};
  gate.resolve({found:true,status:'found',vehicle:{plate:'OLD',vin:'old-vin',organization:{name:'旧客户',code:'old'}}});await loading;
  assert.equal(draft.vehicle.plate,'NEW');assert.equal(draft.customer.name,undefined);assert.equal(render().vehicleHistory,undefined);
 });
@@ -89,9 +89,28 @@ test('new vehicle lookup wins when an older request finishes later',async()=>{
  const gate=deferred();let draft={vehicle:{plate:''},customer:{}};
  const api={lookupVehicle:async({plate})=>plate==='OLD'?gate.promise:{found:true,status:'found',vehicle:{plate:'NEW'}}};
  const render=hook('../client/src/features/vehicle-identity/useVehicleIdentityRecognition.ts','useVehicleIdentityRecognition',api,[{setDraft:update=>{draft=update(draft);}}]);
- const old=render().lookupVehicleIdentifier('plate','OLD');await render().lookupVehicleIdentifier('plate','NEW');
+ const old=render().lookupDraftVehicle({plate:'OLD'});await render().lookupDraftVehicle({plate:'NEW'});
  gate.resolve({found:true,status:'found',vehicle:{plate:'OLD'}});await old;
  assert.equal(draft.vehicle.plate,'NEW');assert.equal(render().vehicleHistory.vehicle.plate,'NEW');
+});
+
+test('both plate scans and manually entered VIN apply saved model and organization codes',async()=>{
+ let draft={vehicle:{plate:''},customer:{}};
+ const inputs=[];
+ const vehicle={plate:'辽A12345',vin:'LSVNV2182E2123456',model:'历史车型',modelLegacyCode:'M',organization:{name:'历史单位',code:'O'}};
+ const api={recognizeLicensePlate:async()=>({value:vehicle.plate}),lookupVehicle:async input=>{
+  inputs.push(input);return {found:true,status:'found',vehicle};
+ }};
+ const render=hook('../client/src/features/vehicle-identity/useVehicleIdentityRecognition.ts','useVehicleIdentityRecognition',api,[{setDraft:update=>{draft=update(draft);}}]);
+ await render().scanVehicleIdentifier('plate',{});
+ assert.equal(inputs[0].plate,vehicle.plate);
+ assert.equal(draft.vehicle.modelLegacyCode,'M');
+ render().resetVehicleIdentityRecognition();
+ draft={vehicle:{vin:vehicle.vin},customer:{}};
+ await render().lookupDraftVehicle(draft.vehicle);
+ assert.equal(inputs[1].vin,vehicle.vin);
+ assert.equal(render().vehicleHistory.found,true);
+ assert.equal(draft.customer.legacyCode,'O');
 });
 
 test('late plate OCR cannot start a lookup or modify a reset draft',async()=>{

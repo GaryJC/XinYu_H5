@@ -64,9 +64,9 @@ test('opening project validation and supplemental signature correction transacti
     await pool.query("insert into users(id,name,role,shop_id,active) values($1,$2,'manager','shop-hq',true)", [actor.id, actor.name]);
     const technician = { id: 'opening-technician', name: '开单测试维修工', role: 'technician', active: true, shopId: 'shop-hq' };
     await pool.query("insert into users(id,name,role,shop_id,active,legacy_employee_code,legacy_employee_name,legacy_employee_department,legacy_employee_bound_at) values($1,$2,'technician','shop-hq',true,'T001',$3,'测试部门',now())", [technician.id, technician.name, technician.name]);
-    const before = { expectedRevision: 1, contact: '原联系人', phone: '13800000000', model: '原车型', modelLegacyCode: 'OLD', organization: '原单位', organizationLegacyCode: 'ORG1' };
-    const change = { ...before, contact: '新联系人', phone: '13900000000', model: '新车型', modelLegacyCode: 'NEW', organization: '新单位', organizationLegacyCode: 'ORG2' };
-    const deps = { enabled: true, readReference: async kind => ({ value: kind === 'model' ? change.model : change.organization }) };
+    const before = { expectedRevision: 1, contact: '原联系人', phone: '13800000000' };
+    const change = { ...before, contact: '新联系人', phone: '13900000000' };
+    const deps = { enabled: true };
     let sequence = 100;
     async function seed() {
       const id = `order-${randomUUID()}`, fileId = randomUUID();
@@ -84,14 +84,14 @@ test('opening project validation and supplemental signature correction transacti
     async function tokenState(token) {
       return (await pool.query('select used,expires_at from signature_tokens where token=$1', [token])).rows[0];
     }
-    await t.test('a previously opened customer page cannot sign after its organization or vehicle changes', async () => {
+    await t.test('a previously opened customer page cannot sign after its contact details change', async () => {
       const { id, token, fileId } = await seed();
       const preview = await loadCustomerSignature(token);
-      assert.equal(preview.order.customerName, before.organization);
-      assert.equal(preview.order.vehicle.model, before.model);
+      assert.equal(preview.order.customerName, '原单位');
+      assert.equal(preview.order.vehicle.model, '原车型');
       const corrected = await updateCustomerVehicle(id, change, actor, deps);
       assert.equal(corrected.status, '维修中');
-      assert.equal(corrected.customer.name, change.organization);
+      assert.equal(corrected.customer.name, '原单位');
       let created = false;
       await assert.rejects(() => db.signWorkOrderByToken(token, null, null, async () => { created = true; return { id: fileId }; }), error => error.status === 404);
       assert.equal(created, false, 'stale public signature is rejected before storing an image');
@@ -100,11 +100,11 @@ test('opening project validation and supplemental signature correction transacti
       assert.equal((await pool.query('select count(*) from signatures where order_id=$1', [id])).rows[0].count, '0');
       const renewed = await db.createSignatureTokenForOrder(id, actor.name, { signatureMode: 'remote' });
       assert.notEqual(renewed.signatureToken, token);
-      assert.equal((await loadCustomerSignature(renewed.signatureToken)).order.customerName, change.organization);
+      assert.equal((await loadCustomerSignature(renewed.signatureToken)).order.customerName, '原单位');
       const signed = await db.signWorkOrderByToken(renewed.signatureToken, null, null, async () => ({ id: fileId }));
       assert.equal(signed.status, '维修中');
       assert.equal(signed.customerSignatureReview.state, 'pending');
-      assert.equal(signed.signatures.customer, change.organization);
+      assert.equal(signed.signatures.customer, '原单位');
     });
     await t.test('unchanged saves retain the current supplemental session', async () => {
       const { id, token } = await seed();
@@ -125,10 +125,10 @@ test('opening project validation and supplemental signature correction transacti
       }
       assert.deepEqual(await tokenState(token), state);
       const original = await db.findWorkOrderById(pool, id);
-      assert.equal(original.customer.name, before.organization);
-      assert.equal(original.vehicle.model, before.model);
+      assert.equal(original.customer.name, '原单位');
+      assert.equal(original.vehicle.model, '原车型');
       assert.equal((await loadCustomerSignature(token)).state, 'pending');
-      assert.equal((await pool.query('select count(*) from audit_logs where order_id=$1 and action like $2', [id, '修改联系及车辆信息%'])).rows[0].count, '0');
+      assert.equal((await pool.query('select count(*) from audit_logs where order_id=$1 and action like $2', [id, '修改联系人和电话%'])).rows[0].count, '0');
     });
     await t.test('already recorded and confirmed signatures remain historical evidence', async () => {
       const { id, token, fileId } = await seed();
