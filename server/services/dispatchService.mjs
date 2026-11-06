@@ -12,7 +12,7 @@ import { inspectionReturnStats } from '../domain/inspectionReturnStats.mjs';
 import { listInspectionReturns } from '../repositories/inspectionReturnRepository.mjs';
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import {actionParts,individualRepair} from '../domain/individualRepair.mjs';
-import {enqueueRepairWriteback} from '../repositories/repairWritebackRepository.mjs';
+import {enqueueRepairWriteback,enqueueRoundWithdrawals} from '../repositories/repairWritebackRepository.mjs';
 import {wakeRepairWriteback} from '../workers/repairWritebackWorker.mjs';
 import { assertPartsPhotos, assertVehicleNameplate } from '../repositories/partsRequirementRepository.mjs';
 import { repairCatalog,saveRepairRound } from '../repositories/repairRoundRepository.mjs';
@@ -129,6 +129,10 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
     const {rows:[event]}=await client.query(`insert into dispatch_events(order_id,actor_id,actor_name,request_id,request_body,action,detail) values($1,$2,$3,$4,$5,$6,$7) returning id`,[id,actor.id,actor.name,input.requestId,JSON.stringify(input),input.action,JSON.stringify(detail)]);
     if(input.deferredItemIds?.length)await enqueueDeferredNotifications(client,task,next,event.id,currentActor,'deferred',input.deferredItemIds,input.deferredReason,people,input.requestId);
     if(['inspect','complete-outsourced'].includes(input.action)&&next.stage==='维修完成')await enqueueRepairWriteback(client,next,event.id);
+    if(input.action==='inspect'&&next.stage!=='维修完成'&&next.repairRound) {
+      const withdrawn=[...(input.deferredItemIds??[]),...(input.rejectedItemIds??[])];
+      if(withdrawn.length)await enqueueRoundWithdrawals(client,next,event.id,withdrawn);
+    }
     if(input.action==='edit-repair-items'&&task.stage!=='维修完成'&&next.stage==='维修完成')await enqueueRepairWriteback(client,next,event.id,{deferValidation:true});
     await client.query('insert into audit_logs(order_id,actor,action) values($1,$2,$3)',[id,actor.name,`派工：${input.action}${input.reason?` · ${input.reason}`:''}`]);
     if(input.action==='retry-scheduler-notifications') {

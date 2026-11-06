@@ -23,7 +23,7 @@ export function assertLegacyRepairHeaders(rows,snapshot,{checkMutable=true}={}) 
  if(rows.some(r=>r.plate!==snapshot.plate||r.department!==snapshot.departmentCode||Number(r.dh)!==snapshot.documentNo))throw new Error('润丰派工号对应的车辆、部门或内部单号不一致');
  if(checkMutable&&rows.some(r=>r.deleted==='1'||r.settled||r.approved==='1'))throw new Error('润丰单据已删除、结算或审核，禁止替换项目');
 }
-export async function replaceLegacyRepairItems(snapshot,{executeTransaction=executeSqlServerTransaction,source=process.env.RUNFENG_REPAIR_WRITEBACK_SOURCE,allowedDispatchNos=writebackDispatchAllowlist()}={}) {
+export async function replaceLegacyRepairItems(snapshot,{executeTransaction=executeSqlServerTransaction,source=process.env.RUNFENG_REPAIR_WRITEBACK_SOURCE,allowedDispatchNos=writebackDispatchAllowlist(),readRoundHistory=async()=>[]}={}) {
  validateWritebackSnapshot(snapshot);
  if(allowedDispatchNos&&!allowedDispatchNos.includes(snapshot.dispatchNo))throw new Error('当前派工号未在润丰直写测试白名单中');
  if(!source||!/^[a-zA-Z0-9_-]{1,60}$/.test(source))throw new Error('请配置唯一 RUNFENG_REPAIR_WRITEBACK_SOURCE');
@@ -49,7 +49,8 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
   }
   const pending=[];
   for(const header of headers||[]) {
-   const documentKey=`${key}:${header.wd===''?'internal':'external'}`;
+   const suffix=header.wd==='1'&&snapshot.operation==='write-round'?`external-rounds-${header.reid}`:header.wd===''?'internal':'external';
+   const documentKey=`${key}:${suffix}`;
    const existing=await execute('select payload_hash from dbo.h5_repair_writeback_receipts with (updlock,holdlock) where event_key=@event_key',(req,sql)=>req.input('event_key',sql.VarChar(150),documentKey));
    if(existing.recordset?.[0]) {
     if(!compatibleHashes.has(existing.recordset[0].payload_hash.trim()))throw new Error('润丰写回幂等键对应内容不一致');
@@ -78,7 +79,20 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
   for(const header of pending) {
    const target=(req,sql)=>{req.input('wd',sql.Char(1),header.wd);req.input('dh',sql.Int,Number(header.dh));};
    if(snapshot.operation==='write-round') {
-    await writeInternalRound(execute,target,source,snapshot,header);
+    let rounds=[snapshot];
+    if(header.wd==='1') {
+     const last=(await readRoundHistory({latestOnly:true})).at(-1);
+     if(last) {
+      const priorKey=`${source}:${last.event_id}:external-rounds-${header.reid}`;
+      const prior=await execute('select payload_hash from dbo.h5_repair_writeback_receipts with (updlock,holdlock) where event_key=@event_key',
+       (req,sql)=>req.input('event_key',sql.VarChar(150),priorKey));
+      if(!prior.recordset?.length) {
+       const history=await readRoundHistory();
+       rounds=latestRoundItems([...history,{snapshot}]);
+      }
+     }
+    }
+    for(const round of rounds)await writeInternalRound(execute,target,source,round,header);
    } else if(snapshot.operation==='remove') {
     // Without a published position, the original row may not yet carry the
     // deferred prefix. Match both exact names, require uniqueness, and treat
@@ -113,9 +127,47 @@ export async function replaceLegacyRepairItems(snapshot,{executeTransaction=exec
  });
 }
 
+// Fold successive inspections before filling a late external document. Never
+// replay superseded names or recreate a row that a later inspection withdrew.
+function latestRoundItems(history) {
+ const rounds=new Map();
+ for(const {snapshot,status} of history) {
+  const items=rounds.get(snapshot.repairRound)??new Map();
+  rounds.set(snapshot.repairRound,items);
+  // Staff confirmed this result in Runfeng. Its snapshot may lack bindings
+  // or describe rows that were never mapped. Retire older automatic values.
+  if(status==='manual') {
+   if(!snapshot.partial)items.clear();
+   else for(const id of snapshot.removedItemIds??[])items.delete(id);
+   continue;
+  }
+  validateWritebackSnapshot(snapshot);
+  if(!snapshot.partial)for(const id of items.keys())items.set(id,null);
+  for(const id of snapshot.removedItemIds??[])items.set(id,null);
+  for(const item of snapshot.items)items.set(item.id,item);
+ }
+ return [...rounds].map(([repairRound,items])=>({orderId:history[0].snapshot.orderId,repairRound,
+  items:[...items.values()].filter(Boolean),removedItemIds:[...items.keys()].filter(id=>!items.get(id))}));
+}
+
 // A Runfeng project name or position cannot identify an H5 item: outsourced
 // and internal work can share both the name and the H5 item ID across rounds.
 async function writeInternalRound(execute,target,source,snapshot,header) {
+ for(const id of snapshot.removedItemIds??[]) {
+  const key=writebackHash([source,snapshot.orderId,snapshot.repairRound,id,Number(header.reid)]);
+  await execute(`declare @detail int
+   select @detail=detail_reid from dbo.h5_repair_round_items with (updlock,holdlock) where item_key=@item_key
+   if @detail is not null
+   begin
+    if exists(select 1 from dbo.qxwxmxb with (updlock,holdlock) where reid=@detail)
+    begin
+     delete from dbo.qxwxmxb where reid=@detail and wd=@wd and dh=@dh and lb=N'项目' and not (${protectedProjectValues})
+     if @@rowcount<>1
+     begin raiserror(N'润丰本轮项目已变动或已计价，请人工核对后撤销',16,1) return end
+    end
+    delete from dbo.h5_repair_round_items where item_key=@item_key and detail_reid=@detail
+   end`,(req,sql)=>{target(req,sql);req.input('item_key',sql.Char(64),key);});
+ }
  for(const item of snapshot.items) {
   const itemKey=writebackHash([source,snapshot.orderId,snapshot.repairRound,item.id,Number(header.reid)]);
   const worker=header.wd===''?`${item.employeeCode.trim()} ${item.employeeName.trim()}`:'';

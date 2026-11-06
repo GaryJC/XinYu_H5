@@ -8,7 +8,7 @@ export async function processRepairWritebackSimulations(runTransaction,shouldCon
   const processed=await runTransaction(async client=>{
    const {rows}=await client.query(`select j.*,coalesce(s.attempts,0) as mock_attempts,s.snapshot as mock_snapshot from repair_writebacks j
     left join repair_writeback_simulations s on s.job_id=j.id
-    where j.status in ('pending','failed') and (s.status is null or s.status='pending')
+    where j.status in ('pending','round_pending','failed') and (s.status is null or s.status='pending')
     and not exists(select 1 from repair_writebacks older left join repair_writeback_simulations os on os.job_id=older.id
      where older.order_id=j.order_id and older.id<j.id and older.status not in ('synced','manual') and coalesce(os.status,'pending')<>'synced')
     order by j.id for update of j skip locked limit 1`);
@@ -31,12 +31,12 @@ export async function processRepairWritebackSimulations(runTransaction,shouldCon
 }
 
 export async function readRepairWritebackSimulation(client,id) {
- const {rows}=await client.query(`select j.id::text,coalesce(s.status,j.status) as status,
+ const {rows}=await client.query(`select j.id::text,coalesce(s.status,case when j.status='round_pending' then 'pending' else j.status end) as status,
   coalesce((j.snapshot->>'repairRound')::integer,0) as "repairRound",coalesce(s.error,j.error) as error,
   coalesce(s.attempts,0) as attempts,j.created_at as "createdAt",s.synced_at as "syncedAt"
-  from repair_writebacks j left join repair_writeback_simulations s on s.job_id=j.id where j.order_id=$1 and j.status in ('pending','failed')
-  order by (coalesce(s.status,j.status) in ('pending','failed')) desc,
-   case when coalesce(s.status,j.status) in ('pending','failed') then j.id end asc,j.id desc limit 1`,[id]);
+  from repair_writebacks j left join repair_writeback_simulations s on s.job_id=j.id where j.order_id=$1 and j.status in ('pending','round_pending','failed')
+  order by (coalesce(s.status,j.status) in ('pending','round_pending','failed')) desc,
+   case when coalesce(s.status,j.status) in ('pending','round_pending','failed') then j.id end asc,j.id desc limit 1`,[id]);
  return rows[0]?{...rows[0],simulated:true,enabled:true}:undefined;
 }
 
@@ -46,7 +46,7 @@ export async function retryRepairWritebackSimulation(client,id,actorName,repairS
  const locked=await client.query(`select status,snapshot,event_id,
   (select snapshot from repair_writeback_simulations where job_id=repair_writebacks.id) as mock_snapshot
   from repair_writebacks where id=$1 for update`,[job.id]);
- if(!['pending','failed'].includes(locked.rows[0]?.status))throw new HttpError(409,'此任务已有真实处理结果，不可模拟重试');
+ if(!['pending','round_pending','failed'].includes(locked.rows[0]?.status))throw new HttpError(409,'此任务已有真实处理结果，不可模拟重试');
  const snapshot=locked.rows[0].mock_snapshot??locked.rows[0].snapshot;
  const repaired=job.status==='failed'?await repairSnapshot({...locked.rows[0],id:job.id,snapshot}):undefined;
  // Mock recovery never changes the real snapshot or its idempotency receipt.

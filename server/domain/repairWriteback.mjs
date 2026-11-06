@@ -14,6 +14,9 @@ export function validateWritebackSnapshot(snapshot) {
  if(snapshot.operation==='write-round'&&(!snapshot.orderId||!Number.isSafeInteger(snapshot.repairRound)||snapshot.repairRound<1||
    snapshot.items.some(item=>!Number.isSafeInteger(item.id)||item.pendingConfirmation)||new Set(snapshot.items.map(item=>item.id)).size!==snapshot.items.length))
   throw new Error('本轮润丰维修项目标识无效');
+ if(snapshot.removedItemIds!==undefined&&(snapshot.operation!=='write-round'||!Array.isArray(snapshot.removedItemIds)||
+   snapshot.removedItemIds.some(id=>!Number.isSafeInteger(id)||snapshot.items.some(item=>item.id===id))))
+  throw new Error('本轮撤销项目标识无效');
  if(snapshot.operation==='remove') {
   const target=snapshot.removeItem;
   if(!Number.isSafeInteger(target?.id)||!target.name?.trim()||target.name.length>100||

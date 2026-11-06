@@ -13,8 +13,15 @@ export async function enqueueRepairWriteback(client,task,eventId,{deferValidatio
  let snapshot;
  if(roundOnly) {
   const completed=task.items.filter(item=>item.status==='已完工');
-  if(!completed.length)return;
+  const ids=new Set(completed.map(item=>item.id));
+  const {rows:previous}=await client.query(`select distinct (item->>'id')::bigint::text as id from repair_writebacks j
+   cross join lateral jsonb_array_elements(j.snapshot->'items') item
+   where j.order_id=$1 and j.snapshot->>'operation'='write-round' and j.snapshot->>'repairRound'=$2`,[task.orderId,String(task.repairRound)]);
+  const removed=previous.map(row=>Number(row.id)).filter(id=>!ids.has(id));
+  if(!completed.length&&!removed.length)return;
   snapshot={...makeWritebackSnapshot(task,completed,users),operation:'write-round'};
+  if(!completed.length)snapshot.allowEmptyRemoval=true;
+  if(removed.length)snapshot.removedItemIds=removed;
  } else {
   const all=new Map();
   for(const round of rounds) {
@@ -40,9 +47,11 @@ function hasEarlierOutsourcedRound(rounds,currentRound) {
 // Keep the last published positions: removing a row must never publish active work
 // or renumber the remaining legacy rows. FIFO execution orders this after its baseline.
 export async function enqueueRepairRemoval(client,task,eventId,entry) {
- // Mixed rounds publish completed items only. A deferred item has no new row
- // to remove, and an earlier manual row can share its name or position.
- if(task.repairRound&&hasEarlierOutsourcedRound(await readRepairRounds(client,task.orderId),task.repairRound))return;
+ // A reviewed item may already have a mapped row from its first inspection.
+ if(task.repairRound&&hasEarlierOutsourcedRound(await readRepairRounds(client,task.orderId),task.repairRound)) {
+  await enqueueRoundWithdrawals(client,task,eventId,[entry.itemId],entry.sourceRound??task.repairRound);
+  return;
+ }
  const {rows}=await client.query('select snapshot from repair_writebacks where order_id=$1 order by id desc limit 1',[task.orderId]);
  const baseline=rows[0]?.snapshot||await readInitialRemovalBaseline(client,task.orderId);
  // A complete prior replacement proves this ID was never published. Avoid a
@@ -51,6 +60,17 @@ export async function enqueueRepairRemoval(client,task,eventId,entry) {
  const snapshot=makeRemovalSnapshot(task,baseline,entry);
  validateWritebackSnapshot(snapshot);
  await client.query('insert into repair_writebacks(event_id,order_id,snapshot,status,error) values($1,$2,$3,$4,$5) on conflict(event_id) do nothing',[eventId,task.orderId,JSON.stringify(snapshot),task.executionMode==='outsourced'?'manual':'pending',task.executionMode==='outsourced'?'外包任务需人工在润丰移除对应维修项目':'']);
+}
+// A deferred item may have been published before this inspection was reopened.
+export async function enqueueRoundWithdrawals(client,task,eventId,itemIds,round=task.repairRound) {
+ if(!round)return;
+ const snapshot={orderId:task.orderId,plate:task.plate,repairRound:round,operation:'write-round',
+  items:[],allowEmptyRemoval:true,removedItemIds:itemIds,partial:true};
+ await client.query(`insert into repair_writebacks(event_id,order_id,snapshot,status,error)
+  select $1,$2,$3,'pending','' where exists(select 1 from repair_writebacks j
+   where j.order_id=$2 and j.snapshot->>'operation'='write-round' and j.snapshot->>'repairRound'=$4
+    and exists(select 1 from jsonb_array_elements(j.snapshot->'items') i where i->>'id'=any($5::text[])))
+  on conflict(event_id) do nothing`,[eventId,task.orderId,JSON.stringify(snapshot),String(round),itemIds.map(String)]);
 }
 async function readInitialRemovalBaseline(client,orderId) {
  // The creation payload records IDs and names before any inspection. Its
@@ -68,7 +88,7 @@ function makeRemovalSnapshot(task,baseline,entry) {
 }
 export async function readRepairWriteback(client,id) {
  if(repairWritebackSimulationEnabled()){const simulated=await readRepairWritebackSimulation(client,id);if(simulated)return simulated;}
- const {rows}=await client.query(`select j.id::text,j.status,coalesce((j.snapshot->>'repairRound')::integer,0) as "repairRound",j.error,j.attempts,j.created_at as "createdAt",j.synced_at as "syncedAt",w.dispatch_no from repair_writebacks j join work_orders w on w.id=j.order_id where j.order_id=$1 order by (j.status in ('pending','failed')) desc,case when j.status in ('pending','failed') then j.id end asc,j.id desc limit 1`,[id]);
+ const {rows}=await client.query(`select j.id::text,case when j.status='round_pending' then 'pending' else j.status end as status,coalesce((j.snapshot->>'repairRound')::integer,0) as "repairRound",j.error,j.attempts,j.created_at as "createdAt",j.synced_at as "syncedAt",w.dispatch_no from repair_writebacks j join work_orders w on w.id=j.order_id where j.order_id=$1 order by (j.status in ('pending','round_pending','failed')) desc,case when j.status in ('pending','round_pending','failed') then j.id end asc,j.id desc limit 1`,[id]);
  if(!rows[0])return undefined;
  const {dispatch_no,...job}=rows[0];return {...job,enabled:writebackAllowed(dispatch_no)};
 }
@@ -77,24 +97,32 @@ export async function processRepairWritebacks(runTransaction,write,shouldContinu
  for(let count=0;count<100&&shouldContinue();count++) {
   const result=await runTransaction(async client=>{
    // Row locks survive until after the SQL Server commit. A receipt on SQL Server handles PG commit loss.
-   const {rows}=await client.query(`select j.* from repair_writebacks j join work_orders w on w.id=j.order_id where j.status='pending' and j.next_attempt_at<=now() and ($1::text[] is null or w.dispatch_no=any($1::text[]))
+   const {rows}=await client.query(`select j.* from repair_writebacks j join work_orders w on w.id=j.order_id where j.status in ('pending','round_pending') and j.next_attempt_at<=now() and ($1::text[] is null or w.dispatch_no=any($1::text[]))
      and not exists(select 1 from repair_writebacks older where older.order_id=j.order_id and older.id<j.id and older.status not in ('synced','manual'))
-     order by j.id for update of j skip locked limit 1`,[writebackDispatchAllowlist()]);
+     order by j.id for update of w,j skip locked limit 1`,[writebackDispatchAllowlist()]);
    if(!rows[0])return false;
    const job=rows[0];
    // A still-queued pre-upgrade replacement may already have a SQL receipt.
    // Keep its payload immutable and prevent it from replacing outsourced work.
-   const legacyRound=job.snapshot.operation!=='write-round'&&job.snapshot.repairRound>0?job.snapshot.repairRound:0;
+   const replaces=job.snapshot.operation!=='write-round';
+   // Claiming the parent with the job serializes this check with a change of mode.
    const {rows:orders}=await client.query(`select dispatch_no,department_code,legacy_reid,legacy_document_no,vehicle_plate,
-    exists(select 1 from dispatch_repair_rounds where order_id=$1 and round_no<$2
-     and snapshot->>'executionMode'='outsourced') as protects_outsourced
-    from work_orders where id=$1`,[job.order_id,legacyRound]);
+    ($2::boolean and has_outsourced_repair($1)) as protects_outsourced
+    from work_orders where id=$1`,[job.order_id,replaces]);
    try {
     const order=orders[0];
     if(!order?.dispatch_no||!order.legacy_document_no){await client.query("update repair_writebacks set error='等待润丰开单回填派工号及内部编号',next_attempt_at=now()+interval '1 minute' where id=$1",[job.id]);return true;}
     if(order.protects_outsourced)throw new Error('旧版写回任务涉及历史外包项目，请管理员在润丰核对并人工登记本轮项目');
     if(order.vehicle_plate!==job.snapshot.plate)throw new Error('工单车牌已变化，请管理员核对');
-    await write({...job.snapshot,eventId:String(job.event_id),dispatchNo:order.dispatch_no,departmentCode:order.department_code,legacyReid:Number(order.legacy_reid),documentNo:Number(order.legacy_document_no)});
+    await write({...job.snapshot,eventId:String(job.event_id),dispatchNo:order.dispatch_no,departmentCode:order.department_code,legacyReid:Number(order.legacy_reid),documentNo:Number(order.legacy_document_no)},{
+     readRoundHistory:async({latestOnly=false}={})=>{
+      const fields=latestOnly?'event_id::text':'event_id::text,status,snapshot';
+      const order=latestOnly?'desc limit 1':'asc';
+      const {rows}=await client.query(`select ${fields} from repair_writebacks where order_id=$1 and id<$2
+       and status in ('synced','manual') and snapshot->>'operation'='write-round' order by id ${order}`,[job.order_id,job.id]);
+      return rows;
+     }
+    });
     await client.query("update repair_writebacks set status='synced',error='',synced_at=now(),attempts=attempts+1 where id=$1",[job.id]);
    } catch(error) {
     const attempts=job.attempts+1;
@@ -109,7 +137,8 @@ export async function processRepairWritebacks(runTransaction,write,shouldContinu
 export async function retryFailedRepairWriteback(client,id,actorName) {
  if(repairWritebackSimulationEnabled())return retryRepairWritebackSimulation(client,id,actorName,
   job=>repairInvalidWritebackSnapshot(client,id,job,{checkLegacyStrings:false}));
- const {rows}=await client.query("select id,status,snapshot,event_id from repair_writebacks where order_id=$1 and status<>'manual' order by (status<>'synced') desc,case when status<>'synced' then id end asc,id desc limit 1 for update",[id]);
+ const {rows}=await client.query(`select id,status,snapshot,event_id from repair_writebacks where order_id=$1
+  order by (status not in ('synced','manual')) desc,case when status not in ('synced','manual') then id end asc,id desc limit 1 for update`,[id]);
  if(!rows[0]||!['failed','synced'].includes(rows[0].status))throw new HttpError(409,'仅失败或已完成的同步任务可以重试');
  const job=rows[0];
  if(job.status==='failed') {

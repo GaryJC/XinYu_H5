@@ -94,6 +94,39 @@ test('SQL Server 2000 temporary fixtures replace atomically and recover idempote
   assert.deepEqual(mixed.items.filter(i=>!originalIds.has(i.reid)).map(i=>i.wxr.trim()),['032 李富强','']);
   await submit({...round,repairRound:2,eventId:'52'});
   assert.equal((await state()).items.length,originalIds.size+4);
+
+  // A late blank external document must receive both internal rounds, while
+  // a repeated inspection in round one contributes only its latest state.
+  const round2={...round,eventId:'52',repairRound:2};
+  const beforeLate=(await state()).items.filter(i=>i.wd.trim()==='');
+  await query(`delete from ${tables.qxwxmxb} where wd='1'`);
+  await query(`delete from ${tables.qxwxb} where wd='1'`);
+  await query(`insert into ${tables.qxwxb}(wd,dh,pgd,ch,bm,xmfy,xmfy0,fyhj,cbhj) values('1',90123,'Z99999998','测B12345','TEST',0,0,0,0)`);
+  const history=[round,changed].map(s=>({event_id:s.eventId,snapshot:s}));
+  const replay=()=>replaceLegacyRepairItems(round2,{source:'temporary-fixture',allowedDispatchNos:null,executeTransaction,readRoundHistory:async()=>history});
+  await replay();assert.deepEqual(await replay(),{duplicate:true});
+  const late=(await state()).items;
+  assert.equal(late.filter(i=>i.wd.trim()==='1').length,2);
+  assert.deepEqual(late.filter(i=>i.wd.trim()===''),beforeLate);
+  const removal={...round,eventId:'53',items:[],removedItemIds:[round.items[0].id],allowEmptyRemoval:true};
+  const mapped=late.find(i=>i.wd.trim()===''&&!originalIds.has(i.reid)&&i.wxr.trim()==='032 李富强');
+  await query(`update ${tables.qxwxmxb} set gs=1 where reid=${Number(mapped.reid)}`);
+  await assert.rejects(()=>submit(removal),/已变动或已计价/);
+  assert.equal((await state()).items.length,late.length);
+  await query(`update ${tables.qxwxmxb} set gs=0 where reid=${Number(mapped.reid)}`);
+  // A moved row must block both documents. If a person has already removed
+  // that row, withdrawal only needs to clear its link and handle the other copy.
+  await query(`update ${tables.qxwxmxb} set dh=90124 where reid=${Number(mapped.reid)}`);
+  await assert.rejects(()=>submit(removal),/已变动或已计价/);
+  assert.equal((await state()).items.length,late.length);
+  await query(`delete from ${tables.qxwxmxb} where reid=${Number(mapped.reid)}`);
+  await submit(removal);
+  assert.deepEqual(await submit(removal),{duplicate:true});
+  const remaining=(await state()).items;
+  assert.equal(remaining.length,late.length-2);
+  assert.deepEqual(remaining.filter(i=>i.wd.trim()===''&&originalIds.has(i.reid)),original.items.filter(i=>i.wd.trim()===''));
+  assert.ok(!remaining.some(i=>i.reid===mapped.reid));
+  assert.equal((await query(`select count(*) as n from ${tables.h5_repair_round_items} where detail_reid=${Number(mapped.reid)}`)).recordset[0].n,0);
  } finally {
   for(const table of Object.values(tables).reverse())await query(`if object_id('tempdb..${table}') is not null drop table ${table}`).catch(()=>{});
   await closeSqlServerPool();

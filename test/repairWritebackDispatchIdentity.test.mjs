@@ -26,7 +26,7 @@ test('a queued legacy replacement cannot erase outsourced history after upgrade'
    available=false;return {rows};
   }
   if(sql.startsWith('select dispatch_no')){
-   assert.deepEqual(args,['o',1]);
+   assert.deepEqual(args,['o',true]);
    return {rows:[{dispatch_no:'A123',legacy_document_no:20,vehicle_plate:'鲁B12345',protects_outsourced:true}]};
   }
   failure=args;return {rows:[]};

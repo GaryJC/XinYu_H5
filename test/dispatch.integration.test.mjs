@@ -1323,6 +1323,84 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await run(inspector,'claim-inspection');await run(inspector,'inspect');assert.equal(current.items[0].status,'已完工');
       }
     });
+    await t.test('A67808 mixed inspection, rollback isolation, and same-round withdrawal',async()=>{
+      const id='mixed-round-a67808';await seed(id);
+      await pool.query("update work_orders set vehicle_plate='鲁UD8552',dispatch_no='A67808',legacy_document_no=67808 where id=$1",[id]);
+      await pool.query("update repair_items set name='作业水箱3处漏水' where order_id=$1 and client_item_id=1",[id]);
+      let task=(await service.dispatchDetail(advisor,id)).task;
+      const run=async(actor,action,extra={})=>{task=(await service.executeDispatchAction(actor,id,{action,expectedVersion:task.version,requestId:randomUUID(),...extra})).task;};
+      await run(advisor,'assign',{executionMode:'outsourced',outsourcingMode:'onsite',contractor:'外包',dueAt});
+      await run(advisor,'record-parts',{partsRequirement:{mode:'none'}});await progressPhoto(id);
+      await run(advisor,'complete-outsourced');
+      await run(advisor,'reopen-repair',{executionMode:'internal',technicianIds:[tech.id],additionalItems:['安装管卡子2个'],reason:'追加',dueAt});
+      await run(tech,'accept',{partsRequirement:{mode:'none'}});await progressPhoto(id,1);
+      await run(tech,'submit-order');await run(inspector,'claim-inspection');await run(inspector,'inspect');
+      const latest=async()=>(await pool.query('select * from repair_writebacks where order_id=$1 order by id desc limit 1',[id])).rows[0];
+      const job=await latest(),item=task.items[0];
+      assert.deepEqual(job.snapshot.items.map(i=>[i.name,i.responsibleId]),[['安装管卡子2个',tech.id]]);
+      assert.equal(job.status,'round_pending');
+      assert.equal((await service.dispatchDetail(manager,id)).repairWriteback.status,'pending');
+      // An old retry endpoint explicitly writes 'pending'. Its worker must still see zero rows.
+      await pool.query("update repair_writebacks set status='pending' where id=$1",[job.id]);
+      assert.equal((await pool.query("select id from repair_writebacks where id=$1 and status='pending' and next_attempt_at<=now() for update skip locked",[job.id])).rowCount,0);
+      const previous=process.env.RUNFENG_REPAIR_WRITEBACK_DISPATCH_ALLOWLIST;
+      process.env.RUNFENG_REPAIR_WRITEBACK_DISPATCH_ALLOWLIST='A67808';
+      try {
+        const {drainRepairWritebacks}=await import('../server/workers/repairWritebackWorker.mjs');
+        const writes=[];const drain=()=>drainRepairWritebacks({write:async payload=>writes.push(payload)});
+        await drain();assert.equal(writes.length,1);assert.equal(writes[0].operation,'write-round');
+        await run(inspector,'send-review');await run(tech,'submit-review');await run(inspector,'claim-inspection');
+        await run(inspector,'inspect',{rejectedItemIds:[item.id],reason:'卡子需返修'});
+        await drain();assert.deepEqual(writes.at(-1).removedItemIds,[item.id]);
+        assert.equal(writes.at(-1).partial,true);
+        await run(tech,'start-order');await run(tech,'submit-order');await run(inspector,'claim-inspection');
+        await run(inspector,'inspect',{deferredItemIds:[item.id],deferredReason:'复查待定'});
+        assert.equal((await latest()).status,'round_pending');await drain();
+        assert.deepEqual(writes.at(-1).removedItemIds,[item.id]);assert.deepEqual(writes.at(-1).items,[]);
+        const {pendingRepairList,pendingRepairCommand}=await import('../server/services/pendingRepairsService.mjs');
+        const pending=await pendingRepairList(inspector,id);
+        await pendingRepairCommand(inspector,id,{action:'decline',id:pending.items[0].id,expectedVersion:pending.version,requestId:randomUUID(),note:'撤销复查项目'});
+        await drain();
+        assert.equal(writes.length,4);
+        assert.equal(writes.at(-1).partial,true);
+        assert.deepEqual(writes.at(-1).removedItemIds,[item.id]);
+        // A manual resolution is the newest effective result. A stale retry
+        // request must not republish the preceding successful inspection.
+        const resolved=await latest();
+        await pool.query("update repair_writebacks set status='manual' where id=$1",[resolved.id]);
+        const {retryFailedRepairWriteback}=await import('../server/repositories/repairWritebackRepository.mjs');
+        await assert.rejects(()=>retryFailedRepairWriteback(pool,id,manager.name),/可以重试/);
+      } finally {
+        if(previous===undefined)delete process.env.RUNFENG_REPAIR_WRITEBACK_DISPATCH_ALLOWLIST;
+        else process.env.RUNFENG_REPAIR_WRITEBACK_DISPATCH_ALLOWLIST=previous;
+      }
+    });
+    await t.test('outsourcing a later round quarantines a delayed round-zero replacement before either worker can write',async()=>{
+      const id='delayed-before-outsourcing';await seed(id);
+      await pool.query("update work_orders set dispatch_no='A67809',legacy_document_no=67809 where id=$1",[id]);
+      let task=(await service.dispatchDetail(advisor,id)).task;
+      const run=async(actor,action,extra={})=>{task=(await service.executeDispatchAction(actor,id,{action,expectedVersion:task.version,requestId:randomUUID(),...extra})).task;};
+      await run(advisor,'assign',{technicianIds:[tech.id],dueAt});
+      await run(tech,'accept',{partsRequirement:{mode:'none'}});await progressPhoto(id);
+      await run(tech,'submit-order');await run(inspector,'claim-inspection');await run(inspector,'inspect');
+      const first=async()=>(await pool.query('select status,error from repair_writebacks where order_id=$1 order by id limit 1',[id])).rows[0];
+      assert.equal((await first()).status,'pending');
+      await run(advisor,'reopen-repair',{additionalItems:['外包追加'],executionMode:'outsourced',outsourcingMode:'onsite',contractor:'外包',dueAt,reason:'客户追加'});
+      assert.equal((await first()).status,'round_pending');
+      await run(advisor,'record-parts',{partsRequirement:{mode:'none'}});await progressPhoto(id,1);
+      await run(advisor,'complete-outsourced');
+      await pool.query("update repair_writebacks set attempts=4 where order_id=$1 and status='round_pending'",[id]);
+      const previous=process.env.RUNFENG_REPAIR_WRITEBACK_DISPATCH_ALLOWLIST;
+      process.env.RUNFENG_REPAIR_WRITEBACK_DISPATCH_ALLOWLIST='A67809';
+      try {
+        const {drainRepairWritebacks}=await import('../server/workers/repairWritebackWorker.mjs');
+        let calls=0;await drainRepairWritebacks({write:async()=>{calls++;}});
+        assert.equal(calls,0);assert.equal((await first()).status,'failed');assert.match((await first()).error,/历史外包/);
+      } finally {
+        if(previous===undefined)delete process.env.RUNFENG_REPAIR_WRITEBACK_DISPATCH_ALLOWLIST;
+        else process.env.RUNFENG_REPAIR_WRITEBACK_DISPATCH_ALLOWLIST=previous;
+      }
+    });
     if(process.env.DISPATCH_UI_TEST==='true') await t.test('desktop and mobile UI complete assignment, acceptance, repair and inspection',async()=>{
       uiUploadRoot=await fs.mkdtemp(path.join(os.tmpdir(),'repair-dispatch-ui-'));
       process.env.LOCAL_UPLOAD_ROOT=uiUploadRoot;

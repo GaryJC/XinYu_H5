@@ -47,6 +47,22 @@ function sqlHarness({failInsert=false,existingHash,downstream=0,headerRows=heade
  };
  return {executeTransaction,state:()=>({statements,committed,rolledBack})};
 }
+test('late external documents omit superseded manual work and retain other passed projects',async()=>{
+ const mock=sqlHarness();
+ const round={...snapshot,operation:'write-round',repairRound:1};
+ const item=(id,name)=>({...snapshot.items[0],id,name});
+ const history=[
+  {event_id:'37',status:'synced',snapshot:{...round,items:[item(1,'人工已撤销'),item(2,'保留项目')]}},
+  {event_id:'38',status:'manual',snapshot:{...round,partial:true,items:[],allowEmptyRemoval:true,removedItemIds:[1]}},
+  {event_id:'39',status:'synced',snapshot:{...round,repairRound:2,items:[item(3,'旧版项目')]}},
+  {event_id:'40',status:'manual',snapshot:{...round,repairRound:2,items:[{...item(3,'人工修订'),employeeCode:null}]}},
+ ];
+ await replaceLegacyRepairItems({...round,repairRound:3,items:[item(4,'本轮项目')]},{
+  executeTransaction:mock.executeTransaction,source:'test',readRoundHistory:async()=>history
+ });
+ const writes=mock.state().statements.filter(row=>row.params.item_key);
+ assert.deepEqual(writes.map(({params})=>[params.wd,params.name]),[['','本轮项目'],['1','保留项目'],['1','本轮项目']]);
+});
 test('direct replacement only deletes project rows and writes employee solely to internal document',async()=>{
  const mock=sqlHarness();await replaceLegacyRepairItems(snapshot,{executeTransaction:mock.executeTransaction,source:'test'});
  const {statements,committed}=mock.state();assert.equal(committed,true);
@@ -289,6 +305,8 @@ test('an internal inspection after outsourcing only queues completed items of th
   if(sql.includes('from dispatch_repair_rounds'))return {rows:[history,{round_no:1,snapshot:current}]};
   if(sql.startsWith('select id,legacy_employee_code'))return {rows:[{id:'t',legacy_employee_code:'027',legacy_employee_name:'甲'}]};
   if(sql.startsWith('select dispatch_no'))return {rows:[{dispatch_no:'A123'}]};
+  if(sql.startsWith('select distinct (item'))return {rows:jobs.flatMap(job=>job.snapshot.items.map(item=>({id:String(item.id)})))};
+  if(sql.includes("select $1,$2,$3,'pending'"))return {rows:[]};
   assert.ok(sql.startsWith('insert into repair_writebacks'),sql);
   jobs.push({snapshot:JSON.parse(args[2]),status:args[3]});return {rows:[]};
  }};
@@ -301,5 +319,5 @@ test('an internal inspection after outsourcing only queues completed items of th
  assert.equal(jobs[1].status,'failed');assert.equal(jobs[1].snapshot.operation,'write-round');
  await enqueueRepairRemoval(client,current,4,{itemId:3,name:'外包维修'});
  await enqueueRepairWriteback(client,{...current,items:[]},5,{deferValidation:true});
- assert.equal(jobs.length,2);
+ assert.equal(jobs.length,3);assert.deepEqual([...new Set(jobs[2].snapshot.removedItemIds)],[1,2]);
 });
