@@ -1,3 +1,5 @@
+import * as legacyInputValidation from '../shared/legacyInputValidation.mjs';
+import * as vehiclePlateValidation from '../shared/vehiclePlateValidation.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -113,6 +115,8 @@ function workbench() {
   const globals={window:b.window,location:{href:'http://localhost/',search:''},navigator:{userAgent:'Chrome'}};
   const http=load('client/src/shared/api/httpClient.ts',{}, {...globals,fetch:()=>{throw new Error('Unexpected fetch');}});
   const domain=load('client/src/features/work-orders/domain/workOrderDomain.ts',{
+    '../../../../../shared/legacyInputValidation.mjs':legacyInputValidation,
+    '../../../../../shared/vehiclePlateValidation.mjs':vehiclePlateValidation,
     '../../dispatch/dispatchAvailability':{dispatchEnabled:false},'./repairItems':{filterEmptyRepairItems:items=>items.filter(i=>i.name.trim())},
     '../../../../../shared/repairCompletion.mjs':repairCompletion,'../../../../../shared/pendingRepairLimits.mjs':pendingRepairLimits
   });

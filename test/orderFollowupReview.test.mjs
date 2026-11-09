@@ -1,3 +1,5 @@
+import * as legacyInputValidation from '../shared/legacyInputValidation.mjs';
+import * as vehiclePlateValidation from '../shared/vehiclePlateValidation.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -12,6 +14,8 @@ async function loadDraftValidation() {
   const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } });
   const exports = {};
   vm.runInNewContext(outputText, { exports, require: name => {
+    if (name === '../../../../../shared/legacyInputValidation.mjs') return legacyInputValidation;
+    if (name === '../../../../../shared/vehiclePlateValidation.mjs') return vehiclePlateValidation;
     if (name === './repairItems') return { filterEmptyRepairItems: rows => rows.filter(row => row.name.trim() || Number(row.laborFee || 0) !== 0) };
     if (name.includes('pendingRepairLimits')) return { pendingRepairNameMaxLength };
     if (name.includes('dispatchAvailability')) return { dispatchEnabled: false };

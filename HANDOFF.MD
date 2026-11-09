@@ -351,3 +351,8 @@
 - 生产字段核对：cxb.mc 为 varchar(50)，qc 为 varchar(100)，新增车型同时写两列，应按 50 字节验收。已有车型按编码加空格加名称写入 qxwxb.cx/qxclxxb.cx，合计容量 100 字节，不能把新建简称限制套到已有车型名称。
 - khxxb.mc 150、qxwxb/qxclxxb.lxdh 50、联系人 100、里程 20、服务顾问 20，均为字节容量。qxwxmxb.hh 为 200 字节，wxr 为 100 字节。前后端共用 legacyInputValidation，新建入队与联系人电话更正均校验；正常长度的说明文字可用。
 - 故障描述和车辆地址的消费端实际落库列尚未确认，不能仅凭文档中的“备注/地址”擅自套字段长度。本次未给这两项增设推测限制。
+
+## 部署检查的测试依赖遗漏 — 2026-11-09
+
+- workOrderDomain.ts 新增共享模块 import 后，authSessionFollowupReview、authenticatedRole、orderFollowupReview 三组 VM 测试必须补齐显式依赖映射，映射到实际模块。否则生产部署 npm run check 会报 Unexpected import，定向业务测试通过也无法覆盖。
+- 修正后完整 npm run check 通过：1024 项，994 通过、30 跳过、0 失败，类型检查和生产构建通过。本次仅修改测试依赖映射，无新增生产运行开销。

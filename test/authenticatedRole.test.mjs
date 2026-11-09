@@ -1,3 +1,5 @@
+import * as legacyInputValidation from '../shared/legacyInputValidation.mjs';
+import * as vehiclePlateValidation from '../shared/vehiclePlateValidation.mjs';
 import * as repairCompletion from '../shared/repairCompletion.mjs';
 import * as pendingRepairLimits from '../shared/pendingRepairLimits.mjs';
 import assert from "node:assert/strict";
@@ -20,6 +22,8 @@ function loadModule(relativePath, dependencies) {
 }
 
 const { roles } = loadModule("../client/src/features/work-orders/domain/workOrderDomain.ts", {
+  '../../../../../shared/legacyInputValidation.mjs':legacyInputValidation,
+  '../../../../../shared/vehiclePlateValidation.mjs':vehiclePlateValidation,
   "../../dispatch/dispatchAvailability": { dispatchEnabled: false },
   "./repairItems": {},
   "../../../../../shared/pendingRepairLimits.mjs": pendingRepairLimits,
@@ -73,6 +77,8 @@ test("supported logins still save their token and return the authenticated user"
 
 test('work order cards prioritize active repair stages over legacy settlement labels',()=>{
  const {workOrderDisplayStatus}=loadModule('../client/src/features/work-orders/domain/workOrderDomain.ts',{
+  '../../../../../shared/legacyInputValidation.mjs':legacyInputValidation,
+  '../../../../../shared/vehiclePlateValidation.mjs':vehiclePlateValidation,
   '../../../../../shared/pendingRepairLimits.mjs':pendingRepairLimits,
   '../../dispatch/dispatchAvailability':{dispatchEnabled:true},'./repairItems':{},'../../../../../shared/repairCompletion.mjs':repairCompletion
  });
