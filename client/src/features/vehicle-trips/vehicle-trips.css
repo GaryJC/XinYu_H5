@@ -54,6 +54,11 @@
 .trip-photos { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0 0; }
 .trip-photos .authenticated-image { border: 1px solid #e5eaf1; border-radius: 10px; overflow: hidden; background: #f7f9fb; }
 .trip-photos .ant-btn { min-height: 32px; margin-top: 8px; font-size: 12px; padding-inline: 8px; }
+.trip-application-photos > div { display: flex; flex-direction: column; align-items: flex-start; max-width: 100%; }
+.trip-application-photos img { max-width: 100%; object-fit: cover; border: 1px solid #e5eaf1; border-radius: 10px; }
+.trip-capture-section { margin-bottom: 18px; }
+.trip-capture-section p { margin: 12px 0 0; }
+.trip-upload[aria-disabled="true"] { cursor: default; opacity: .65; }
 .trip-upload { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; position: relative; cursor: pointer; padding: 24px 16px; border: 1px dashed #9db9d7; border-radius: 12px; background: #f7faff; color: #356797; }
 .trip-upload > span { font-size: 12px; color: #8190a2; }
 .trip-upload:focus-within { outline: 2px solid #1677ff; outline-offset: 2px; }

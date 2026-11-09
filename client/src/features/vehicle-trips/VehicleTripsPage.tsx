@@ -3,12 +3,13 @@ import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { LoadingState } from "../../shared/ui/LoadingState";
 import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { useState } from 'react';
-import { Alert, Button, Card, Drawer, Empty, Form, Input, Modal, Select, Space, Tag } from 'antd';
-import { CarFront, ClipboardCheck, Clock3, Camera, CircleAlert } from 'lucide-react';
+import { Alert, Button, Card, Drawer, Empty, Form, Input, Modal, Select, Tag } from 'antd';
+import { CarFront, ClipboardCheck, Clock3, CircleAlert } from 'lucide-react';
 import { hasRole } from '../../../../shared/roles.mjs';
 import type { UserProfile, VehicleTripStage } from '../../../../shared/types';
 import { AuthenticatedImage } from '../../shared/ui/AuthenticatedImage';
 import { useVehicleTrips } from './useVehicleTrips';
+import { TripCameraInput } from './TripCameraInput';
 import './vehicle-trips.css';
 
 const time = (value?: string) => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '—';
@@ -27,6 +28,7 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
   const mine = detail?.applicantId === user.id;
   const stage = detail?.status === '待出车' ? 'departure' : detail?.status === '用车中' ? 'return' : undefined;
   const photoIds = detail?.attachments.filter(a => a.stage === stage && !excluded.includes(a.fileId)).map(a => a.fileId) || [];
+  const hasApplicationPhotos = detail?.attachments.some(a => a.stage === 'departure' && a.confirmed);
   function open(id: string) { setRejectOpen(false); rejectForm.resetFields(); setExcluded([]); state.select(id); }
   function photos(phase: VehicleTripStage, title: string) {
     const items = detail?.attachments.filter(a => a.stage === phase) || [];
@@ -39,7 +41,7 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
     <header className="trip-page-heading"><div><h2>出车申请</h2></div><Button loading={state.pending === 'list'} disabled={state.busy} onClick={() => void state.refresh()}>刷新申请</Button></header>
     {state.error && <Alert type="error" showIcon title={state.error} />}
     <Card className="trip-create-card" title={<span className="trip-section-heading"><CarFront size={20} />申请用车</span>}>
-      <p>驾驶员：{user.name}。领导批准后，上传公里数照片即可出车。</p>
+      <p>驾驶员：{user.name}</p>
       <Form name="vehicle-trip-create" form={form} layout="vertical" disabled={state.busy} onFinishFailed={() => feedback.warning("请选择车辆并填写用车事由")} onFinish={async values => { if (await state.create(values)) form.resetFields(); }}>
         <Form.Item label="公司车辆" name="vehicleId" rules={[{ required: true, message: '请选择车辆' }]}>
           <Select showSearch optionFilterProp="label" placeholder="请选择公司车辆" options={state.vehicles.map(car => ({ value: car.id, label: `${car.plate} · ${car.brand} ${car.model}` }))} />
@@ -47,6 +49,13 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
         {!state.busy && !state.vehicles.length && <Alert type="info" title="暂无可用车辆，请联系管理员录入或启用车辆" />}
         <Form.Item label="用车事由" name="reason" rules={[{ required: true, whitespace: true, message: '请填写用车事由' }]}><Input.TextArea rows={3} maxLength={500} showCount /></Form.Item>
         <Form.Item label="备注（选填）" name="note"><Input.TextArea rows={2} maxLength={500} /></Form.Item>
+        <Form.Item label="出车公里数照片" required>
+          <TripCameraInput label="拍摄申请用车公里数照片" busy={state.pending === 'prepare-photo'} disabled={state.busy || state.departurePhotos.length >= 9} onCapture={file => void state.addDeparturePhoto(file)} />
+          {!!state.departurePhotos.length && <div className="trip-photos trip-application-photos">{state.departurePhotos.map((photo, index) => <div key={index}>
+            <img src={photo} alt={`出车公里数照片 ${index + 1}`} width={140} height={100} />
+            <Button size="small" disabled={state.busy} aria-label={`移除第 ${index + 1} 张公里数照片`} onClick={() => state.removeDeparturePhoto(index)}>移除照片</Button>
+          </div>)}</div>}
+        </Form.Item>
         <Button type="primary" htmlType="submit" loading={state.pending === 'create'} disabled={state.busy || !state.vehicles.length}>提交出车申请</Button>
       </Form>
     </Card>
@@ -98,12 +107,10 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
         {mine && manager && detail.status === '待审批' && <Alert type="info" title="请等待另一名门店管理员审批，不能审批自己的申请" />}
         {mine && stage && <section className="trip-section">
           <h3>{stage === 'departure' ? '出车登记' : '还车登记'}</h3>
-          <p>上传清晰的仪表盘公里数照片，确认时系统自动记录{stage === 'departure' ? '出车' : '收车'}时间。</p>
-          <label className="trip-upload" aria-busy={state.pending === 'upload'}>
-            <span className="trip-mileage-example"><img src="/photo-guides/mileage-illustrated.jpg" alt="仪表盘总公里数拍摄示例" /><span>拍摄示例 · 非上传照片</span></span>
-            <span className="trip-upload-action"><Camera size={20} /><strong>{state.pending === 'upload' ? '正在上传照片…' : '拍照或选择照片'}</strong></span><span>点亮仪表盘，拍清总公里数和单位</span><input aria-label={stage === 'departure' ? '上传出车公里数照片' : '上传收车公里数照片'} type="file" accept="image/*" disabled={state.busy || photoIds.length >= 9} onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void state.upload(file, stage); }} /></label>
-          {state.pending === 'upload' && <LoadingState label="正在处理并上传照片…" />}
-          <p>已选 {photoIds.length} 张照片（最多 9 张）</p>
+          {(stage === 'return' || !hasApplicationPhotos) && <div className="trip-capture-section">
+            <TripCameraInput label={stage === 'departure' ? '上传出车公里数照片' : '上传收车公里数照片'} busy={state.pending === 'upload'} disabled={state.busy || photoIds.length >= 9} onCapture={file => void state.upload(file, stage)} />
+            <p>已选 {photoIds.length} 张照片（最多 9 张）</p>
+          </div>}
           <Button type="primary" loading={state.pending === 'depart' || state.pending === 'return'} disabled={state.busy || !photoIds.length} onClick={() => void state.act(stage === 'departure' ? 'depart' : 'return', { fileIds: photoIds })}>{stage === 'departure' ? '确认出车' : '确认还车'}</Button>
         </section>}
         {mine && ['待审批', '待出车'].includes(detail.status) && <Button danger loading={state.pending === 'cancel'} disabled={state.busy} onClick={() => void state.act('cancel')}>取消申请</Button>}

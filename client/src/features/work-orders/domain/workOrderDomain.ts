@@ -1,3 +1,5 @@
+import { legacyOrderInputErrors } from "../../../../../shared/legacyInputValidation.mjs";
+import { vehiclePlateError } from "../../../../../shared/vehiclePlateValidation.mjs";
 import {repairStatusLabel} from '../../../../../shared/repairCompletion.mjs';
 import { RepairItem, RoleKey, WorkOrder, WorkOrderDraft, WorkOrderStatus } from "../../../../../shared/types";
 import { dispatchEnabled } from "../../dispatch/dispatchAvailability";
@@ -92,9 +94,10 @@ export function sumLabor(items: RepairItem[]) {
 }
 
 export function validateWorkOrderDraft(draft: WorkOrderDraft) {
-  const errors: string[] = [];
+  const errors: string[] = legacyOrderInputErrors(draft);
   if (!draft.department.code.trim() || !draft.department.name.trim()) errors.push("部门必填");
-  if (!draft.vehicle.plate.trim()) errors.push("车牌号码必填");
+  const plateError = vehiclePlateError(draft.vehicle.plate);
+  if (plateError) errors.push(plateError);
   if (!/^[A-Z0-9]{17}$/i.test(draft.vehicle.vin.trim())) errors.push("VIN 必须为 17 位字母数字");
   if (!/^\d+(\.\d+)?$/.test(draft.vehicle.mileage.trim())) errors.push("进厂里程必须为数字");
   if (!draft.vehicle.model.trim()) errors.push("车型必填");

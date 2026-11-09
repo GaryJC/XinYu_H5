@@ -63,11 +63,26 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
       return { ...trip, attachments: await repository.attachments(id, user), history: await repository.history(id) };
     },
     async create(user, input) {
-      const normalized = { requestId: input.requestId, vehicleId: tripText(input.vehicleId, '车辆', 100), reason: tripText(input.reason, '用车事由'), note: tripText(input.note, '备注', 500, true) };
+      requireTripUser(user);
+      const photos = input.departurePhotos;
+      if (!Array.isArray(photos) || !photos.length || photos.length > 9 || photos.some(photo => typeof photo !== 'string' || !photo)) throw new HttpError(400, '请先拍摄公里数照片（最多 9 张）');
+      // Leave room for JSON/text within the existing 16 MB HTTP body limit.
+      if (photos.reduce((size, photo) => size + photo.length, 0) > 12 * 1024 * 1024) throw new HttpError(400, '照片总大小过大，请减少照片后重试');
+      const normalized = { requestId: input.requestId, vehicleId: tripText(input.vehicleId, '车辆', 100), reason: tripText(input.reason, '用车事由'), note: tripText(input.note, '备注', 500, true), departurePhotos: photos };
       return operation(user, normalized, 'create', null, async repo => {
         const car = await repo.getVehicle(normalized.vehicleId, true);
         if (!car || car.shopId !== user.shopId || !car.active) throw new HttpError(409, '车辆不存在或已停用，请重新选择');
-        return repo.createTrip(`trip_${randomUUID()}`, user, car, normalized);
+        const trip = await repo.createTrip(`trip_${randomUUID()}`, user, car, normalized);
+        const ids = [];
+        for (const imageBase64 of photos) {
+          const image = await prepareTripImage({ imageBase64 }, 'departure');
+          const file = await saveFile({ ...image, kind: tripFileKinds.departure, uploadedBy: user.id, database: repo.database });
+          await repo.addAttachment(trip.id, 'departure', user, file);
+          ids.push(file.id);
+        }
+        // Submitted evidence is visible to approvers before departure.
+        if (await repo.confirmAttachments(trip.id, 'departure', user.id, ids) !== ids.length) throw new HttpError(400, '公里数照片保存失败，请重试');
+        return trip;
       });
     },
     async act(user, id, action, input) {
@@ -82,7 +97,8 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
         }
         if (['depart', 'return'].includes(action)) {
           const stage = { depart: 'departure', return: 'return' }[action];
-          const ids = input.fileIds;
+          const submitted = action === 'depart' ? (await repo.attachments(id, user)).filter(photo => photo.stage === 'departure' && photo.confirmed) : [];
+          const ids = submitted.length ? submitted.map(photo => photo.fileId) : input.fileIds;
           if (!Array.isArray(ids) || !ids.length || ids.length > 9 || ids.some(id => typeof id !== 'string') || new Set(ids).size !== ids.length) throw new HttpError(400, '请先上传公里数照片（最多 9 张）');
           if (await repo.confirmAttachments(id, stage, user.id, ids) !== ids.length) throw new HttpError(400, '附件不属于本次申请、用途不匹配或不是本人上传');
         }
@@ -94,6 +110,7 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
       return operation(user, input, `upload:${input.stage}`, id, async repo => {
         const trip = await repo.getTrip(id, true);
         assertTripUpload(trip, user, input.stage);
+        if (input.stage === 'departure' && (await repo.attachments(id, user)).some(photo => photo.stage === 'departure' && photo.confirmed)) throw new HttpError(409, '申请时已提交公里数照片，无需重复上传');
         const image = await prepareTripImage(input, input.stage);
         const file = await saveFile({ ...image, kind: tripFileKinds[input.stage], uploadedBy: user.id, database: repo.database });
         await repo.addAttachment(id, input.stage, user, file);

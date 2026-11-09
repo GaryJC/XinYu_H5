@@ -1,3 +1,4 @@
+import { legacyTextError } from "../../shared/legacyInputValidation.mjs";
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import { HttpError } from "../http/HttpError.mjs";
 
@@ -15,6 +16,8 @@ export function parseCustomerVehicleUpdate(input) {
       throw new HttpError(400, "联系人和联系电话不能为空、超过 50 个字符或包含控制字符");
     }
     result[key] = input[key].trim();
+    const capacityError = legacyTextError(result[key], key === "contact" ? 100 : 50, key === "contact" ? "联系人" : "联系电话");
+    if (capacityError) throw new HttpError(400, capacityError);
   }
   return result;
 }

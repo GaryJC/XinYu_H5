@@ -1,3 +1,5 @@
+import { legacyOrderInputErrors } from "../../shared/legacyInputValidation.mjs";
+import { vehiclePlateError } from "../../shared/vehiclePlateValidation.mjs";
 import {isUnsignedOrderEditable} from '../../shared/workOrderEditPolicy.mjs';
 import {isCurrentLicenseException} from './vehicleLicenseException.mjs';
 import { HttpError } from "../http/HttpError.mjs";
@@ -41,7 +43,19 @@ export function normalizeDraftRepairItems(items) {
   }));
 }
 
+export function assertLegacyOrderInputs(order) {
+  const errors = legacyOrderInputErrors(order);
+  if (errors.length) throw new HttpError(400, errors.join("；"));
+}
+
+export function assertVehiclePlate(value, required = false) {
+  const error = vehiclePlateError(value, { required });
+  if (error) throw new HttpError(400, error);
+}
+
 export function assertOrderReadyForSignature(order) {
+  assertVehiclePlate(order.vehicle?.plate);
+  assertLegacyOrderInputs(order);
   const missing = [];
   if (!order.department?.code?.trim() || !order.department?.name?.trim()) missing.push("部门");
   if (!order.vehicle?.plate?.trim()) missing.push("车牌号码");

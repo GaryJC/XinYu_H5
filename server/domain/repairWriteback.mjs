@@ -1,3 +1,4 @@
+import { legacyTextBytes } from "../../shared/legacyInputValidation.mjs";
 import {createHash} from 'node:crypto';
 export function writebackEnabled(env=process.env) {return env.RUNFENG_REPAIR_WRITEBACK_ENABLED==='true';}
 export function makeWritebackSnapshot(task,items,users) {
@@ -26,7 +27,7 @@ export function validateWritebackSnapshot(snapshot) {
  for(const item of snapshot.items) {
   if(!item.name?.trim())throw new Error('维修项目名称为空');
   if(item.name.length>100)throw new Error(`项目“${item.name.slice(0,20)}…”超出润丰字段长度，请缩短名称`);
-  if(item.employeeCode&&item.employeeName&&`${item.employeeCode.trim()} ${item.employeeName.trim()}`.length>100)throw new Error('负责人编码及姓名超出润丰字段长度');
+  if(item.employeeCode&&item.employeeName&&legacyTextBytes(`${item.employeeCode.trim()} ${item.employeeName.trim()}`)>100)throw new Error('负责人编码及姓名超出润丰字段长度');
   if(!item.pendingConfirmation&&(!item.responsibleId||!item.employeeCode?.trim()||!item.employeeName?.trim()))throw new Error(`项目“${item.name}”的负责人尚未绑定润丰员工编码，请管理员核对后重新生成同步任务`);
  }
 }

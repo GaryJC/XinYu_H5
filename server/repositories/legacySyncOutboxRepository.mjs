@@ -1,3 +1,4 @@
+import { assertVehiclePlate, assertLegacyOrderInputs } from "../domain/workOrderPolicy.mjs";
 import { pendingLegacyItems } from '../domain/pendingRepairs.mjs';
 import { randomUUID } from "node:crypto";
 
@@ -13,6 +14,10 @@ export const INSERT_LEGACY_SYNC_EVENT_QUERY = `
 
 export async function enqueueLegacySyncEvent(client, order, eventType = "updated") {
   if (order.paperOrder?.mode === "pending" || order.paperOrder?.mode === "runfeng" && eventType !== "updated") return;
+  if (eventType === "created") {
+    assertVehiclePlate(order.vehicle?.plate, true);
+    assertLegacyOrderInputs(order);
+  }
   const eventId = randomUUID();
   const revisionResult = await client.query(
     `

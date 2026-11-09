@@ -665,7 +665,7 @@ export type VehicleTripDetail = VehicleTrip & {
   attachments: VehicleTripAttachment[];
   history: Array<{ action: string; actorName: string; at: string }>;
 };
-export type VehicleTripCreateInput = { requestId: string; vehicleId: string; reason: string; note: string };
+export type VehicleTripCreateInput = { requestId: string; vehicleId: string; reason: string; note: string; departurePhotos: string[] };
 export type VehicleTripActionInput = { requestId: string; fileIds?: string[]; reason?: string };
 export type VehicleTripUploadInput = { requestId: string; stage: Exclude<VehicleTripStage, "signature">; imageBase64: string };
 export interface AppVersionResponse { version: string }

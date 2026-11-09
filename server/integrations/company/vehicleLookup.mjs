@@ -1,3 +1,4 @@
+import { legacyReferenceNameError } from "../../../shared/legacyInputValidation.mjs";
 import { HttpError } from "../../http/HttpError.mjs";
 import { hasSqlServerConfig } from "../../config/sqlServerConfig.mjs";
 import {
@@ -148,6 +149,8 @@ export async function createCompanyVehicleReference({ kind, name, code } = {}, c
   if (normalizedName.length > (kind === "model" ? 100 : 150)) {
     throw new HttpError(400, `${kind === "model" ? "车型" : "所属单位"}名称过长`);
   }
+  const nameError = legacyReferenceNameError(kind, normalizedName);
+  if (nameError) throw new HttpError(400, nameError);
   const normalizedCode = normalizeNewReferenceCode(code, kind === "model" ? 10 : 50);
   const result = await createReference({ kind, name: normalizedName, code: normalizedCode });
   if (!result.created && normalizeReference(result.value) !== normalizeReference(normalizedName)) {

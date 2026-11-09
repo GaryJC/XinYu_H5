@@ -20,6 +20,7 @@ export function useVehicleTrips(initialScope = 'all') {
   const [pending, setPending] = useState('list');
   const [selectedId, setSelectedId] = useState<string | undefined>(() => new URLSearchParams(location.search).get('vehicleTrip') || undefined);
   const [error, setError] = useState('');
+  const [departurePhotos, setDeparturePhotos] = useState<string[]>([]);
   const requests = useRef(new Map<string, string>());
   const running = useRef(false);
   const selection = useRef(0);
@@ -61,11 +62,21 @@ export function useVehicleTrips(initialScope = 'all') {
     return vehicleTripApi.upload(id, { stage, imageBase64, requestId: requestId(key) });
   }
   return { scope,setScope,list,mobile,vehicles, trips, detail, selectedId, busy:busy||list.loading, pending, error:error||list.error, select,
+    departurePhotos,
+    addDeparturePhoto: (file: File) => run(async () => {
+      if (departurePhotos.length >= 9) throw new Error('最多拍摄 9 张照片');
+      const prepared = await prepareUploadPhoto(file);
+      if (departurePhotos.reduce((size, photo) => size + photo.length, prepared.imageBase64.length) > 12 * 1024 * 1024) throw new Error('照片总大小过大，请减少照片后重试');
+      setDeparturePhotos(current => [...current, prepared.imageBase64]);
+    }, undefined, 'prepare-photo'),
+    removeDeparturePhoto: (index: number) => { if (!running.current) setDeparturePhotos(current => current.filter((_, i) => i !== index)); },
     refresh: () => run(async () => { await Promise.all([refreshData(),list.refresh()]); if (detail) setDetail(await vehicleTripApi.detail(detail.id)); }),
     create: (values: { vehicleId: string; reason: string; note?: string }) => run(async () => {
-      const input = { ...values, note: values.note || '' }; const key = JSON.stringify(input);
+      if (!departurePhotos.length) throw new Error('请先拍摄出车公里数照片');
+      const input = { ...values, note: values.note || '', departurePhotos }; const key = JSON.stringify(input);
       await vehicleTripApi.create({ ...input, requestId: requestId(key) });
-      await list.refresh(); requests.current.delete(key);
+      setDeparturePhotos([]); requests.current.delete(key);
+      await list.refresh();
     }, '出车申请已提交，等待审批', 'create'),
     upload: (file: File, stage: 'departure' | 'return') => run(async () => {
       if (!detail) return;

@@ -1,3 +1,5 @@
+import { legacyOrderInputErrors } from "../../../../../shared/legacyInputValidation.mjs";
+import { vehiclePlateError } from "../../../../../shared/vehiclePlateValidation.mjs";
 import {useDirectDispatch} from '../hooks/useDirectDispatch';
 import { pendingRepairNameMaxLength } from '../../../../../shared/pendingRepairLimits.mjs';
 import {VehicleLicenseHistoryPrompt} from '../../vehicle-license-history/VehicleLicenseHistoryPrompt';
@@ -61,8 +63,9 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
   const paperOnly = draft.paperOrder?.mode === "pending";
   const paperDingTalk = draft.paperOrder?.mode === "dingtalk";
   const showLegacySyncStatus = Boolean(selectedOrder && !["草稿","待客户签字"].includes(selectedOrder.status));
-  const fieldError = (...phrases: string[]) => formErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
-  const hasValidationError = formErrors.some((error) => ["必填", "VIN", "里程", "维修项目", "编码", "选择已有"].some((phrase) => error.includes(phrase)));
+  const inputErrors = [...legacyOrderInputErrors(draft), ...formErrors];
+  const fieldError = (...phrases: string[]) => inputErrors.find((error) => phrases.some((phrase) => error.includes(phrase)));
+  const hasValidationError = formErrors.some((error) => ["车牌号码", "必填", "VIN", "里程", "维修项目", "编码", "选择已有"].some((phrase) => error.includes(phrase)));
   const canResumeSignature = Boolean(selectedOrder?.status === "待客户签字" && !selectedOrder.signatures.customer);
   const signatureDisabled = Boolean(actionLoading) || Boolean(controller.preRepairPhotos.uploading) || !canResumeSignature && (!canEditForm || (Boolean(selectedOrder) && !canSendSignature(role, selectedOrder)));
   const signatureDisabledReason = selectedOrder && !["草稿", "待客户签字"].includes(selectedOrder.status) ? `当前状态“${selectedOrder.status}”不能再次发起签字` : "";
@@ -205,7 +208,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
             </>}
 
             <div className="field-grid">
-              <Field required error={fieldError("车牌号码")} disabled={!canEditForm} label="车牌号码" value={draft.vehicle.plate} onBlur={checkIdentifiers} onChange={(value) => editIdentifier("plate", value)} />
+              <Field required error={vehiclePlateError(draft.vehicle.plate, { required: false }) || fieldError("车牌号码")} disabled={!canEditForm} label="车牌号码" value={draft.vehicle.plate} onBlur={checkIdentifiers} onChange={(value) => editIdentifier("plate", value)} />
               <div style={{ marginBottom: 16 }}>
                 <Field required error={fieldError("VIN")} disabled={!canEditForm} label="VIN/底盘号" value={draft.vehicle.vin} onBlur={checkIdentifiers} onChange={(value) => editIdentifier("vin", value)} />
                 <ImageSourcePicker
@@ -301,7 +304,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                 />
                 </>}
               </Form.Item>
-              <Field disabled={!canEditForm} label="联系人" value={draft.customer.contact} onChange={(value) => updateCustomer("contact", value)} />
+              <Field error={fieldError("联系人")} disabled={!canEditForm} label="联系人" value={draft.customer.contact} onChange={(value) => updateCustomer("contact", value)} />
               <Field required error={fieldError("联系电话")} disabled={!canEditForm} label="联系电话" value={draft.customer.phone} onChange={(value) => updateCustomer("phone", value)} />
             </div>
 

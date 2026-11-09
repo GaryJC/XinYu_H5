@@ -29,6 +29,8 @@ import {
   workOrderValues
 } from "./domain/workOrderModel.mjs";
 import {
+  assertLegacyOrderInputs,
+  assertVehiclePlate,
   assertDraftEditable,
   assertOrderReadyForSignature,
   assertPlatformSyncAllowed,
@@ -89,6 +91,10 @@ export async function createWorkOrder(draft, actor, actorUser) {
   if (!draft || typeof draft !== "object" || Array.isArray(draft)) {
     throw new HttpError(400, "缺少有效的委托单草稿");
   }
+  if (!draft.paperOrder) {
+    assertVehiclePlate(draft.vehicle?.plate);
+    assertLegacyOrderInputs(draft);
+  }
   if (draft.paperOrder) assertPaperPhotoIds(draft.paperOrder);
   return transaction(async (client) => {
     const order = {
@@ -136,6 +142,8 @@ export async function updateWorkOrder(order, actor, action, actorUser) {
       repairItems: normalizeDraftRepairItems(order.repairItems),
       updatedAt: nowString()
     };
+    assertVehiclePlate(next.vehicle?.plate);
+    assertLegacyOrderInputs(next);
     await upsertWorkOrder(client, next);
     await saveDraftPendingRepairs(client, next, actorUser, order.pendingRepairsVersion);
     // Editing unsigned content invalidates every old signature session, including remote links.

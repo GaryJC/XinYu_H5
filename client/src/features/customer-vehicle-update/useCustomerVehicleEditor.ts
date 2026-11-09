@@ -1,3 +1,4 @@
+import { legacyTextError } from "../../../../shared/legacyInputValidation.mjs";
 import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import { useEffect, useRef, useState } from "react";
@@ -40,6 +41,8 @@ export function useCustomerVehicleEditor(order: WorkOrder, user: UserProfile | u
       setError("请填写联系人和联系电话");
       return;
     }
+    const capacityError = legacyTextError(change.contact.trim(), 100, "联系人") || legacyTextError(change.phone.trim(), 50, "联系电话");
+    if (capacityError) { setError(capacityError); return; }
     running.current = true;
     setSaving(true);
     setError("");

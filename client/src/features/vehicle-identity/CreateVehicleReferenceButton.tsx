@@ -1,3 +1,4 @@
+import { legacyReferenceNameError } from "../../../../shared/legacyInputValidation.mjs";
 import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Form, Input } from "antd";
@@ -91,7 +92,7 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
       setCheck({ status: "error", message: `${label}名称不能为空` });
       return;
     }
-    const localError = validateCode(code, maxLength);
+    const localError = legacyReferenceNameError(kind, name.normalize("NFKC").trim()) || validateCode(code, maxLength);
     if (localError) {
       setCheck({ status: "error", message: localError });
       return;
@@ -111,7 +112,9 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
     }
   }
 
+  const nameError = legacyReferenceNameError(kind, name.normalize("NFKC").trim());
   const submitDisabled = !name.trim()
+    || Boolean(legacyReferenceNameError(kind, name.normalize("NFKC").trim()))
     || Boolean(validateCode(code, maxLength))
     || check.status === "checking"
     || check.status === "duplicate";
@@ -141,7 +144,7 @@ export function CreateVehicleReferenceButton({ kind, currentName, currentCode, d
           style={{ marginBottom: 16 }}
         />
         <Form layout="vertical">
-          <Form.Item label={`${label}名称`} required>
+          <Form.Item label={`${label}名称`} required validateStatus={nameError ? "error" : undefined} help={nameError || undefined}>
             <Input
               value={name}
               maxLength={kind === "model" ? 100 : 150}
