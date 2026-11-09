@@ -17,7 +17,7 @@ test('vehicle license exception persistence, signature rules, administrator fano
   for(const file of (await fs.readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')&&f!=='202608070005_remove_obsolete_runfeng_sync_role.sql').sort())await pool.query(await fs.readFile(`supabase/migrations/${file}`,'utf8'));
   const advisor={id:'a',name:'顾问甲',role:'advisor',shopId:'shop-hq',active:true};
   const manager={id:'m1',name:'管理员甲',role:'manager',shopId:'shop-hq',active:true};
-  const others=[{...manager,id:'m2',name:'管理员乙'},{...manager,id:'outside',shopId:'other'},{...manager,id:'disabled',active:false},{...advisor,id:'a2',name:'顾问乙'},{...advisor,id:'t',role:'technician'}];
+  const others=[{...manager,id:'m2',name:'管理员乙'},{...manager,id:'outside',shopId:'other'},{...manager,id:'disabled',active:false},{...advisor,id:'a2',name:'顾问乙'},{...advisor,id:'t',name:'无关技师',role:'technician'}];
   for(const p of [advisor,manager,...others])await pool.query('insert into users(id,name,role,shop_id,active,dingtalk_user_id) values($1,$2,$3,$4,$5,$6)',[p.id,p.name,p.role,p.shopId,p.active,`ding-${p.id}`]);
   const db=await import('../server/db.mjs');
   const {reportVehicleLicenseException:report}=await import('../server/services/vehicleLicenseExceptionService.mjs');

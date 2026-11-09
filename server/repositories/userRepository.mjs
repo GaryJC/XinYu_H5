@@ -223,6 +223,14 @@ export async function createAuthSession({ token, userId, userAgent, ipAddress, e
   return id;
 }
 
+export async function findActiveSessionUser(token, userId) {
+  const { rows } = await pool.query(`select users.id, name, role, dingtalk_user_id, active, shop_id, phone, last_login_at, legacy_employee_code, roles, inspector_role_member, ${outsourcingMembership}
+    from users join auth_sessions session on session.user_id=users.id
+    where users.id=$2 and session.token_hash=$1 and session.revoked_at is null and session.expires_at>now()
+    limit 1`, [hashToken(token), userId]);
+  return rows[0] ? rowToUser(rows[0]) : undefined;
+}
+
 export async function isAuthSessionActive(token) {
   const { rows } = await pool.query(
     `

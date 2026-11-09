@@ -1,16 +1,12 @@
+import {ProcurementPhoto} from './ProcurementPhoto';
+export {ProcurementPhoto} from './ProcurementPhoto';
 import { createRequestId } from "../../shared/api/requestId";
-import {useEffect,useState,useRef} from 'react';
-import {Alert,Button,Image,Space} from 'antd';
+import {useState,useRef} from 'react';
+import {Alert,Button,Space} from 'antd';
 import {ImageSourcePicker} from '../../shared/ui/ImageSourcePicker';
-import {requestBlob} from '../../shared/api/httpClient';
 import {prepareUploadPhoto} from '../../shared/images/prepareOcrImage';
 import {VehicleNameplateIllustration} from '../../shared/ui/VehicleNameplateIllustration';
 import {procurementApi} from './procurementApi';
-export function ProcurementPhoto({id,portal=false,label="铭牌号照片"}:{id:string;portal?:boolean;label?:string}) {
- const [src,setSrc]=useState('');
- useEffect(()=>{if(portal)return;let active=true,url='';void requestBlob(`/api/procurement/photos/${encodeURIComponent(id)}`).then(blob=>{url=URL.createObjectURL(blob);if(active)setSrc(url);else URL.revokeObjectURL(url);}).catch(()=>{});return()=>{active=false;if(url)URL.revokeObjectURL(url);};},[id,portal]);
- return <Image src={portal?`/api/supplier-portal/photos/${encodeURIComponent(id)}`:src||undefined} alt={label} width={120} height={100} style={{objectFit:'contain'}}/>;
-}
 export function ProcurementNameplatePhotos({value=[],onChange,onBusy,disabled,other=false}:{value?:string[];onChange?:(ids:string[])=>void;onBusy:(busy:boolean)=>void;disabled:boolean;other?:boolean}) {
  const limit=other?10:1;
  const label=other?"其他照片":"铭牌号照片";

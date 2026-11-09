@@ -45,3 +45,17 @@ export function canStartRepairWithParts(task,ownerId=task.technicianId,sharedPar
  if(needs(personal))return ready(personal)||sharedReady(true);
  return needs(shared)?sharedReady(false):true;
 }
+
+// Rework is an overlapping classification, scoped to the current worker when supplied.
+export function isReworkTask(task, ownerId) {
+ const stage=ownerId?personalRepairStage(task,ownerId):task.stage;
+ if(!['待接单','待开工','维修中','暂停','待检验','回审'].includes(stage))return false;
+ const owners=task.technicianIds??(task.technicianId?[task.technicianId]:[]);
+ const own=ownerId?task.items.filter(i=>i.responsibleId===ownerId||!i.responsibleId&&owners.length===1&&owners[0]===ownerId):task.items;
+ if(ownerId&&!own.some(i=>i.status!=='已完工'))return false;
+ if(task.repairRound&&task.roundKind!=='additional')return true;
+ const rejected=new Set(task.rejectedItemIds||[]);
+ if(own.some(i=>i.status!=='已完工'&&(i.rejectionReason||rejected.has(i.id))))return true;
+ // Legacy flags are usable only when there is no project-level evidence to contradict them.
+ return Boolean(task.rework&&!task.items.some(i=>i.rejectionReason)&&!rejected.size);
+}

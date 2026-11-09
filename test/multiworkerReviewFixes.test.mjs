@@ -67,3 +67,21 @@ test('cancellation keeps pause when the worker still owns another project',()=>{
  const next=cancelInspectionDeferred(paused,{itemId:1,inspectionState:'scheduled'},m,'取消项目','2026-11-05T02:00:00Z',people);
  assert.deepEqual(next.workerPauses.a,paused.workerPauses.a);
 });
+
+for(const round of [{},{repairRound:1,roundKind:'additional'}])test(`personal rework follows rejected projects in ${round.roundKind||'original'} round`,()=>{
+ let task=act(base(),a,'submit-order');Object.assign(task,round);
+ task=act(task,m,'inspect',{rejectedItemIds:[1],reason:'需要重新维修'});
+ assert.equal(countDispatchTaskStatuses([task],a,{personal:'true'})['返工'],1);
+ assert.equal(countDispatchTaskStatuses([task],b,{personal:'true'})['返工'],0);
+ assert.equal(countDispatchTaskStatuses([task],b,{personal:'true'})['维修中'],1);
+});
+test('converting unfinished internal work to outsourced completion does not manufacture inspection',async()=>{
+ const {technicianCompletedProjects}=await import('../server/domain/technicianCompletedProjects.mjs');
+ let task=act(base(),a,'submit-order');
+ task=act(task,m,'reassign',{reason:'外包',executionMode:'outsourced',outsourcingMode:'onsite',contractor:'承包方',dueAt:'2026-11-08T00:00:00Z'});
+ task=act(task,m,'complete-outsourced');
+ assert.equal(task.items[0].inspectedAt,undefined);
+ assert.equal(technicianCompletedProjects([{order_id:'o',round_no:0,snapshot:task}],'a','2026-11').length,0);
+ task.items[0].inspectedAt='2026-11-01T00:00:00Z';
+ assert.equal(technicianCompletedProjects([{order_id:'o',round_no:0,snapshot:task}],'a','2026-11').length,1);
+});

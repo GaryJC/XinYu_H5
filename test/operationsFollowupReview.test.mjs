@@ -8,7 +8,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 
 const adminUrl=process.env.DISPATCH_TEST_ADMIN_URL;
-test('vehicle occupancy is exclusive across applications and released on return',{skip:!adminUrl,timeout:120000},async t=>{
+test('vehicle occupancy is exclusive across applications and released on return approval',{skip:!adminUrl,timeout:120000},async t=>{
  const url=new URL(adminUrl);assert.ok(['localhost','127.0.0.1','[::1]'].includes(url.hostname));
  const admin=new pg.Client({connectionString:adminUrl});await admin.connect();
  const uploads=await fs.mkdtemp(path.join(os.tmpdir(),'trip-occupancy-'));
@@ -35,44 +35,39 @@ test('vehicle occupancy is exclusive across applications and released on return'
    await pool.query('insert into vehicle_trip_attachments(file_id,trip_id,stage,uploaded_by) values($1,$2,$3,$4)',[id,tripId,stage,user.id]);
    return id;
   }
-  async function departure(user,trip){return key();}
-  let a,b,aDeparture,bDeparture;
-  await t.test('multiple applications can wait for approval and departure',async()=>{
-   a=await request(first,car.id);b=await request(second,car.id);
-   assert.equal(a.status,'待审批');assert.equal(b.status,'待审批');
-   a=await service.act(manager,a.id,'approve',key());b=await service.act(manager,b.id,'approve',key());
-   assert.equal(a.status,'待出车');assert.equal(b.status,'待出车');
-   aDeparture=await departure(first,a);bDeparture=await departure(second,b);
+  let a;
+  await t.test('application immediately departs and a duplicate request preserves its time',async()=>{
+   const input={...key(),vehicleId:car.id,reason:'自动出车',departurePhotos:[imageBase64]};
+   const results=await Promise.all([service.create(first,input),service.create(first,input)]);
+   a=results[0];assert.equal(a.status,'用车中');assert.ok(a.departureAt);
+   assert.equal(results[1].id,a.id);assert.equal(results[1].departureAt,a.departureAt);
   });
-  await t.test('a second application cannot depart an occupied vehicle, and rejection rolls back',async()=>{
-   const departed=await service.act(first,a.id,'depart',aDeparture);assert.equal(departed.status,'用车中');
-   await assert.rejects(()=>service.act(second,b.id,'depart',bDeparture),error=>error.status===409&&/使用中/.test(error.message));
-   assert.equal((await service.detail(second,b.id)).status,'待出车');
-   assert.equal((await service.detail(second,b.id)).attachments[0].confirmed,true,'application photo remains submitted when departure is blocked');
-   assert.equal((await pool.query('select 1 from vehicle_trip_operations where actor_id=$1 and request_id=$2',[second.id,bDeparture.requestId])).rowCount,0);
-   assert.equal((await pool.query("select 1 from vehicle_trip_notification_jobs where trip_id=$1 and action='depart'",[b.id])).rowCount,0);
-   assert.equal((await service.act(first,a.id,'depart',aDeparture)).departureAt,departed.departureAt);
+  await t.test('an occupied vehicle rejects a new application without records or events',async()=>{
+   const input={...key(),vehicleId:car.id,reason:'应拒绝',departurePhotos:[imageBase64]};
+   await assert.rejects(()=>service.create(second,input),error=>error.status===409);
+   assert.equal((await service.list(second)).length,0);
+   assert.equal((await pool.query('select 1 from vehicle_trip_operations where actor_id=$1 and request_id=$2',[second.id,input.requestId])).rowCount,0);
+   assert.equal((await pool.query('select 1 from vehicle_trip_notification_jobs where actor_id=$1 and request_id=$2',[second.id,input.requestId])).rowCount,0);
   });
-  await t.test('another vehicle remains available while the first is occupied',async()=>{
-   const trip=await request(second,otherCar.id);await service.act(manager,trip.id,'approve',key());
-   assert.equal((await service.act(second,trip.id,'depart',await departure(second,trip))).status,'用车中');
+  await t.test('another vehicle remains available',async()=>{
+   assert.equal((await request(second,otherCar.id)).status,'用车中');
   });
-  await t.test('return releases the vehicle and the rejected departure can be retried',async()=>{
-   await service.act(first,a.id,'return',{...key(),fileIds:[await photo(first,a.id,'return')]});
-   const next=await service.act(second,b.id,'depart',bDeparture);assert.equal(next.status,'用车中');
+  await t.test('submitting return keeps occupation until a manager approves',async()=>{
+   const submitted=await service.act(first,a.id,'return',{...key(),fileIds:[await photo(first,a.id,'return')]});
+   assert.equal(submitted.status,'待收车审核');
+   await assert.rejects(()=>request(second,car.id),error=>error.status===409);
+   await service.act(manager,a.id,'approve-return',{...key(),returnRound:submitted.returnRound});
+   assert.equal((await request(second,car.id)).status,'用车中');
    assert.equal((await service.detail(first,a.id)).status,'已还车');
-   assert.equal((await pool.query("select count(*)::integer as total from vehicle_trip_requests where vehicle_id=$1 and status='用车中'",[car.id])).rows[0].total,1);
   });
-  await t.test('concurrent departures on the same vehicle allow exactly one application',async()=>{
+  await t.test('concurrent applications on one vehicle have exactly one winner',async()=>{
    const raceCar=await service.saveVehicle(manager,{plate:'鲁BTEST03',brand:'测试',model:'并发占用'});
-   const trips=await Promise.all([request(first,raceCar.id),request(second,raceCar.id)]);
-   await Promise.all(trips.map(trip=>service.act(manager,trip.id,'approve',key())));
-   const users=[first,second],inputs=await Promise.all(trips.map((trip,index)=>departure(users[index],trip)));
-   const results=await Promise.allSettled(trips.map((trip,index)=>service.act(users[index],trip.id,'depart',inputs[index])));
+   const results=await Promise.allSettled([request(first,raceCar.id),request(second,raceCar.id)]);
    assert.equal(results.filter(result=>result.status==='fulfilled').length,1);
-   const failed=results.find(result=>result.status==='rejected');assert.equal(failed.reason.status,409);
+   assert.equal(results.find(result=>result.status==='rejected').reason.status,409);
    assert.equal((await pool.query("select count(*)::integer as total from vehicle_trip_requests where vehicle_id=$1 and status='用车中'",[raceCar.id])).rows[0].total,1);
-   assert.equal((await pool.query("select count(*)::integer as total from vehicle_trip_notification_jobs where trip_id=any($1::text[]) and action='depart'",[trips.map(trip=>trip.id)])).rows[0].total,1);
+   const id=results.find(result=>result.status==='fulfilled').value.id;
+   assert.equal((await pool.query("select count(*)::integer as total from vehicle_trip_notification_jobs where trip_id=$1 and action='create'",[id])).rows[0].total,1);
   });
  } finally {
   await pool?.end();await Promise.all(connectionsClosed);

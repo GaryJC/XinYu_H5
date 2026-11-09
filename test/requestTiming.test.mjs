@@ -40,11 +40,22 @@ test("failed stages retain timing and propagate the original error", async () =>
   assert.match(res.headers["Server-Timing"], /aliyun_ocr;dur=/);
 });
 
-test("unrelated requests receive no diagnostic headers", async () => {
+test("non API requests receive no diagnostic headers", async () => {
   const res = response();
-  await withRequestTiming({ method: "GET" }, res, "/api/work-orders", async () => {
+  await withRequestTiming({ method: "GET" }, res, "/assets/app.js", async () => {
     await measureStage("test", async () => {});
     writeTimingHeaders(res);
   });
   assert.deepEqual(res.headers, {});
+});
+
+test("error requests are logged with route templates and no identifiers or bodies", async () => {
+  const lines=[],original=console.info;console.info=(...values)=>lines.push(values);
+  try {
+    const res=response();res.statusCode=500;
+    await withRequestTiming({method:'POST',body:{password:'private'}},res,'/api/work-orders/customer-secret/actions',async()=>{});
+    res.emit('finish');assert.equal(lines.length,1);
+    const record=JSON.parse(lines[0][1]);assert.equal(record.path,'/api/work-orders/:id/actions');
+    assert.doesNotMatch(JSON.stringify(record),/customer-secret|password|private/);
+  } finally {console.info=original;}
 });

@@ -1,26 +1,29 @@
 import { hasAnyRole } from "../../../shared/roles.mjs";
+import {pendingDingTalkRead} from './pendingRead.mjs';
 import { pool } from '../../database/pool.mjs';
 import { getDingTalkAccessToken } from './accessToken.mjs';
 import { getDingTalkUserProfile, resolveDingTalkOrganizationMapping } from './organization.mjs';
 import definitions from '../../../shared/dingtalkRoles.json' with { type:'json' };
 import { findUserByDingTalkUserId, upsertUserFromDingTalk, saveDingTalkUserSnapshot } from '../../repositories/userRepository.mjs';
 
-export async function listDingTalkRoleMembers(roleKeys,{fetcher=fetch,token=getDingTalkAccessToken}={}) {
+export async function listDingTalkRoleMembers(roleKeys,{fetcher=fetch,token=getDingTalkAccessToken,coalesce=false}={}) {
   const accessToken=await token();
   async function call(path,body) {
-    const url=new URL(`https://oapi.dingtalk.com/topapi/role/${path}`);url.searchParams.set('access_token',accessToken);
-    const response=await fetcher(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(10000)});
-    const data=await response.json();
-    if(!response.ok || data.errcode!==0 || !data.result) throw new Error('获取钉钉角色失败，请检查通讯录授权');
-    return data.result;
+    return pendingDingTalkRead({fetcher,accessToken,endpoint:`role/${path}`,body,coalesce},async()=>{
+      const url=new URL(`https://oapi.dingtalk.com/topapi/role/${path}`);url.searchParams.set('access_token',accessToken);
+      const response=await fetcher(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(10000)});
+      const data=await response.json().catch(()=>null);
+      if(!response.ok || data?.errcode!==0 || !data?.result) throw new Error('获取钉钉角色失败，请检查通讯录授权');
+      return data.result;
+    });
   }
   const names=definitions.filter(r=>roleKeys.includes(r.role)).flatMap(r=>r.names);
-  const roles=[];
+  const roles=new Set();
   for(let offset=0,pages=0;;pages++) {
     if(pages>=1000) throw new Error('钉钉角色分页过多');
     const data=await call('list',{offset,size:200});
     if(!Array.isArray(data.list)) throw new Error('钉钉角色列表格式无效');
-    for(const group of data.list) for(const role of group.roles||[]) if(names.includes(role.name?.trim())) roles.push(role.id);
+    for(const group of data.list) for(const role of group.roles||[]) if(names.includes(role.name?.trim())) roles.add(role.id);
     if(!data.hasMore && !data.has_more) break;
     if(!data.list.length) throw new Error('钉钉角色分页未前进'); offset+=data.list.length;
   }
@@ -36,14 +39,14 @@ export async function listDingTalkRoleMembers(roleKeys,{fetcher=fetch,token=getD
   return {ids:[...ids],accessToken};
 }
 export const listInspectorRoleMembers=options=>listDingTalkRoleMembers(['inspector','manager'],options);
-export async function syncInspectorRoster(shopId,{list=listInspectorRoleMembers,profile=getDingTalkUserProfile,find=findUserByDingTalkUserId,upsert=upsertUserFromDingTalk,snapshot=saveDingTalkUserSnapshot,database=pool}={}) {
+export async function syncInspectorRoster(shopId,{list=()=>listInspectorRoleMembers({coalesce:true}),profile=getDingTalkUserProfile,find=findUserByDingTalkUserId,upsert=upsertUserFromDingTalk,snapshot=saveDingTalkUserSnapshot,database=pool}={}) {
   const {ids,accessToken}=await list();
   const eligible=[],inspectorIds=[];
   const inspectionNames=definitions.filter(d=>['inspector','manager'].includes(d.role)).flatMap(d=>d.names);
   const inspectorNames=definitions.find(d=>d.role==='inspector').names;
   // Never use a partially fetched roster as the notification audience.
   const profiles=[];
-  for(const userId of ids) profiles.push(await profile({userId,accessToken}));
+  for(const userId of ids) profiles.push(await profile({userId,accessToken,coalesce:true}));
   for(const p of profiles) {
     const existing=await find(p.userId);
     const mapping=resolveDingTalkOrganizationMapping(p,{shopId:existing?.shopId||shopId});

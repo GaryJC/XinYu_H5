@@ -65,7 +65,7 @@ export function useWorkbenchController() {
 
   const archive = useArchiveFilters(currentUser, activeNav === '工单全览', ['工作台','工单全览'].includes(activeNav));
   const orders = archive.items, setOrders = archive.setItems, ordersLoading = archive.loading;
-  const selectedOrder = (selectedRecord?.id===selectedId?selectedRecord:undefined) || orders.find(order=>order.id===selectedId);
+  const selectedOrder = (selectedRecord?.id===selectedId?selectedRecord:undefined);
   const actor = currentUser?.name || roles[role].name;
   const {
     identifierRecognition,
@@ -165,13 +165,19 @@ export function useWorkbenchController() {
       setDepartmentError("");
       return;
     }
-    void loadDashboard(currentUser.role, generation);
-    void loadUsers(generation);
-    void loadDepartments(generation);
+
     return () => {
       if (sessionGeneration.current === generation) sessionGeneration.current += 1;
     };
   }, [currentUser?.id, currentUser?.legacyEmployeeCode]);
+
+  useEffect(()=>{
+    if(!currentUser)return;
+    const generation=sessionGeneration.current;
+    if(['工作台','工单全览'].includes(activeNav))void loadDashboard(currentUser.role,generation);
+    if(activeNav==='权限设置')void loadUsers(generation);
+    if(activeNav==='委托开单')void loadDepartments(generation);
+  },[currentUser?.id,currentUser?.legacyEmployeeCode,activeNav]);
 
   useEffect(() => {
     if (!visibleNavItems.some((item) => item.label === activeNav)) {
@@ -396,12 +402,14 @@ export function useWorkbenchController() {
         repairItems: filterEmptyRepairItems(draft.repairItems) };
       if (selectedOrder) {
         const updated = await workOrderApi.update({ ...selectedOrder, ...cleanedDraft }, actor, "保存委托单");
+        selectOrder(updated);
         feedback.success("委托单已保存");
         await loadOrders(role, updated.id);
         return;
       }
 
       const created = await workOrderApi.create(cleanedDraft, actor);
+      selectOrder(created);
       feedback.success("草稿已保存");
       await loadOrders(role, created.id);
     } catch (error) {
@@ -421,7 +429,7 @@ export function useWorkbenchController() {
     try {
       const cleaned={...draft,repairItems:filterEmptyRepairItems(draft.repairItems)};
       const order=selectedOrder?await workOrderApi.update({...selectedOrder,...cleaned},actor,'保存行驶证缺失备案前草稿'):await workOrderApi.create(cleaned,actor);
-      setOrders(current=>[order,...current.filter(o=>o.id!==order.id)]);setSelectedId(order.id);
+      setOrders(current=>[order,...current.filter(o=>o.id!==order.id)]);setSelectedRecord(order);setSelectedId(order.id);
       const normalize=(value:string)=>value.replace(/\s/g,'').toUpperCase();
       const input={reason,vehiclePlate:normalize(order.vehicle.plate),vehicleVin:normalize(order.vehicle.vin)};
       const key=JSON.stringify({orderId:order.id,...input});
@@ -481,7 +489,9 @@ export function useWorkbenchController() {
         repairItems: filterEmptyRepairItems(draft.repairItems) };
       const order = selectedOrder ?? (await workOrderApi.create(cleanedDraft, actor));
       if (selectedOrder) await workOrderApi.update({ ...selectedOrder, ...cleanedDraft }, actor, "保存签字前委托单");
+      else {setSelectedRecord(order);setSelectedId(order.id);}
       const withToken = await workOrderApi.createSignatureToken(order.id, actor);
+      selectOrder(withToken);
       feedback.success("签字流程已发起");
       await loadOrders(role, withToken.id);
       return { token: withToken.signatureToken!, order: withToken };
@@ -507,7 +517,9 @@ export function useWorkbenchController() {
     try {
       const cleaned={...draft,repairItems:filterEmptyRepairItems(draft.repairItems)};
       const saved=selectedOrder ? await workOrderApi.update({...selectedOrder,...cleaned},actor,"保存纸质委托单") : await workOrderApi.create(cleaned,actor);
+      setSelectedRecord(saved);setSelectedId(saved.id);
       const updated=completing ? await workOrderApi.submitPaperOrder(saved.id) : saved;
+      selectOrder(updated);
       feedback.success(completing ? "纸质委托单已提交" : "纸质委托书已创建");
       await loadOrders(role,updated.id);
       await loadDashboard();

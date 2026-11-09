@@ -57,9 +57,9 @@ export function useVehicleTrips(initialScope = 'all') {
     },undefined,id?'detail':'list');
     return()=>{mounted.current=false;};
   }, []);
-  async function uploadImage(id: string, stage: Exclude<VehicleTripStage, "signature">, imageBase64: string) {
-    const key = JSON.stringify({ id, stage, imageBase64 });
-    return vehicleTripApi.upload(id, { stage, imageBase64, requestId: requestId(key) });
+  async function uploadImage(id: string, stage: Exclude<VehicleTripStage, "signature">, imageBase64: string, returnRound: number) {
+    const key = JSON.stringify({ id, stage, imageBase64, returnRound });
+    return vehicleTripApi.upload(id, { stage, imageBase64, returnRound, requestId: requestId(key) });
   }
   return { scope,setScope,list,mobile,vehicles, trips, detail, selectedId, busy:busy||list.loading, pending, error:error||list.error, select,
     departurePhotos,
@@ -77,22 +77,22 @@ export function useVehicleTrips(initialScope = 'all') {
       await vehicleTripApi.create({ ...input, requestId: requestId(key) });
       setDeparturePhotos([]); requests.current.delete(key);
       await list.refresh();
-    }, '出车申请已提交，等待审批', 'create'),
+    }, '已自动出车，出车时间已记录', 'create'),
     upload: (file: File, stage: 'departure' | 'return') => run(async () => {
       if (!detail) return;
       const prepared = await prepareUploadPhoto(file);
-      const attachment = await uploadImage(detail.id, stage, prepared.imageBase64);
+      const attachment = await uploadImage(detail.id, stage, prepared.imageBase64, detail.returnRound);
       setDetail(current => current && current.id === detail.id ? { ...current, attachments: [...current.attachments.filter(a => a.fileId !== attachment.fileId), attachment] } : current);
     }, '照片上传成功', 'upload'),
     act: (action: VehicleTripAction, options: { reason?: string; fileIds?: string[] } = {}) => run(async () => {
       if (!detail) return;
       const fileIds = options.fileIds;
-      const input = { fileIds, reason: options.reason };
+      const input = { fileIds, reason: options.reason, ...(['approve-return', 'reject-return'].includes(action) ? { returnRound: detail.returnRound } : {}) };
       const key = JSON.stringify({ id: detail.id, action, ...input });
       const item = await vehicleTripApi.act(detail.id, action, { ...input, requestId: requestId(key) });
       await list.refresh();
       setDetail(current => current && current.id === item.id ? { ...current, ...item } : current);
-      feedback.success(({ approve: '申请已批准', reject: '申请已驳回', cancel: '申请已取消', depart: '出车登记成功，已记录出车时间', return: '还车登记成功，已记录收车时间' })[action]);
+      feedback.success(({ approve: '已批准并出车', reject: '申请已驳回', cancel: '申请已取消', depart: '出车登记成功，已记录出车时间', return: '还车已提交，等待管理员审核', 'approve-return': '收车审核通过', 'reject-return': '收车已退回，请申请人重新拍照提交' })[action]);
       setDetail(await vehicleTripApi.detail(item.id));
     }, undefined, action)
   };

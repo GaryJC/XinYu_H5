@@ -38,7 +38,7 @@ export function archiveBounds(filters: ArchiveFilters, now = Date.now()): [numbe
 }
 export const archivePerson = (name?: string) => !name?.trim() || ['待派工', '未分配'].includes(name.trim()) ? '未分配' : name.trim();
 export const archiveTechnicians = (names?: string) => [...new Set((names || '').split(/[、,，;；]/).map(archivePerson))];
-export function orderTimestamp(order: WorkOrder, field: 'created' | 'updated') {
+export function orderTimestamp(order: Pick<WorkOrder,'createdAt'|'updatedAt'|'createdAtIso'|'updatedAtIso'>, field: 'created' | 'updated') {
   return archiveTimestamp(field === 'created' ? order.createdAtIso || order.createdAt : order.updatedAtIso || order.updatedAt);
 }
 export function filterArchiveOrders(orders: WorkOrder[], filters: ArchiveFilters, displayStatus: (order: WorkOrder) => string, now = Date.now()) {
@@ -62,7 +62,7 @@ export function filterArchiveOrders(orders: WorkOrder[], filters: ArchiveFilters
     return a.id.localeCompare(b.id);
   });
 }
-export function archiveTimeLabel(order: WorkOrder, field: 'created' | 'updated') {
+export function archiveTimeLabel(order: Pick<WorkOrder,'createdAt'|'updatedAt'|'createdAtIso'|'updatedAtIso'>, field: 'created' | 'updated') {
   const time = orderTimestamp(order, field);
   return Number.isFinite(time) ? new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(time) : '-';
 }

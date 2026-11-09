@@ -1,4 +1,5 @@
 import React from "react";
+import {RecoveryBoundary} from "./shared/ui/recoverableLazy";
 import ReactDOM from "react-dom/client";
 import { BusinessThemeProvider } from "./shared/ui/BusinessForm";
 import dayjs from "dayjs";
@@ -19,7 +20,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <WebViewStyleProvider>
       <BusinessThemeProvider>
-        <App />
+        <RecoveryBoundary><App /></RecoveryBoundary>
       </BusinessThemeProvider>
     </WebViewStyleProvider>
   </React.StrictMode>

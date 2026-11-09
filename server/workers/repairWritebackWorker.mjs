@@ -9,7 +9,7 @@ export function wakeRepairWriteback() {
  if(!started||stopping||!repairWritebackSimulationEnabled()&&!writebackEnabled())return;
  if(!running)running=drainRepairWritebacks({shouldContinue:()=>!stopping}).catch(error=>console.error('润丰检验写回:',error.message)).finally(()=>{running=undefined;});
 }
-export async function drainRepairWritebacks({runTransaction=transaction,write=replaceLegacyRepairItems,shouldContinue=()=>true}={}) {
+export async function drainRepairWritebacks({runTransaction=callback=>transaction(callback,{interactive:false}),write=replaceLegacyRepairItems,shouldContinue=()=>true}={}) {
  if(repairWritebackSimulationEnabled())return processRepairWritebackSimulations(runTransaction,shouldContinue);
  return processRepairWritebacks(runTransaction,write,shouldContinue);
 }

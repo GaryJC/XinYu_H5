@@ -5,7 +5,7 @@ import {
   createAuthSession,
   findUserByDingTalkUserId,
   findUserById,
-  isAuthSessionActive,
+  findActiveSessionUser,
   markUserLogin,
   saveDingTalkUserSnapshot,
   upsertDevelopmentUser,
@@ -113,9 +113,7 @@ export async function authenticateRequest(req) {
 
   const payload = await verifySessionToken(token);
   if (!payload) throw new HttpError(401, "登录已失效，请重新进入钉钉应用");
-  if (!(await isAuthSessionActive(token))) throw new HttpError(401, "登录会话已失效，请重新进入钉钉应用");
-
-  const user = await findUserById(payload.userId);
+  const user = await findActiveSessionUser(token, payload.userId);
   if (!user || !user.active) throw new HttpError(401, "登录用户不存在或已停用");
   return user;
 }
@@ -145,6 +143,7 @@ async function getDingTalkUserId(authCode) {
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(10000),
     body: JSON.stringify({ code: authCode })
   });
   const payload = await response.json().catch(() => null);

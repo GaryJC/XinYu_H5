@@ -1,7 +1,7 @@
 import {buildOperationsDashboard} from './operationsDashboard.mjs';
 import {isRepairCompleted} from '../../shared/repairCompletion.mjs';
 import {hasRole,hasAnyRole} from '../../shared/roles.mjs';
-import {hasPendingInspection,isIndividualRepair,personalRepairStage} from '../../shared/repairProgress.mjs';
+import {isReworkTask,hasPendingInspection,isIndividualRepair,personalRepairStage} from '../../shared/repairProgress.mjs';
 import {hasActiveRepairRound} from './repairRounds.mjs';
 import {completionRange,dispatchMetric,technicianIds} from './dispatchPolicy.mjs';
 import {HttpError} from '../http/HttpError.mjs';
@@ -9,11 +9,13 @@ import {HttpError} from '../http/HttpError.mjs';
 // Counts describe the result of clicking each tab: preserve ordinary filters,
 // but clear the workload/metric drill-down just as the tab handler does.
 export function countDispatchTaskStatuses(tasks,actor,query={}) {
-  return {...(query.search||query.includeCompleted==='true'?{all:filterDispatchTasks(tasks,actor,{...query,stage:undefined,includeCompleted:'true',metric:undefined,workloadState:undefined}).length}:{}),...Object.fromEntries(['','回审&维修中','待处理','待派工','待客户确认','待定','待接单','待开工','维修中','暂停','返工','待检验','回审','草稿','待客户签字','已完成']
-    .map(stage=>[stage,filterDispatchTasks(tasks,actor,{...query,stage,includeCompleted:undefined,metric:undefined,workloadState:undefined}).length]))};
+  const projections=new Map();
+  const select=query=>filterDispatchTasks(tasks,actor,query,projections);
+  return {...(query.search||query.includeCompleted==='true'?{all:select({...query,stage:undefined,includeCompleted:'true',metric:undefined,workloadState:undefined}).length}:{}),...Object.fromEntries(['','回审&维修中','待处理','待派工','待客户确认','待定','待接单','待开工','维修中','暂停','返工','待检验','回审','草稿','待客户签字','已完成']
+    .map(stage=>[stage,select({...query,stage,includeCompleted:undefined,metric:undefined,workloadState:undefined}).length]))};
 }
 
-export function filterDispatchTasks(tasks, actor, query={}) {
+export function filterDispatchTasks(tasks, actor, query={}, projections=new Map()) {
   const personal=query.personal==='true';
   if(personal&&(!actor.id||!hasAnyRole(actor,['technician','outsourcing'])&&!actor.outsourcingRoleMember||query.technicianId&&query.technicianId!==actor.id))throw new HttpError(403,'仅可查看本人维修任务');
   if(personal&&(query.partsStatus||query.workloadState))throw new HttpError(400,'本人维修不能使用仓管或负荷筛选');
@@ -35,16 +37,20 @@ export function filterDispatchTasks(tasks, actor, query={}) {
     if(personal&&!technicianIds(original).includes(actor.id))return false;
     let t=original;
     if(personal&&isIndividualRepair(original)) {
+      if(projections.has(original))t=projections.get(original);
+      else {
       const own=original.items.filter(item=>item.responsibleId===actor.id);
       const stage=personalRepairStage(original,actor.id);
       const completedAt=stage==='维修完成'&&own.length&&own.every(item=>item.status==='已完工')
         ?own.map(item=>item.inspectedAt).filter(Boolean).sort().at(-1)||original.completedAt:original.completedAt;
       t={...original,stage,items:own,completedAt};
+      projections.set(original,t);
+      }
     }
     if(workloadOrders&&!workloadOrders.has(t.orderId))return false;
     if(!workloadOrders && query.technicianId && !technicianIds(t).includes(query.technicianId)) return false;
     if(executionModes.length && !executionModes.includes(t.executionMode||'internal')) return false;
-    if(query.stage==='返工' && (!(t.repairRound?t.roundKind!=='additional':t.rework)||!['待接单','待开工','维修中','暂停','待检验','回审'].includes(t.stage)))return false;
+    if(query.stage==='返工' && !isReworkTask(original,personal?actor.id:undefined))return false;
     if(query.stage==='回审&维修中' && !['回审','维修中'].includes(t.stage)) return false;
     if(query.stage==='待处理' && !['待开工','维修中','暂停','回审'].includes(t.stage)) return false;
     if(query.stage==='进行中' && !['待开工','维修中','暂停'].includes(t.stage)) return false;
@@ -71,7 +77,7 @@ export function filterDispatchTasks(tasks, actor, query={}) {
     const review=[],rework=[],other=[];
     for(const task of filtered) {
       const stage=personal?personalRepairStage(task,actor.id):task.stage;
-      const isRework=task.repairRound?task.roundKind!=='additional':Boolean(task.rework);
+      const isRework=isReworkTask(task,personal?actor.id:undefined);
       (stage==='回审'?review:isRework?rework:other).push(task);
     }
     return [...review,...rework,...other];

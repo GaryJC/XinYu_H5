@@ -17,14 +17,15 @@ function load(path,dependencies={},globals={}) {
     : readFileSync(new URL(`../${path}`,import.meta.url),'utf8');
   const output=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   const exports={};
-  vm.runInNewContext(output,{exports,Error,URL,URLSearchParams,Event,CustomEvent,console,performance,Date,Promise,...globals,
+  vm.runInNewContext(output,{exports,AbortController,Error,URL,URLSearchParams,Event,CustomEvent,console,performance,Date,Promise,...globals,
     require(name){assert.ok(name in dependencies,`Unexpected import ${name}`);return dependencies[name];}});
   return exports;
 }
-function deferred() {let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};}
+function deferred() {let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};}
 function browser(initial='token-a') {
   const values=new Map(initial?[[tokenKey,initial]]:[]);
   const window=new EventTarget();
+  window.setTimeout=setTimeout;window.clearTimeout=clearTimeout;
   window.localStorage={getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};
   const storage=(key=tokenKey)=>{const event=new Event('storage');Object.assign(event,{key,storageArea:window.localStorage});window.dispatchEvent(event);};
   return {window,storage,setToken:token=>token?values.set(tokenKey,token):values.delete(tokenKey)};
@@ -32,7 +33,7 @@ function browser(initial='token-a') {
 function transport(initial='token-a') {
   const b=browser(initial),calls=[],pending=[];
   const api=load('client/src/shared/api/httpClient.ts',{}, {window:b.window,fetch:(path,options)=>{
-    calls.push({path,options});const wait=deferred();pending.push(wait);return wait.promise;
+    calls.push({path,options});const wait=deferred();pending.push(wait);options?.signal?.addEventListener('abort',()=>wait.reject(new Error('aborted')),{once:true});return wait.promise;
   }});
   return {...b,api,calls,pending};
 }
@@ -134,11 +135,11 @@ function workbench() {
     '../work-orders/hooks/usePaperOrderPhotos':{usePaperOrderPhotos:()=>({reset(){resets.paperPhotos++;},isUploading:()=>false})},
     '../work-orders/domain/vehicleLicenseException':{},'../../shared/api/requestId':{createRequestId:()=> 'request-id'},
     '../pre-repair-photos/usePreRepairPhotos':{usePreRepairPhotos:()=>({reset(){resets.prePhotos++;},isUploading:()=>false})},
-    '../pre-repair-photos/photoSlots':{},'../work-orders/domain/workOrderDomain':domain,'../work-orders/domain/repairItems':{},
+    '../pre-repair-photos/photoSlots':{},'../work-orders/domain/workOrderDomain':domain,'../work-orders/domain/repairItems':{filterEmptyRepairItems:items=>items.filter(item=>item.name.trim())},
     '../work-orders/domain/permissions':{canCreateOrder:()=>true},'../../integrations/dingtalk/auth':{},
     '../../shared/api/httpClient':http,'../work-orders/api/workOrderApi':{workOrderApi:api},'../work-orders/hooks/useWorkOrderDraft':draft,
     '../work-orders/hooks/createWorkOrderWorkflowActions':{createWorkOrderWorkflowActions:()=>({})},
-    '../vehicle-license-ocr/useVehicleLicenseOcr':{useVehicleLicenseOcr:()=>({ocrState:{vehicleLicense:{status:'未识别'}},resetOcr(){resets.ocr++;}})},
+    '../vehicle-license-ocr/useVehicleLicenseOcr':{useVehicleLicenseOcr:()=>({isUploading:()=>false,ocrState:{vehicleLicense:{status:'未识别'}},resetOcr(){resets.ocr++;}})},
     '../vehicle-identity/useVehicleIdentityRecognition':{useVehicleIdentityRecognition:()=>({lookupDraftVehicle(){},resetVehicleIdentityRecognition(){resets.identity++;}})},
     './workbenchConfig':{navItems:[{label:'委托开单',roles:['advisor','manager']}],primaryNavByRole:{advisor:'委托开单',manager:'委托开单'}},
     '../dispatch/dispatchAvailability':{dispatchEnabled:false,isDispatchNavigation:()=>false}
@@ -146,7 +147,7 @@ function workbench() {
   // The baseline has no subscription API; all other dependencies still execute its real controller.
   const {useWorkbenchController}=load('client/src/features/workbench/useWorkbenchController.ts',dependencies,globals);
   h.start(useWorkbenchController);
-  return {...b,h,http,resets,loginCalls,domain,setRestoredUser:user=>{restoredUser=user;}};
+  return {...b,h,http,resets,loginCalls,domain,api,setRestoredUser:user=>{restoredUser=user;}};
 }
 
 test('switching test identity clears selected customer, vehicle, photos and recognition state',async()=>{
@@ -205,4 +206,31 @@ test('expiration clears the authenticated workbench and all draft data',async()=
   const h=workbench();await h.h.flush();h.h.value.updateCustomer('name','客户甲');await h.h.flush();
   h.window.dispatchEvent(new CustomEvent('repair-h5-auth-token-changed',{detail:'expired'}));await h.h.flush();
   assert.equal(h.h.value.currentUser,undefined);assert.equal(h.h.value.draft.customer.name,'');assert.match(h.h.value.apiError,/登录已失效/);
+});
+
+test('read cancellation and mutation timeout are distinguishable and never automatically replayed',async()=>{
+ const h=transport();const controller=new AbortController();
+ const read=h.api.request('/api/work-orders',{signal:controller.signal});controller.abort();
+ await assert.rejects(read,error=>error.kind==='cancelled'&&!('status' in error));
+ const body={requestId:'keep-original-request',expectedVersion:3};
+ await assert.rejects(h.api.request('/api/dispatch/tasks/o/actions',{method:'POST',body,timeoutMs:5}),error=>error.kind==='timeout'&&error.message.includes('结果待确认')&&!('status' in error));
+ assert.equal(h.calls.length,2);assert.equal(JSON.parse(h.calls[1].options.body).requestId,body.requestId);
+});
+
+test('the deadline covers body parsing even after headers arrive',async()=>{
+ const h=transport(),body=deferred();
+ const request=h.api.request('/api/work-orders',{timeoutMs:5});
+ h.pending[0].resolve({ok:true,status:200,json:()=>body.promise,headers:new Headers()});
+ const rejected=assert.rejects(request,error=>error.kind==='timeout');
+ await new Promise(resolve=>setTimeout(resolve,15));body.resolve({ok:true});await rejected;
+});
+
+test('a successful save remains selected when the following detail refresh fails',async()=>{
+ const fixture=workbench();await fixture.h.flush();let creates=0,updates=0;
+ fixture.api.create=async draft=>{creates++;return {...draft,id:'saved-order',ocrRecords:[],files:[]};};
+ fixture.api.update=async order=>{updates++;return order;};
+ fixture.api.get=async()=>{throw new Error('刷新失败');};
+ await fixture.h.value.saveDraft();await fixture.h.flush();
+ assert.equal(fixture.h.value.selectedOrder.id,'saved-order');assert.equal(fixture.h.value.apiError,'刷新失败');
+ await fixture.h.value.saveDraft();await fixture.h.flush();assert.equal(creates,1);assert.equal(updates,1);
 });

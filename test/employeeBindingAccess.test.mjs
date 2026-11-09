@@ -7,8 +7,7 @@ const { createTokenForUser } = await import("../server/auth.mjs");
 const { handleApiRequest } = await import("../server/routes/apiRouter.mjs");
 test("unbound authenticated technicians can read identity but cannot reach repair or management routers", async t => {
   t.mock.method(pool, "query", async sql => {
-    if (sql.includes("auth_sessions")) return { rows: [{ id: "session" }] };
-    if (sql.includes("from users where id")) return { rows: [{ id: "u", name: "李富强", role: "technician", active: true, shop_id: "shop-hq" }] };
+    if (sql.includes("from users join auth_sessions")) return { rows: [{ id: "u", name: "李富强", role: "technician", active: true, shop_id: "shop-hq" }] };
     assert.fail(`Unexpected business query: ${sql}`);
   });
   const req = { method: "GET", headers: { authorization: `Bearer ${createTokenForUser("u")}` } };
@@ -25,8 +24,7 @@ test('ordinary employees and unbound technicians reach draft validation through 
   const {Readable}=await import('node:stream');
   let role='employee';
   t.mock.method(pool,'query',async sql=>{
-    if(sql.includes('auth_sessions'))return {rows:[{id:'session'}]};
-    if(sql.includes('from users where id'))return {rows:[{id:'u',name:'开单员工',role,active:true,shop_id:'shop-hq'}]};
+    if(sql.includes('from users join auth_sessions'))return {rows:[{id:'u',name:'开单员工',role,active:true,shop_id:'shop-hq'}]};
     assert.fail(`Unexpected query: ${sql}`);
   });
   for(role of ['employee','technician','inspector','warehouse','outsourcing']){

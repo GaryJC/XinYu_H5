@@ -1,4 +1,5 @@
-import { lazy,Suspense } from "react";
+import { lazy } from "../shared/ui/recoverableLazy";
+import { Suspense } from "react";
 import { usePageZoomLock } from "../shared/ui/usePageZoomLock";
 import { LoadingState } from "../shared/ui/LoadingState";
 import { AppUpdateNotice } from '../shared/app-update/AppUpdateNotice';

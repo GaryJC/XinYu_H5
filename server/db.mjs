@@ -55,6 +55,10 @@ export async function listWorkOrders(role = "manager", user, query = {}) {
   if (query.metadata === 'true') return archiveMetadata(scope);
   if (query.page !== undefined) {
     const { rows, ...result } = await workOrderPageRows(scope, query);
+    if(query.view==='summary') return {...result,items:rows.map(row=>{
+      const order={...rowToWorkOrder(row,[],[],[],[],[],[],[]),dispatchStage:row.dispatch_stage||undefined};
+      return Object.fromEntries(['id', 'dispatchNo', 'arrivalDate', 'status', 'createdAt', 'updatedAt', 'createdAtIso', 'updatedAtIso', 'shop', 'vehicle', 'customer', 'advisor', 'technician', 'dispatchStage', 'customerSignatureReview', 'isBaiyuanOrder', 'paperOrder', 'legacyApproved', 'legacySyncStatus', 'legacySyncRevision', 'legacySyncedAt', 'legacySyncError', 'customerVehicleUpdatedAt', 'customerVehicleUpdatedBy', 'estimatedFee', 'settlementAmount'].map(key=>[key,order[key]]));
+    })};
     const orders = await hydrateOrders(rows);
     return { ...result, items: sanitizeVisibleOrders(orders.map((order, index) => ({ ...order, dispatchStage: rows[index].dispatch_stage || undefined })), role, user) };
   }

@@ -30,6 +30,17 @@ test('paged lists preserve filters, counts, permissions and stable ordering acro
     }
     const page=n=>listWorkOrders('manager',actor,{page:String(n),pageSize:'20'});
     const first=await page(1),second=await page(2),last=await page(99);
+    const summary=await listWorkOrders('manager',actor,{page:'1',pageSize:'20',view:'summary'});
+    assert.equal(summary.total,first.total);
+    assert.deepEqual(summary.items.map(order=>order.id),first.items.map(order=>order.id));
+    for(const item of summary.items) {
+      for(const key of ['auditLog','ocrRecords','repairItems','files','signatureToken','signatureTokenUsed'])assert.equal(Object.hasOwn(item,key),false);
+      const full=first.items.find(order=>order.id===item.id);
+      for(const key of ['vehicle','customer','status','dispatchStage','createdAtIso'])assert.deepEqual(item[key],full[key]);
+    }
+    await pool.query("insert into audit_logs(order_id,actor,action) select 'paging-000','测试','历史记录'||n from generate_series(1,1000)n");
+    const grown=await listWorkOrders('manager',actor,{page:'1',pageSize:'20',view:'summary'});
+    assert.equal(JSON.stringify(grown).length,JSON.stringify(summary).length,'summary does not grow with audit history');
     assert.equal(first.total,45);assert.equal(first.items.length,20);assert.equal(last.page,3);assert.equal(last.items.length,5);
     assert.equal(new Set([...first.items,...second.items,...last.items].map(x=>x.id)).size,45);
     assert.equal(first.items[0].dispatchStage,'维修中');

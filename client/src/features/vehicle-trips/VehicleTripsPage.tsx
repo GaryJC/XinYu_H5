@@ -13,7 +13,7 @@ import { TripCameraInput } from './TripCameraInput';
 import './vehicle-trips.css';
 
 const time = (value?: string) => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '—';
-const actions: Record<string, string> = { create: '提交申请', approve: '批准申请', reject: '驳回', cancel: '取消申请', depart: '确认出车', return: '确认还车' };
+const actions: Record<string, string> = { create: '提交申请', approve: '批准申请', reject: '驳回', cancel: '取消申请', depart: '确认出车', return: '提交还车', 'approve-return': '收车审核通过', 'reject-return': '收车审核退回' };
 export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserProfile; initialScope?:string }) {
   const feedback = useActionFeedback();
   const state = useVehicleTrips(initialScope);
@@ -26,12 +26,12 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
   const manager = hasRole(user, 'manager');
   const detail = state.detail;
   const mine = detail?.applicantId === user.id;
-  const stage = detail?.status === '待出车' ? 'departure' : detail?.status === '用车中' ? 'return' : undefined;
-  const photoIds = detail?.attachments.filter(a => a.stage === stage && !excluded.includes(a.fileId)).map(a => a.fileId) || [];
+  const stage = detail && ['待审批', '待出车'].includes(detail.status) ? 'departure' : detail?.status === '用车中' ? 'return' : undefined;
+  const photoIds = detail?.attachments.filter(a => a.stage === stage && (stage !== 'return' || a.returnRound === detail.returnRound) && !excluded.includes(a.fileId)).map(a => a.fileId) || [];
   const hasApplicationPhotos = detail?.attachments.some(a => a.stage === 'departure' && a.confirmed);
   function open(id: string) { setRejectOpen(false); rejectForm.resetFields(); setExcluded([]); state.select(id); }
-  function photos(phase: VehicleTripStage, title: string) {
-    const items = detail?.attachments.filter(a => a.stage === phase) || [];
+  function photos(phase: VehicleTripStage, title: string, returnRound?: number) {
+    const items = detail?.attachments.filter(a => a.stage === phase && (returnRound === undefined || a.returnRound === returnRound)) || [];
     return items.length ? <section className="trip-section"><h3>{title}</h3><div className="trip-photos">{items.map(a => <div key={a.fileId}>
       <AuthenticatedImage fileId={a.fileId} alt={title} width={140} height={100} />
       {!a.confirmed && mine && stage === phase && <Button size="small" disabled={state.busy} onClick={() => setExcluded(current => current.includes(a.fileId) ? current.filter(id => id !== a.fileId) : [...current, a.fileId])}>{excluded.includes(a.fileId) ? '重新选用' : '不使用此照片'}</Button>}
@@ -56,18 +56,18 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
             <Button size="small" disabled={state.busy} aria-label={`移除第 ${index + 1} 张公里数照片`} onClick={() => state.removeDeparturePhoto(index)}>移除照片</Button>
           </div>)}</div>}
         </Form.Item>
-        <Button type="primary" htmlType="submit" loading={state.pending === 'create'} disabled={state.busy || !state.vehicles.length}>提交出车申请</Button>
+        <Button type="primary" htmlType="submit" loading={state.pending === 'create'} disabled={state.busy || !state.vehicles.length}>提交并出车</Button>
       </Form>
     </Card>
     <div className="trip-list-heading"><div><h3>{manager ? '本店申请记录' : '我的申请记录'}</h3><span className="trip-muted">共 {state.list.total} 条申请</span></div>
-      <Select aria-label="筛选出车申请" value={scope} onChange={setScope} style={{ width: 140 }} options={[{ value: 'all', label: '全部记录' }, { value: 'mine', label: '我的申请' }, { value: 'pending', label: '待审批' }, { value: 'using', label: '用车中' }]} />
+      <Select aria-label="筛选出车申请" value={scope} onChange={setScope} style={{ width: 140 }} options={[{ value: 'all', label: '全部记录' }, { value: 'mine', label: '我的申请' }, { value: 'return-review', label: '待收车审核' }, { value: 'using', label: '用车中' }]} />
     </div>
     {!state.busy && !state.trips.length && <Empty description="暂无出车申请" />}
     {state.pending === 'list' && <LoadingState label="正在加载出车申请…" />}
     <div className="trip-card-grid">{state.trips.map(t => <Card className="trip-record-card" role="button" tabIndex={state.busy ? -1 : 0} aria-label={`查看申请：${t.vehicle.plate}，${t.applicantName}，${t.status}`} aria-disabled={state.busy}
       onClick={() => { if (!state.busy) open(t.id); }} onKeyDown={event => {
         if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (!state.busy) open(t.id); }
-      }} key={t.id} title={t.vehicle.plate} extra={<Tag color={t.status === '待审批' ? 'orange' : t.status === '用车中' ? 'blue' : t.status === '已还车' ? 'green' : 'default'}>{t.status}</Tag>}>
+      }} key={t.id} title={t.vehicle.plate} extra={<Tag color={['待审批', '待收车审核'].includes(t.status) ? 'orange' : t.status === '用车中' ? 'blue' : t.status === '已还车' ? 'green' : 'default'}>{t.status}</Tag>}>
       <p className="trip-muted">{t.vehicle.brand} {t.vehicle.model} · {t.applicantName}</p><p className="trip-record-reason">{t.reason}</p>
       <div className="trip-record-footer"><span><Clock3 size={14} />{time(t.createdAt)}</span></div>
     </Card>)}</div>
@@ -79,7 +79,7 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
         <div className="trip-vehicle-summary">
           <div className="trip-vehicle-icon"><CarFront size={26} /></div>
           <div><span className="trip-eyebrow">出车申请</span><h2>{detail.vehicle.plate}</h2><p>{detail.vehicle.brand} {detail.vehicle.model}</p></div>
-          <Tag color={detail.status === '待审批' ? 'orange' : detail.status === '用车中' ? 'blue' : detail.status === '已还车' ? 'green' : 'default'}>{detail.status}</Tag>
+          <Tag color={['待审批', '待收车审核'].includes(detail.status) ? 'orange' : detail.status === '用车中' ? 'blue' : detail.status === '已还车' ? 'green' : 'default'}>{detail.status}</Tag>
         </div>
         <section className="trip-section"><h3 className="trip-section-heading"><ClipboardCheck size={18} />申请信息</h3>
           <dl className="trip-info-grid">
@@ -88,46 +88,49 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
             {detail.note && <div className="trip-info-wide"><dt>备注</dt><dd>{detail.note}</dd></div>}
           </dl>
         </section>
-        <section className="trip-section"><h3 className="trip-section-heading"><Clock3 size={18} />行程与审批</h3>
+        <section className="trip-section"><h3 className="trip-section-heading"><Clock3 size={18} />行程与收车</h3>
           <dl className="trip-info-grid">
             <div><dt>出车时间</dt><dd>{detail.departureAt ? time(detail.departureAt) : '尚未出车'}</dd></div>
-            <div><dt>收车时间</dt><dd>{detail.returnAt ? time(detail.returnAt) : '尚未还车'}</dd></div>
-            <div className="trip-info-wide"><dt>审批记录</dt><dd>{detail.approvedName ? `${detail.approvedName} · ${time(detail.approvedAt)}` : detail.status === '待审批' ? '等待管理员审批' : '未批准'}</dd></div>
+            <div><dt>还车提交时间</dt><dd>{detail.returnAt ? time(detail.returnAt) : '尚未还车'}</dd></div>
+            {detail.approvedName && <div className="trip-info-wide"><dt>原出车审批</dt><dd>{detail.approvedName} · {time(detail.approvedAt)}</dd></div>}
+            <div className="trip-info-wide"><dt>收车审核</dt><dd>{detail.returnReviewedName ? `${detail.returnReviewedName} · ${time(detail.returnReviewedAt)}` : detail.status === '待收车审核' ? '等待管理员审核' : detail.status === '已还车' ? '历史已还车' : '尚未审核'}</dd></div>
           </dl>
         </section>
         {detail.rejectionReason && <Alert type="warning" title={`驳回原因：${detail.rejectionReason}`} />}
-        {photos('departure', '出车公里数照片')}{photos('return', '收车公里数照片')}
-        {manager && !mine && detail.status === '待审批' && <section className="trip-section trip-approval">
-          <h3 className="trip-section-heading"><ClipboardCheck size={18} />领导审批</h3>
+        {detail.returnRejectionReason && <Alert className="trip-return-feedback" type="warning" showIcon title={`收车退回：${detail.returnRejectionReason}`} />}
+        {photos('departure', '出车公里数照片')}{photos('return', '本次收车公里数照片', detail.returnRound)}
+        {[...new Set(detail.attachments.filter(a => a.stage === 'return' && a.confirmed && a.returnRound < detail.returnRound).map(a => a.returnRound))].map(round => <div key={round}>{photos('return', `第 ${round} 次还车照片（已退回）`, round)}</div>)}
+        {manager && !mine && detail.status === '待收车审核' && <section className="trip-section trip-approval">
+          <h3 className="trip-section-heading"><ClipboardCheck size={18} />收车审核</h3>
           <div className="trip-approval-actions">
-            <Button type="primary" loading={state.pending === 'approve'} disabled={state.busy} onClick={() => void state.act('approve')}>批准申请</Button>
-            <Button danger disabled={state.busy} onClick={() => { rejectForm.resetFields(); setRejectOpen(true); }}>驳回申请</Button>
+            <Button type="primary" loading={state.pending === 'approve-return'} disabled={state.busy} onClick={() => void state.act('approve-return')}>审核通过</Button>
+            <Button danger disabled={state.busy} onClick={() => { rejectForm.resetFields(); setRejectOpen(true); }}>退回重拍</Button>
           </div>
         </section>}
-        {mine && manager && detail.status === '待审批' && <Alert type="info" title="请等待另一名门店管理员审批，不能审批自己的申请" />}
+        {mine && manager && detail.status === '待收车审核' && <Alert type="info" title="请等待另一名门店管理员审核收车" />}
         {mine && stage && <section className="trip-section">
           <h3>{stage === 'departure' ? '出车登记' : '还车登记'}</h3>
           {(stage === 'return' || !hasApplicationPhotos) && <div className="trip-capture-section">
             <TripCameraInput label={stage === 'departure' ? '上传出车公里数照片' : '上传收车公里数照片'} busy={state.pending === 'upload'} disabled={state.busy || photoIds.length >= 9} onCapture={file => void state.upload(file, stage)} />
             <p>已选 {photoIds.length} 张照片（最多 9 张）</p>
           </div>}
-          <Button type="primary" loading={state.pending === 'depart' || state.pending === 'return'} disabled={state.busy || !photoIds.length} onClick={() => void state.act(stage === 'departure' ? 'depart' : 'return', { fileIds: photoIds })}>{stage === 'departure' ? '确认出车' : '确认还车'}</Button>
+          <Button type="primary" loading={state.pending === 'depart' || state.pending === 'return'} disabled={state.busy || !photoIds.length} onClick={() => void state.act(stage === 'departure' ? 'depart' : 'return', { fileIds: photoIds })}>{stage === 'departure' ? '确认出车' : '提交还车审核'}</Button>
         </section>}
         {mine && ['待审批', '待出车'].includes(detail.status) && <Button danger loading={state.pending === 'cancel'} disabled={state.busy} onClick={() => void state.act('cancel')}>取消申请</Button>}
         <ActionHistory title="操作记录" items={detail.history.map((entry,index)=>({key:index,title:actions[entry.action]||entry.action,actor:entry.actorName,time:time(entry.at)}))}/>
       </>}
     </Drawer>
-    <Modal className="trip-reject-modal" centered width={480} title={<span className="trip-reject-title"><span><CircleAlert size={22} /></span>驳回申请</span>} open={rejectOpen && Boolean(detail) && detail?.status === '待审批'}
-      okText="确认驳回" cancelText="取消" okButtonProps={{ danger: true }} confirmLoading={state.pending === 'reject'}
+    <Modal className="trip-reject-modal" centered width={480} title={<span className="trip-reject-title"><span><CircleAlert size={22} /></span>退回收车</span>} open={rejectOpen && Boolean(detail) && detail?.status === '待收车审核'}
+      okText="确认退回" cancelText="取消" okButtonProps={{ danger: true }} confirmLoading={state.pending === 'reject-return'}
       onOk={() => rejectForm.submit()} onCancel={() => { if (!state.busy) setRejectOpen(false); }}>
-      <p className="trip-reject-description">请填写具体原因，方便申请人了解情况后重新申请。</p>
+      <p className="trip-reject-description">请填写退回原因，申请人将重新拍照提交。</p>
       <div className="trip-reject-context"><span>{detail?.vehicle.plate}</span><span>申请人 · {detail?.applicantName}</span></div>
       {state.error && <Alert type="error" showIcon title={state.error} />}
-      <Form name="vehicle-trip-reject" form={rejectForm} layout="vertical" disabled={state.busy} onFinishFailed={() => feedback.warning("请填写驳回原因")} onFinish={async ({ reason }) => {
-        if (await state.act('reject', { reason: reason.trim() })) { setRejectOpen(false); rejectForm.resetFields(); }
+      <Form name="vehicle-trip-reject" form={rejectForm} layout="vertical" disabled={state.busy} onFinishFailed={() => feedback.warning("请填写退回原因")} onFinish={async ({ reason }) => {
+        if (await state.act('reject-return', { reason: reason.trim() })) { setRejectOpen(false); rejectForm.resetFields(); }
       }}>
-        <Form.Item label="驳回原因" name="reason" rules={[{ required: true, whitespace: true, message: '请填写驳回原因' }]}>
-          <Input.TextArea aria-label="驳回原因" placeholder="例如：用车时间需要调整，请修改后重新申请" rows={4} maxLength={500} />
+        <Form.Item label="退回原因" name="reason" rules={[{ required: true, whitespace: true, message: '请填写退回原因' }]}>
+          <Input.TextArea aria-label="退回原因" placeholder="例如：公里数不清晰，请重新拍摄仪表盘" rows={4} maxLength={500} />
         </Form.Item>
         <div className="trip-reject-count"><span>原因将保存在申请记录中</span><span>{rejectReason.length} / 500</span></div>
       </Form>

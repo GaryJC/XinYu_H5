@@ -1,15 +1,16 @@
+import { lazy } from "../../shared/ui/recoverableLazy";
 import { TodoOverview } from "./TodoOverview";
 import { LoadingState } from "../../shared/ui/LoadingState";
 import { userRoles } from "../../../../shared/roles.mjs";
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import { EmployeeBindingGate } from "../employee-binding/EmployeeBindingGate";
-import { lazy, Suspense, useState } from "react";
+import { Suspense, useState } from "react";
 import { ArrowLeft, ArrowUp, ClipboardCheck, Menu, Plus, ChevronRight, RefreshCcw, UserRound } from "lucide-react";
 import { Alert, Button, Drawer, FloatButton, Grid, Layout, Select, Space } from "antd";
 import { DevelopmentPersonaKey } from "../../../../shared/types";
 import "./workbench.css";
 import { roles } from "../work-orders/domain/workOrderDomain";
-import { OrdersArchive } from "./OrdersArchive";
+const OrdersArchive = lazy(() => import("./OrdersArchive").then(m => ({default:m.OrdersArchive})));
 import { dispatchEnabled, isDispatchNavigation } from "../dispatch/dispatchAvailability";
 import { useWorkbenchController } from "./useWorkbenchController";
 
@@ -140,7 +141,7 @@ export function WorkbenchPage() {
         {!bindingRequired && currentUser && activeNav === "工作台" && (dispatchEnabled || !["technician", "inspector", "warehouse"].includes(role)) ? (
           <>
             {controller.todoError?<Alert type="warning" title={controller.todoError}/>:null}
-            <TodoOverview key={currentUser?.id} counters={counters} canApprove={!!currentUser&&hasRole(currentUser,'manager')} onTodo={controller.openTodo} onApprovals={()=>{setTripScope('pending');setActiveNav('出车申请');}}/>
+            <TodoOverview key={currentUser?.id} counters={counters} canApprove={!!currentUser&&hasRole(currentUser,'manager')} onTodo={controller.openTodo} onApprovals={()=>{setTripScope('return-review');setActiveNav('出车申请');}}/>
             <section className="workbench-shortcuts" aria-label="快捷入口">
               <div className="workbench-section-heading"><h2>快捷入口</h2></div>
               <div className="workbench-shortcut-grid">{visibleNavItems.filter(item => !['工作台', '车辆管理', '数据看板', '权限设置', '配件竞价', '工单全览'].includes(item.label)).map(item => {
@@ -148,11 +149,11 @@ export function WorkbenchPage() {
                 return <button type="button" key={item.label} onClick={() => setActiveNav(item.label)}><span className="shortcut-icon"><Icon size={21} aria-hidden="true" /></span><span className="shortcut-label">{item.label}</span><ChevronRight className="shortcut-arrow" size={16} aria-hidden="true" /></button>;
               })}</div>
             </section>
-            <OrdersArchive controller={controller} />
+            <Suspense fallback={<LoadingState label="正在加载工单…" />}><OrdersArchive controller={controller} /></Suspense>
           </>
         ) : null}
 
-        {!bindingRequired && activeNav === "工单全览" && currentUser && hasAnyRole(currentUser, ["advisor", "manager"]) ? <OrdersArchive key={currentUser.id} controller={controller} overview/> : null}
+        {!bindingRequired && activeNav === "工单全览" && currentUser && hasAnyRole(currentUser, ["advisor", "manager"]) ? <Suspense fallback={<LoadingState label="正在加载工单…" />}><OrdersArchive key={currentUser.id} controller={controller} overview/></Suspense> : null}
 
         {!bindingRequired && currentUser && activeNav === "委托开单" ? (
           <Suspense fallback={<LoadingState label="正在加载委托开单…" />}>
@@ -176,7 +177,7 @@ export function WorkbenchPage() {
 
         {!bindingRequired && currentUser && (activeNav === "权限设置") ? (
           <Suspense fallback={<LoadingState label="正在加载功能模块…" />}>
-            <ModulePanel activeNav={activeNav} orders={orders} dashboard={dashboard} users={users} />
+            <ModulePanel activeNav={activeNav} orders={[]} dashboard={dashboard} users={users} />
           </Suspense>
         ) : null}
       </Layout.Content>

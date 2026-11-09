@@ -2,7 +2,13 @@ import { HttpError } from "../../http/HttpError.mjs";
 const DINGTALK_ACCESS_TOKEN_TTL_MS = 90 * 1000;
 let dingTalkAccessToken = "";
 let dingTalkAccessTokenExpiresAt = 0;
+let pending;
 export async function getDingTalkAccessToken() {
+  if (dingTalkAccessToken && Date.now() < dingTalkAccessTokenExpiresAt) return dingTalkAccessToken;
+  if (!pending) pending = fetchAccessToken().finally(() => { pending = undefined; });
+  return pending;
+}
+async function fetchAccessToken() {
   const now = Date.now();
   if (dingTalkAccessToken && now < dingTalkAccessTokenExpiresAt) return dingTalkAccessToken;
 

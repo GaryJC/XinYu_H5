@@ -33,7 +33,7 @@ export async function prepareDeploymentRelease(appPath, processName, port, sourc
   const options = {
     name: processName, cwd: releasePath, script: path.join(releasePath, "server", "server.mjs"),
     interpreter: process.execPath, node_args: ["--env-file=.env.production"],
-    autorestart: true, max_restarts: 10, restart_delay: 2000, time: true,
+    autorestart: true, kill_timeout: 70000, max_restarts: 10, restart_delay: 2000, time: true,
     env: { LOCAL_UPLOAD_ROOT: path.resolve(root, settings.uploads), STATIC_DIR: path.join(releasePath, "dist"), DEPLOYMENT_RELEASE: releaseId }
   };
   await writeFile(path.join(releasePath, "ecosystem.release.config.cjs"), `module.exports = ${JSON.stringify({ apps: [options] }, null, 2)};\n`);

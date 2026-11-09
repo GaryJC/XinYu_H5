@@ -49,9 +49,9 @@ test('legacy completed projects retain their month when new work is added before
   assert.equal(technicianCompletedProjects([data],'A','2026-11').length,0);
 });
 
-test('outsourced completed items use their own finish date before the entire order completes', () => {
+test('outsourced completion without inspection does not count as personal inspected work', () => {
   const data=row([{id:1,name:'外包维修',status:'已完工',responsibleId:'A',finishAt:'2026-10-31T10:00:00Z'}],0,{executionMode:'outsourced',completedAt:'2026-11-02T00:00:00Z'});
-  assert.equal(technicianCompletedProjects([data],'A','2026-10').length,1);
+  assert.equal(technicianCompletedProjects([data],'A','2026-10').length,0);
   assert.equal(technicianCompletedProjects([data],'A','2026-11').length,0);
 });
 

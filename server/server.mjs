@@ -1,3 +1,5 @@
+import {drainServer} from './http/drainServer.mjs';
+import {startRuntimeMetrics} from './workers/runtimeMetrics.mjs';
 import {startVehicleTripNotifications} from './workers/vehicleTripNotifications.mjs';
 import { startProcurementWorker } from "./workers/procurementWorker.mjs";
 import {startRepairWritebacks} from './workers/repairWritebackWorker.mjs';
@@ -16,6 +18,7 @@ import { handleApiRequest } from "./routes/apiRouter.mjs";
 import { withRequestTiming } from "./http/requestTiming.mjs";
 
 const config = serverConfig();
+const stopMetrics=startRuntimeMetrics();
 const stopRepairWritebacks = startRepairWritebacks();
 const stopNotifications = startDispatchNotifications();
 const stopLegacySyncRecovery = startLegacySyncRecovery();
@@ -53,12 +56,17 @@ server.listen(config.port, "0.0.0.0", () => {
   console.log(`Repair API server listening on http://localhost:${config.port}`);
 });
 
+let stopping=false;
 for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.on(signal, () => {
-    server.close(async () => {
-      await Promise.all([stopRepairWritebacks(), stopNotifications(), stopProcurement(), stopLicenseNotifications(), stopTripNotifications(), stopLegacySyncRecovery()]);
-      await Promise.all([closePool(), closeSqlServerPool()]);
-      process.exit(0);
-    });
+  process.on(signal, async () => {
+    if(stopping)return;
+    stopping=true;
+    const deadline=setTimeout(()=>{console.error('[shutdown] drain deadline exceeded');process.exit(1);},60000);
+    deadline.unref();
+    try {
+      // Calling stop immediately prevents new leases while in-flight HTTP drains.
+      await drainServer(server,[stopMetrics,stopRepairWritebacks,stopNotifications,stopProcurement,stopLicenseNotifications,stopTripNotifications,stopLegacySyncRecovery],[closePool,closeSqlServerPool]);
+      clearTimeout(deadline);process.exit(0);
+    } catch(error) {console.error('[shutdown]',{code:error.code});process.exit(1);}
   });
 }

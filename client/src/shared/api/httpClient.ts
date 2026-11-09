@@ -13,12 +13,40 @@ let sessionReady = true;
 type SessionChange = "changed" | "storage" | "expired";
 const sessionChangedEvent = "repair-h5-auth-token-changed";
 
-type RequestOptions = {
+export type RequestOptions = {
+  signal?: AbortSignal;
+  timeoutMs?: number;
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   skipAuth?: boolean;
   restoreSession?: boolean;
 };
+
+// Keep the deadline active until the response body has been consumed.
+async function withDeadline<T>(options: RequestOptions, operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const writing = Boolean(options.method && options.method !== "GET");
+  const timeoutMs = options.timeoutMs ?? (writing ? 60_000 : 20_000);
+  let timedOut = false;
+  const cancel = () => controller.abort();
+  options.signal?.addEventListener("abort", cancel, { once: true });
+  if (options.signal?.aborted) cancel();
+  const timer = window.setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
+  try {
+    if (controller.signal.aborted) throw new Error("cancelled");
+    const result = await operation(controller.signal);
+    if (controller.signal.aborted) throw new Error("aborted");
+    return result;
+  } catch (error) {
+    if (controller.signal.aborted) throw Object.assign(new Error(timedOut
+      ? writing ? "请求超时，提交结果待确认，请先核对记录" : "加载超时，请重试"
+      : writing ? "请求已中断，提交结果待确认" : "请求已取消"), { kind: timedOut ? "timeout" : "cancelled" });
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+    options.signal?.removeEventListener("abort", cancel);
+  }
+}
 
 export function setAuthToken(token: string) {
   window.localStorage.setItem(authTokenKey, token);
@@ -117,7 +145,7 @@ export function requestCachedImage(path: string): Promise<Blob> {
   if (pending) return pending;
   const generation = imageCacheGeneration;
   const started = performance.now();
-  const loading = fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : undefined })
+  const loading = withDeadline({ timeoutMs: 120_000 }, signal => fetch(path, { signal, headers: token ? { Authorization: `Bearer ${token}` } : undefined })
     .then(async (response) => {
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
@@ -142,7 +170,7 @@ export function requestCachedImage(path: string): Promise<Blob> {
         }
       }
       return blob;
-    })
+    }))
     .finally(() => {
       if (generation === imageCacheGeneration) pendingImages.delete(path);
     });
@@ -163,7 +191,9 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     const token = session?.token || "";
     if (token) headers.Authorization = `Bearer ${token}`;
 
+    return await withDeadline({ ...options, timeoutMs: options.timeoutMs ?? (/\/(?:ocr|files)(?:\/|$)|photos|print-pdf|export/.test(path) ? 120_000 : undefined) }, async signal => {
     response = await fetch(path, {
+      signal,
       method: options.method ?? "GET",
       headers: Object.keys(headers).length ? headers : undefined,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined
@@ -176,6 +206,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     }
     succeeded = true;
     return payload as T;
+    });
   } finally {
     if (measured) console.info("[ocr-request]", {
       path, durationMs: Math.round(performance.now() - started),
@@ -186,10 +217,12 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 }
 
-export async function requestBlob(path: string): Promise<Blob> {
+export async function requestBlob(path: string, options: Pick<RequestOptions, "signal" | "timeoutMs"> = {}): Promise<Blob> {
+  return withDeadline({timeoutMs:120_000,...options}, async signal => {
   const session = captureSession();
   const { token } = session;
   const response = await fetch(path, {
+    signal,
     headers: token ? { Authorization: `Bearer ${token}` } : undefined
   });
 
@@ -201,4 +234,5 @@ export async function requestBlob(path: string): Promise<Blob> {
   const blob = await response.blob();
   checkSession(session);
   return blob;
+  });
 }

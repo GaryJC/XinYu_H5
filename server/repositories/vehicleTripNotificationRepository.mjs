@@ -21,11 +21,11 @@ export async function queueTripRecipients(job,managerIds,runTransaction) {
     const current=(await database.query('select lease_id from vehicle_trip_notification_jobs where id=$1 for update',[job.id])).rows[0];
     if(current?.lease_id!==job.lease_id)return;
     const trip=await new VehicleTripRepository(database).getTrip(job.trip_id,true);
-    if(!tripNotificationCurrent(job.action,trip)) {
+    if(!tripNotificationCurrent(job.action,trip,job.payload)) {
       await database.query("update vehicle_trip_notification_jobs set status='obsolete',locked_until=null,lease_id=null,next_attempt_at=null where id=$1",[job.id]);return;
     }
     const {rows}=await database.query('select id,shop_id as "shopId",active,role,roles from users where shop_id=$1 and active',[trip.shopId]);
-    const targets=rows.filter(user=>tripNotificationRecipient(job.action,trip,user)&&(!tripManagerFanout(job.action)||!managerIds||managerIds.includes(user.id)));
+    const targets=rows.filter(user=>tripNotificationRecipient(job.action,trip,user,job.payload)&&(!tripManagerFanout(job.action)||!managerIds||managerIds.includes(user.id)));
     if(!targets.length)throw new Error('本店暂无有效通知接收人，请核对管理员和申请人的在职状态');
     for(const user of targets)await database.query('insert into vehicle_trip_notifications(id,job_id,recipient_id) values($1,$2,$3) on conflict(job_id,recipient_id) do nothing',[randomUUID(),job.id,user.id]);
     await database.query("update vehicle_trip_notification_jobs set status='queued',error='',locked_until=null,lease_id=null,next_attempt_at=null where id=$1",[job.id]);

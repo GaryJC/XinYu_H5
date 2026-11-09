@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {sortDispatchTasks} from '../server/domain/dispatchTaskSort.mjs';
 import {pageResult} from '../server/domain/pagination.mjs';
 const actor={id:'a'};
-const make=(orderId,assignedAt,dueAt,extra={})=>({orderId,assignedAt,dueAt,stage:'维修中',items:[],technicianIds:['a'],...extra});
+const make=(orderId,assignedAt,dueAt,extra={})=>({orderId,assignedAt,dueAt,stage:'维修中',items:[{id:1,responsibleId:'a',status:'维修中'}],technicianIds:['a'],...extra});
 const tasks=[make('late','2026-11-03T00:00:00Z','2026-11-04T00:00:00Z',{urgent:true}),make('early','2026-11-01T00:00:00Z','2026-11-06T00:00:00Z'),make('middle','2026-11-02T00:00:00Z','2026-11-05T00:00:00Z'),make('missing',undefined,undefined),make('invalid','invalid','invalid')];
 const ids=rows=>rows.map(t=>t.orderId);
 test('personal lists default to dispatch number and support both directions and date fields',()=>{

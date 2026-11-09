@@ -17,9 +17,9 @@ export function useArchiveFilters(user?: UserProfile, overview = false, enabled 
   const setFilters=(filters:ArchiveFilters)=>setState({userId,filters});
   const key=JSON.stringify({userId,filters,overview,day});
   const bounds=archiveBounds(filters);
-  const list=usePagedList(key,page=>workOrderApi.page({page,pageSize:20,search:filters.search,baiyuanOnly:String(filters.baiyuanOnly),
+  const list=usePagedList(key,(page,signal)=>workOrderApi.summaryPage({page,pageSize:20,search:filters.search,baiyuanOnly:String(filters.baiyuanOnly),
     statuses:JSON.stringify(filters.statuses),advisors:JSON.stringify(filters.advisors),technicians:JSON.stringify(filters.technicians),sort:filters.sort,
-    ...(bounds?{from:new Date(bounds[0]).toISOString(),to:new Date(bounds[1]).toISOString()}:{}),...(overview?{shopId:user?.shopId}:{})}),mobile,enabled&&Boolean(user),order=>order.id);
+    ...(bounds?{from:new Date(bounds[0]).toISOString(),to:new Date(bounds[1]).toISOString()}:{}),...(overview?{shopId:user?.shopId}:{})},signal),mobile,enabled&&Boolean(user),order=>order.id);
   useEffect(()=>{
     if(!user||!enabled)return;
     let active=true;

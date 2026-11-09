@@ -79,8 +79,7 @@ test('employees and unbound technicians can prepare their own PDFs while foreign
     const queries = [];
     const mock = t.mock.method(pool, 'query', async (sql, params) => {
       queries.push(sql);
-      if (sql.includes('from auth_sessions')) return { rows: [{ valid: true }] };
-      if (sql.includes('from users where id =')) return { rows: [user] };
+      if (sql.includes('from users join auth_sessions')) return { rows: [user] };
       if (sql.includes('select advisor, shop_id from work_orders')) return { rows: [{ advisor: params[0] === 'other-owner' ? '其他员工' : user.name, shop_id: params[0] === 'other-shop' ? 'other' : user.shop_id }] };
       throw new Error(`Unexpected query: ${sql}`);
     });

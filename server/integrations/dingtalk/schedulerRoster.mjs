@@ -3,10 +3,10 @@ import { listDingTalkRoleMembers } from './inspectorRoster.mjs';
 import { getDingTalkUserProfile,resolveDingTalkOrganizationMapping } from './organization.mjs';
 import { findUserByDingTalkUserId,upsertUserFromDingTalk,saveDingTalkUserSnapshot } from '../../repositories/userRepository.mjs';
 import definitions from '../../../shared/dingtalkRoles.json' with {type:'json'};
-export async function syncSchedulerRoster(shopId,{list=()=>listDingTalkRoleMembers(['advisor','manager']),profile=getDingTalkUserProfile,find=findUserByDingTalkUserId,upsert=upsertUserFromDingTalk,snapshot=saveDingTalkUserSnapshot}={}) {
+export async function syncSchedulerRoster(shopId,{list=()=>listDingTalkRoleMembers(['advisor','manager'],{coalesce:true}),profile=getDingTalkUserProfile,find=findUserByDingTalkUserId,upsert=upsertUserFromDingTalk,snapshot=saveDingTalkUserSnapshot}={}) {
   const {ids,accessToken}=await list();
   const profiles=[];
-  for(const userId of ids) profiles.push(await profile({userId,accessToken}));
+  for(const userId of ids) profiles.push(await profile({userId,accessToken,coalesce:true}));
   const names=definitions.filter(r=>['advisor','manager'].includes(r.role)).flatMap(r=>r.names);
   const eligible=[];
   for(const p of profiles) {

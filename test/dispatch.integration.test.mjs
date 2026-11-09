@@ -799,12 +799,27 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await run(advisor,'retry-inspection-notifications');
       // Earlier errored jobs become obsolete before the newest submission resolves.
       await pool.query("update dispatch_inspection_notifications set next_attempt_at=now() where order_id='no-roster'");
-      await drainInspectionNotifications({env,sync:async()=>[]});await drainInspectionNotifications({env,sync:async()=>[]});
+      let rosterReads=0;
+      await drainInspectionNotifications({env,sync:async()=>{rosterReads++;return [];}});
+      assert.equal(rosterReads,1,'only the latest actionable inspection job reads the live roster');
+      const jobs=(await pool.query("select status from dispatch_inspection_notifications where order_id='no-roster' order by event_id")).rows;
+      assert.deepEqual(jobs.map(j=>j.status),['obsolete','pending']);
       assert.match((await service.dispatchDetail(manager,'no-roster')).inspectionNotification.error,/暂无本店/);
       await pool.query("update users set inspector_role_member=false where id='inspector'");
       await assert.rejects(()=>service.executeDispatchAction(inspector,'no-roster',{action:'claim-inspection',expectedVersion:local.version,requestId:randomUUID()}),e=>e.status===403);
       await pool.query("update users set inspector_role_member=null where id='inspector'");
       await assert.rejects(()=>service.executeDispatchAction(outside,'no-roster',{action:'claim-inspection',expectedVersion:local.version,requestId:randomUUID()}),e=>e.status===403);
+    });
+    await t.test('claimed inspection jobs become obsolete without contacting an unavailable roster',async()=>{
+      const local=(await service.dispatchDetail(manager,'no-roster')).task;
+      await service.executeDispatchAction(inspector,'no-roster',{action:'claim-inspection',expectedVersion:local.version,requestId:randomUUID()});
+      await pool.query("update dispatch_inspection_notifications set next_attempt_at=now() where order_id='no-roster' and status='pending'");
+      const env={APP_ENV:'test',DISPATCH_NOTIFICATION_MODE:'dingtalk',DINGTALK_AGENT_ID:'1',DINGTALK_APP_KEY:'test',DINGTALK_APP_SECRET:'test',DISPATCH_APP_URL:'https://example.com'};
+      let rosterReads=0;
+      await drainInspectionNotifications({env,sync:async()=>{rosterReads++;throw new Error('通讯录不可用');}});
+      assert.equal(rosterReads,0);
+      assert.ok((await pool.query("select status from dispatch_inspection_notifications where order_id='no-roster'")).rows.every(row=>row.status==='obsolete'));
+      assert.equal((await pool.query("select 1 from dispatch_notifications where order_id='no-roster' and kind='待检验'")).rowCount,0);
     });
     await t.test('my repair category counts match each list and exclude other technicians',async()=>{
       const counts=await service.myRepairCounts(tech);
@@ -1401,6 +1416,59 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         else process.env.RUNFENG_REPAIR_WRITEBACK_DISPATCH_ALLOWLIST=previous;
       }
     });
+    if(process.env.DISPATCH_OPTIMIZATION_UI_TEST==='true') await t.test('archive summary, detail-only dispatch and mobile wrapped layouts',async()=>{
+      const {chromium}=await import(process.env.DISPATCH_PLAYWRIGHT_MODULE||'playwright');
+      const {createTokenForUser}=await import('../server/auth.mjs');
+      const {createAuthSession}=await import('../server/repositories/userRepository.mjs');
+      await seed('optimization-ui','待派工');
+      await pool.query("update work_orders set vehicle_plate='鲁BOPT01',customer_name=$1,fault_description=$1 where id='optimization-ui'",['客户名称与故障说明用于检查窄屏换行和卡片内部间距'.repeat(5)]);
+      const token=createTokenForUser(advisor.id);await createAuthSession({token,userId:advisor.id,expiresAt:new Date(Date.now()+3600000)});
+      const browser=await chromium.launch({headless:true,executablePath:process.env.DISPATCH_CHROME_PATH});
+      await fs.mkdir('output/playwright/optimization',{recursive:true});
+      try {
+        for(const width of [360,390,1440]) {
+          const context=await browser.newContext({viewport:{width,height:844},isMobile:width<500,hasTouch:width<500});
+          const page=await context.newPage();page.setDefaultTimeout(10000);
+          const errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',request=>requests.push(request.url()));
+          await page.addInitScript(token=>localStorage.setItem('repair-h5-auth-token',token),token);
+          await page.goto(`http://127.0.0.1:${server.address().port}/`);
+          const search=page.getByPlaceholder('搜索车牌 / VIN / 工单号 / 派工号');await search.fill('鲁BOPT01');
+          const summary=page.waitForResponse(r=>r.url().includes('view=summary')&&r.url().includes('search=')&&r.url().includes('OPT01'));
+          await search.press('Enter');assert.equal((await (await summary).json()).items.length,1);
+          const row=width<500?page.locator('.archive-order-card').filter({hasText:'鲁BOPT01'}):page.locator('.orders-table tbody tr').filter({hasText:'鲁BOPT01'});
+          await row.waitFor();if(width<500)await page.locator('.archive-mobile-list[aria-busy="false"]').waitFor();else await page.locator('.orders-table .ant-spin-spinning').waitFor({state:'hidden'});await page.screenshot({path:`output/playwright/optimization/archive-${width}.png`,fullPage:true});
+          assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'page must not overflow horizontally');
+          await row.click();const dialog=page.getByRole('dialog',{name:'委托单详情',exact:true});
+          await dialog.getByRole('button',{name:/^派\s*工$/}).waitFor().catch(async error=>{console.log('OPTIMIZATION UI',await page.locator('body').innerText());await page.screenshot({path:`output/playwright/optimization/failure-${width}.png`,fullPage:true});throw error;});
+          await dialog.getByText('机动车修理委托单',{exact:true}).waitFor();
+          await page.waitForFunction(()=>![...document.querySelectorAll('.archive-detail-modal [role=status]')].some(node=>node.textContent?.includes('正在加载')));
+          await page.screenshot({path:`output/playwright/optimization/detail-${width}.png`,fullPage:true});
+          let failPeople=width===360;
+          await page.route('**/api/dispatch/people',route=>{if(failPeople){failPeople=false;return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'人员名单暂时加载失败，请重试后再选择维修人员。'.repeat(3)})});}return route.continue();});
+          const start=requests.length;await dialog.getByRole('button',{name:/^派\s*工$/}).click();
+          if(width===360){
+            const retry=page.getByRole('button',{name:/^重\s*试$/});await retry.waitFor().catch(async error=>{console.log('PERSONNEL RETRY UI',await page.locator('body').innerText());throw error;});
+            await page.screenshot({path:'output/playwright/optimization/personnel-retry-360.png',fullPage:true});
+            await retry.click();
+          }
+          await page.locator('.dispatch-action-modal').getByText('维修项目与负责人',{exact:true}).waitFor();
+          assert.equal(requests.slice(start).filter(url=>/\/api\/dispatch\/tasks\?/.test(url)||url.includes('/my-counts')||url.includes('/dispatch/technicians')).length,0,'detail must not load hidden list/counts');
+          const peopleCount=()=>requests.slice(start).filter(url=>url.endsWith('/api/dispatch/people')).length;
+          assert.equal(peopleCount(),width===360?2:1,'personnel load only on opening, with explicit retry after failure');
+          await page.evaluate(()=>{window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('focus'));document.dispatchEvent(new Event('visibilitychange'));});
+          await page.waitForLoadState('networkidle');
+          assert.equal(peopleCount(),width===360?2:1,'focus refresh must not refetch personnel');
+          await page.screenshot({path:`output/playwright/optimization/dispatch-${width}.png`,fullPage:true});
+          assert.deepEqual(errors,[]);await context.close();
+        }
+        const recovery=await browser.newContext({viewport:{width:390,height:844}});const page=await recovery.newPage();page.setDefaultTimeout(5000);
+        await page.addInitScript(token=>localStorage.setItem('repair-h5-auth-token',token),token);
+        let fail=true;await page.route('**/OrdersArchive-*.js',route=>{if(fail){fail=false;return route.abort();}return route.continue();});
+        await page.goto(`http://127.0.0.1:${server.address().port}/`);
+        await page.getByRole('button',{name:'重新加载',exact:true}).click();
+        await page.getByPlaceholder('搜索车牌 / VIN / 工单号 / 派工号').waitFor();await recovery.close();
+      } finally {await browser.close();}
+    });
     if(process.env.DISPATCH_UI_TEST==='true') await t.test('desktop and mobile UI complete assignment, acceptance, repair and inspection',async()=>{
       uiUploadRoot=await fs.mkdtemp(path.join(os.tmpdir(),'repair-dispatch-ui-'));
       process.env.LOCAL_UPLOAD_ROOT=uiUploadRoot;
@@ -1426,6 +1494,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         const editPage=await pageFor(advisor,false,'');
         await editPage.getByRole('navigation',{name:'主导航'}).getByRole('button',{name:'工作台',exact:true}).click();
         await editPage.getByPlaceholder('搜索车牌 / VIN / 工单号 / 派工号').fill('鲁BEDIT01');
+        await editPage.getByPlaceholder('搜索车牌 / VIN / 工单号 / 派工号').press('Enter');
         await editPage.locator('.orders-table tbody tr').filter({hasText:'鲁BEDIT01'}).click();
         await editPage.getByRole('button',{name:'编辑委托单',exact:true}).click();
         await editPage.getByLabel('车牌号码',{exact:true}).fill('鲁B862P7');
@@ -1445,6 +1514,8 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await editPage.getByRole('button',{name:'保存修改',exact:true}).and(editPage.locator('button:not(.ant-btn-loading)')).waitFor();
         const originalVin=await editPage.getByLabel('VIN/底盘号',{exact:true}).inputValue();
         await editPage.getByLabel('VIN/底盘号',{exact:true}).fill('');
+        await editPage.getByLabel('VIN/底盘号',{exact:true}).press('Tab');
+        await editPage.waitForLoadState('networkidle');
         await editPage.getByRole('radio',{name:'本次无法提供行驶证',exact:true}).click();
         const invalidLicense=editPage.getByRole('dialog',{name:'本次跳过行驶证上传',exact:true});
         await invalidLicense.getByLabel('无法提供行驶证的说明',{exact:true}).fill('客户未携带');
@@ -1453,6 +1524,8 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         assert.equal(await invalidLicense.getByLabel('无法提供行驶证的说明',{exact:true}).inputValue(),'客户未携带');
         await invalidLicense.getByRole('button',{name:/取\s*消/}).click();
         await editPage.getByLabel('VIN/底盘号',{exact:true}).fill(originalVin);
+        await editPage.getByLabel('VIN/底盘号',{exact:true}).press('Tab');
+        await editPage.waitForLoadState('networkidle');
         await editPage.getByRole('radio',{name:'本次无法提供行驶证',exact:true}).click();
         const missingLicense=editPage.getByRole('dialog',{name:'本次跳过行驶证上传',exact:true});
         await missingLicense.getByRole('button',{name:'备案并跳过本次上传',exact:true}).click();
@@ -1474,6 +1547,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         const historyPage=await pageFor(advisor,false,'');
         await historyPage.getByRole('navigation',{name:'主导航'}).getByRole('button',{name:'工作台',exact:true}).click();
         await historyPage.getByPlaceholder('搜索车牌 / VIN / 工单号 / 派工号').fill('鲁BHIST02');
+        await historyPage.getByPlaceholder('搜索车牌 / VIN / 工单号 / 派工号').press('Enter');
         await historyPage.locator('.orders-table tbody tr').filter({hasText:'鲁BHIST02'}).click();
         await historyPage.getByRole('button',{name:'继续编辑草稿',exact:true}).click();
         const reuseDialog=historyPage.getByRole('dialog',{name:'这辆车之前上传过行驶证，是否复用？',exact:true});
@@ -1492,6 +1566,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await historyPage.reload();
         await historyPage.getByRole('navigation',{name:'主导航'}).getByRole('button',{name:'工作台',exact:true}).click();
         await historyPage.getByPlaceholder('搜索车牌 / VIN / 工单号 / 派工号').fill('鲁BHIST02');
+        await historyPage.getByPlaceholder('搜索车牌 / VIN / 工单号 / 派工号').press('Enter');
         await historyPage.locator('.orders-table tbody tr').filter({hasText:'鲁BHIST02'}).click();
         await historyPage.getByRole('button',{name:'继续编辑草稿',exact:true}).click();
         await reuseDialog.getByRole('button',{name:'复用历史行驶证',exact:true}).click();
@@ -1518,6 +1593,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         await historyPage.reload();
         await historyPage.getByRole('navigation',{name:'主导航'}).getByRole('button',{name:'工作台',exact:true}).click();
         await historyPage.getByPlaceholder('搜索车牌 / VIN / 工单号 / 派工号').fill('鲁BHIST02');
+        await historyPage.getByPlaceholder('搜索车牌 / VIN / 工单号 / 派工号').press('Enter');
         await historyPage.locator('.orders-table tbody tr').filter({hasText:'鲁BHIST02'}).click();
         const licenseGallery=historyPage.getByRole('region',{name:'行驶证照片',exact:true});
         await licenseGallery.waitFor();
@@ -1545,11 +1621,15 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         const managerPage=await pageFor(manager);
         await managerPage.locator('.ant-drawer-close').click();
         await managerPage.locator('.ant-drawer-section').waitFor({state:'hidden'});
-        const selectStatus=async label=>{await managerPage.getByRole('tab',{name:label,exact:true}).click();};
+        const selectStatus=async label=>{await managerPage.getByRole('tab',{name:new RegExp(`^${label}(?:\\s|\\d|$)`)}).click();};
         await selectStatus('未派工');
         await managerPage.locator('.dispatch-page .ant-table').last().getByText('ui-filter-unassigned',{exact:true}).waitFor();
+        await managerPage.getByLabel('搜索派工任务',{exact:true}).fill('board-unsettled');
+        await managerPage.getByLabel('搜索派工任务',{exact:true}).press('Enter');
         await selectStatus('已完成');
         await managerPage.locator('.dispatch-page .ant-table').last().getByText('board-unsettled',{exact:true}).waitFor();
+        await managerPage.getByLabel('搜索派工任务',{exact:true}).fill('');
+        await managerPage.getByLabel('搜索派工任务',{exact:true}).press('Enter');
         await selectStatus('草稿');
         const draftRow=managerPage.locator('.dispatch-page .ant-table').last().locator('tr').filter({hasText:'board-draft'});
         await draftRow.getByRole('button',{name:/^详\s*情$/}).click();

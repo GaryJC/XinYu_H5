@@ -72,6 +72,7 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
       return operation(user, normalized, 'create', null, async repo => {
         const car = await repo.getVehicle(normalized.vehicleId, true);
         if (!car || car.shopId !== user.shopId || !car.active) throw new HttpError(409, '车辆不存在或已停用，请重新选择');
+        if (await repo.isVehicleInUse(car.id)) throw new HttpError(409, '车辆正在使用中或等待收车审核，请选择其他车辆');
         const trip = await repo.createTrip(`trip_${randomUUID()}`, user, car, normalized);
         const ids = [];
         for (const imageBase64 of photos) {
@@ -89,20 +90,21 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
       return operation(user, input, action, id, async repo => {
         const trip = await repo.getTrip(id, true);
         assertTripAction(trip, user, action);
-        if (action === 'depart') {
+        if (['depart', 'approve'].includes(action)) {
           const car = await repo.getVehicle(trip.vehicleId, true);
           if (!car?.active) throw new HttpError(409, '车辆已停用，不能出车');
           // The vehicle lock serializes departures across different applications.
-          if (await repo.isVehicleInUse(trip.vehicleId, id)) throw new HttpError(409, '车辆正在使用中，请等待还车后再出车');
+          if (await repo.isVehicleInUse(trip.vehicleId, id)) throw new HttpError(409, '车辆正在使用中或等待收车审核，请等待审核通过后再出车');
         }
-        if (['depart', 'return'].includes(action)) {
-          const stage = { depart: 'departure', return: 'return' }[action];
-          const submitted = action === 'depart' ? (await repo.attachments(id, user)).filter(photo => photo.stage === 'departure' && photo.confirmed) : [];
+        if (['approve-return', 'reject-return'].includes(action) && input.returnRound !== trip.returnRound) throw new HttpError(409, '还车资料已更新，请刷新后重新审核');
+        if (['depart', 'approve', 'return'].includes(action)) {
+          const stage = action === 'return' ? 'return' : 'departure';
+          const submitted = stage === 'departure' ? (await repo.attachments(id, user)).filter(photo => photo.stage === 'departure' && photo.confirmed) : [];
           const ids = submitted.length ? submitted.map(photo => photo.fileId) : input.fileIds;
           if (!Array.isArray(ids) || !ids.length || ids.length > 9 || ids.some(id => typeof id !== 'string') || new Set(ids).size !== ids.length) throw new HttpError(400, '请先上传公里数照片（最多 9 张）');
-          if (await repo.confirmAttachments(id, stage, user.id, ids) !== ids.length) throw new HttpError(400, '附件不属于本次申请、用途不匹配或不是本人上传');
+          if (await repo.confirmAttachments(id, stage, trip.applicantId, ids, trip.returnRound) !== ids.length) throw new HttpError(400, '附件不属于本次申请、本次还车或不是申请人上传');
         }
-        const reason = action === 'reject' ? tripText(input.reason, '驳回原因') : '';
+        const reason = ['reject', 'reject-return'].includes(action) ? tripText(input.reason, '退回原因') : '';
         return repo.changeTrip(id, action, user, reason);
       });
     },
@@ -110,11 +112,12 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
       return operation(user, input, `upload:${input.stage}`, id, async repo => {
         const trip = await repo.getTrip(id, true);
         assertTripUpload(trip, user, input.stage);
+        if (input.stage === 'return' && input.returnRound !== undefined && input.returnRound !== trip.returnRound) throw new HttpError(409, '还车资料已更新，请刷新后重新拍照');
         if (input.stage === 'departure' && (await repo.attachments(id, user)).some(photo => photo.stage === 'departure' && photo.confirmed)) throw new HttpError(409, '申请时已提交公里数照片，无需重复上传');
         const image = await prepareTripImage(input, input.stage);
         const file = await saveFile({ ...image, kind: tripFileKinds[input.stage], uploadedBy: user.id, database: repo.database });
-        await repo.addAttachment(id, input.stage, user, file);
-        return { fileId: file.id, stage: input.stage, confirmed: false };
+        await repo.addAttachment(id, input.stage, user, file, trip.returnRound);
+        return { fileId: file.id, stage: input.stage, confirmed: false, returnRound: trip.returnRound };
       });
     },
     async authorizeFile(user, fileId) {

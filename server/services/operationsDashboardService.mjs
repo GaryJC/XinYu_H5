@@ -1,4 +1,4 @@
-import {listDispatchTasks,dispatchPeople} from '../repositories/dispatchRepository.mjs';
+import {listDispatchTasks,readDispatchPeople} from '../repositories/dispatchRepository.mjs';
 import {buildOperationsDashboard} from '../domain/operationsDashboard.mjs';
 import {requireAnyRole} from '../domain/accessPolicy.mjs';
 export async function operationsDashboard(actor){
@@ -10,6 +10,6 @@ export async function dispatchWorkload(actor){
  return readWorkload(actor);
 }
 async function readWorkload(actor){
- const [tasks,people]=await Promise.all([listDispatchTasks(actor),dispatchPeople(actor)]);
+ const [tasks,people]=await Promise.all([listDispatchTasks(actor),readDispatchPeople(actor)]);
  return buildOperationsDashboard(tasks,people);
 }

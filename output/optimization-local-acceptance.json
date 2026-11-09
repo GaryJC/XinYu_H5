@@ -1,0 +1,79 @@
+{
+  "date": "2026-11-09",
+  "requestTiming": {
+    "size": 10000,
+    "equalityCases": 13,
+    "rssBytes": 232734720,
+    "measurements": {
+      "unfiltered_after": {
+        "samples": 120,
+        "p50Ms": 139.11095800000112,
+        "p95Ms": 144.84379199999967,
+        "candidateRows": 9474,
+        "resultBytes": 112893
+      },
+      "unfiltered_observed": {
+        "samples": 120,
+        "p50Ms": 139.8362500000003,
+        "p95Ms": 143.8583749999998,
+        "candidateRows": 9474,
+        "resultBytes": 112893
+      },
+      "unfiltered_instrumentation": {
+        "p50Ms": 0.06554099999630125,
+        "p95Ms": 0.19795700000031502
+      },
+      "personal_after": {
+        "samples": 120,
+        "p50Ms": 34.6552920000031,
+        "p95Ms": 36.474999999998545,
+        "candidateRows": 909,
+        "resultBytes": 9524
+      },
+      "personal_observed": {
+        "samples": 120,
+        "p50Ms": 34.553625000000466,
+        "p95Ms": 37.15079199999309,
+        "candidateRows": 909,
+        "resultBytes": 9524
+      },
+      "personal_instrumentation": {
+        "p50Ms": 0.0440009999947506,
+        "p95Ms": 0.06691699999646517
+      }
+    }
+  },
+  "queueMetrics": {
+    "queues": 4,
+    "rowsPerQueue": 50000,
+    "allPending": true,
+    "samples": 20,
+    "p50Ms": 46.15079199999991,
+    "p95Ms": 49.38483400000018,
+    "periodMs": 60000,
+    "p95WallTimeShare": 0.0008230805666666697
+  },
+  "scope": "isolated local PostgreSQL; not production CPU or aggregate overhead",
+  "verification": {
+    "check": {
+      "total": 1042,
+      "passed": 1010,
+      "skipped": 32,
+      "failed": 0
+    },
+    "postgresRelease": {
+      "suites": 28,
+      "passed": 196,
+      "skipped": 0
+    },
+    "fullChrome": {
+      "passed": 47,
+      "failed": 0
+    },
+    "isolatedPm2": "passed",
+    "realHttpDrainRestart": "passed",
+    "dingTalkMockDeadlineSeconds": 10,
+    "poolWaitSeconds": 5,
+    "statementDeadlineSeconds": 15
+  }
+}

@@ -7,6 +7,7 @@ module.exports = {
       interpreter: "node",
       node_args: "--env-file-if-exists=.env.production",
       autorestart: true,
+      kill_timeout: 70000,
       max_restarts: 10,
       restart_delay: 2000,
       time: true

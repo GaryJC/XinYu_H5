@@ -1,3 +1,4 @@
+import { isReworkTask } from '../../../../shared/repairProgress.mjs';
 import { Card, Tag } from 'antd';
 import { Clock3, Package } from 'lucide-react';
 import type { DispatchTask } from '../../../../shared/types';
@@ -25,7 +26,8 @@ export function TechnicianTaskCard({ task, userId, onOpen }: { task: DispatchTas
     <div className="technician-flags">
       {task.urgent ? <Tag color="red">加急</Tag> : null}
       {task.overdue ? <Tag color="red">超期</Tag> : null}
-      {task.repairRound ? <Tag color="orange">{task.roundKind === 'additional' ? '追加维修第' : '返工第'} {task.repairRound} 轮</Tag> : task.rework ? <Tag color="orange">返工</Tag> : null}
+      {task.repairRound ? <Tag color="orange">{task.roundKind === 'additional' ? '追加维修第' : '返工第'} {task.repairRound} 轮</Tag> : null}
+      {isReworkTask(task,userId) && (!task.repairRound || task.roundKind==='additional') ? <Tag color="orange">返工</Tag> : null}
     </div>
     <div className="technician-card-projects">
       <div><span>{individual ? '本人负责项目' : '维修项目'}</span><span>{own.items.length} 项</span></div>

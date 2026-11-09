@@ -26,12 +26,12 @@ export function assertTripAccess(trip, user) {
 }
 export function assertTripAction(trip, user, action) {
   assertTripAccess(trip, user);
-  const approval = action === 'approve' || action === 'reject';
+  const approval = ['approve', 'reject', 'approve-return', 'reject-return'].includes(action);
   if (approval) {
     requireVehicleManager(user);
-    if (trip.applicantId === user.id) throw new HttpError(403, '不能审批自己的申请');
+    if (trip.applicantId === user.id) throw new HttpError(403, '不能审核自己的申请或还车');
   } else if (trip.applicantId !== user.id) throw new HttpError(403, '仅申请人可操作出车、还车或取消');
-  const states = { approve: ['待审批'], reject: ['待审批'], cancel: ['待审批', '待出车'], depart: ['待出车'], return: ['用车中'] };
+  const states = { approve: ['待审批'], reject: ['待审批'], cancel: ['待审批', '待出车'], depart: ['待审批', '待出车'], return: ['用车中'], 'approve-return': ['待收车审核'], 'reject-return': ['待收车审核'] };
   if (!Object.hasOwn(states, action)) throw new HttpError(400, '不支持的操作');
   if (!states[action].includes(trip.status)) throw new HttpError(409, '申请状态已变化，请刷新后重试');
 }

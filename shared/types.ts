@@ -650,24 +650,25 @@ export type CompanyVehicle = {
   id: string; shopId: string; plate: string; brand: string; model: string; active: boolean;
 };
 export type CompanyVehicleInput = Pick<CompanyVehicle, "plate" | "brand" | "model" | "active">;
-export type VehicleTripStatus = "待审批" | "待出车" | "用车中" | "已还车" | "已驳回" | "已取消";
+export type VehicleTripStatus = "待审批" | "待出车" | "用车中" | "待收车审核" | "已还车" | "已驳回" | "已取消";
 export type VehicleTripStage = "departure" | "return" | "signature";
-export type VehicleTripAction = "approve" | "reject" | "cancel" | "depart" | "return";
-export type VehicleTripAttachment = { fileId: string; stage: VehicleTripStage; confirmed: boolean };
+export type VehicleTripAction = "approve" | "reject" | "cancel" | "depart" | "return" | "approve-return" | "reject-return";
+export type VehicleTripAttachment = { fileId: string; stage: VehicleTripStage; confirmed: boolean; returnRound: number };
 export type VehicleTrip = {
   id: string; shopId: string; applicantId: string; applicantName: string; vehicleId: string;
   vehicle: Pick<CompanyVehicle, "plate" | "brand" | "model">;
   reason: string; note: string; status: VehicleTripStatus; createdAt: string;
   approvedBy?: string; approvedName?: string; approvedAt?: string;
   departureAt?: string; returnAt?: string; rejectionReason?: string;
+  returnRound: number; returnReviewedBy?: string; returnReviewedName?: string; returnReviewedAt?: string; returnRejectionReason?: string;
 };
 export type VehicleTripDetail = VehicleTrip & {
   attachments: VehicleTripAttachment[];
   history: Array<{ action: string; actorName: string; at: string }>;
 };
 export type VehicleTripCreateInput = { requestId: string; vehicleId: string; reason: string; note: string; departurePhotos: string[] };
-export type VehicleTripActionInput = { requestId: string; fileIds?: string[]; reason?: string };
-export type VehicleTripUploadInput = { requestId: string; stage: Exclude<VehicleTripStage, "signature">; imageBase64: string };
+export type VehicleTripActionInput = { requestId: string; fileIds?: string[]; reason?: string; returnRound?: number };
+export type VehicleTripUploadInput = { requestId: string; stage: Exclude<VehicleTripStage, "signature">; imageBase64: string; returnRound?: number };
 export interface AppVersionResponse { version: string }
 
 
@@ -726,3 +727,6 @@ export type TechnicianCompletedOrder = {
 };
 
 export type CompletedProjectFilters = {from?:string;to?:string;sort?:DispatchNumberSort | 'completed-asc'|'completed-desc'};
+
+/** List metadata only; fetch the full order before editing, signing or printing. */
+export type WorkOrderListItem = Pick<WorkOrder, "id" | "dispatchNo" | "arrivalDate" | "status" | "createdAt" | "updatedAt" | "createdAtIso" | "updatedAtIso" | "shop" | "vehicle" | "customer" | "advisor" | "technician" | "dispatchStage" | "customerSignatureReview" | "isBaiyuanOrder" | "paperOrder" | "legacyApproved" | "legacySyncStatus" | "legacySyncRevision" | "legacySyncedAt" | "legacySyncError" | "customerVehicleUpdatedAt" | "customerVehicleUpdatedBy" | "estimatedFee" | "settlementAmount">;

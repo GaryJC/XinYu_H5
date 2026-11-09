@@ -2,14 +2,18 @@ import {transaction,pool} from '../database/pool.mjs';
 import {dispatchPeople,mapTask} from '../repositories/dispatchRepository.mjs';
 import {dueReminderCandidates,queueDueReminder} from '../repositories/dueReminderRepository.mjs';
 import {dueReminderWindow,dueReminderRecipients,isCurrentDueReminder} from '../domain/dueReminderPolicy.mjs';
-export async function queueDueReminders({runTransaction=transaction,now=Date.now()}={}) {
+export async function queueDueReminders({runTransaction=transaction,now=Date.now(),candidates=dueReminderCandidates,people=dispatchPeople,queue=queueDueReminder}={}) {
   return runTransaction(async client=>{
     let count=0;
-    for(const task of await dueReminderCandidates(client,now)) {
+    // One fresh roster per shop for this atomic batch (at most 100 candidates).
+    // Never carry it into another scan; delivery still rechecks each recipient.
+    const rosters=new Map();
+    for(const task of await candidates(client,now)) {
       const lead=dueReminderWindow(task,now);
       if(!lead)continue;
-      const recipients=dueReminderRecipients(task,await dispatchPeople({shopId:task.shopId},client),now);
-      count+=await queueDueReminder(client,task,recipients,lead);
+      if(!rosters.has(task.shopId))rosters.set(task.shopId,await people({shopId:task.shopId},client));
+      const recipients=dueReminderRecipients(task,rosters.get(task.shopId),now);
+      count+=await queue(client,task,recipients,lead);
     }
     return count;
   });

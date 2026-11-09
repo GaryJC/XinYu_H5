@@ -20,7 +20,7 @@ export function technicianCompletedProjects(rows, userId, month) {
       if (owner !== userId || item.status !== '已完工') continue;
       // Legacy records may only have the order's inspection completion timestamp.
       const completedAt = item.inspectedAt || item.completionRecordedAt
-        || (task.executionMode === 'outsourced' ? item.finishAt : undefined) || task.completedAt;
+        || (task.executionMode !== 'outsourced' ? task.completedAt : undefined);
       const timestamp = Date.parse(completedAt);
       if (!Number.isFinite(timestamp) || month && new Date(timestamp + 8 * 3600000).toISOString().slice(0, 7) !== month) continue;
       projects.push({

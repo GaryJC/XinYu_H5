@@ -115,7 +115,7 @@ export function validateWorkOrderDraft(draft: WorkOrderDraft) {
   return errors;
 }
 
-export function workOrderDisplayStatus(order: WorkOrder) {
+export function workOrderDisplayStatus(order: Pick<WorkOrder,"status"|"dispatchStage"|"customerSignatureReview">) {
   if (order.customerSignatureReview?.state === "pending" && !order.customerSignatureReview.supplemental) return "需确认用户签字";
   if (!dispatchEnabled) return repairStatusLabel(undefined,order.status);
   if (["草稿", "待客户签字", "待处理纸质委托书"].includes(order.status)) return order.status;

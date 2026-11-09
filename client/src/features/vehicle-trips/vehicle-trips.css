@@ -58,6 +58,8 @@
 .trip-application-photos img { max-width: 100%; object-fit: cover; border: 1px solid #e5eaf1; border-radius: 10px; }
 .trip-capture-section { margin-bottom: 18px; }
 .trip-capture-section p { margin: 12px 0 0; }
+.trip-return-feedback { margin: 16px 0; }
+.trip-return-feedback .ant-alert-message { overflow-wrap: anywhere; white-space: pre-wrap; line-height: 1.7; }
 .trip-upload[aria-disabled="true"] { cursor: default; opacity: .65; }
 .trip-upload { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; position: relative; cursor: pointer; padding: 24px 16px; border: 1px dashed #9db9d7; border-radius: 12px; background: #f7faff; color: #356797; }
 .trip-upload > span { font-size: 12px; color: #8190a2; }

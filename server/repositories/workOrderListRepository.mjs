@@ -46,8 +46,16 @@ export async function workOrderPageRows(scope, query, database = pool) {
   const { pageSize, page: requested } = pagination(query);
   const { rows: [counts] } = await database.query(`select count(*)::integer as total ${source} ${where}`, params);
   const page = Math.min(requested, Math.max(1, Math.ceil(counts.total / pageSize)));
-  const { rows } = await database.query(`select wo.*, dt.stage as dispatch_stage, st.token as signature_token, st.used as signature_token_used
-    ${source} left join lateral (select token,used from signature_tokens where order_id=wo.id order by created_at desc limit 1) st on true
+  const summary=query.view==='summary';
+  const fields=summary?['id','dispatch_no','arrival_date','status','created_at','updated_at','shop_id','shop_name','shop_address','shop_phone',
+    'vehicle_is_military','vehicle_plate','vehicle_vin','vehicle_mileage','vehicle_model','vehicle_model_legacy_code','vehicle_purchase_date',
+    'customer_name','customer_legacy_code','customer_phone','customer_contact','customer_address','advisor','technician',
+    'customer_signature_review','is_baiyuan_order','paper_order','legacy_approved','legacy_sync_status','legacy_sync_revision','legacy_synced_at','legacy_sync_error',
+    'customer_vehicle_updated_at','customer_vehicle_updated_by','estimated_fee','settlement_amount'].map(column=>`wo.${column}`).join(','):'wo.*';
+  const signature=summary?'':', st.token as signature_token, st.used as signature_token_used';
+  const signatureJoin=summary?'':' left join lateral (select token,used from signature_tokens where order_id=wo.id order by created_at desc limit 1) st on true';
+  const { rows } = await database.query(`select ${fields}, dt.stage as dispatch_stage${signature}
+    ${source}${signatureJoin}
     ${where} order by ${order} limit $${params.length+1} offset $${params.length+2}`, [...params,pageSize,(page-1)*pageSize]);
   return { rows, total: counts.total, page, pageSize };
 }

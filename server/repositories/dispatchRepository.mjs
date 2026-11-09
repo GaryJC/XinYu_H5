@@ -1,4 +1,5 @@
 import { verifyTechnicianMembership } from "../integrations/dingtalk/technicianRoster.mjs";
+import { createPendingRead } from '../domain/pendingRead.mjs';
 import {hasPendingInspection} from '../../shared/repairProgress.mjs';
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import { outsourcingMembership } from './outsourcingMembership.mjs';
@@ -43,20 +44,56 @@ export async function validateInspectionRecipient(notification, user, client=poo
   const task=mapTask(rows[0]);
   return hasPendingInspection(task) && !task.needsReview && (!task.inspectorId || task.inspectorId===user.id) && Boolean(canInspect(task,user));
 }
-export async function listDispatchTasks(actor, client=pool) {
+// Advisory snapshot before external roster discovery. The worker must still
+// lock and recheck the task, latest event and lease before changing any queue.
+export async function inspectionNotificationSnapshot(client,job) {
+  const {rows}=await client.query(`select dt.*,wo.status as order_status,
+    (select max(e.id) from dispatch_events e where e.order_id=dt.order_id
+      and exists(select 1 from dispatch_inspection_notifications n where n.event_id=e.id)) as latest_inspection_event_id,
+    (select lease_id from dispatch_inspection_notifications where event_id=$2) as notification_lease_id
+    from dispatch_tasks dt join work_orders wo on wo.id=dt.order_id where dt.order_id=$1`,[job.order_id,job.event_id]);
+  const row=rows[0];
+  return row?{task:mapTask({...row,repair_items:[]}),latestEventId:row.latest_inspection_event_id,leaseId:row.notification_lease_id}:undefined;
+}
+export async function listDispatchTasks(actor, client=pool, query={}) {
   if(!actor?.active || !hasAnyRole(actor, ['manager','advisor','technician','inspector','warehouse','outsourcing'])) throw new HttpError(403,'无权访问派工模块');
+  const params=[actor.shopId], clauses=[];
+  const bind=value=>{params.push(value);return `$${params.length}`;};
+  // Only predicates common to every tab may narrow the candidate set. Never LIMIT here.
+  if(query.counts!=='true') {
+    const owner=query.personal==='true'?actor.id:!query.workloadState?query.technicianId:undefined;
+    if(owner) {
+      const parameter=bind(owner);
+      clauses.push(`(case when nullif(dt.data->'technicianIds','null'::jsonb) is null then dt.technician_id=${parameter}
+        else dt.data->'technicianIds' @> jsonb_build_array(${parameter}::text) end)`);
+    }
+    if(query.executionMode)clauses.push(`coalesce(nullif(dt.data->>'executionMode',''),'internal')=any(${bind(query.executionMode.split(','))}::text[])`);
+    if(query.search) {
+      const parameter=bind(query.search.toLowerCase());
+      clauses.push(`(${['wo.id','wo.dispatch_no','wo.vehicle_plate'].map(column=>`strpos(lower(coalesce(${column},'')),${parameter})>0`).join(' or ')})`);
+    }
+  }
   const {rows}=await client.query(`${projection} where wo.shop_id=$1 and wo.status <> '待处理纸质委托书'
+    ${clauses.map(clause=>`and ${clause}`).join(' ')}
     order by coalesce((dt.data->>'urgent')::boolean,false) desc,
-      nullif(dt.data->>'dueAt','')::timestamptz asc nulls last, wo.arrival_date asc, wo.id asc`, [actor.shopId]);
+      nullif(dt.data->>'dueAt','')::timestamptz asc nulls last, wo.arrival_date asc, wo.id asc`, params);
   return rows.map(mapTask).filter(task => {
     try { assertDispatchAccess(task, actor); return true; }
     catch (error) { if (error.status === 403) return false; throw error; }
   });
 }
 export async function dispatchPeople(actor, client=pool) {
-  const {rows}=await client.query(`select id,name,role,active,shop_id,inspector_role_member, roles,dingtalk_user_id, ${outsourcingMembership} from users where shop_id=$1 order by name,id`,[actor.shopId]);
-  return verifyTechnicianMembership(rows.map(r=>({id:r.id,name:r.name,role:r.role,roles:r.roles,active:r.active,shopId:r.shop_id,dingtalkUserId:r.dingtalk_user_id,inspectorRoleMember:r.inspector_role_member,outsourcingRoleMember:r.outsourcing_role_member})));
+  return verifyTechnicianMembership(await localDispatchPeople(actor,client));
 }
+// Notifications already synchronize their own recipient roles. They do not need
+// a second, unrelated technician roster lookup to select managers/inspectors.
+export async function localDispatchPeople(actor, client=pool) {
+  const {rows}=await client.query(`select id,name,role,active,shop_id,inspector_role_member, roles,dingtalk_user_id, ${outsourcingMembership} from users where shop_id=$1 order by name,id`,[actor.shopId]);
+  return rows.map(r=>({id:r.id,name:r.name,role:r.role,roles:r.roles,active:r.active,shopId:r.shop_id,dingtalkUserId:r.dingtalk_user_id,inspectorRoleMember:r.inspector_role_member,outsourcingRoleMember:r.outsourcing_role_member}));
+}
+const pendingPeopleReads=createPendingRead();
+// GET paths only. Transactional submissions always use dispatchPeople directly.
+export const readDispatchPeople=actor=>pendingPeopleReads(actor.shopId,()=>dispatchPeople(actor));
 export async function saveDispatchTask(client, task, { metadataOnly = false, techniciansOnly = false } = {}) {
   const {inspectionDeferredCount,hasPartsHistory,pendingRepairCount,orderId,shopId,technicianId,inspectorId,stage,version,plate,dispatchNo,arrivalDate,orderStatus,faultDescription,overdue,repairCatalog,vehicleVin,vehicleModel,vehicleMileage,customerName,advisor,...data}=task;
   await client.query(`insert into dispatch_tasks(order_id,shop_id,technician_id,inspector_id,stage,version,data)
@@ -76,9 +113,15 @@ export async function saveDispatchTask(client, task, { metadataOnly = false, tec
   const status=task.settlementAssignment&&orderStatus!=='完成'?(stage==='维修完成'?'待结算':'维修中'):stage==='维修完成'?(orderStatus==='完成'?'完成':'待结算'):started?'维修中':'待派工';
   await client.query(`update work_orders set status=$2,technician=$3,inspector=$4,updated_at=now() where id=$1`,[orderId,status,task.technicianName||'待派工',task.inspectorName||(task.executionMode==='outsourced'?'无需提检':'待检验')]);
   await client.query('delete from repair_items where order_id=$1 and not (client_item_id=any($2::bigint[]))',[orderId,[...task.items,...(task.deferredItems||[])].map(item=>item.id)]);
-  for(const [index,item] of task.items.entries()) await client.query(`insert into repair_items(order_id,client_item_id,item_no,name) values($1,$2,$3,$4)
-    on conflict(order_id,client_item_id) do update set name=excluded.name,item_no=excluded.item_no`,[orderId,item.id,index+1,item.name]);
-  for(const item of task.items) await client.query(`update repair_items set owner=$3,status=$4,start_at=$5,finish_at=$6,inspector=$7 where order_id=$1 and client_item_id=$2`,[orderId,item.id,item.responsibleName||task.technicianName||'待派工',item.status,item.startAt||'',item.finishAt||'',item.inspectorName||(task.executionMode==='outsourced'?'无需提检':'待检验')]);
+  await client.query(`insert into repair_items(order_id,client_item_id,item_no,name,owner,status,start_at,finish_at,inspector)
+    select $1,x.id,x.position,x.name,x.owner,x.status,x.start_at,x.finish_at,x.inspector
+    from jsonb_to_recordset($2::jsonb) as x(id bigint,position integer,name text,owner text,status text,start_at text,finish_at text,inspector text)
+    on conflict(order_id,client_item_id) do update set item_no=excluded.item_no,name=excluded.name,
+      owner=excluded.owner,status=excluded.status,start_at=excluded.start_at,finish_at=excluded.finish_at,inspector=excluded.inspector`,
+    [orderId,JSON.stringify(task.items.map((item,index)=>({id:item.id,position:index+1,name:item.name,
+      owner:item.responsibleName||task.technicianName||'待派工',status:item.status,start_at:item.startAt||'',finish_at:item.finishAt||'',
+      inspector:item.inspectorName||(task.executionMode==='outsourced'?'无需提检':'待检验')})))]);
+
 }
 export async function dispatchDetail(actor,id,client=pool) {
   const task=await getDispatchTask(client,id,actor);

@@ -92,7 +92,9 @@ test("customer-vehicle correction transactions, concurrency, ordered outbox and 
       await assert.rejects(() => refresh("test-order", actor, { readSource: async () => { throw new Error("must not read Runfeng"); } }), error => error.status === 409);
       assert.equal((await pool.query("select fail_legacy_sync_event($1,'test-consumer','temporary failure',0) as result", [eventId])).rows[0].result, true);
       await assert.rejects(() => update("test-order", { ...input, expectedRevision: 2 }, actor, deps), error => error.status === 409);
-      assert.equal((await pool.query("select * from claim_legacy_sync_events('test-consumer',20)")).rows[0].event_id, eventId);
+      assert.equal((await pool.query("select * from claim_legacy_sync_events('test-consumer',20)")).rows.length,0);
+      await pool.query("select retry_legacy_sync_event($1)",[eventId]);
+      assert.equal((await pool.query("select * from claim_legacy_sync_events('test-consumer',20)")).rows[0].event_id,eventId);
     });
     await t.test("ACK must retain original reid/dh/pgd and repeating ACK never creates events", async () => {
       for (const ids of [[999,201,"A123"],[101,999,"A123"],[101,201,"A999"]]) {

@@ -44,7 +44,7 @@ export async function handleVehicleTrips(req, res, url, user) {
     else throw new HttpError(405, '不支持的请求方法');
     return true;
   }
-  const trip = url.pathname.match(/^\/api\/vehicle-trip-requests\/([^/]+)(?:\/(approve|reject|cancel|depart|return|attachments))?$/);
+  const trip = url.pathname.match(/^\/api\/vehicle-trip-requests\/([^/]+)(?:\/(approve|reject|cancel|depart|return|approve-return|reject-return|attachments))?$/);
   if (!trip) return false;
   if (!trip[2] && req.method === 'GET') sendJson(res, 200, await service.detail(user, trip[1]));
   else if (trip[2] && req.method === 'POST') {

@@ -9,7 +9,7 @@ import './dispatch.css';
 import './technician-repair.css';
 
 export function TechnicianProjectDetail({ user, orderId, onClose }: { user: UserProfile; orderId: string; onClose: () => void }) {
-  const controller = useDispatchController(user, '我的维修', orderId);
+  const controller = useDispatchController(user, '我的维修', orderId, undefined, 'detail');
   useDetailScrollLock(true);
   const mobile = !Grid.useBreakpoint().md;
   const [photoBlocked, setPhotoBlocked] = useState(false);

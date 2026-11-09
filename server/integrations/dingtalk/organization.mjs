@@ -1,20 +1,26 @@
 import { HttpError } from "../../http/HttpError.mjs";
+import {pendingDingTalkRead} from './pendingRead.mjs';
 
 import roleDefinitions from "../../../shared/dingtalkRoles.json" with { type: "json" };
 
-export async function getDingTalkUserProfile({ userId, accessToken }) {
-  const url = new URL("https://oapi.dingtalk.com/topapi/v2/user/get");
-  url.searchParams.set("access_token", accessToken);
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userid: userId }),
-    signal: AbortSignal.timeout(10000)
+export async function getDingTalkUserProfile({ userId, accessToken, coalesce=false, fetcher=fetch }) {
+  const body={userid:userId};
+  const payload=await pendingDingTalkRead({fetcher,accessToken,endpoint:'v2/user/get',body,coalesce},async()=>{
+    const url = new URL("https://oapi.dingtalk.com/topapi/v2/user/get");
+    url.searchParams.set("access_token", accessToken);
+    const response = await fetcher(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000)
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || payload?.errcode !== 0 || !payload.result || typeof payload.result !== 'object' || Array.isArray(payload.result)
+      || String(payload.result.userid || '') !== String(userId)) {
+      throw new HttpError(502, `获取钉钉员工详情失败：${payload?.errmsg || response.status}`);
+    }
+    return payload;
   });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || payload?.errcode) {
-    throw new HttpError(502, `获取钉钉员工详情失败：${payload?.errmsg || response.status}`);
-  }
   return normalizeDingTalkUserProfile(payload?.result, userId);
 }
 

@@ -3,7 +3,8 @@ import {useState} from 'react';
 import {Alert,Button,Modal,Select,Tag} from 'antd';
 import {request} from '../../shared/api/httpClient';
 import type {PendingRepairList,UserProfile} from '../../../../shared/types';
-import {PendingRepairsPanel} from './PendingRepairsPanel';
+import {lazy} from '../../shared/ui/recoverableLazy';
+const PendingRepairsPanel=lazy(()=>import('./PendingRepairsPanel').then(m=>({default:m.PendingRepairsPanel})));
 type Followup=PendingRepairList&{orderId:string;plate:string;dispatchNo:string};
 export function PendingRepairFollowups({user}:{user?:UserProfile}) {
  const [sort,setSort]=useState<DispatchNumberSort>('dispatch-desc');

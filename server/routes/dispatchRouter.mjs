@@ -8,7 +8,7 @@ import {ensureVehicleNameplate} from '../services/vehicleNameplateHistoryService
 import { readJson, sendJson } from '../http/response.mjs';
 import { requireAnyRole } from '../domain/accessPolicy.mjs';
 import { DISPATCH_ROLES } from '../domain/dispatchPolicy.mjs';
-import { myRepairCounts, queryDispatchTasks, technicianSummaries, dispatchPeople, dispatchDetail, executeDispatchAction } from '../services/dispatchService.mjs';
+import { myRepairCounts, queryDispatchTasks, technicianSummaries, readDispatchPeople, dispatchDetail, executeDispatchAction } from '../services/dispatchService.mjs';
 export async function handleDispatchRequest(req,res,url,actor) {
   if(!url.pathname.startsWith('/api/dispatch/')) return false;
   requireAnyRole(actor,DISPATCH_ROLES);
@@ -19,7 +19,7 @@ export async function handleDispatchRequest(req,res,url,actor) {
   if(req.method==='GET' && url.pathname==='/api/dispatch/tasks') { sendJson(res,200,await queryDispatchTasks(actor,query)); return true; }
   if(req.method==='GET' && url.pathname==='/api/dispatch/technicians') { sendJson(res,200,await technicianSummaries(actor,query)); return true; }
   if(req.method==='GET' && url.pathname==='/api/dispatch/people') {
-    const people=await dispatchPeople(actor);
+    const people=await readDispatchPeople(actor);
     sendJson(res,200,{dispatchers:people.filter(p=>p.active && hasAnyRole(p, ['manager','advisor','inspector'])),contractors:people.filter(p=>p.active && (hasRole(p, 'outsourcing')||p.outsourcingRoleMember)),technicians:people.filter(p=>p.active && hasRole(p, 'technician')),inspectors:people.filter(p=>p.active && (hasRole(p, 'manager')||p.inspectorRoleMember!==false) && hasAnyRole(p, ['inspector','manager']))}); return true;
   }
   const resolveWriteback=url.pathname.match(/^\/api\/dispatch\/tasks\/([^/]+)\/repair-writeback\/resolve$/);

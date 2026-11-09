@@ -1,3 +1,5 @@
+import { OrderLegacySyncStatus } from "./OrderLegacySyncStatus";
+export { OrderLegacySyncStatus } from "./OrderLegacySyncStatus";
 import { RepairStatusTag } from "../dispatch/RepairStatusTag";
 import { orderAuditLabel } from "./orderAuditLabel";
 import { ActionHistory } from "../../shared/ui/ActionHistory";
@@ -96,10 +98,7 @@ function OrderIdentity({ order }: { order: WorkOrder }) {
   </section>;
 }
 
-export function OrderLegacySyncStatus({ order }: { order: WorkOrder }) {
-  if (order.status === "草稿") return null;
-  return <><LegacySyncStatusChip status={order.legacySyncStatus} /><CustomerVehicleUpdateTag order={order} /></>;
-}
+
 
 function OrderRepairRecords({order,isMobile,onOpen}:{order:WorkOrder;isMobile:boolean;onOpen?:()=>void}) {
   if (isMobile) return <section className="workbench-detail-group detail-repairs" aria-label="维修项目">

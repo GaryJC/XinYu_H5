@@ -23,7 +23,11 @@ test('workflow transitions require exact state and owner even for managers', () 
   assertTripAction(trip, employee, 'cancel');
   assertTripAction({ ...trip, status: '待出车' }, employee, 'depart');
   assertTripAction({ ...trip, status: '用车中' }, employee, 'return');
-  assert.throws(() => assertTripAction(trip, employee, 'depart'), status(409));
+  assertTripAction(trip, employee, 'depart');
+  assertTripAction({ ...trip, status: '待收车审核' }, manager, 'approve-return');
+  assertTripAction({ ...trip, status: '待收车审核' }, manager, 'reject-return');
+  assert.throws(() => assertTripAction({ ...trip, status: '待收车审核' }, { ...manager, id: employee.id }, 'approve-return'), status(403));
+  assert.throws(() => assertTripAction({ ...trip, status: '待收车审核' }, employee, 'return'), status(409));
   assert.throws(() => assertTripAction({ ...trip, status: '已还车' }, employee, 'return'), status(409));
   assert.throws(() => assertTripAction({ ...trip, status: '用车中' }, employee, 'cancel'), status(409));
   assert.throws(() => assertTripAction({ ...trip, status: '待出车' }, manager, 'depart'), status(403));
@@ -31,7 +35,8 @@ test('workflow transitions require exact state and owner even for managers', () 
 test('uploads follow the same actor and stage restrictions as confirmation', () => {
   assert.throws(() => assertTripUpload(trip, manager, 'signature'), status(400));
   assert.throws(() => assertTripUpload(trip, employee, 'signature'), status(400));
-  assert.throws(() => assertTripUpload(trip, employee, 'departure'), status(409));
+  assertTripUpload(trip, employee, 'departure');
+  assert.throws(() => assertTripUpload({ ...trip, status: '待收车审核' }, employee, 'return'), status(409));
   assert.throws(() => assertTripUpload(trip, manager, 'unknown'), status(400));
   assertTripUpload({ ...trip, status: '用车中' }, employee, 'return');
 });

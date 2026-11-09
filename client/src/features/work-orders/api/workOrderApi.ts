@@ -1,3 +1,4 @@
+import type { WorkOrderListItem } from "../../../../../shared/types";
 import {
   ArchiveOptions, PageResult, WorkOrderListQuery,
   AuthResult,
@@ -45,6 +46,7 @@ export type WorkOrderApi = {
   me(): Promise<UserProfile>;
   list(role: RoleKey): Promise<WorkOrder[]>;
   page(query: WorkOrderListQuery): Promise<PageResult<WorkOrder>>;
+  summaryPage(query: WorkOrderListQuery, signal?: AbortSignal): Promise<PageResult<WorkOrderListItem>>;
   archiveOptions(): Promise<ArchiveOptions>;
   refreshTargets(): Promise<string[]>;
   get(id:string):Promise<WorkOrder>;
@@ -100,6 +102,7 @@ export const workOrderApi: WorkOrderApi = {
   },
   list: (_role) => request<WorkOrder[]>("/api/work-orders"),
   page: query => request<PageResult<WorkOrder>>(`/api/work-orders?${new URLSearchParams(Object.entries(query).map(([key,value])=>[key,String(value)]))}`),
+  summaryPage: (query,signal) => request<PageResult<WorkOrderListItem>>(`/api/work-orders?${new URLSearchParams(Object.entries({...query,view:"summary"}).map(([key,value])=>[key,String(value)]))}`,{signal}),
   archiveOptions: () => request<ArchiveOptions>('/api/work-orders?metadata=true'),
   refreshTargets: () => request<string[]>('/api/work-orders?refreshTargets=true'),
   deletePhotos(id, input) {

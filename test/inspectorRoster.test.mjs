@@ -12,6 +12,17 @@ test('role and member pagination deduplicates members and requires complete resp
  assert.deepEqual((await listInspectorRoleMembers({fetcher,token:async()=>''})).ids,['a','b']);assert.equal(calls.length,6);
  await assert.rejects(()=>listInspectorRoleMembers({token:async()=>'',fetcher:async()=>({ok:true,json:async()=>({errcode:0,result:{list:[],hasMore:true}})})}));
 });
+test('duplicate role IDs across catalog pages request the member list only once',async()=>{
+ let members=0;
+ const result=await listInspectorRoleMembers({token:async()=>'',fetcher:async(url,input)=>{
+  const body=JSON.parse(input.body);
+  const result=url.pathname.endsWith('/list')
+   ?{list:[{roles:[{id:7,name:'检验员'}]}],hasMore:body.offset===0}
+   :(++members,{list:[{userid:'worker'}]});
+  return {ok:true,json:async()=>({errcode:0,result})};
+ }});
+ assert.deepEqual(result.ids,['worker']);assert.equal(members,1);
+});
 test('roster preserves existing store and disabled status; removed members do not receive notifications',async()=>{
  const saved=[],queries=[];
  const deps={list:async()=>({ids:['new','disabled','elsewhere'],accessToken:''}),profile:async({userId})=>({userId,name:userId,active:true,departmentIds:[],roles:[{id:'7',name:'检验员'}]}),find:async id=>id==='new'?undefined:{id,shopId:id==='elsewhere'?'other':'shop-hq',active:id!=='disabled'},snapshot:async()=>{},upsert:async({profile,mapping,existingUser})=>{saved.push(mapping);return {id:profile.userId,active:profile.active&&existingUser?.active!==false,role:mapping.role,shopId:mapping.shopId};},database:{query:async(...args)=>queries.push(args)}};

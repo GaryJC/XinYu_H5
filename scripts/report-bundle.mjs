@@ -35,13 +35,17 @@ async function size(files) {
 
 const routes = {
   workbench: "src/features/workbench/WorkbenchPage.tsx",
+  archive: "src/features/workbench/OrdersArchive.tsx",
+  technician: "src/features/dispatch/DispatchPage.tsx",
   signature: "src/features/signature/CustomerSignaturePage.tsx",
   supplier: "src/features/procurement/SupplierPortalPage.tsx"
 };
 const report = {};
+const budgets={workbench:450000,signature:225273,supplier:391483};
 for (const [name, entry] of Object.entries(routes)) {
-  const files = dependencies(["index.html", entry]);
+  const files = dependencies(["index.html", entry,...(name==="workbench"?[routes.archive]:[])]);
   report[name] = await size(files);
+  if(budgets[name]&&report[name].gzip>budgets[name])throw new Error(`${name} gzip ${report[name].gzip} exceeds budget ${budgets[name]}`);
   if ([...files].some(file => /\/(?:PrintPreview|createPrintPdf|WorkerLoadChart|CreateVehicleReferenceButton)-/.test(file))) {
     throw new Error(`${name} eagerly loads an interaction-only feature`);
   }

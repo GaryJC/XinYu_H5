@@ -18,10 +18,11 @@
     "typecheck": "tsc -b",
     "test": "node --test",
     "build": "npm run typecheck && node --env-file-if-exists=.env.production --env-file-if-exists=.env.local node_modules/vite/bin/vite.js build",
-    "check": "npm test && npm run build",
+    "check": "npm test && npm run build && npm run analyze:bundle",
     "analyze:bundle": "node scripts/report-bundle.mjs",
     "package:deploy": "node scripts/create-deployment-package.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:release": "node scripts/check-release.mjs"
   },
   "engines": {
     "node": ">=20.20 <23"

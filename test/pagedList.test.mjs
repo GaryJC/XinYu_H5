@@ -14,8 +14,8 @@ function harness(load,mobile=false) {
     useCallback(fn){return fn;},
     useEffect(fn,deps){const i=cursor++;const previous=slots[i];if(!previous||deps.some((v,n)=>v!==previous.deps[n])){previous?.cleanup?.();slots[i]={deps};effects.push(()=>{slots[i].cleanup=fn();});}}
   };
-  vm.runInNewContext(source,{exports,Error,Map,window:{setTimeout:fn=>{const id=++nextTimer;timers.set(id,fn);return id;},clearTimeout:id=>timers.delete(id)},require:id=>{assert.equal(id,'react');return react;}});
-  return {render(){cursor=0;const state=exports.usePagedList(key,page=>load(page,key),mobile,enabled,item=>item.id);for(const effect of effects.splice(0))effect();return state;},
+  vm.runInNewContext(source,{exports,AbortController,Error,Map,window:{setTimeout:fn=>{const id=++nextTimer;timers.set(id,fn);return id;},clearTimeout:id=>timers.delete(id)},require:id=>{assert.equal(id,'react');return react;}});
+  return {render(){cursor=0;const state=exports.usePagedList(key,(page,signal)=>load(page,key,signal),mobile,enabled,item=>item.id);for(const effect of effects.splice(0))effect();return state;},
     async request(){for(const [id,fn] of [...timers]){timers.delete(id);fn();}await flush();},
     key(value){key=value;},mobile(value){mobile=value;},enabled(value){enabled=value;}};
 }
@@ -69,4 +69,17 @@ test('shrinking the last mobile page removes stale pages beyond the new total',a
   let shrink=false;const h=harness(async page=>shrink?result(2,['last'],21):result(page,ids(page)),true);
   h.render();await h.request();h.render().loadMore();h.render();await h.request();h.render().loadMore();h.render();await h.request();
   shrink=true;h.render().loadMore();h.render();await h.request();assert.equal(h.render().page,2);assert.equal(h.render().items.length,21);
+});
+
+test('overlapping timer, focus and manual refresh share one request',async()=>{
+ let release;let calls=0;
+ const h=harness(async page=>{calls++;if(calls>1)await new Promise(resolve=>{release=resolve;});return result(page,ids(page));});
+ h.render();await h.request();const state=h.render();
+ const first=state.refresh(),second=state.refresh(),third=state.refresh();
+ assert.equal(calls,2);release();await Promise.all([first,second,third]);assert.equal(h.render().items.length,20);
+});
+test('changing filters aborts the obsolete transport request',async()=>{
+ const signals=[];const h=harness(async(page,key,signal)=>{signals.push(signal);return result(page,[key]);});
+ h.render();await h.request();h.key('new');h.render();await h.request();
+ assert.equal(signals[0].aborted,true);assert.equal(signals[1].aborted,false);assert.equal(h.render().items[0].id,'new');
 });

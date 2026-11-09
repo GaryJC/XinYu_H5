@@ -22,11 +22,11 @@ import { randomUUID } from 'node:crypto';
 import { transaction } from '../database/pool.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 import { applyDispatchAction, technicianIds, validateDispatchRequest, dispatchMetric, completionRange } from '../domain/dispatchPolicy.mjs';
-import { getDispatchTask, saveDispatchTask, dispatchPeople, dispatchDetail, listDispatchTasks, assertRepairPhotoRecorded } from '../repositories/dispatchRepository.mjs';
-export { dispatchPeople, dispatchDetail };
+import { getDispatchTask, saveDispatchTask, dispatchPeople, readDispatchPeople, dispatchDetail, listDispatchTasks, assertRepairPhotoRecorded } from '../repositories/dispatchRepository.mjs';
+export { dispatchPeople, readDispatchPeople, dispatchDetail };
 export const metricKeys=['pendingAccept','unstarted','working','paused','inspection','completed','overdue','rework'];
 export async function queryDispatchTasks(actor, query={}) {
-  const tasks = await listDispatchTasks(actor);
+  const tasks = await listDispatchTasks(actor,undefined,query);
   if(query.counts==='true') return Object.fromEntries(['待派工','维修中','待检验'].map(stage=>[stage,filterDispatchTasks(tasks,actor,{stage}).length]));
   const filtered = filterDispatchTasks(tasks,actor,query);
   if(query.partsStatus) {
@@ -56,7 +56,7 @@ export async function myRepairCounts(actor) {
 export async function technicianSummaries(actor,query={}) {
   if(!hasAnyRole(actor, ['manager','advisor','inspector'])) throw new HttpError(403,'无权查看维修工负荷');
   const range=completionRange(query.from,query.to);
-  const tasks=await listDispatchTasks(actor); const people=await dispatchPeople(actor);
+  const [tasks,people]=await Promise.all([listDispatchTasks(actor),readDispatchPeople(actor)]);
   const returns = inspectionReturnStats(await listInspectionReturns(actor.shopId, range));
   return people.filter(p=>hasRole(p, 'technician') || returns.has(p.id) || tasks.some(t=>technicianIds(t).includes(p.id))).map(p=> {
     const own=tasks.filter(t=>technicianIds(t).includes(p.id));

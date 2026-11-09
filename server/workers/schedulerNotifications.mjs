@@ -2,7 +2,7 @@ import {hasSubmissionNotification} from '../repositories/dispatchNotificationRep
 import { hasAnyRole } from "../../shared/roles.mjs";
 import {randomUUID} from 'node:crypto';
 import {pool,transaction} from '../database/pool.mjs';
-import {dispatchPeople} from '../repositories/dispatchRepository.mjs';
+import {localDispatchPeople} from '../repositories/dispatchRepository.mjs';
 import {syncSchedulerRoster} from '../integrations/dingtalk/schedulerRoster.mjs';
 import {notificationConfiguration} from '../integrations/dingtalk/notifications.mjs';
 export async function processSchedulerNotifications({database=pool,runTransaction=transaction,sync=syncSchedulerRoster,env=process.env}={}) {
@@ -20,7 +20,7 @@ export async function processSchedulerNotifications({database=pool,runTransactio
       await client.query('select id from work_orders where id=$1 for update',[job.order_id]);
       const {rows:current}=await client.query('select lease_id from dispatch_scheduler_notifications where event_id=$1 for update',[job.event_id]);
       if(current[0]?.lease_id!==lease)return;
-      const recipients=(await dispatchPeople({shopId},client)).filter(p=>p.active && hasAnyRole(p, ['advisor','manager']) && (!ids || ids.includes(p.id)));
+      const recipients=(await localDispatchPeople({shopId},client)).filter(p=>p.active && hasAnyRole(p, ['advisor','manager']) && (!ids || ids.includes(p.id)));
       if(!recipients.length)throw new Error('暂无本店有效服务顾问或管理员，请检查钉钉角色后重试');
       for(const p of recipients) {
        if(['维修已提检','回审已提交'].includes(job.kind)&&await hasSubmissionNotification(client,job.order_id,job.event_id,p.id))continue;

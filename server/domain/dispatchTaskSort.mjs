@@ -1,5 +1,5 @@
 import {compareDispatchNumbers} from '../../shared/dispatchNumberSort.mjs';
-import {personalRepairStage} from '../../shared/repairProgress.mjs';
+import {personalRepairStage,isReworkTask} from '../../shared/repairProgress.mjs';
 import {HttpError} from '../http/HttpError.mjs';
 
 export function sortDispatchTasks(tasks,actor,query={}) {
@@ -12,7 +12,7 @@ export function sortDispatchTasks(tasks,actor,query={}) {
   if(!['待处理','回审&维修中'].includes(query.stage))return 0;
   const stage=query.personal==='true'?personalRepairStage(task,actor.id):task.stage;
   if(stage==='回审')return 0;
-  return (task.repairRound?task.roundKind!=='additional':task.rework)?1:2;
+  return isReworkTask(task,query.personal==='true'?actor.id:undefined)?1:2;
  };
  return tasks.map(task=>({task,priority:priority(task),time:Date.parse(task[field])})).sort((a,b)=>{
   if(a.priority!==b.priority)return a.priority-b.priority;

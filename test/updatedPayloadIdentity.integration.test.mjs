@@ -49,6 +49,9 @@ test("updated JSON identity backfill and first-claim association", { skip: !admi
     assert.equal(claimed.payload.order.dispatchNo, "A124");
     assert.deepEqual(claimed.payload.order.signatures, business.order.signatures);
     await client.query("update legacy_sync_outbox set locked_at=now()-interval '11 minutes', payload=jsonb_set(payload,'{legacy_reid}','999') where event_id='correction'");
+    assert.equal((await client.query("select * from claim_legacy_sync_events('consumer-2',20)")).rows.length,0);
+    // The first expired lease is pending with a five-minute backoff; simulate its expiry.
+    await client.query("update legacy_sync_outbox set available_at=now() where event_id='correction' and status='pending'");
     const reclaimed = (await client.query("select * from claim_legacy_sync_events('consumer-2',20)")).rows;
     assert.equal(reclaimed.find(row => row.event_id === "correction").payload.legacy_reid, 102);
     await assert.rejects(() => client.query("update legacy_sync_outbox set legacy_reid=999 where event_id='correction'"), /must retain original/);

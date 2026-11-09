@@ -60,6 +60,7 @@ for(const mode of ['mock','dingtalk']) test(`inspection worker includes independ
  const db={async query(sql,params=[]) {
   calls.push({sql,params});
   if(sql.startsWith('with candidate'))return {rows:[{event_id:99,order_id:'o',lease_id:'lease'}]};
+  if(sql.includes('as notification_lease_id'))return {rows:[{order_id:'o',shop_id:'s',order_status:'维修中',technician_id:'t',stage:'待检验',data:task,latest_inspection_event_id:99,notification_lease_id:calls[0].params[0]}]};
   if(sql.includes('select shop_id'))return {rows:[{shop_id:'s'}]};
   if(sql.includes('from work_orders'))return {rows:[{id:'o',vehicle_plate:'沪ATEST',shop_id:'s',status:'维修中'}]};
   if(sql.includes('select * from dispatch_tasks'))return {rows:[{shop_id:'s',technician_id:'t',stage:'待检验',data:task}]};

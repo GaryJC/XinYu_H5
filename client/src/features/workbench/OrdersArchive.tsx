@@ -1,25 +1,31 @@
+const ArchiveOrderTable=lazy(()=>import("./ArchiveOrderTable").then(m=>({default:m.ArchiveOrderTable})));
+import { lazy } from "../../shared/ui/recoverableLazy";
+import { workOrderApi } from "../work-orders/api/workOrderApi";
+import type { WorkOrderListItem } from "../../../../shared/types";
 import { useDetailScrollLock } from '../../shared/ui/useDetailScrollLock';
 import { ListPagination } from '../../shared/ui/ListPagination';
-import { OrderDetail, OrderLegacySyncStatus } from "./OrderDetail";
+import { OrderLegacySyncStatus } from "./OrderLegacySyncStatus";
+const OrderDetail=lazy(()=>import("./OrderDetail").then(m=>({default:m.OrderDetail})));
 
 import { isUnsignedOrderEditable } from "../../../../shared/workOrderEditPolicy.mjs";
 import { PendingRepairFollowups } from '../pending-repairs/PendingRepairFollowups';
 import { ArchiveFilterBar } from "./ArchiveFilterBar";
 import { archiveTimeLabel } from "./archiveFilters";
-import { SignatureReview } from "../signature/SignatureReview";
-import { PaperOrderResolution } from "../work-orders/components/PaperOrderResolution";
-import { WorkOrderSignatureDialog } from "../signature/WorkOrderSignatureDialog";
-import { CustomerVehicleEditor, CustomerVehicleUpdateNotice } from "../customer-vehicle-update/CustomerVehicleEditor";
+const SignatureReview=lazy(()=>import("../signature/SignatureReview").then(m=>({default:m.SignatureReview})));
+const PaperOrderResolution=lazy(()=>import("../work-orders/components/PaperOrderResolution").then(m=>({default:m.PaperOrderResolution})));
+const WorkOrderSignatureDialog=lazy(()=>import("../signature/WorkOrderSignatureDialog").then(m=>({default:m.WorkOrderSignatureDialog})));
+const CustomerVehicleEditor=lazy(()=>import("../customer-vehicle-update/CustomerVehicleEditor").then(m=>({default:m.CustomerVehicleEditor})));
+const CustomerVehicleUpdateNotice=lazy(()=>import("../customer-vehicle-update/CustomerVehicleEditor").then(m=>({default:m.CustomerVehicleUpdateNotice})));
 import { useArchiveSignature } from "../signature/useArchiveSignature";
 import { useArchiveLegacyRefresh } from "./useArchiveLegacyRefresh";
-import { WorkOrderPrintButton } from "../work-order-print/WorkOrderPrintButton";
+const WorkOrderPrintButton=lazy(()=>import("../work-order-print/WorkOrderPrintButton").then(m=>({default:m.WorkOrderPrintButton})));
 import {VehicleLicenseExceptionNotice} from '../work-orders/components/VehicleLicenseException';
 import {isCurrentVehicleLicenseException} from '../work-orders/domain/vehicleLicenseException';
 import { workOrderDisplayStatus } from "../work-orders/domain/workOrderDomain";
-import { QuickDispatchDialog } from "../dispatch/QuickDispatchDialog";
+const QuickDispatchDialog=lazy(()=>import("../dispatch/QuickDispatchDialog").then(m=>({default:m.QuickDispatchDialog})));
 import { dispatchEnabled } from "../dispatch/dispatchAvailability";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, Empty, Grid, Input, Modal, Popconfirm, Spin, Table, Tag } from "antd";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { Alert, Button, Card, Empty, Grid, Input, Modal, Popconfirm, Spin, Tag } from "antd";
 import { ChevronRight, PencilLine, Trash2, RefreshCw } from "lucide-react";
 import { WorkOrder } from "../../../../shared/types";
 import { StatusChip } from "../../shared/ui/Status";
@@ -48,8 +54,11 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
   useEffect(()=>setSearchDraft(searchTerm),[searchTerm]);
   const [detailOrderId, setLocalDetailOrderId] = useState<string | undefined>(()=>new URLSearchParams(location.search).get("paperOrder") || undefined);
   const setDetailOrderId=(id?:string)=>{setLocalDetailOrderId(id);if(!id)controller.clearLinkedOrder();};
-  const detailOrder = controller.orders.find(order => order.id === detailOrderId) || (controller.selectedOrder?.id === detailOrderId ? controller.selectedOrder : undefined) || ((!detailOrderId || controller.linkedOrderDetail?.id === detailOrderId) ? controller.linkedOrderDetail : undefined);
-  useDetailScrollLock(Boolean(detailOrder));
+  const detailRequest=useRef(0);
+  const [detailLoading,setDetailLoading]=useState(false);
+  const [detailError,setDetailError]=useState('');
+  const detailOrder = detailLoading||detailError ? undefined : (controller.selectedOrder?.id === detailOrderId ? controller.selectedOrder : undefined) || ((!detailOrderId || controller.linkedOrderDetail?.id === detailOrderId) ? controller.linkedOrderDetail : undefined);
+  useDetailScrollLock(Boolean(detailOrderId||detailOrder));
   const legacyRefresh = useArchiveLegacyRefresh(currentUser, controller.acceptRefreshedOrder, controller.refreshArchiveSummary);
   const listedOrders = searchedOrders.filter(order => !overview || order.shop.id === currentUser?.shopId);
   const refreshReport = legacyRefresh.report ? <Alert style={{ marginBottom: 12 }} showIcon
@@ -70,12 +79,21 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
 
-  function openDetail(order: WorkOrder) {
-    selectOrder(order);
+  useEffect(()=>{detailRequest.current++;setDetailLoading(false);setDetailError('');return()=>{detailRequest.current++;};},[currentUser?.id]);
+  async function openDetail(order: WorkOrderListItem) {
+    const generation=++detailRequest.current;
+    setDetailLoading(true);setDetailError('');
+    setDetailOrderId(order.id);
+    try {
+      const full=await workOrderApi.get(order.id);
+      if(generation!==detailRequest.current)return;
+      selectOrder(full);
+    } catch(error) {if(generation===detailRequest.current)setDetailError(error instanceof Error?error.message:'详情加载失败');}
+    finally {if(generation===detailRequest.current)setDetailLoading(false);}
+
     setDeleteError("");
     legacyRefresh.clearReport();
     signature.clearError();
-    setDetailOrderId(order.id);
   }
 
   function resumeDraft(order: WorkOrder) {
@@ -148,34 +166,7 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
         </div>
         </Spin>
       ) : (
-        <Table
-          className="orders-table"
-          loading={{ spinning: ordersLoading, description: "正在加载委托单…" }}
-          aria-busy={ordersLoading}
-          size="small"
-          rowKey="id"
-          scroll={{ x: "max-content" }}
-          pagination={false}
-          locale={{ emptyText: ordersLoading ? <div style={{ minHeight: 140 }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无符合条件的委托单"><Button onClick={controller.archive.reset}>清空筛选</Button></Empty> }}
-          rowClassName={(order) => order.id === selectedId ? "selected" : ""}
-          onRow={(order) => ({ onClick: () => openDetail(order), tabIndex: 0, 'aria-label': `查看委托单 ${order.vehicle.plate || order.id}`, onKeyDown: event => {
-            if (event.target !== event.currentTarget) return;
-            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDetail(order); }
-          } })}
-          dataSource={listedOrders}
-          columns={[
-            { title: "派工号", render: (_, order) => order.dispatchNo || "暂无派工号", width: 160 },
-            { title: "车牌", render: (_, order) => order.vehicle.plate || "-" },
-            { title: "车主", render: (_, order) => order.customer.name || "-" },
-            { title: "服务顾问", dataIndex: "advisor" },
-            { title: "维修技师", dataIndex: "technician" },
-            { title: "业务状态", render: (_, order) => <><StatusChip status={workOrderDisplayStatus(order)} />{order.legacyApproved && <Tag color="green">已审</Tag>}{order.isBaiyuanOrder && <Tag color="blue">百援</Tag>}{order.paperOrder && <Tag color="orange">纸质委托书</Tag>}</> },
-            { title: "润丰同步", render: (_, order) => <OrderLegacySyncStatus order={order} /> },
-            { title: "金额", render: (_, order) => order.settlementAmount || order.estimatedFee ? `¥${order.settlementAmount || order.estimatedFee}` : "-" },
-            { title: "创建时间", render: (_, order) => archiveTimeLabel(order, "created"), width: 145 },
-            { title: "更新时间", render: (_, order) => archiveTimeLabel(order, "updated"), width: 145 }
-          ]}
-        />
+        <ArchiveOrderTable listedOrders={listedOrders} ordersLoading={ordersLoading} selectedId={selectedId} openDetail={openDetail} onReset={controller.archive.reset}/>
       )}
 
       <ListPagination mobile={isMobile} page={controller.archive.page} total={controller.archive.total} loaded={listedOrders.length} loading={ordersLoading} onPage={controller.archive.setPage} onMore={controller.archive.loadMore}/>
@@ -183,11 +174,11 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
       <Modal
         rootClassName="archive-detail-modal"
         transitionName={isMobile ? "" : undefined}
-        open={Boolean(detailOrder)}
+        open={Boolean(detailOrderId||detailOrder)}
         title="委托单详情"
         width={isMobile ? "calc(100vw - 16px)" : 1080}
         style={isMobile ? { top: 8, paddingBottom: 8 } : undefined}
-        onCancel={() => setDetailOrderId(undefined)}
+        onCancel={() => {detailRequest.current++;setDetailLoading(false);setDetailOrderId(undefined);}}
         footer={overview ? <Button onClick={() => setDetailOrderId(undefined)}>关闭</Button> : (
           <div className="archive-detail-actions">
             {detailOrder && !detailOrder.paperOrder && ["草稿","待客户签字"].includes(detailOrder.status) && signature.canSign(detailOrder) && <Button type="primary" loading={signature.starting}
@@ -222,6 +213,8 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
         )}
         styles={{ body: { overflowY: "auto" } }}
       >
+        {detailLoading && <Spin/>}
+        {detailError && <Alert type="error" title={detailError} action={<Button onClick={()=>{const row=listedOrders.find(order=>order.id===detailOrderId);if(row)void openDetail(row);}}>重试</Button>}/>}
         {overview && detailOrder ? <Suspense fallback={<Spin/>}><OrderOverviewDetail key={detailOrder.id} id={detailOrder.id} onOpenRepairs={openRepairProjects}/></Suspense> : <>
         {detailOrder && <PaperOrderResolution key={`paper-${detailOrder.id}`} order={detailOrder} user={currentUser} onUpdated={controller.acceptRefreshedOrder} onEdit={resumeDraft}/>}
         {detailOrder && <div style={{ marginBottom: 12 }}><CustomerVehicleEditor key={`${detailOrder.id}-${currentUser?.id}`} order={detailOrder} user={currentUser}

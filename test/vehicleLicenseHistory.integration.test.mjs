@@ -23,7 +23,7 @@ test('vehicle license reuse preserves old orders, selects one current image and 
   assert.equal((await history.vehicleLicenseHistory(b,{plate:'鲁 B862P7'})).vin,vin);
   assert.equal(await history.vehicleLicenseHistory({...b,shopId:'other'},{vin}),null);
   await assert.rejects(()=>history.authorizeLicensePreview({...b,shopId:'other'},{vin,fileId:firstFile}),e=>e.status===404);
-  await assert.rejects(()=>history.reuseVehicleLicense({...b,role:'technician'},{vin,fileId:firstFile}),e=>e.status===403);
+  await assert.rejects(()=>history.reuseVehicleLicense({...b,role:'technician',active:false},{vin,fileId:firstFile}),e=>e.status===403);
   await assert.rejects(()=>history.reuseVehicleLicense(b,{vin:otherVin,fileId:firstFile}),e=>e.status===409);
   assert.equal(await history.authorizeLicensePreview(b,{vin,fileId:firstFile}),firstFile);
   const reused=await history.reuseVehicleLicense(b,{vin,fileId:firstFile});assert.notEqual(reused.fileId,firstFile);

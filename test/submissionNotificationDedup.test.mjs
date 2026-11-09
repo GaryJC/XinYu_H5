@@ -13,6 +13,7 @@ function fixture({kind='维修已提检',existing=[]}={}) {
    const type=sql.includes('dispatch_inspection_notifications')?'inspection':'scheduler';leases[type]=params[0];
    return {rows:[{event_id:99,order_id:'o',kind,payload:{orderId:'o',actorName:'维修工'}}]};
   }
+  if(sql.includes('as notification_lease_id'))return {rows:[{order_id:'o',stage:'待检验',order_status:'维修中',shop_id:'s',technician_id:'worker',data:{items:[{id:1,name:'项目',status:'待检验',responsibleId:'worker'}],technicianIds:['worker']},latest_inspection_event_id:99,notification_lease_id:leases.inspection}]};
   if(sql.startsWith('select shop_id'))return {rows:[{shop_id:'s'}]};
   if(sql.includes('from work_orders'))return {rows:[{id:'o',shop_id:'s',vehicle_plate:'沪ATEST',status:'维修中'}]};
   if(sql.startsWith('select * from dispatch_tasks'))return {rows:[{stage:'待检验',shop_id:'s',technician_id:'worker',data:{items:[{id:1,name:'项目',status:'待检验',responsibleId:'worker'}],technicianIds:['worker']}}]};

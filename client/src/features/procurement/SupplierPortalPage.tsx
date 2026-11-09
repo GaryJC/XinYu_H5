@@ -5,8 +5,9 @@ import { procurementTotalFen } from "../../../../shared/procurementMoney.mjs";
 import { useEffect,useState } from 'react';
 import { Alert,Button,Card,Checkbox,Form,Input,InputNumber,Modal,Space } from 'antd';
 import { useSupplierPortal } from './useSupplierPortal';
-import { ProcurementTermsView } from './ProcurementTenderDetail';
-import { ProcurementReportView } from './ProcurementReportView';
+import { ProcurementTermsView } from './ProcurementTermsView';
+import { lazy } from '../../shared/ui/recoverableLazy';
+const ProcurementReportView=lazy(()=>import('./ProcurementReportView').then(m=>({default:m.ProcurementReportView})));
 import { money,dateTime,statusLabels,localDateTime } from './procurementApi';
 import './procurement.css';
 export function SupplierPortalPage() {

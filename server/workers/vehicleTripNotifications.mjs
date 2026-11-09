@@ -19,7 +19,7 @@ export async function processTripNotification({database=pool,claim=()=>claimTrip
     const {job,trip,user}=await context(row);
     const notification={...row,action:job?.action,payload:job?.payload};
     if(row.previous_status!=='pending')result=await query(notification,user?.dingtalk_user_id,{env});
-    else if(user?.id!==row.recipient_id||!tripNotificationRecipient(job?.action,trip,user))result={status:'failed',error:'申请状态或接收人权限已变化，通知已取消',retryable:false};
+    else if(user?.id!==row.recipient_id||!tripNotificationRecipient(job?.action,trip,user,job?.payload))result={status:'failed',error:'申请状态或接收人权限已变化，通知已取消',retryable:false};
     else {started=true;result=await send(notification,user.dingtalk_user_id,{env,buildMessage:vehicleTripMessageBody});}
   } catch {result=started||row.previous_status!=='pending'?{status:'unknown',error:'发送结果不确定，请核对钉钉记录'}:{status:'failed',error:'发送前校验失败，将重试',retryable:true};}
   await finish(row,result);return true;
