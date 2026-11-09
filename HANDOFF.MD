@@ -356,3 +356,11 @@
 
 - workOrderDomain.ts 新增共享模块 import 后，authSessionFollowupReview、authenticatedRole、orderFollowupReview 三组 VM 测试必须补齐显式依赖映射，映射到实际模块。否则生产部署 npm run check 会报 Unexpected import，定向业务测试通过也无法覆盖。
 - 修正后完整 npm run check 通过：1024 项，994 通过、30 跳过、0 失败，类型检查和生产构建通过。本次仅修改测试依赖映射，无新增生产运行开销。
+
+## 润丰拉取队列防阻塞 — 2026-11-09
+
+- 新迁移 202611090001_legacy_sync_retry_fairness 保留消费端函数签名，新增 auto_attempt_count 与累计 attempt_count 分离。优先首次领取，失败或10分钟未回执后第一次后延后5分钟，本轮第2次失败后暂停，failed 的 available_at=infinity。
+- 管理员核对润丰是否已建单并修正数据后，可用现有 retry_legacy_sync_event 恢复 failed；保留事件标识、载荷、版本、累计次数。本次无新增页面重试入口，同名消费者晚 ACK 的旧协议限制仍在。
+- 升级时未成功事件按现有次数初始化，pending/failed 中已尝试至少2次的暂停，processing 等完成或超时。可领取部分索引配合首次领取排序，超时回收每批最多100条，避免无限重试占用轮询机会与长批次锁。
+- 在本机临时隔离库执行全部迁移并验证7项集成检查通过，完整 npm run check 994通过/30跳过/0失败，生产构建通过。尚未应用生产迁移。
+- 用户最终确认上限为2次：首次失败/超时后等5分钟，第二次失败/超时暂停。7项隔离集成测试通过。临时库清理在 pool.end() 后使用普通 DROP DATABASE，避免 WITH(FORCE) 抢先终止正在关闭的连接引发异步测试错误。

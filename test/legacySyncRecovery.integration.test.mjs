@@ -21,20 +21,23 @@ test("legacy sync timeout recovery, ordered reclaiming and concurrent consumers"
     const seed = async (id, { age = "11 minutes", status = "processing", revision = 1, latest = revision, type = "created" } = {}) => {
       await pool.query(`insert into work_orders(id,status,advisor,technician,inspector,old_parts_handling,legacy_sync_status,legacy_sync_revision)
         values($1,'已委托','测试顾问','待派工','待检验','环保处理',$2,$3)`, [id, status, latest]);
-      await pool.query(`insert into legacy_sync_outbox(event_id,order_id,revision,event_type,payload,status,attempt_count,locked_by,locked_at,
+      await pool.query(`insert into legacy_sync_outbox(event_id,order_id,revision,event_type,payload,status,attempt_count,auto_attempt_count,locked_by,locked_at,
           legacy_reid,legacy_document_no,legacy_dispatch_no)
-        values($1,$1,$2,$3,'{"order":{"dispatchNo":"A123"}}',$4,1,'old-consumer',now()-$5::interval,
+        values($1,$1,$2,$3,'{"order":{"dispatchNo":"A123"}}',$4,1,1,'old-consumer',now()-$5::interval,
           $6,201,$7)`, [id, revision, type, status, age, id === 'correction' ? 102 : id === 'ordered' ? 103 : 101, id === 'correction' ? 'A124' : id === 'ordered' ? 'A125' : 'A123']);
     };
     const event = async id => (await pool.query("select * from legacy_sync_outbox where event_id=$1", [id])).rows[0];
     const order = async id => (await pool.query("select * from work_orders where id=$1", [id])).rows[0];
     const recover = async () => Number((await pool.query("select requeue_timed_out_legacy_sync_events() as count")).rows[0].count);
+    const ready = async () => pool.query("update legacy_sync_outbox set available_at=now()-interval '1 second' where status in ('pending','failed') and auto_attempt_count<2");
     await t.test("10-minute boundary, recent claims and completed events", async () => {
       await seed("expired"); await seed("recent", { age: "9 minutes" }); await seed("synced", { status: "synced" });
       const before = await event("expired");
       await pool.query("update legacy_sync_outbox set locked_at=now()-interval '10 minutes' where event_id='expired'");
       assert.equal(await recover(), 1);
       const after = await event("expired");
+      assert.ok(after.available_at > new Date());
+      assert.match(after.last_error, /延后重试/);
       assert.equal(after.status, "pending"); assert.equal(after.locked_by, null); assert.equal(after.locked_at, null);
       for (const field of ["event_id", "revision", "attempt_count", "payload", "legacy_reid", "legacy_document_no", "legacy_dispatch_no"]) {
         assert.deepEqual(after[field], before[field]);
@@ -46,6 +49,7 @@ test("legacy sync timeout recovery, ordered reclaiming and concurrent consumers"
     });
     await t.test("late ACK from previous consumer is rejected and reclaim increments attempts", async () => {
       assert.equal((await pool.query("select acknowledge_legacy_sync_event('expired','old-consumer',101,201,'A123') as ok")).rows[0].ok, false);
+      await ready();
       const claimed = (await pool.query("select * from claim_legacy_sync_events('new-consumer',20)")).rows;
       assert.deepEqual(claimed.map(e => e.event_id), ["expired"]);
       assert.equal(claimed[0].attempt_count, 2);
@@ -56,6 +60,8 @@ test("legacy sync timeout recovery, ordered reclaiming and concurrent consumers"
     await t.test("updated events retain immutable identity across timeout and ACK", async () => {
       await seed("correction", { type: "updated" });
       const before = await event("correction");
+      await recover(); await ready();
+      await ready();
       const rows = (await pool.query("select * from claim_legacy_sync_events('new-consumer',20)")).rows;
       assert.equal(rows[0].event_id, "correction"); assert.equal(rows[0].attempt_count, 2);
       assert.deepEqual(rows[0].payload, before.payload);
@@ -68,6 +74,7 @@ test("legacy sync timeout recovery, ordered reclaiming and concurrent consumers"
       await pool.query("update work_orders set legacy_sync_status='pending' where id='ordered'");
       assert.equal(await recover(), 1);
       assert.equal((await order("ordered")).legacy_sync_status, "pending");
+      await ready();
       const rows = (await pool.query("select * from claim_legacy_sync_events('new-consumer',20)")).rows;
       assert.deepEqual(rows.map(e => e.event_id), ["ordered"]);
       assert.equal((await order("ordered")).legacy_sync_status, "pending");
@@ -82,6 +89,7 @@ test("legacy sync timeout recovery, ordered reclaiming and concurrent consumers"
       try {
         await locker.query("begin");
         await locker.query("select * from legacy_sync_outbox where event_id='locked' for update");
+        await recover(); await ready();
         const results = await Promise.all([pool.query("select * from claim_legacy_sync_events('consumer-a',20)"), pool.query("select * from claim_legacy_sync_events('consumer-b',20)")]);
         const ids = results.flatMap(r => r.rows.map(e => e.event_id)).sort();
         assert.deepEqual(ids, ["concurrent-a", "concurrent-b"]);
@@ -89,9 +97,51 @@ test("legacy sync timeout recovery, ordered reclaiming and concurrent consumers"
       } finally { await locker.query("rollback"); locker.release(); }
       assert.equal(await recover(), 1);
     });
+    await t.test("poison events yield to fresh orders, pause at two attempts and retain manual retry identity", async () => {
+      await pool.query('delete from work_orders');
+      await seed('poison', {status:'pending'});
+      await pool.query("update legacy_sync_outbox set auto_attempt_count=0 where event_id='poison'");
+      await seed('fresh', {status:'pending'});
+      await pool.query("update legacy_sync_outbox set attempt_count=0,auto_attempt_count=0 where event_id='fresh'");
+      await ready();
+      const claim = async () => (await pool.query("select * from claim_legacy_sync_events('worker',1)")).rows;
+      assert.equal((await claim())[0].event_id, 'fresh');
+      await pool.query("select acknowledge_legacy_sync_event('fresh','worker',101,201,'A123')");
+      assert.equal((await claim())[0].event_id, 'poison');
+      assert.equal((await pool.query("select fail_legacy_sync_event('poison','wrong','error',0) ok")).rows[0].ok, false);
+      await pool.query("select fail_legacy_sync_event('poison','worker','bad data',0)");
+      let current = await event('poison');
+      assert.ok(current.available_at.getTime() - Date.now() > 4 * 60_000);
+      assert.equal((await claim()).length, 0);
+      await ready();
+      assert.equal((await claim())[0].auto_attempt_count, 2);
+      await pool.query("update legacy_sync_outbox set locked_at=now()-interval '11 minutes' where event_id='poison'");
+      await recover();
+      current = await event('poison');
+      assert.equal(current.status, 'failed');
+      assert.match(current.last_error, /暂停/);
+      await seed('after-poison', {status:'pending'});
+      await pool.query("update legacy_sync_outbox set attempt_count=0,auto_attempt_count=0 where event_id='after-poison'");
+      await pool.query("insert into legacy_sync_outbox(event_id,order_id,revision,event_type,payload) values('poison-next','poison',2,'updated','{}')");
+      assert.equal((await claim())[0].event_id, 'after-poison');
+      assert.equal((await claim()).length, 0);
+      assert.equal((await pool.query("select acknowledge_legacy_sync_event('poison','worker',101,201,'A123') ok")).rows[0].ok, false);
+      assert.equal((await pool.query("select retry_legacy_sync_event('poison') ok")).rows[0].ok, true);
+      const retried = (await claim())[0];
+      assert.equal(retried.event_id, 'poison');
+      assert.equal(retried.attempt_count, current.attempt_count + 1);
+      assert.equal(retried.auto_attempt_count, 1);
+      assert.deepEqual(retried.payload, current.payload);
+      assert.equal((await pool.query("select retry_legacy_sync_event('poison') ok")).rows[0].ok, false);
+      await pool.query("update legacy_sync_outbox set auto_attempt_count=2 where event_id='poison'");
+      await pool.query("select fail_legacy_sync_event('poison','worker','bad data',0)");
+      assert.match((await event('poison')).last_error, /暂停.*bad data/);
+      assert.equal((await claim()).length, 0);
+    });
+
   } finally {
     await pool?.end();
-    await admin.query(`drop database if exists "${database}" with (force)`);
+    await admin.query(`drop database if exists "${database}"`);
     await admin.end();
   }
 });
