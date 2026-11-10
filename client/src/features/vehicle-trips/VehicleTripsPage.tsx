@@ -49,11 +49,11 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
         {!state.busy && !state.vehicles.length && <Alert type="info" title="暂无可用车辆，请联系管理员录入或启用车辆" />}
         <Form.Item label="用车事由" name="reason" rules={[{ required: true, whitespace: true, message: '请填写用车事由' }]}><Input.TextArea rows={3} maxLength={500} showCount /></Form.Item>
         <Form.Item label="备注（选填）" name="note"><Input.TextArea rows={2} maxLength={500} /></Form.Item>
-        <Form.Item label="行驶证照片" required>
-          <TripCameraInput license label="拍摄申请用车行驶证" busy={state.pending === 'prepare-photo'} disabled={state.busy || state.departurePhotos.length >= 9} onCapture={file => void state.addDeparturePhoto(file)} />
+        <Form.Item label="公里数照片" required>
+          <TripCameraInput label="拍摄申请用车公里数" busy={state.pending === 'prepare-photo'} disabled={state.busy || state.departurePhotos.length >= 9} onCapture={file => void state.addDeparturePhoto(file)} />
           {!!state.departurePhotos.length && <div className="trip-photos trip-application-photos">{state.departurePhotos.map((photo, index) => <div key={index}>
-            <img src={photo} alt={`行驶证照片 ${index + 1}`} width={140} height={100} />
-            <Button size="small" disabled={state.busy} aria-label={`移除第 ${index + 1} 张行驶证照片`} onClick={() => state.removeDeparturePhoto(index)}>移除照片</Button>
+            <img src={photo} alt={`公里数照片 ${index + 1}`} width={140} height={100} />
+            <Button size="small" disabled={state.busy} aria-label={`移除第 ${index + 1} 张公里数照片`} onClick={() => state.removeDeparturePhoto(index)}>移除照片</Button>
           </div>)}</div>}
         </Form.Item>
         <Button type="primary" htmlType="submit" loading={state.pending === 'create'} disabled={state.busy || !state.vehicles.length}>提交出车申请</Button>
@@ -98,7 +98,7 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
         </section>
         {detail.rejectionReason && <Alert type="warning" title={`驳回原因：${detail.rejectionReason}`} />}
         {detail.returnRejectionReason && <Alert className="trip-return-feedback" type="warning" showIcon title={`收车退回：${detail.returnRejectionReason}`} />}
-        {photos('departure', detail.departureEvidence === 'license' ? '申请行驶证照片' : '历史出车公里数照片')}{photos('return', '本次收车公里数照片', detail.returnRound)}
+        {photos('departure', detail.departureEvidence === 'license' ? '申请行驶证照片' : '申请公里数照片')}{photos('return', '本次收车公里数照片', detail.returnRound)}
         {[...new Set(detail.attachments.filter(a => a.stage === 'return' && a.confirmed && a.returnRound < detail.returnRound).map(a => a.returnRound))].map(round => <div key={round}>{photos('return', `第 ${round} 次还车照片（已退回）`, round)}</div>)}
         {manager && !mine && detail.status === '待审批' && <section className="trip-section trip-approval">
           <h3 className="trip-section-heading"><ClipboardCheck size={18} />出车审批</h3>
@@ -130,7 +130,7 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
         if (await state.act('reject', { reason: reason.trim() })) { setRejectOpen(false); rejectForm.resetFields(); }
       }}>
         <Form.Item label="驳回原因" name="reason" rules={[{ required: true, whitespace: true, message: '请填写驳回原因' }]}>
-          <Input.TextArea aria-label="驳回原因" placeholder="例如：行驶证信息不清晰，请重新拍摄后申请" rows={4} maxLength={500} />
+          <Input.TextArea aria-label="驳回原因" placeholder="例如：公里数照片不清晰，请重新拍摄后申请" rows={4} maxLength={500} />
         </Form.Item>
         <div className="trip-reject-count"><span>原因将保存在申请记录中</span><span>{rejectReason.length} / 500</span></div>
       </Form>

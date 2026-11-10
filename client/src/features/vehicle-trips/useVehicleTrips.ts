@@ -72,8 +72,8 @@ export function useVehicleTrips(initialScope = 'all') {
     removeDeparturePhoto: (index: number) => { if (!running.current) setDeparturePhotos(current => current.filter((_, i) => i !== index)); },
     refresh: () => run(async () => { await Promise.all([refreshData(),list.refresh()]); if (detail) setDetail(await vehicleTripApi.detail(detail.id)); }),
     create: (values: { vehicleId: string; reason: string; note?: string }) => run(async () => {
-      if (!departurePhotos.length) throw new Error('请先拍摄行驶证照片');
-      const input = { ...values, note: values.note || '', licensePhotos: departurePhotos }; const key = JSON.stringify(input);
+      if (!departurePhotos.length) throw new Error('请先拍摄公里数照片');
+      const input = { ...values, note: values.note || '', departurePhotos: departurePhotos }; const key = JSON.stringify(input);
       await vehicleTripApi.create({ ...input, requestId: requestId(key) });
       setDeparturePhotos([]); requests.current.delete(key);
       await list.refresh();

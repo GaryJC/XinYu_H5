@@ -1,5 +1,11 @@
 # Engineering Handoff
 
+## 申请凭证改回公里数照片 — 2026-11-10
+
+- 用户再次明确：申请上传**公里数照片**，不是行驶证。本节覆盖下方“用车流程最终更正”的凭证类型；审批通过即出车、收车交照片直接完成的状态流程不变。
+- 新申请恢复 `departurePhotos`，服务端必填校验及新记录 `departure_evidence=mileage`；前端恢复仪表盘示例、公里数预览与驳回提示，保留仅拍照入口。已存历史 `license` 类型不重新标注；已应用迁移不改写，本次不需新增迁移。
+- 全量 `npm run check` 通过（1049 通过、32 环境依赖跳过，类型、构建及资源预算通过）。临时数据库 + Chrome 完整申请／审批／还车测试通过，包含 360/390 px 页面。UI 集成读取 `dist`，必须先等构建结束再运行；与构建并发会读到旧文案。日志 `/tmp/mileage-correction-check.log`、`/tmp/mileage-correction-integration.log`，截图 `output/playwright/trip-approval-correction/`。未部署、未推送。
+
 ## 本地工作台加载失败 — 2026-11-10
 
 - `localhost:5175` 显示“无法完成登录或加载数据／服务器处理失败”时，用户身份和统计仍能显示，实际失败的是列表查询。只读复现 PostgreSQL `42703: column wo.legacy_approved does not exist`，本地数据库缺 7 项迁移；隔离测试库已应用全部迁移，不能据此认为日常开发库也已更新。

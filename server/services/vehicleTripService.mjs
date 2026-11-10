@@ -64,11 +64,11 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
     },
     async create(user, input) {
       requireTripUser(user);
-      const photos = input.licensePhotos;
-      if (!Array.isArray(photos) || !photos.length || photos.length > 9 || photos.some(photo => typeof photo !== 'string' || !photo)) throw new HttpError(400, '请先拍摄行驶证照片（最多 9 张）');
+      const photos = input.departurePhotos;
+      if (!Array.isArray(photos) || !photos.length || photos.length > 9 || photos.some(photo => typeof photo !== 'string' || !photo)) throw new HttpError(400, '请先拍摄公里数照片（最多 9 张）');
       // Leave room for JSON/text within the existing 16 MB HTTP body limit.
       if (photos.reduce((size, photo) => size + photo.length, 0) > 12 * 1024 * 1024) throw new HttpError(400, '照片总大小过大，请减少照片后重试');
-      const normalized = { requestId: input.requestId, vehicleId: tripText(input.vehicleId, '车辆', 100), reason: tripText(input.reason, '用车事由'), note: tripText(input.note, '备注', 500, true), licensePhotos: photos };
+      const normalized = { requestId: input.requestId, vehicleId: tripText(input.vehicleId, '车辆', 100), reason: tripText(input.reason, '用车事由'), note: tripText(input.note, '备注', 500, true), departurePhotos: photos };
       return operation(user, normalized, 'create', null, async repo => {
         const car = await repo.getVehicle(normalized.vehicleId, true);
         if (!car || car.shopId !== user.shopId || !car.active) throw new HttpError(409, '车辆不存在或已停用，请重新选择');
@@ -82,7 +82,7 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
           ids.push(file.id);
         }
         // Submitted evidence is visible to approvers before departure.
-        if (await repo.confirmAttachments(trip.id, 'departure', user.id, ids) !== ids.length) throw new HttpError(400, '行驶证照片保存失败，请重试');
+        if (await repo.confirmAttachments(trip.id, 'departure', user.id, ids) !== ids.length) throw new HttpError(400, '公里数照片保存失败，请重试');
         return trip;
       });
     },

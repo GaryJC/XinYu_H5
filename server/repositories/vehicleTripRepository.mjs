@@ -52,7 +52,7 @@ export class VehicleTripRepository {
     return trip((await this.database.query(`select * from vehicle_trip_requests where id=$1${lock ? ' for update' : ''}`, [id])).rows[0]);
   }
   async createTrip(id, user, car, input) {
-    await this.database.query(`insert into vehicle_trip_requests(id,shop_id,applicant_id,applicant_name,vehicle_id,vehicle_snapshot,reason,note,status,departure_evidence) values($1,$2,$3,$4,$5,$6,$7,$8,'待审批','license')`,
+    await this.database.query(`insert into vehicle_trip_requests(id,shop_id,applicant_id,applicant_name,vehicle_id,vehicle_snapshot,reason,note,status,departure_evidence) values($1,$2,$3,$4,$5,$6,$7,$8,'待审批','mileage')`,
       [id, user.shopId, user.id, user.name, car.id, JSON.stringify({ plate: car.plate, brand: car.brand, model: car.model }), input.reason, input.note]);
     return this.getTrip(id);
   }

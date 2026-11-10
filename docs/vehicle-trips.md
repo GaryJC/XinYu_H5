@@ -2,22 +2,22 @@
 
 ## 当前流程（2026-11-10 更正）
 
-1. 申请人选择车辆、填写事由，拍摄并提交 1–9 张**行驶证照片**，申请进入“待审批”。提交申请不等于出车。
-2. 本店其他管理员查看行驶证后批准或驳回。批准成功即进入“用车中”，审批人、审批时间、出车时间在同一次事务中记录；申请人无需再次确认出车。不能自审。
+1. 申请人选择车辆、填写事由，拍摄并提交 1–9 张**公里数照片**，申请进入“待审批”。提交申请不等于出车。
+2. 本店其他管理员查看公里数后批准或驳回。批准成功即进入“用车中”，审批人、审批时间、出车时间在同一次事务中记录；申请人无需再次确认出车。不能自审。
 3. 还车时由申请人拍摄仪表盘公里数照片并点击“确认还车”，立即进入“已还车”，记录收车时间、释放车辆，无需人工收车审核。
 
-照片仅保留拍照入口（`capture="environment"`）。浏览器／钉钉实际唤起行为需真机验证。申请行驶证不使用公里数拍摄示例；历史公里数附件保留原文义。
+照片仅保留拍照入口（`capture="environment"`）。浏览器／钉钉实际唤起行为需真机验证。申请与收车均显示仪表盘公里数拍摄示例；历史附件保留原凭证类型。
 
 ## 历史记录
 
-- 新迁移 `202611100001_vehicle_trip_approval_departure.sql` 增加 `departure_evidence`：旧记录为 `mileage`，新申请为 `license`，不把旧公里数照片冒充为行驶证。
+- 新迁移 `202611100001_vehicle_trip_approval_departure.sql` 增加 `departure_evidence`：新申请为 `mileage`；已存历史 `license` 附件保留原类型，不重新标注。
 - 先前误设“待收车审核”且已有还车提交时间的记录，迁移为“已还车”，保留原提交时间，不伪造审核人或审核时间。旧审核字段、历史轮次与照片保留用于追溯。
 - 旧待审批缺照片可由申请人补拍，补拍立即供审批人查看，仍不能跳过审批。旧已批准待出车记录保留原补拍／确认入口，不批量出车，避免同车冲突。
 - 已在用车中的记录不回退或补造审批。新的收车操作不再产生待收车审核状态，旧收车审核操作接口拒绝继续操作。
 
 ## 接口与约束
 
-- `POST /api/vehicle-trip-requests`：`vehicleId/reason/note/licensePhotos/requestId`。必须提交行驶证照片，旧 `departurePhotos` 字段不能代替；照片 Base64 总计不超过 12 MiB。
+- `POST /api/vehicle-trip-requests`：`vehicleId/reason/note/departurePhotos/requestId`。必须提交公里数照片；照片 Base64 总计不超过 12 MiB。
 - `POST /api/vehicle-trip-requests/:id/approve`：本店其他管理员批准并直接出车；校验申请照片、车辆启用与占用，审批失败不留下审批时间或出车记录。
 - `POST /api/vehicle-trip-requests/:id/reject`：驳回须填写原因。
 - `POST /api/vehicle-trip-requests/:id/return`：仅申请人，以本次 `fileIds` 提交公里数照片并直接完成收车。
@@ -37,5 +37,5 @@
 - 部署前按顺序应用新增迁移，前后端及 worker 一起更新，不编辑已应用迁移。
 - `npm run check` 检查测试、类型、构建和资源预算。
 - 使用本机 `DISPATCH_TEST_ADMIN_URL` 运行 `test/vehicleTrips.integration.test.mjs` 和 `test/operationsFollowupReview.test.mjs`；测试创建并清理独立临时库。
-- `VEHICLE_TRIP_UI_TEST=true` 加 Playwright／Chrome 路径可验证手机申请、行驶证预览、审批即出车、直接还车与待办跳转。
+- `VEHICLE_TRIP_UI_TEST=true` 加 Playwright／Chrome 路径可验证手机申请、公里数预览、审批即出车、直接还车与待办跳转。
 - 沿用压缩和现有 16 MiB HTTP 上限；不增加普通列表关联查询或后台扫描。出车占用继续使用部分索引与行锁。未做大规模延迟基准。

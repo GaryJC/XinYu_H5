@@ -38,7 +38,7 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
     const fails = (promise, code) => assert.rejects(() => promise, e => e.status === code);
     const key = () => ({ requestId: randomUUID() });
     const imageBase64 = (await sharp({ create: { width: 80, height: 40, channels: 3, background: '#102030' } }).png().toBuffer()).toString('base64');
-    const create = (user, input) => svc.create(user, { licensePhotos: [imageBase64], ...input });
+    const create = (user, input) => svc.create(user, { departurePhotos: [imageBase64], ...input });
     const cars = await svc.vehicles(employee); assert.equal(cars.length, 8);
     assert.deepEqual(cars.map(v => v.plate).sort(), ['鲁B60778','鲁BDT7922','鲁BDS3250','鲁BDQ2235','鲁BD56565','鲁BB62767','鲁BD09326','鲁BA86281'].sort());
     await fails(svc.saveVehicle(employee, { plate: '鲁BTEST', brand: '测试', model: '测试' }), 403);
@@ -46,12 +46,12 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
     await fails(svc.saveVehicle(manager, { plate: '鲁BTEST', brand: '其他', model: '其他' }), 409);
     await fails(svc.saveVehicle(stranger, car, car.id), 404);
     const input={...key(),vehicleId:car.id,reason:'外出办事',note:''};
-    for(const licensePhotos of [undefined,[],Array(10).fill(imageBase64),['invalid'],[imageBase64,'invalid'],['a'.repeat(12*1024*1024+1)]]) await fails(create(employee,{...input,licensePhotos}),400);
+    for(const departurePhotos of [undefined,[],Array(10).fill(imageBase64),['invalid'],[imageBase64,'invalid'],['a'.repeat(12*1024*1024+1)]]) await fails(create(employee,{...input,departurePhotos}),400);
     assert.equal((await svc.list(employee)).length,0);
     const [trip,retry]=await Promise.all([create(employee,input),create(employee,input)]);
-    assert.equal(trip.id,retry.id);assert.equal(trip.status,'待审批');assert.equal(trip.departureAt,undefined);assert.equal(trip.departureEvidence,'license');
+    assert.equal(trip.id,retry.id);assert.equal(trip.status,'待审批');assert.equal(trip.departureAt,undefined);assert.equal(trip.departureEvidence,'mileage');
     await fails(create(employee,{...input,reason:'更改'}),409);
-    await fails(create(employee,{...input,licensePhotos:[imageBase64,imageBase64]}),409);
+    await fails(create(employee,{...input,departurePhotos:[imageBase64,imageBase64]}),409);
     const photo=(await svc.detail(manager,trip.id)).attachments[0];assert.equal(photo.confirmed,true);
     await svc.authorizeFile(manager,photo.fileId);
     await fails(svc.authorizeFile(other,photo.fileId),404);await fails(svc.authorizeFile(stranger,photo.fileId),404);
@@ -104,7 +104,7 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
     assert.equal((await svc.detail(employee,another.id)).departureEvidence,'mileage');
     const rejected=await create(employee,{...key(),vehicleId:cars[1].id,reason:'待驳回'});
     await fails(svc.act(manager,rejected.id,'reject',key()),400);
-    assert.equal((await svc.act(manager,rejected.id,'reject',{...key(),reason:'行驶证不清晰'})).status,'已驳回');
+    assert.equal((await svc.act(manager,rejected.id,'reject',{...key(),reason:'公里数不清晰'})).status,'已驳回');
 
     const missing=await create(employee,{...key(),vehicleId:cars[6].id,reason:'旧待审批补照片'});
     await pool.query('delete from vehicle_trip_attachments where trip_id=$1',[missing.id]);
@@ -228,25 +228,27 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
         const reason='送维修配件并到客户现场确认车辆情况，办理完毕后返回门店。'.repeat(3);
         await form.locator('#vehicle-trip-create_reason').fill(reason);
         await form.locator('button[type="submit"]').click();
-        await applicantPage.getByText('请先拍摄行驶证照片',{exact:true}).first().waitFor();
-        const camera=form.getByLabel('拍摄申请用车行驶证',{exact:true});
+        await applicantPage.getByText('请先拍摄公里数照片',{exact:true}).first().waitFor();
+        const camera=form.getByLabel('拍摄申请用车公里数',{exact:true});
         assert.equal(await camera.getAttribute('capture'),'environment');
-        assert.equal(await form.getByAltText('仪表盘总公里数拍摄示例').count(),0);
-        const file={name:'license.png',mimeType:'image/png',buffer:Buffer.from(imageBase64,'base64')};
-        await camera.setInputFiles(file);await form.getByAltText('行驶证照片 1',{exact:true}).waitFor();
+        assert.equal(await form.getByAltText('仪表盘总公里数拍摄示例').count(),1);
+        const file={name:'mileage.png',mimeType:'image/png',buffer:Buffer.from(imageBase64,'base64')};
+        await camera.setInputFiles(file);await form.getByAltText('公里数照片 1',{exact:true}).waitFor();
         await fs.mkdir('output/playwright/trip-approval-correction',{recursive:true});
+        await form.getByText('点亮仪表盘，拍清总公里数和单位',{exact:true}).scrollIntoViewIfNeeded();
+        await applicantPage.screenshot({path:'output/playwright/trip-approval-correction/mileage-camera-mobile.png',animations:'disabled'});
         await form.locator('button[type="submit"]').scrollIntoViewIfNeeded();
         await applicantPage.screenshot({path:'output/playwright/trip-approval-correction/application-mobile.png',animations:'disabled'});
         await form.locator('button[type="submit"]').click();
-        await form.getByAltText('行驶证照片 1',{exact:true}).waitFor({state:'detached'});
+        await form.getByAltText('公里数照片 1',{exact:true}).waitFor({state:'detached'});
         const created=(await svc.list(employee)).find(t=>t.reason===reason);assert.ok(created);
         assert.equal(created.status,'待审批');assert.equal(created.departureAt,undefined);
         const reviewer=await openNotice(manager2,'create',created,true);
         const reviewDrawer=reviewer.getByRole('dialog',{name:'出车申请详情',exact:true});
         await reviewer.setViewportSize({width:360,height:800});
-        await reviewDrawer.getByRole('heading',{name:'申请行驶证照片',exact:true}).scrollIntoViewIfNeeded();
+        await reviewDrawer.getByRole('heading',{name:'申请公里数照片',exact:true}).scrollIntoViewIfNeeded();
         await reviewDrawer.locator('.trip-photos').first().scrollIntoViewIfNeeded();
-        await reviewer.waitForFunction(()=>Array.from(document.querySelectorAll('img[alt="申请行驶证照片"]')).some(img=>img.complete&&img.naturalWidth>0&&img.getAttribute('src')?.startsWith('data:image/'))).catch(async error=>{
+        await reviewer.waitForFunction(()=>Array.from(document.querySelectorAll('img[alt="申请公里数照片"]')).some(img=>img.complete&&img.naturalWidth>0&&img.getAttribute('src')?.startsWith('data:image/'))).catch(async error=>{
           console.log(await reviewDrawer.locator('.authenticated-image').evaluateAll(nodes => nodes.map(node => node.outerHTML.slice(0,1600))));
           throw error;
         });
