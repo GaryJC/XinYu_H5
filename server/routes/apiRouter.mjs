@@ -1,3 +1,4 @@
+import { handlePurchaseDocuments } from './purchaseDocumentRouter.mjs';
 import { isOrderEntryRequest } from "../domain/orderEntryAccess.mjs";
 import { businessAnalytics } from '../services/businessAnalyticsService.mjs';
 import { operationsDashboard } from "../services/operationsDashboardService.mjs";
@@ -90,6 +91,7 @@ export async function handleApiRequest(req, res, url) {
     return true;
   }
 
+  if (await handlePurchaseDocuments(req, res, url, currentUser)) return true;
   if (await handleVehicleTrips(req, res, url, currentUser)) return true;
   const orderEntry = isOrderEntryRequest(req.method, url.pathname);
   if (orderEntry) requireAnyRole(currentUser, ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"]);

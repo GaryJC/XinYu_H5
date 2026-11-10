@@ -20,6 +20,8 @@ const BusinessAnalyticsPage = lazy(() => import('../business-analytics/BusinessA
 const VehicleTripsPage = lazy(() => import('../vehicle-trips/VehicleTripsPage').then(m => ({ default: m.VehicleTripsPage })));
 const CompanyVehiclesPage = lazy(() => import('../company-vehicles/CompanyVehiclesPage').then(m => ({ default: m.CompanyVehiclesPage })));
 
+const PurchaseDocumentsPage = lazy(() => import("../purchase-documents/PurchaseDocumentsPage").then(m => ({ default: m.PurchaseDocumentsPage })));
+
 const ProcurementPage = lazy(() => import("../procurement/ProcurementPage").then(module => ({ default: module.ProcurementPage })));
 
 const DispatchPage = lazy(() => import("../dispatch/DispatchPage").then(module => ({ default: module.DispatchPage })));
@@ -45,7 +47,7 @@ export function WorkbenchPage() {
     devLoginLoading, loginForDevelopment
   } = controller;
 
-  const bindingRequired = currentUser && hasRole(currentUser, 'technician') && !currentUser.legacyEmployeeCode && !['出车申请', '车辆管理', '委托开单'].includes(activeNav);
+  const bindingRequired = currentUser && hasRole(currentUser, 'technician') && !currentUser.legacyEmployeeCode && !['出车申请', '车辆管理', '委托开单', '进货单生成'].includes(activeNav);
 
   const navigation = (
     <div className="navigation-shell workbench-navigation">
@@ -132,6 +134,8 @@ export function WorkbenchPage() {
         {bindingRequired && <EmployeeBindingGate key={currentUser.id} user={currentUser} onBound={controller.setCurrentUser} onDefer={() => setActiveNav('出车申请')} />}
         {activeNav === '出车申请' && currentUser && <Suspense fallback={<LoadingState label="正在加载出车申请…" />}><VehicleTripsPage key={currentUser.id} user={currentUser} initialScope={tripScope} /></Suspense>}
         {activeNav === '车辆管理' && currentUser && hasRole(currentUser, 'manager') && <Suspense fallback={<LoadingState label="正在加载车辆管理…" />}><CompanyVehiclesPage key={currentUser.id} /></Suspense>}
+
+        {activeNav === "进货单生成" && currentUser && hasAnyRole(currentUser, ["advisor", "manager"]) && <Suspense fallback={<LoadingState label="正在加载进货单生成…" />}><PurchaseDocumentsPage key={currentUser.id}/></Suspense>}
 
         {apiError ? <Alert className="error-box" type="warning" showIcon title="无法完成登录或加载数据" description={apiError} /> : null}
 

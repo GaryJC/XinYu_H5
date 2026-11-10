@@ -3,11 +3,22 @@ import { pool } from "../database/pool.mjs";
 import { HttpError } from "../http/HttpError.mjs";
 
 export async function assertWorkOrderAccess(orderId, user, database = pool) {
+  return assertOrderAccess(orderId, user, database, false);
+}
+
+// Archive readers may inspect other advisors' orders; mutation callers must
+// continue using assertWorkOrderAccess so ownership restrictions stay intact.
+export async function assertWorkOrderReadAccess(orderId, user, database = pool) {
+  return assertOrderAccess(orderId, user, database, true);
+}
+
+async function assertOrderAccess(orderId, user, database, readOnly) {
   const { rows } = await database.query("select advisor, shop_id from work_orders where id = $1", [orderId]);
   const order = rows[0];
   if (!order) throw new HttpError(404, "委托单不存在");
   if (!user.shopId || order.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店委托单");
   if (hasRole(user, 'manager')) return;
+  if (readOnly && hasRole(user, 'advisor')) return;
   if (user.name && order.advisor === user.name) return;
   throw new HttpError(403, "无权访问该委托单");
 }

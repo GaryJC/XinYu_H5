@@ -7,7 +7,7 @@ import { assertPaperPhotoIds, attachPaperPhotos, enqueuePaperNotifications } fro
 import { attachDraftVehicleLicense } from "./repositories/draftVehicleLicenseRepository.mjs";
 import { assertNoActiveRepair } from './repositories/repairRoundRepository.mjs';
 import {readLicenseExceptions} from './repositories/vehicleLicenseExceptionRepository.mjs';
-import {assertWorkOrderAccess} from './repositories/accessRepository.mjs';
+import {assertWorkOrderReadAccess} from './repositories/accessRepository.mjs';
 import { attachPreRepairPhotos } from "./repositories/preRepairPhotoRepository.mjs";
 import { assertPreRepairPhotosReady } from "./domain/preRepairPhotos.mjs";
 import { getDispatchTask, assertInspectionCompleted } from './repositories/dispatchRepository.mjs';
@@ -768,7 +768,7 @@ async function refreshOutboundPickedState(client, orderId, repairItems) {
 }
 
 export async function getWorkOrderDetail(id,user) {
-  try { await assertWorkOrderAccess(id,user); }
+  try { await assertWorkOrderReadAccess(id,user); }
   catch (error) { if (error.status !== 403 || !hasRole(user, 'warehouse')) throw error; await getDispatchTask(pool,id,user); }
   const order=await findWorkOrderById(pool,id);
   if(!order)throw new HttpError(404,'委托单不存在');

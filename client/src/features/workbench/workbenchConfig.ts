@@ -19,6 +19,7 @@ export const navItems: Array<{ label: string; icon: typeof LayoutDashboard; role
   { label: "检验任务", icon: ClipboardCheck, roles: ["inspector", "manager"] },
   { label: "工单全览", icon: Files, roles: ["advisor", "manager"] },
   { label: "配件申请", icon: PackagePlus, roles: ["warehouse"] },
+  { label: "进货单生成", icon: Files, roles: ["advisor", "manager"] },
   { label: "配件竞价", icon: Gavel, roles: ["warehouse", "manager"] },
   { label: "我的维修", icon: Wrench, roles: ["technician", "outsourcing"] },
   { label: "出车申请", icon: Route, roles: ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] },

@@ -737,3 +737,20 @@ export type CompletedProjectFilters = {from?:string;to?:string;sort?:DispatchNum
 
 /** List metadata only; fetch the full order before editing, signing or printing. */
 export type WorkOrderListItem = Pick<WorkOrder, "id" | "dispatchNo" | "arrivalDate" | "status" | "createdAt" | "updatedAt" | "createdAtIso" | "updatedAtIso" | "shop" | "vehicle" | "customer" | "advisor" | "technician" | "dispatchStage" | "customerSignatureReview" | "isBaiyuanOrder" | "paperOrder" | "legacyApproved" | "legacySyncStatus" | "legacySyncRevision" | "legacySyncedAt" | "legacySyncError" | "customerVehicleUpdatedAt" | "customerVehicleUpdatedBy" | "estimatedFee" | "settlementAmount">;
+
+export interface PurchaseDocumentRules {
+  mode:'original'|'fixed'|'range'; fixedPercent:number; minPercent:number; maxPercent:number; decimals:0|2;
+  minOriginalPrice:number; excludeBattery:boolean; excludeTyre:boolean; excludeOil:boolean;
+  splitPaint:boolean; splitHengyu:boolean; dateMode:'source'|'blank'|'fixed'; date:string;
+  excludedNames:string; overrides:Array<{name:string;kind:'price'|'percent';value:number}>;
+  modelRules:Array<{models:string;template:string}>;
+}
+export interface PurchaseDocumentFile {name:string;base64:string}
+export interface PurchaseDocumentPreview {
+  lines:Array<{file:string;sheet:string;row:number;code:string;name:string;qty:number;price:number;newPrice:number;amount:number}>;
+  canGenerate:boolean;
+  summary:{documents:number;generated:number;kept:number;excluded:number;total:number;templates:Record<string,number>};
+  issues:Array<{file:string;sheet:string;code:string;message:string;severity:'warning'|'error';row?:number}>;
+  rates:Array<{name:string;percent:number|null;price:number|null}>;
+  docs:Array<{id:string;file:string;sheet:string;code:string;model:string;plate:string;date:string;template:string;kept:number;paint:number;excluded:number;total:number}>;
+}
