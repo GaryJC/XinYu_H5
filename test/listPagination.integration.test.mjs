@@ -78,6 +78,23 @@ test('paged lists preserve filters, counts, permissions and stable ordering acro
     assert.equal((await readTenderPage(actor.shopId,{page:'3'})).items.length,5);
     assert.equal((await readTenderPage(actor.shopId,{page:'1',search:'历史搜索件'})).total,1);
     assert.equal((await readTenderPage('unrelated',{page:'1'})).total,0);
+
+    // Sorting must happen before LIMIT/OFFSET in both archive SQL and task lists.
+    await pool.query("update work_orders set dispatch_no='A'||substring(id from '[0-9]+$') where shop_id=$1",[actor.shopId]);
+    for (const [id,dispatchNo,createdAt] of [
+      ['paging-040','','2026-11-08T00:00:00Z'],
+      ['paging-041','','2026-11-10T00:00:00Z'],
+      ['paging-042','  ','2026-11-09T00:00:00Z']
+    ]) await pool.query('update work_orders set dispatch_no=$2,created_at=$3 where id=$1',[id,dispatchNo,createdAt]);
+    for (const sort of ['dispatch-desc','dispatch-asc']) {
+      const numbered = sort==='dispatch-desc' ? 'paging-044' : 'paging-000';
+      for (const read of [q=>listWorkOrders('manager',actor,q),q=>queryDispatchTasks(actor,q)]) {
+        const a=await read({sort,page:'1',pageSize:'2'}),b=await read({sort,page:'2',pageSize:'2'});
+        assert.deepEqual([...a.items,...b.items].map(row=>row.orderId||row.id),['paging-041','paging-042','paging-040',numbered]);
+      }
+    }
+    const chronological=await listWorkOrders('manager',actor,{sort:'created-asc',page:'1',pageSize:'2'});
+    assert.deepEqual(chronological.items.map(row=>row.id),['paging-000','paging-001']);
   } finally {
     await pool?.end();
     await admin.query(`drop database if exists "${name}" with (force)`);await admin.end();

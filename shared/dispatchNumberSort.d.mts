@@ -1,3 +1,4 @@
 export type DispatchNumberSort = 'dispatch-desc' | 'dispatch-asc';
 export const dispatchNumberSortOptions: Array<{value:DispatchNumberSort; label:string}>;
-export function compareDispatchNumbers(a:{dispatchNo?:string|null}, b:{dispatchNo?:string|null}, sort?:DispatchNumberSort):number;
+type DispatchSortable = {dispatchNo?:string|null;createdAtIso?:string|null;createdAt?:string|null};
+export function compareDispatchNumbers(a:DispatchSortable, b:DispatchSortable, sort?:DispatchNumberSort):number;

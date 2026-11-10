@@ -40,7 +40,7 @@ export function buildOperationsDashboard(tasks,people,now=new Date()) {
    if(task.dueAt&&Date.parse(task.dueAt)<now.getTime())flags.push('overdue');
    const note=inspection?'等待检验':pause?.pauseReason|| (task.stage==='暂停'?task.pauseReason:'') || (waitingParts.length?(pickup?'部分备齐，等待出库':'等待仓库备料'):pickup?'已备齐，等待出库':task.stage==='待接单'?'等待接单':'');
    const waitingSince=inspection?item.finishAt:pause?.pausedAt||(task.stage==='暂停'?task.pausedAt:undefined)||waitingParts.map(p=>p.recordedAt).filter(Boolean).sort()[0]|| (task.stage==='待接单'?task.assignedAt:undefined);
-   projects.push({key:`${task.orderId}:${task.repairRound||0}:${item.id}`,orderId:task.orderId,plate:task.plate,dispatchNo:task.dispatchNo,name:item.name,ownerId,ownerName,status:inspection?'待检验':flags.includes('paused')?'暂停':item.status,dueAt:task.dueAt,flags,waitingSince,note});
+   projects.push({key:`${task.orderId}:${task.repairRound||0}:${item.id}`,orderId:task.orderId,plate:task.plate,dispatchNo:task.dispatchNo,createdAt:task.createdAt,name:item.name,ownerId,ownerName,status:inspection?'待检验':flags.includes('paused')?'暂停':item.status,dueAt:task.dueAt,flags,waitingSince,note});
    if(ownerId&&!workers.has(ownerId))workers.set(ownerId,{id:ownerId,name:ownerName,assignable:!!person?.active&&hasRole(person,'technician'),vehicles:0,counts:empty()});
   }
  }

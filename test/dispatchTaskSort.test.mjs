@@ -9,7 +9,7 @@ const ids=rows=>rows.map(t=>t.orderId);
 test('personal lists default to dispatch number and support both directions and date fields',()=>{
  const before=structuredClone(tasks);
  const numbered=[{dispatchNo:'A9'},{dispatchNo:''},{dispatchNo:'B2'},{dispatchNo:'A100'}];
- for(const query of [{},{personal:'true'}])assert.deepEqual(sortDispatchTasks(numbered,actor,query).map(t=>t.dispatchNo),['A100','A9','B2','']);
+ for(const query of [{},{personal:'true'}])assert.deepEqual(sortDispatchTasks(numbered,actor,query).map(t=>t.dispatchNo),['','A100','A9','B2']);
  for(const [sort,expected] of [['assigned-asc',['early','middle','late']],['assigned-desc',['late','middle','early']],['due-asc',['late','middle','early']],['due-desc',['early','middle','late']]]) {
   assert.deepEqual(ids(sortDispatchTasks(tasks,actor,{sort})),[...expected,'missing','invalid']);
  }
@@ -28,7 +28,7 @@ test('review and rework priority precede date sorting across pages; additional r
  assert.equal(sortDispatchTasks([review,rework,additional],actor,{personal:'true',stage:'进行中',sort:'assigned-asc'})[0],rework);
 });
 
-test('dispatch number order applies across stages before pagination, with unnumbered rows last', () => {
+test('dispatch number order applies across stages before pagination, with unnumbered rows first', () => {
   const rows = ['A9', null, 'B10', 'A100', 'B002', 'A010'].map((dispatchNo, i) => ({
     ...make(String(i)), dispatchNo, stage: i % 2 ? '回审' : '维修中'
   }));
@@ -36,6 +36,6 @@ test('dispatch number order applies across stages before pagination, with unnumb
     const sorted = sortDispatchTasks(rows, actor, {personal:'true', stage:'待处理', sort});
     return pageResult(sorted, {page:2, pageSize:3}).items.map(t => t.dispatchNo);
   };
-  assert.deepEqual(secondPage(undefined), ['A9', 'B002', null]);
-  assert.deepEqual(secondPage('dispatch-asc'), ['B10', 'A100', null]);
+  assert.deepEqual(secondPage(undefined), ['A010', 'A9', 'B002']);
+  assert.deepEqual(secondPage('dispatch-asc'), ['A010', 'B10', 'A100']);
 });

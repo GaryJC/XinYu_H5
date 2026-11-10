@@ -43,7 +43,7 @@ export async function saveDraftPendingRepairs(client,order,actor,expectedVersion
  await writePendingRepairs(client,order.id,items);
 }
 export async function listPendingFollowups(client,shopId) {
- const {rows}=await client.query(`select id as "orderId",vehicle_plate as plate,dispatch_no as "dispatchNo",pending_repairs as items,pending_repairs_version as version from work_orders where shop_id=$1 and exists(select 1 from jsonb_array_elements(pending_repairs) p where p->>'state'='pending' or p->>'state'='approved' and p->>'scheduled'='false') order by updated_at desc`,[shopId]);return rows;
+ const {rows}=await client.query(`select id as "orderId",created_at as "createdAt",vehicle_plate as plate,dispatch_no as "dispatchNo",pending_repairs as items,pending_repairs_version as version from work_orders where shop_id=$1 and exists(select 1 from jsonb_array_elements(pending_repairs) p where p->>'state'='pending' or p->>'state'='approved' and p->>'scheduled'='false') order by updated_at desc`,[shopId]);return rows;
 }
 export async function readPendingRequest(client,id,actorId,requestId) {
  const {rows}=await client.query('select body from pending_repair_requests where order_id=$1 and actor_id=$2 and request_id=$3',[id,actorId,requestId]);return rows[0]?.body;

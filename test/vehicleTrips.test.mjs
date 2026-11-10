@@ -23,9 +23,9 @@ test('workflow transitions require exact state and owner even for managers', () 
   assertTripAction(trip, employee, 'cancel');
   assertTripAction({ ...trip, status: '待出车' }, employee, 'depart');
   assertTripAction({ ...trip, status: '用车中' }, employee, 'return');
-  assertTripAction(trip, employee, 'depart');
-  assertTripAction({ ...trip, status: '待收车审核' }, manager, 'approve-return');
-  assertTripAction({ ...trip, status: '待收车审核' }, manager, 'reject-return');
+  assert.throws(() => assertTripAction(trip, employee, 'depart'), status(409));
+  assert.throws(() => assertTripAction({ ...trip, status: '待收车审核' }, manager, 'approve-return'), status(409));
+  assert.throws(() => assertTripAction({ ...trip, status: '待收车审核' }, manager, 'reject-return'), status(409));
   assert.throws(() => assertTripAction({ ...trip, status: '待收车审核' }, { ...manager, id: employee.id }, 'approve-return'), status(403));
   assert.throws(() => assertTripAction({ ...trip, status: '待收车审核' }, employee, 'return'), status(409));
   assert.throws(() => assertTripAction({ ...trip, status: '已还车' }, employee, 'return'), status(409));

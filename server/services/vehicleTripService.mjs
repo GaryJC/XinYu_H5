@@ -64,11 +64,11 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
     },
     async create(user, input) {
       requireTripUser(user);
-      const photos = input.departurePhotos;
-      if (!Array.isArray(photos) || !photos.length || photos.length > 9 || photos.some(photo => typeof photo !== 'string' || !photo)) throw new HttpError(400, '请先拍摄公里数照片（最多 9 张）');
+      const photos = input.licensePhotos;
+      if (!Array.isArray(photos) || !photos.length || photos.length > 9 || photos.some(photo => typeof photo !== 'string' || !photo)) throw new HttpError(400, '请先拍摄行驶证照片（最多 9 张）');
       // Leave room for JSON/text within the existing 16 MB HTTP body limit.
       if (photos.reduce((size, photo) => size + photo.length, 0) > 12 * 1024 * 1024) throw new HttpError(400, '照片总大小过大，请减少照片后重试');
-      const normalized = { requestId: input.requestId, vehicleId: tripText(input.vehicleId, '车辆', 100), reason: tripText(input.reason, '用车事由'), note: tripText(input.note, '备注', 500, true), departurePhotos: photos };
+      const normalized = { requestId: input.requestId, vehicleId: tripText(input.vehicleId, '车辆', 100), reason: tripText(input.reason, '用车事由'), note: tripText(input.note, '备注', 500, true), licensePhotos: photos };
       return operation(user, normalized, 'create', null, async repo => {
         const car = await repo.getVehicle(normalized.vehicleId, true);
         if (!car || car.shopId !== user.shopId || !car.active) throw new HttpError(409, '车辆不存在或已停用，请重新选择');
@@ -82,7 +82,7 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
           ids.push(file.id);
         }
         // Submitted evidence is visible to approvers before departure.
-        if (await repo.confirmAttachments(trip.id, 'departure', user.id, ids) !== ids.length) throw new HttpError(400, '公里数照片保存失败，请重试');
+        if (await repo.confirmAttachments(trip.id, 'departure', user.id, ids) !== ids.length) throw new HttpError(400, '行驶证照片保存失败，请重试');
         return trip;
       });
     },
@@ -101,7 +101,7 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
           const stage = action === 'return' ? 'return' : 'departure';
           const submitted = stage === 'departure' ? (await repo.attachments(id, user)).filter(photo => photo.stage === 'departure' && photo.confirmed) : [];
           const ids = submitted.length ? submitted.map(photo => photo.fileId) : input.fileIds;
-          if (!Array.isArray(ids) || !ids.length || ids.length > 9 || ids.some(id => typeof id !== 'string') || new Set(ids).size !== ids.length) throw new HttpError(400, '请先上传公里数照片（最多 9 张）');
+          if (!Array.isArray(ids) || !ids.length || ids.length > 9 || ids.some(id => typeof id !== 'string') || new Set(ids).size !== ids.length) throw new HttpError(400, `请先上传${stage === 'departure' && trip.departureEvidence === 'license' ? '行驶证' : '公里数'}照片（最多 9 张）`);
           if (await repo.confirmAttachments(id, stage, trip.applicantId, ids, trip.returnRound) !== ids.length) throw new HttpError(400, '附件不属于本次申请、本次还车或不是申请人上传');
         }
         const reason = ['reject', 'reject-return'].includes(action) ? tripText(input.reason, '退回原因') : '';
@@ -113,11 +113,13 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
         const trip = await repo.getTrip(id, true);
         assertTripUpload(trip, user, input.stage);
         if (input.stage === 'return' && input.returnRound !== undefined && input.returnRound !== trip.returnRound) throw new HttpError(409, '还车资料已更新，请刷新后重新拍照');
-        if (input.stage === 'departure' && (await repo.attachments(id, user)).some(photo => photo.stage === 'departure' && photo.confirmed)) throw new HttpError(409, '申请时已提交公里数照片，无需重复上传');
+        if (input.stage === 'departure' && (await repo.attachments(id, user)).some(photo => photo.stage === 'departure' && photo.confirmed)) throw new HttpError(409, '申请时已提交照片，无需重复上传');
         const image = await prepareTripImage(input, input.stage);
         const file = await saveFile({ ...image, kind: tripFileKinds[input.stage], uploadedBy: user.id, database: repo.database });
         await repo.addAttachment(id, input.stage, user, file, trip.returnRound);
-        return { fileId: file.id, stage: input.stage, confirmed: false, returnRound: trip.returnRound };
+        const confirmed = input.stage === 'departure' && trip.status === '待审批';
+        if (confirmed) await repo.confirmAttachments(id, input.stage, user.id, [file.id]);
+        return { fileId: file.id, stage: input.stage, confirmed, returnRound: trip.returnRound };
       });
     },
     async authorizeFile(user, fileId) {

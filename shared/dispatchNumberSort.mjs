@@ -11,7 +11,14 @@ function compareText(left, right) {
 export function compareDispatchNumbers(a, b, sort = 'dispatch-desc') {
   const left = (a.dispatchNo || '').trim().toUpperCase();
   const right = (b.dispatchNo || '').trim().toUpperCase();
-  if (!left || !right) return Number(!left) - Number(!right);
+  if (!left || !right) {
+    if (left || right) return Number(Boolean(left)) - Number(Boolean(right));
+    const created = row => {
+      const time = Date.parse(row.createdAtIso || row.createdAt || '');
+      return Number.isFinite(time) ? time : -Infinity;
+    };
+    return compareText(created(b), created(a));
+  }
 
   // Compare significant digits without rounding long serial numbers.
   const leftDigits = left.match(/[0-9]+$/)?.[0].replace(/^0+/, '');

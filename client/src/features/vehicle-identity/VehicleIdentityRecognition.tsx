@@ -18,9 +18,12 @@ type Props = {
   onManualLicenseLookup: (input: VehicleLookupInput) => Promise<void>;
 };
 
+const plateChoiceTitle = "请选择润丰档案中的车牌原文";
+
 export function VehicleIdentityRecognition({ disabled, recognition, history, historyLoading, historyError, onConfirmPlate, onRetry, onScan, onManualLicenseLookup }: Props) {
   const [dismissedChoices, setDismissedChoices] = useState<string[]>();
   const choices = history?.plateChoices;
+  const plateChoiceError = history?.status === "conflict" && history.message !== plateChoiceTitle ? history.message : undefined;
   const [testLicense, setTestLicense] = useState<VehicleLookupInput>({ plate: "", vin: "", model: "", owner: "" });
 
   async function submitTestLicense() {
@@ -78,8 +81,9 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
       {historyLoading ? <div className="vehicle-history-loading"><Spin size="small" />正在查询公司系统车辆档案…</div> : null}
       {choices?.length ? (
         <>
-          <Modal title="请选择润丰档案中的车牌原文" open={dismissedChoices !== choices}
+          <Modal title={plateChoiceTitle} open={dismissedChoices !== choices}
             centered footer={null} onCancel={() => setDismissedChoices(choices)}>
+            {plateChoiceError ? <Alert showIcon type="error" title={plateChoiceError} style={{ marginBottom: 12 }} /> : null}
             <div aria-label="润丰车牌候选">
               {choices.map(plate => (
                 <Button key={plate} disabled={disabled || historyLoading} style={{ whiteSpace: "pre", margin: 4 }}
@@ -87,7 +91,10 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
               ))}
             </div>
           </Modal>
-          {dismissedChoices === choices && <Button disabled={disabled} onClick={() => setDismissedChoices(undefined)}>选择润丰车牌</Button>}
+          {dismissedChoices === choices && <div style={{ display: "grid", gap: 12 }}>
+            {plateChoiceError ? <Alert showIcon type="error" title={plateChoiceError} /> : null}
+            <Button disabled={disabled} onClick={() => setDismissedChoices(undefined)}>选择润丰车牌</Button>
+          </div>}
         </>
       ) : history ? (
         <Alert

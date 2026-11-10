@@ -25,6 +25,7 @@ export function technicianCompletedProjects(rows, userId, month) {
       if (!Number.isFinite(timestamp) || month && new Date(timestamp + 8 * 3600000).toISOString().slice(0, 7) !== month) continue;
       projects.push({
         key: `${row.order_id}:${row.round_no}:${item.id}`, orderId: row.order_id,
+        createdAt: row.created_at ? new Date(row.created_at).toISOString() : undefined,
         dispatchNo: row.dispatch_no || '', plate: row.vehicle_plate, round: row.round_no,
         itemId: item.id, name: item.name, completedAt: new Date(timestamp).toISOString()
       });

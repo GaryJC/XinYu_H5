@@ -451,6 +451,7 @@ export type RepairPhotoUploadRequest = {requestId:string;fileName:string;mimeTyp
 export type VehicleNameplateEnsureRequest = {requestId:string;repairRound:number};
 export type PartsRequirement = { referencePhotoIds?:string[]; preparationOnly?:boolean; applicantId?:string; applicantName?:string; ownerId?:string; ownerName?:string; sourcePhotoIds?:string[]; revision?:number; batch?:number; preparedBy?:string; preparedName?:string; preparedAt?:string; issuedBy?:string; issuedName?:string; issuedAt?:string; recipientIds?:string[]; recipientName?:string; confirmedBy?:string; confirmedName?:string; confirmedAt?:string; mode:"none"|"list"|"photo"; items:Array<{name:string;quantity:number;unit:string;recipientId?:string;recipientName?:string;issuedAt?:string;issuedBy?:string;issuedName?:string;preparedAt?:string;preparedBy?:string;preparedName?:string}>; photoIds:string[]; recordedBy?:string; recordedName?:string; recordedAt?:string };
 export type DispatchTask = DispatchExecution & {
+  createdAt?: string;
   vehicleNameplateFileId?: string;
   settlementAssignment?: boolean;
   hasPartsHistory?:boolean;
@@ -660,13 +661,14 @@ export type VehicleTrip = {
   reason: string; note: string; status: VehicleTripStatus; createdAt: string;
   approvedBy?: string; approvedName?: string; approvedAt?: string;
   departureAt?: string; returnAt?: string; rejectionReason?: string;
+  departureEvidence: "license" | "mileage";
   returnRound: number; returnReviewedBy?: string; returnReviewedName?: string; returnReviewedAt?: string; returnRejectionReason?: string;
 };
 export type VehicleTripDetail = VehicleTrip & {
   attachments: VehicleTripAttachment[];
   history: Array<{ action: string; actorName: string; at: string }>;
 };
-export type VehicleTripCreateInput = { requestId: string; vehicleId: string; reason: string; note: string; departurePhotos: string[] };
+export type VehicleTripCreateInput = { requestId: string; vehicleId: string; reason: string; note: string; licensePhotos: string[] };
 export type VehicleTripActionInput = { requestId: string; fileIds?: string[]; reason?: string; returnRound?: number };
 export type VehicleTripUploadInput = { requestId: string; stage: Exclude<VehicleTripStage, "signature">; imageBase64: string; returnRound?: number };
 export interface AppVersionResponse { version: string }
@@ -690,6 +692,7 @@ export type DispatchFilters = {sort?:DispatchNumberSort | 'assigned-asc'|'assign
 
 export type OperationsMetric = 'unfinished'|'working'|'waiting'|'parts'|'pickup'|'paused'|'inspection'|'overdue';
 export type OperationsProject = {
+  createdAt?:string;
   key:string; orderId:string; plate:string; dispatchNo:string; name:string;
   ownerId?:string; ownerName:string; status:string; dueAt?:string;
   flags:OperationsMetric[]; waitingSince?:string; note:string;
@@ -717,6 +720,7 @@ export type BusinessAnalytics = {
 };
 
 export type TechnicianCompletedProject = {
+  createdAt?:string;
   key: string; orderId: string; dispatchNo: string; plate: string; round: number;
   itemId: number; name: string; completedAt: string;
 };

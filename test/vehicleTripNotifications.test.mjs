@@ -8,9 +8,9 @@ const {processTripNotification}=await import('../server/workers/vehicleTripNotif
 const {notificationNextState}=await import('../server/repositories/dispatchNotificationRepository.mjs');
 const employee={id:'e',active:true,role:'employee',shopId:'s',dingtalk_user_id:'ding-e'};
 const manager={...employee,id:'m',role:'manager',dingtalk_user_id:'ding-m'};
-const trip={id:'trip-1',shopId:'s',status:'用车中',applicantId:'e',applicantName:'员工甲',approvedBy:'m',vehicle:{plate:'鲁B12345',brand:'大众',model:'捷达'},reason:'送配件',actorName:'甲'};
+const trip={id:'trip-1',shopId:'s',status:'待审批',applicantId:'e',applicantName:'员工甲',approvedBy:'m',vehicle:{plate:'鲁B12345',brand:'大众',model:'捷达'},reason:'送配件',actorName:'甲'};
 const env={DISPATCH_NOTIFICATION_MODE:'dingtalk',APP_ENV:'test',DINGTALK_AGENT_ID:'123',DINGTALK_APP_KEY:'test',DINGTALK_APP_SECRET:'secret',DINGTALK_CORP_ID:'ding-corp',DISPATCH_APP_URL:'https://repair.example/?dispatchOrder=old&workOrder=old&paperOrder=old&procurementTender=old&source=message'};
-const states={create:'用车中',approve:'用车中',reject:'已驳回',cancel:'已取消',depart:'用车中',return:'待收车审核','approve-return':'已还车','reject-return':'用车中'};
+const states={create:'待审批',approve:'用车中',reject:'已驳回',cancel:'已取消',depart:'用车中',return:'已还车','approve-return':'已还车','reject-return':'用车中'};
 test('each trip event targets only authorized people, excludes self approval and respects secondary roles',()=>{
  for(const action of Object.keys(states)) {
   const current={...trip,status:states[action]};
@@ -79,10 +79,10 @@ test('trip payload uses the real DingTalk adapter contract without network or re
 });
 
 test('obsolete return rounds never revive after resubmission', async()=>{
- const latest={...trip,status:'待收车审核',returnRound:2};
+ const latest={...trip,status:'已还车',returnRound:2};
  assert.equal(tripNotificationRecipient('return',latest,manager,{...latest,returnRound:1}),false);
  assert.equal(tripNotificationRecipient('return',latest,manager,latest),true);
- assert.equal(tripNotificationRecipient('create',trip,manager,{...trip,status:'待审批'}),false);
+ assert.equal(tripNotificationRecipient('create',trip,manager,{...trip,status:'用车中'}),false);
  const {sends,result}=await runWorker({context:{trip:latest,job:{action:'return',payload:{...latest,returnRound:1}}}});
  assert.equal(sends,0);assert.equal(result.status,'failed');
 });

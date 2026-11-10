@@ -72,12 +72,12 @@ export function useVehicleTrips(initialScope = 'all') {
     removeDeparturePhoto: (index: number) => { if (!running.current) setDeparturePhotos(current => current.filter((_, i) => i !== index)); },
     refresh: () => run(async () => { await Promise.all([refreshData(),list.refresh()]); if (detail) setDetail(await vehicleTripApi.detail(detail.id)); }),
     create: (values: { vehicleId: string; reason: string; note?: string }) => run(async () => {
-      if (!departurePhotos.length) throw new Error('请先拍摄出车公里数照片');
-      const input = { ...values, note: values.note || '', departurePhotos }; const key = JSON.stringify(input);
+      if (!departurePhotos.length) throw new Error('请先拍摄行驶证照片');
+      const input = { ...values, note: values.note || '', licensePhotos: departurePhotos }; const key = JSON.stringify(input);
       await vehicleTripApi.create({ ...input, requestId: requestId(key) });
       setDeparturePhotos([]); requests.current.delete(key);
       await list.refresh();
-    }, '已自动出车，出车时间已记录', 'create'),
+    }, '申请已提交，等待审批', 'create'),
     upload: (file: File, stage: 'departure' | 'return') => run(async () => {
       if (!detail) return;
       const prepared = await prepareUploadPhoto(file);
@@ -92,7 +92,7 @@ export function useVehicleTrips(initialScope = 'all') {
       const item = await vehicleTripApi.act(detail.id, action, { ...input, requestId: requestId(key) });
       await list.refresh();
       setDetail(current => current && current.id === item.id ? { ...current, ...item } : current);
-      feedback.success(({ approve: '已批准并出车', reject: '申请已驳回', cancel: '申请已取消', depart: '出车登记成功，已记录出车时间', return: '还车已提交，等待管理员审核', 'approve-return': '收车审核通过', 'reject-return': '收车已退回，请申请人重新拍照提交' })[action]);
+      feedback.success(({ approve: '已批准并出车', reject: '申请已驳回', cancel: '申请已取消', depart: '出车登记成功，已记录出车时间', return: '还车已完成，收车时间已记录', 'approve-return': '收车审核通过', 'reject-return': '收车已退回，请申请人重新拍照提交' })[action]);
       setDetail(await vehicleTripApi.detail(item.id));
     }, undefined, action)
   };

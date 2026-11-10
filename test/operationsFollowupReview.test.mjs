@@ -8,7 +8,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 
 const adminUrl=process.env.DISPATCH_TEST_ADMIN_URL;
-test('vehicle occupancy is exclusive across applications and released on return approval',{skip:!adminUrl,timeout:120000},async t=>{
+test('vehicle occupancy is exclusive across applications and released on return',{skip:!adminUrl,timeout:120000},async t=>{
  const url=new URL(adminUrl);assert.ok(['localhost','127.0.0.1','[::1]'].includes(url.hostname));
  const admin=new pg.Client({connectionString:adminUrl});await admin.connect();
  const uploads=await fs.mkdtemp(path.join(os.tmpdir(),'trip-occupancy-'));
@@ -28,7 +28,7 @@ test('vehicle occupancy is exclusive across applications and released on return 
   const car=await service.saveVehicle(manager,{plate:'鲁BTEST01',brand:'测试',model:'出车占用'});
   const otherCar=await service.saveVehicle(manager,{plate:'鲁BTEST02',brand:'测试',model:'独立车辆'});
   const imageBase64=(await sharp({create:{width:40,height:20,channels:3,background:'#102030'}}).png().toBuffer()).toString('base64');
-  async function request(user,vehicleId){return service.create(user,{...key(),vehicleId,reason:'隔离库出车测试',departurePhotos:[imageBase64]});}
+  async function request(user,vehicleId){const trip=await service.create(user,{...key(),vehicleId,reason:'隔离库出车测试',licensePhotos:[imageBase64]});return service.act(manager,trip.id,'approve',key());}
   async function photo(user,tripId,stage){
    const id=`file_${randomUUID()}`;
    await pool.query("insert into files(id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by) values($1,$2,'local','','test-fixture','image/jpeg',8,$3)",[id,stage==='departure'?'trip_departure_photo':'trip_return_photo',user.id]);
@@ -36,14 +36,15 @@ test('vehicle occupancy is exclusive across applications and released on return 
    return id;
   }
   let a;
-  await t.test('application immediately departs and a duplicate request preserves its time',async()=>{
-   const input={...key(),vehicleId:car.id,reason:'自动出车',departurePhotos:[imageBase64]};
+  await t.test('approval immediately departs and a duplicate request preserves its time',async()=>{
+   const input={...key(),vehicleId:car.id,reason:'自动出车',licensePhotos:[imageBase64]};
    const results=await Promise.all([service.create(first,input),service.create(first,input)]);
-   a=results[0];assert.equal(a.status,'用车中');assert.ok(a.departureAt);
-   assert.equal(results[1].id,a.id);assert.equal(results[1].departureAt,a.departureAt);
+   a=results[0];assert.equal(a.status,'待审批');assert.equal(a.departureAt,undefined);
+   assert.equal(results[1].id,a.id);
+   a=await service.act(manager,a.id,'approve',key());assert.equal(a.status,'用车中');assert.ok(a.departureAt);
   });
   await t.test('an occupied vehicle rejects a new application without records or events',async()=>{
-   const input={...key(),vehicleId:car.id,reason:'应拒绝',departurePhotos:[imageBase64]};
+   const input={...key(),vehicleId:car.id,reason:'应拒绝',licensePhotos:[imageBase64]};
    await assert.rejects(()=>service.create(second,input),error=>error.status===409);
    assert.equal((await service.list(second)).length,0);
    assert.equal((await pool.query('select 1 from vehicle_trip_operations where actor_id=$1 and request_id=$2',[second.id,input.requestId])).rowCount,0);
@@ -52,11 +53,9 @@ test('vehicle occupancy is exclusive across applications and released on return 
   await t.test('another vehicle remains available',async()=>{
    assert.equal((await request(second,otherCar.id)).status,'用车中');
   });
-  await t.test('submitting return keeps occupation until a manager approves',async()=>{
+  await t.test('submitting return immediately releases occupation',async()=>{
    const submitted=await service.act(first,a.id,'return',{...key(),fileIds:[await photo(first,a.id,'return')]});
-   assert.equal(submitted.status,'待收车审核');
-   await assert.rejects(()=>request(second,car.id),error=>error.status===409);
-   await service.act(manager,a.id,'approve-return',{...key(),returnRound:submitted.returnRound});
+   assert.equal(submitted.status,'已还车');
    assert.equal((await request(second,car.id)).status,'用车中');
    assert.equal((await service.detail(first,a.id)).status,'已还车');
   });
@@ -67,7 +66,7 @@ test('vehicle occupancy is exclusive across applications and released on return 
    assert.equal(results.find(result=>result.status==='rejected').reason.status,409);
    assert.equal((await pool.query("select count(*)::integer as total from vehicle_trip_requests where vehicle_id=$1 and status='用车中'",[raceCar.id])).rows[0].total,1);
    const id=results.find(result=>result.status==='fulfilled').value.id;
-   assert.equal((await pool.query("select count(*)::integer as total from vehicle_trip_notification_jobs where trip_id=$1 and action='create'",[id])).rows[0].total,1);
+   assert.equal((await pool.query("select count(*)::integer as total from vehicle_trip_notification_jobs where trip_id=$1 and action='approve'",[id])).rows[0].total,1);
   });
  } finally {
   await pool?.end();await Promise.all(connectionsClosed);

@@ -232,3 +232,18 @@ test("plate, VIN and license lookups require the original Runfeng plate before r
   assert.equal(resolveVehicleCandidates(rows,"鲁BQ6362","","伪造车牌").status,"conflict");
   assert.equal(resolveVehicleCandidates(rows,"鲁BQ6362","OTHER","鲁B Q6362").status,"conflict");
 });
+
+test('spaced and compact plate choices preserve VIN conflict checks and select the exact original record',()=>{
+  const rows=[
+    {plate:'鲁B FP121',vin:'',model:'车型A',modelLegacyCode:'A'},
+    {plate:'鲁BFP121',vin:'LTEST00000A000001',model:'车型B',modelLegacyCode:'B'}
+  ];
+  const conflict=resolveVehicleCandidates(rows,'鲁BFP121','LTEST00000B000001','鲁BFP121');
+  assert.equal(conflict.status,'conflict');assert.match(conflict.message,/VIN 不符/);
+  assert.equal(conflict.vehicle,undefined);assert.deepEqual(conflict.plateChoices,['鲁B FP121','鲁BFP121']);
+  for(const vin of ['',rows[1].vin]) {
+    const result=resolveVehicleCandidates(rows,'鲁BFP121',vin,'鲁BFP121');
+    assert.equal(result.status,'found');assert.deepEqual(result.vehicle,{...rows[1],plateMatched:true});
+  }
+  assert.equal(resolveVehicleCandidates(rows,'鲁BFP121','LTEST00000B000001','鲁B FP121').vehicle.plate,'鲁B FP121');
+});

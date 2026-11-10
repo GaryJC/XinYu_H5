@@ -8,7 +8,7 @@ import { readRepairRounds } from './repairRoundRepository.mjs';
 import { pool } from '../database/pool.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 import { assertDispatchAccess, canInspect, dispatchMetric, technicianIds } from '../domain/dispatchPolicy.mjs';
-const projection = `select wo.id as order_id, wo.shop_id, wo.vehicle_plate, wo.dispatch_no, wo.arrival_date,
+const projection = `select wo.id as order_id, wo.shop_id, wo.vehicle_plate, wo.dispatch_no, wo.arrival_date, wo.created_at,
   (select count(*)::integer from jsonb_array_elements(wo.pending_repairs) p where p->>'state'='pending' and coalesce(p->>'source','customer')<>'inspection') as pending_repair_count,
   (select count(*)::integer from jsonb_array_elements(wo.pending_repairs) p where p->>'source'='inspection' and p->>'inspectionState' in ('pending','scheduled')) as inspection_deferred_count,
   wo.vehicle_vin,wo.vehicle_model,wo.vehicle_mileage,wo.customer_name,wo.advisor,wo.status as order_status, wo.fault_description, wo.technician as legacy_technician,
@@ -22,7 +22,7 @@ export function mapTask(row) {
   const task = { hasPartsHistory:Boolean(row.has_parts_history), items:row.repair_items, ...row.data, vehicleVin:row.vehicle_vin||'',vehicleModel:row.vehicle_model||'',vehicleMileage:row.vehicle_mileage||'',customerName:row.customer_name||'',advisor:row.advisor||'', orderId:row.order_id, shopId:row.shop_id,
     technicianId:row.technician_id || undefined, inspectorId:row.inspector_id || undefined,
     stage:['草稿','待客户签字'].includes(row.order_status)?row.order_status:row.stage || (['待结算','完成'].includes(row.order_status)?'维修完成':row.order_status==='维修中'?'维修中':'待派工'),
-    version:row.version || 0, plate:row.vehicle_plate, dispatchNo:row.dispatch_no || '', arrivalDate:row.arrival_date,
+    version:row.version || 0, plate:row.vehicle_plate, dispatchNo:row.dispatch_no || '', arrivalDate:row.arrival_date, createdAt:row.created_at ? new Date(row.created_at).toISOString() : undefined,
     pendingRepairCount:row.pending_repair_count||0, inspectionDeferredCount:row.inspection_deferred_count||0, orderStatus:row.order_status, faultDescription:row.fault_description };
   const ids=task.technicianIds??(task.technicianId?[task.technicianId]:[]);
   if(ids.length===1)task.items=task.items.map(item=>({...item,responsibleId:item.responsibleId||ids[0],responsibleName:item.responsibleName||(item.responsibleId&&item.responsibleId!==ids[0]?undefined:task.technicianName)}));

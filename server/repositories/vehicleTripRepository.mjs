@@ -11,7 +11,7 @@ function trip(row) {
     vehicleId: row.vehicle_id, vehicle: row.vehicle_snapshot, reason: row.reason, note: row.note, status: row.status,
     approvedBy: row.approved_by, approvedName: row.approved_name, approvedAt: iso(row.approved_at),
     departureAt: iso(row.departure_at), returnAt: iso(row.return_at), rejectionReason: row.rejection_reason, createdAt: iso(row.created_at),
-    returnRound: row.return_round, returnReviewedBy: row.return_reviewed_by, returnReviewedName: row.return_reviewed_name,
+    departureEvidence: row.departure_evidence, returnRound: row.return_round, returnReviewedBy: row.return_reviewed_by, returnReviewedName: row.return_reviewed_name,
     returnReviewedAt: iso(row.return_reviewed_at), returnRejectionReason: row.return_rejection_reason };
 }
 export class VehicleTripRepository {
@@ -52,14 +52,14 @@ export class VehicleTripRepository {
     return trip((await this.database.query(`select * from vehicle_trip_requests where id=$1${lock ? ' for update' : ''}`, [id])).rows[0]);
   }
   async createTrip(id, user, car, input) {
-    await this.database.query(`insert into vehicle_trip_requests(id,shop_id,applicant_id,applicant_name,vehicle_id,vehicle_snapshot,reason,note,status,departure_at) values($1,$2,$3,$4,$5,$6,$7,$8,'用车中',now())`,
+    await this.database.query(`insert into vehicle_trip_requests(id,shop_id,applicant_id,applicant_name,vehicle_id,vehicle_snapshot,reason,note,status,departure_evidence) values($1,$2,$3,$4,$5,$6,$7,$8,'待审批','license')`,
       [id, user.shopId, user.id, user.name, car.id, JSON.stringify({ plate: car.plate, brand: car.brand, model: car.model }), input.reason, input.note]);
     return this.getTrip(id);
   }
   async changeTrip(id, action, user, note) {
     const changes = { approve: "status='用车中',approved_by=$2,approved_name=$3,approved_at=now(),departure_at=now()", reject: "status='已驳回',rejection_reason=$2",
       cancel: "status='已取消'", depart: "status='用车中',departure_at=now()",
-      return: "status='待收车审核',return_at=now(),return_reviewed_by=null,return_reviewed_name=null,return_reviewed_at=null,return_rejection_reason=null",
+      return: "status='已还车',return_at=now(),return_reviewed_by=null,return_reviewed_name=null,return_reviewed_at=null,return_rejection_reason=null",
       'approve-return': "status='已还车',return_reviewed_by=$2,return_reviewed_name=$3,return_reviewed_at=now()",
       'reject-return': "status='用车中',return_at=null,return_round=return_round+1,return_reviewed_by=$2,return_reviewed_name=$3,return_reviewed_at=now(),return_rejection_reason=$4" };
     const args = ['approve', 'approve-return'].includes(action) ? [id, user.id, user.name] : action === 'reject-return' ? [id, user.id, user.name, note] : action === 'reject' ? [id, note] : [id];

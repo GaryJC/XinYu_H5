@@ -10,11 +10,11 @@ export function vehicleTripMessageBody(notification,recipient,env=process.env) {
   const kind=tripNotificationKinds[notification.action];
   const details=[`申请人：${escape(p.applicantName)}`,`车辆：${escape(p.vehicle.plate)} · ${escape(p.vehicle.brand)} ${escape(p.vehicle.model)}`,
     `用车事由：${escape(p.reason)}`,`状态：${escape(p.status)}`,`操作人：${escape(p.actorName)}`];
-  if(notification.action==='create')details.push(`申请已自动出车，出车时间：${time(p.departureAt)}`);
+  if(notification.action==='create')details.push('请查看行驶证并审批出车申请。');
   if(notification.action==='approve')details.push(p.departureAt ? `已出车，出车时间：${time(p.departureAt)}` : '历史申请已批准，请进入详情办理出车。');
   if(notification.action==='reject')details.push(`驳回原因：${escape(p.rejectionReason)}`);
   if(notification.action==='depart')details.push(`出车时间：${time(p.departureAt)}`);
-  if(notification.action==='return')details.push(`还车提交时间：${time(p.returnAt)}`, '请核对公里数照片并审核收车。');
+  if(notification.action==='return')details.push(`收车时间：${time(p.returnAt)}`, '车辆已归还，无需再次审核。');
   if(notification.action==='approve-return')details.push(`收车审核时间：${time(p.returnReviewedAt)}`);
   if(notification.action==='reject-return')details.push(`退回原因：${escape(p.returnRejectionReason)}`, '请重新拍照并提交还车。');
   return {agent_id:Number(env.DINGTALK_AGENT_ID),userid_list:recipient,to_all_user:false,msg:{msgtype:'markdown',markdown:{
