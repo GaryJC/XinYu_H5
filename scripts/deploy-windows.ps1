@@ -6,6 +6,8 @@ param(
     [string]$SourcePath = "",
     [ValidateRange(1, 1024)]
     [int]$MinimumFreeSpaceGB = 4,
+    [ValidateRange(0, 3600)]
+    [int]$DeploymentLockTimeoutSeconds = 300,
     [switch]$SkipSqlServerCheck
 )
 
@@ -48,7 +50,29 @@ function Invoke-Native {
 # Hold the lock through preparation and activation, so two pipeline runs cannot switch concurrently.
 $deploymentLock = $null
 try {
-    $deploymentLock = [System.IO.File]::Open((Join-Path $AppPath ".deployment.lock"), [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+    $lockPath = Join-Path $AppPath ".deployment.lock"
+    $lockTimer = [System.Diagnostics.Stopwatch]::StartNew()
+    $nextLockNotice = 0
+    while (-not $deploymentLock) {
+        try {
+            $deploymentLock = [System.IO.File]::Open($lockPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+        }
+        catch [System.IO.IOException] {
+            # Retry Windows sharing/lock violations only; other IO failures need attention.
+            $nativeCode = $_.Exception.HResult -band 0xFFFF
+            if ($nativeCode -notin @(32, 33)) { throw }
+            if ($lockTimer.Elapsed.TotalSeconds -ge $DeploymentLockTimeoutSeconds) {
+                throw "Deployment lock timeout after $DeploymentLockTimeoutSeconds seconds: $lockPath is held by another process. Check the previous pipeline run and wait for it to finish, or cancel that deployment before retrying. Do not delete the lock file or stop the application. This run has not prepared or activated a release."
+            }
+            if ($lockTimer.Elapsed.TotalSeconds -ge $nextLockNotice) {
+                Write-Host "Waiting for deployment lock: $lockPath ($([int]$lockTimer.Elapsed.TotalSeconds)/$DeploymentLockTimeoutSeconds seconds). Another process still holds the lock."
+                $nextLockNotice = $lockTimer.Elapsed.TotalSeconds + 15
+            }
+            $remainingMs = [int][math]::Ceiling(($DeploymentLockTimeoutSeconds - $lockTimer.Elapsed.TotalSeconds) * 1000)
+            if ($remainingMs -gt 0) { Start-Sleep -Milliseconds ([math]::Min(2000, $remainingMs)) }
+        }
+    }
+    $lockTimer.Stop()
     Invoke-Native {
         node.exe (Join-Path $SourcePath "scripts/check-deployment-space.mjs") "$MinimumFreeSpaceGB" "$AppPath" "$NpmCachePath" ([System.IO.Path]::GetTempPath())
     } "Deployment disk space preflight failed"

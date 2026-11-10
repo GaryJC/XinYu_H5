@@ -1,3 +1,4 @@
+import {pendingPhotoWaivers} from '../../shared/repairPhotoWaiver.mjs';
 import {buildOperationsDashboard} from './operationsDashboard.mjs';
 import {isRepairCompleted} from '../../shared/repairCompletion.mjs';
 import {hasRole,hasAnyRole} from '../../shared/roles.mjs';
@@ -11,7 +12,7 @@ import {HttpError} from '../http/HttpError.mjs';
 export function countDispatchTaskStatuses(tasks,actor,query={}) {
   const projections=new Map();
   const select=query=>filterDispatchTasks(tasks,actor,query,projections);
-  return {...(query.search||query.includeCompleted==='true'?{all:select({...query,stage:undefined,includeCompleted:'true',metric:undefined,workloadState:undefined}).length}:{}),...Object.fromEntries(['','回审&维修中','待处理','待派工','待客户确认','待定','待接单','待开工','维修中','暂停','返工','待检验','回审','草稿','待客户签字','已完成']
+  return {...(query.search||query.includeCompleted==='true'?{all:select({...query,stage:undefined,includeCompleted:'true',metric:undefined,workloadState:undefined}).length}:{}),...Object.fromEntries(['','无照片待审批','回审&维修中','待处理','待派工','待客户确认','待定','待接单','待开工','维修中','暂停','返工','待检验','回审','草稿','待客户签字','已完成']
     .map(stage=>[stage,select({...query,stage,includeCompleted:undefined,metric:undefined,workloadState:undefined}).length]))};
 }
 
@@ -50,6 +51,7 @@ export function filterDispatchTasks(tasks, actor, query={}, projections=new Map(
     if(workloadOrders&&!workloadOrders.has(t.orderId))return false;
     if(!workloadOrders && query.technicianId && !technicianIds(t).includes(query.technicianId)) return false;
     if(executionModes.length && !executionModes.includes(t.executionMode||'internal')) return false;
+    if(query.stage==='无照片待审批'&&(!hasAnyRole(actor,['manager','advisor'])||!pendingPhotoWaivers(original).some(entry=>entry.applicantId!==actor.id)))return false;
     if(query.stage==='返工' && !isReworkTask(original,personal?actor.id:undefined))return false;
     if(query.stage==='回审&维修中' && !['回审','维修中'].includes(t.stage)) return false;
     if(query.stage==='待处理' && !['待开工','维修中','暂停','回审'].includes(t.stage)) return false;
@@ -60,7 +62,7 @@ export function filterDispatchTasks(tasks, actor, query={}, projections=new Map(
     else if(query.stage==='待定') {if(!t.inspectionDeferredCount)return false;}
     else if(query.stage==='待客户确认') {if(!t.pendingRepairCount) return false;}
     else if(query.stage==='待检验') {if(!hasPendingInspection(t)||personal&&t.stage!=='待检验')return false;}
-    else if(query.stage && !['进行中','回审&维修中','待处理','返工'].includes(query.stage) && t.stage!==query.stage) return false;
+    else if(query.stage && !['无照片待审批','进行中','回审&维修中','待处理','返工'].includes(query.stage) && t.stage!==query.stage) return false;
     if(query.urgent==='true' && !t.urgent) return false;
     if(query.overdue==='true' && !t.overdue) return false;
     if(query.search && ![t.orderId,t.dispatchNo,t.plate].some(v=>v.toLowerCase().includes(query.search.toLowerCase()))) return false;

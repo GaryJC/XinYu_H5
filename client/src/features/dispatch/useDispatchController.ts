@@ -123,6 +123,7 @@ export type DispatchController=ReturnType<typeof useDispatchController>;
 
 function dispatchActionSuccess(action: ActionInput['action']) {
   const labels: Partial<Record<ActionInput['action'], string>> = {
+    'request-photo-waiver':'无维修照片申请已提交','approve-photo-waiver':'无维修照片审批已通过','reject-photo-waiver':'无维修照片申请已驳回',
     'record-parts': '配件申请已提交', 'edit-parts': '配件需求已保存', 'issue-parts': '出库已确认',
     'confirm-parts': '领料已确认', assign: '派工成功', reassign: '改派成功', accept: '接单成功',
     decline: '拒单已记录', 'start-order': '已登记开工', start: '已登记开工', pause: '已暂停维修', resume: '已恢复维修',

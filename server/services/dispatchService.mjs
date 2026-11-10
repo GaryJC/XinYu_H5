@@ -1,3 +1,5 @@
+import {pendingPhotoWaivers} from '../../shared/repairPhotoWaiver.mjs';
+import {photoWaiverActions} from '../domain/repairPhotoWaiver.mjs';
 import {sortDispatchTasks} from '../domain/dispatchTaskSort.mjs';
 import { warehouseRequests, matchesPartsStatus, sortWarehouseRequests } from '../../shared/warehouseRequests.mjs';
 import { pageResult } from '../domain/pagination.mjs';
@@ -27,7 +29,7 @@ export { dispatchPeople, readDispatchPeople, dispatchDetail };
 export const metricKeys=['pendingAccept','unstarted','working','paused','inspection','completed','overdue','rework'];
 export async function queryDispatchTasks(actor, query={}) {
   const tasks = await listDispatchTasks(actor,undefined,query);
-  if(query.counts==='true') return Object.fromEntries(['待派工','维修中','待检验'].map(stage=>[stage,filterDispatchTasks(tasks,actor,{stage}).length]));
+  if(query.counts==='true') return {...Object.fromEntries(['待派工','维修中','待检验'].map(stage=>[stage,filterDispatchTasks(tasks,actor,{stage}).length])),photoApprovalCount:hasAnyRole(actor,['manager','advisor'])?tasks.reduce((count,task)=>count+pendingPhotoWaivers(task).filter(entry=>entry.applicantId!==actor.id).length,0):0};
   const filtered = filterDispatchTasks(tasks,actor,query);
   if(query.partsStatus) {
     if(!['all','待备料','部分备齐','备料完成'].includes(query.partsStatus))throw new HttpError(400,'配件状态无效');
@@ -114,7 +116,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
       next.repairItemIdFloor=Math.min(next.repairItemIdFloor||0,added.id);
     }
 
-    if(['complete-outsourced','submit-review','submit-order','submit'].includes(input.action)) await assertRepairPhotoRecorded(client,task,task.executionMode!=='outsourced'&&individualRepair(task)?actor.id:undefined);
+    if(['complete-outsourced','submit-review','submit-order','submit'].includes(input.action)) await assertRepairPhotoRecorded(client,task,task.executionMode!=='outsourced'&&individualRepair(task)?actor.id:undefined,actor.id,next);
     const parts=actionParts(next,input,actor);
     const preparationGroups=input.preparationGroups?.map(group=>({...group,partsRequirement:actionParts(next,{partsOwnerId:group.partsOwnerId},actor)}));
     const preparedForRecipient=recipient=>preparationGroups?.map(group=>({...group,items:group.items.filter(item=>item.recipientId===recipient)})).filter(group=>group.items.length);
@@ -122,9 +124,9 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
     if(input.action==='record-parts'||input.action==='accept'&&!actionParts(task,input,actor))await assertVehicleNameplate(client,task,parts);
     if(['accept','record-parts','edit-parts'].includes(input.action))await assertPartsPhotos(client,task,parts,input.action==='edit-parts'?undefined:actor.id);
     if(input.action!=='update-technicians') await saveRepairRound(client,task,next,currentActor,input.action);
-    await saveDispatchTask(client,next,{metadataOnly:input.action==='update-due',techniciansOnly:input.action==='update-technicians'});
+    await saveDispatchTask(client,next,{metadataOnly:input.action==='update-due'||photoWaiverActions.includes(input.action),techniciansOnly:input.action==='update-technicians'});
     if(input.action==='assign') await markDispatchPlan(client,id);
-    const detail={deferredItemIds:input.deferredItemIds,deferredReason:input.deferredReason,preparationGroups,partsPreparation:input.partsPreparation,partsIssue:input.partsIssue,reassignItemIds:input.reassignItemIds,previousItems:input.repairItems||['send-review','reassign','inspect'].includes(input.action)?task.items:undefined,partsRequirement:parts,roundKind:next.roundKind,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
+    const detail={photoWaiver:photoWaiverActions.includes(input.action)?next.repairPhotoWaivers?.find(entry=>input.action==='request-photo-waiver'?entry.applicantId===actor.id:entry.id===input.waiverId):undefined,deferredItemIds:input.deferredItemIds,deferredReason:input.deferredReason,preparationGroups,partsPreparation:input.partsPreparation,partsIssue:input.partsIssue,reassignItemIds:input.reassignItemIds,previousItems:input.repairItems||['send-review','reassign','inspect'].includes(input.action)?task.items:undefined,partsRequirement:parts,roundKind:next.roundKind,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
       technicianName:next.technicianName,previousTechnicianName:task.technicianName,inspectorName:next.inspectorName,dueAt:next.dueAt,urgent:next.urgent,previousDueAt:task.dueAt};
     const {rows:[event]}=await client.query(`insert into dispatch_events(order_id,actor_id,actor_name,request_id,request_body,action,detail) values($1,$2,$3,$4,$5,$6,$7) returning id`,[id,actor.id,actor.name,input.requestId,JSON.stringify(input),input.action,JSON.stringify(detail)]);
     if(input.deferredItemIds?.length)await enqueueDeferredNotifications(client,task,next,event.id,currentActor,'deferred',input.deferredItemIds,input.deferredReason,people,input.requestId);

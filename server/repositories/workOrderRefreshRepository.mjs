@@ -35,7 +35,7 @@ export async function applyLegacyRefresh(client, order, change, header, actor, {
   }
   // Only the original round mirrors repair_items. Later rounds own their execution
   // list independently; still invalidate stale action versions after an archive refresh.
-  await client.query(`update dispatch_tasks dt set data=case when coalesce((dt.data->>'repairRound')::integer,0)>0 then dt.data else jsonb_set(dt.data,'{items}',
+  await client.query(`update dispatch_tasks dt set data=case when coalesce((dt.data->>'repairRound')::integer,0)>0 then dt.data else jsonb_set(dt.data-'repairPhotoWaivers','{items}',
     coalesce((select jsonb_agg(coalesce(previous.entry,'{}'::jsonb) ||
         jsonb_build_object('id',ri.client_item_id,'name',ri.name,'status',ri.status) order by ri.item_no)
       from repair_items ri left join lateral (

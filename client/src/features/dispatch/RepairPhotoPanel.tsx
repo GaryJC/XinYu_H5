@@ -1,3 +1,6 @@
+import type {UserProfile} from '../../../../shared/types';
+import {hasApprovedPhotoWaiver} from '../../../../shared/repairPhotoWaiver.mjs';
+import {RepairPhotoWaiverPanel} from './RepairPhotoWaiverPanel';
 import { PhotoRemoveButton } from '../../shared/ui/PhotoRemoveButton';
 import { useEffect, useState } from 'react';
 import { Button, Image, Alert, Checkbox, Modal } from 'antd';
@@ -9,7 +12,7 @@ import { useRepairPhotos } from './useRepairPhotos';
 import { displayTime } from './dispatchLabels';
 import type { DispatchController } from './useDispatchController';
 
-export function RepairPhotoPanel({controller,editable,onBlocked,ownerId}:{controller:DispatchController;ownerId?:string;editable:boolean;onBlocked:(blocked:boolean)=>void}) {
+export function RepairPhotoPanel({controller,user,editable,onBlocked,ownerId}:{controller:DispatchController;user:UserProfile;ownerId?:string;editable:boolean;onBlocked:(blocked:boolean)=>void}) {
   const {uploads,select,selectMany,retry,remove,deletePhotos,deleting,error}=useRepairPhotos(controller,onBlocked);
   const [managing,setManaging]=useState(false);
   const [confirmIds,setConfirmIds]=useState<string[]>();
@@ -26,11 +29,12 @@ export function RepairPhotoPanel({controller,editable,onBlocked,ownerId}:{contro
     if(await deletePhotos(confirmIds)){selection.clear();setConfirmIds(undefined);}
   }
   return <section className="repair-photos" aria-label="维修照片">
-    <div className="repair-photo-heading"><h3>维修照片 <span>（必填）</span></h3>
+    <div className="repair-photo-heading"><h3>维修照片{!hasApprovedPhotoWaiver(task,user.id)&&<span>（必填或审批）</span>}</h3>
       {editable&&currentPhotos.length>0&&<Button icon={managing?undefined:<Trash2 size={16}/>} disabled={busy} onClick={()=>{setManaging(!managing);selection.clear();}}>{managing?'完成':'多选删除'}</Button>}
     </div>
-    {editable?<p className="dispatch-muted">提交完工前，须上传至少一张本轮维修照片。支持相册多选，上传后自动保存；本轮照片可多选删除。</p>:null}
+    {editable?<p className="dispatch-muted">提交完工前，须上传至少一张本轮维修照片，或取得无维修照片审批。照片上传后自动保存。</p>:null}
     {editable&&!managing?<ImageSourcePicker label="维修记录" primaryActionLabel="拍照记录" galleryActionLabel="相册" loading={uploads.some(p=>p.state==='uploading')} disabled={controller.busy || deleting} multiple onSelectMany={selectMany} onSelect={select}/>:null}
+    <RepairPhotoWaiverPanel key={`${task.orderId}-${user.id}`} controller={controller} user={user} blocked={busy}/>
     {error&&!confirmIds?<Alert type="error" showIcon title={error}/>:null}
     {managing&&editable&&<div className="repair-photo-batch">
       <Checkbox disabled={busy} checked={Boolean(eligibleIds.length&&selection.selectedIds.length===eligibleIds.length)} indeterminate={Boolean(selection.selectedIds.length&&selection.selectedIds.length<eligibleIds.length)} onChange={event=>selection.selectAll(event.target.checked)}>全选本轮照片</Checkbox>
@@ -49,7 +53,7 @@ export function RepairPhotoPanel({controller,editable,onBlocked,ownerId}:{contro
     {!editable&&!photos.length&&!uploads.length?<p className="dispatch-muted">暂无维修照片</p>:null}
     <Modal title={`删除选中的 ${confirmIds?.length||0} 张维修照片？`} open={Boolean(confirmIds)} okText="删除照片" cancelText="取消" okButtonProps={{danger:true,disabled:controller.busy||uploads.length>0||!editable||!confirmIds?.length||confirmIds.some(id=>!eligibleIds.includes(id))}} confirmLoading={deleting}
       onOk={()=>void confirmDelete()} onCancel={()=>{if(!deleting)setConfirmIds(undefined);}} cancelButtonProps={{disabled:deleting}} closable={!deleting} mask={{closable:!deleting}} zIndex={1500}>
-      <p>仅删除所选的本轮维修照片。提交完工时须保留至少一张本轮照片。</p>
+      <p>仅删除所选的本轮维修照片。提交完工时须保留至少一张本轮照片，或取得本人的无维修照片审批。</p>
       {error&&<Alert type="error" showIcon title={error}/>}
     </Modal>
   </section>;

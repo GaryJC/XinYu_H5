@@ -1,3 +1,4 @@
+import {currentPhotoWaiver,hasApprovedPhotoWaiver} from '../../shared/repairPhotoWaiver.mjs';
 import { verifyTechnicianMembership } from "../integrations/dingtalk/technicianRoster.mjs";
 import { createPendingRead } from '../domain/pendingRead.mjs';
 import {hasPendingInspection} from '../../shared/repairProgress.mjs';
@@ -95,6 +96,7 @@ const pendingPeopleReads=createPendingRead();
 // GET paths only. Transactional submissions always use dispatchPeople directly.
 export const readDispatchPeople=actor=>pendingPeopleReads(actor.shopId,()=>dispatchPeople(actor));
 export async function saveDispatchTask(client, task, { metadataOnly = false, techniciansOnly = false } = {}) {
+  if(task.repairPhotoWaivers)task.repairPhotoWaivers=task.repairPhotoWaivers.filter(entry=>currentPhotoWaiver(task,entry.applicantId)===entry);
   const {inspectionDeferredCount,hasPartsHistory,pendingRepairCount,orderId,shopId,technicianId,inspectorId,stage,version,plate,dispatchNo,arrivalDate,orderStatus,faultDescription,overdue,repairCatalog,vehicleVin,vehicleModel,vehicleMileage,customerName,advisor,...data}=task;
   await client.query(`insert into dispatch_tasks(order_id,shop_id,technician_id,inspector_id,stage,version,data)
     values($1,$2,$3,$4,$5,$6,$7) on conflict(order_id) do update set technician_id=excluded.technician_id,
@@ -147,7 +149,7 @@ export async function assertInspectionCompleted(client,orderId) {
   if(rows[0]?.stage!=='维修完成') throw new HttpError(409,'请先完成维修检验再完结工单');
 }
 
-export async function assertRepairPhotoRecorded(client,task,ownerId) {
+export async function assertRepairPhotoRecorded(client,task,ownerId,applicantId=ownerId,completionTask=task) {
   const {rows}=await client.query("select 1 from files where order_id=$1 and kind in ('repair_progress_photo','repair_completed_photo') and coalesce(repair_round,0)=$2 and ($3::text is null or uploaded_by=$3) limit 1",[task.orderId,task.repairRound||0,ownerId||null]);
-  if(!rows.length) throw new HttpError(409,'请先上传至少一张本轮维修照片，再提交完工');
+  if(!rows.length&&!hasApprovedPhotoWaiver(completionTask,applicantId)) throw new HttpError(409,'请先上传至少一张本轮维修照片，或取得本人的无维修照片审批，再提交完工');
 }

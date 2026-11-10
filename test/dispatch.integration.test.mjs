@@ -1416,6 +1416,77 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         else process.env.RUNFENG_REPAIR_WRITEBACK_DISPATCH_ALLOWLIST=previous;
       }
     });
+    if(process.env.PHOTO_WAIVER_UI_TEST==='true') await t.test('photo waiver application, rejection, approval and completion at mobile/desktop widths',async()=>{
+      const {chromium}=await import(process.env.DISPATCH_PLAYWRIGHT_MODULE||'playwright');
+      const {createTokenForUser}=await import('../server/auth.mjs');
+      const {createAuthSession}=await import('../server/repositories/userRepository.mjs');
+      const browser=await chromium.launch({headless:true,executablePath:process.env.DISPATCH_CHROME_PATH});
+      const base=`http://127.0.0.1:${server.address().port}`;
+      await fs.mkdir('output/playwright/photo-waiver',{recursive:true});
+      try {
+        for(const width of [360,390,1440]) {
+          const id=`waiver-ui-${width}`;await seed(id);
+          let current=(await service.dispatchDetail(advisor,id)).task;
+          for(const [actor,action,extra] of [[advisor,'assign',{technicianIds:[tech.id],dueAt}],[tech,'accept',{partsRequirement:{mode:'none'}}]])
+            current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;
+          const contexts=[];
+          const pages=[];const errors=[];
+          async function open(actor) {
+            const token=createTokenForUser(actor.id);await createAuthSession({token,userId:actor.id,expiresAt:new Date(Date.now()+3600000)});
+            const context=await browser.newContext({viewport:{width,height:844},isMobile:width<500,hasTouch:width<500});contexts.push(context);
+            const page=await context.newPage();pages.push(page);page.setDefaultTimeout(10000);page.on('pageerror',error=>errors.push(error.message));
+            await page.addInitScript(token=>localStorage.setItem('repair-h5-auth-token',token),token);
+            await page.goto(`${base}/?dispatchOrder=${id}`);return page;
+          }
+          try {
+            const workerPage=await open(tech);
+            await workerPage.getByRole('button',{name:'申请审批',exact:true}).click();
+            const requestDialog=workerPage.getByRole('dialog',{name:'申请无维修照片审批',exact:true});
+            assert.equal(await requestDialog.getByRole('button',{name:/^提\s*交$/}).isDisabled(),true);
+            const reason='现场禁止拍照，手机上交保管，维修已按要求完成。'.repeat(8);
+            await requestDialog.getByLabel('无法拍照原因',{exact:true}).fill(reason);
+            await workerPage.waitForFunction(el=>getComputedStyle(el).opacity==='1'&&el.getBoundingClientRect().width>300,await requestDialog.elementHandle());
+            await workerPage.screenshot({path:`output/playwright/photo-waiver/request-${width}.png`,animations:'disabled'});
+            await requestDialog.getByRole('button',{name:/^提\s*交$/}).click();await requestDialog.waitFor({state:'hidden'});
+            await workerPage.getByText('等待本店管理员或服务顾问审批',{exact:true}).waitFor();
+            const advisorPage=await open(advisor);
+            await advisorPage.locator('.photo-waiver-panel').getByRole('button',{name:/^驳\s*回$/}).click();
+            const rejectDialog=advisorPage.getByRole('dialog',{name:'驳回无维修照片申请',exact:true});
+            await rejectDialog.getByLabel('驳回原因',{exact:true}).fill('请核对现场要求后重新申请');
+            await rejectDialog.getByRole('button',{name:/^提\s*交$/}).click();await rejectDialog.waitFor({state:'hidden'});
+            await workerPage.reload();await workerPage.getByRole('button',{name:'重新申请',exact:true}).click();
+            await requestDialog.getByLabel('无法拍照原因',{exact:true}).fill(reason);
+            await requestDialog.getByRole('button',{name:/^提\s*交$/}).click();await requestDialog.waitFor({state:'hidden'});
+            await advisorPage.reload();
+            await advisorPage.locator('.photo-waiver-panel').getByRole('button',{name:/^通\s*过$/}).click();
+            const approveDialog=advisorPage.getByRole('dialog',{name:'通过无维修照片审批？',exact:true});
+            await advisorPage.waitForFunction(el=>getComputedStyle(el).opacity==='1'&&el.getBoundingClientRect().width>300,await approveDialog.elementHandle());
+            await advisorPage.screenshot({path:`output/playwright/photo-waiver/approve-${width}.png`,animations:'disabled'});
+            assert.ok(await approveDialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1),'approval dialog must wrap long reasons');
+            await approveDialog.getByRole('button',{name:'确认通过',exact:true}).click();await approveDialog.waitFor({state:'hidden'});
+            // Reload fetches the committed decision without waiting for the regular polling interval.
+            await workerPage.reload();
+            await workerPage.getByText('本次维修可免传维修照片，其他完工条件仍需满足。',{exact:true}).waitFor();
+            await workerPage.getByRole('button',{name:'提交完工',exact:true}).click();
+            const completion=workerPage.getByRole('dialog',{name:'确认维修完成？',exact:true});
+            assert.equal(await completion.getByRole('button',{name:'确认提交',exact:true}).isEnabled(),true);
+            const projectName=completion.getByLabel('维修项目 1 名称',{exact:true});const originalName=await projectName.inputValue();
+            await projectName.fill('修改后的维修项目');
+            assert.equal(await completion.getByRole('button',{name:'确认提交',exact:true}).isDisabled(),true);
+            await completion.getByText('项目已修改，请先返回保存项目，再重新申请无维修照片审批',{exact:true}).waitFor();
+            await projectName.fill(originalName);
+            assert.equal(await completion.getByRole('button',{name:'确认提交',exact:true}).isEnabled(),true);
+            await workerPage.waitForFunction(el=>getComputedStyle(el).opacity==='1'&&el.getBoundingClientRect().width>300,await completion.elementHandle());
+            await workerPage.screenshot({path:`output/playwright/photo-waiver/completion-${width}.png`,animations:'disabled'});
+            await completion.getByRole('button',{name:'确认提交',exact:true}).click();await completion.waitFor({state:'hidden'});
+            assert.equal((await service.dispatchDetail(advisor,id)).task.stage,'待检验');
+            assert.equal((await pool.query("select 1 from files where order_id=$1 and kind in ('repair_progress_photo','repair_completed_photo')",[id])).rowCount,0);
+            assert.deepEqual(errors,[]);
+          } catch(error) {for(let i=0;i<pages.length;i++){console.log('PHOTO WAIVER UI',width,i,await pages[i].locator('body').innerText());await pages[i].screenshot({path:`output/playwright/photo-waiver/failure-${width}-${i}.png`,animations:'disabled'});}throw error;}
+          finally {for(const context of contexts)await context.close();}
+        }
+      } finally {await browser.close();}
+    });
     if(process.env.DISPATCH_OPTIMIZATION_UI_TEST==='true') await t.test('archive summary, detail-only dispatch and mobile wrapped layouts',async()=>{
       const {chromium}=await import(process.env.DISPATCH_PLAYWRIGHT_MODULE||'playwright');
       const {createTokenForUser}=await import('../server/auth.mjs');

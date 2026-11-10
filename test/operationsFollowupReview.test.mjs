@@ -28,7 +28,7 @@ test('vehicle occupancy is exclusive across applications and released on return'
   const car=await service.saveVehicle(manager,{plate:'鲁BTEST01',brand:'测试',model:'出车占用'});
   const otherCar=await service.saveVehicle(manager,{plate:'鲁BTEST02',brand:'测试',model:'独立车辆'});
   const imageBase64=(await sharp({create:{width:40,height:20,channels:3,background:'#102030'}}).png().toBuffer()).toString('base64');
-  async function request(user,vehicleId){const trip=await service.create(user,{...key(),vehicleId,reason:'隔离库出车测试',licensePhotos:[imageBase64]});return service.act(manager,trip.id,'approve',key());}
+  async function request(user,vehicleId){const trip=await service.create(user,{...key(),vehicleId,reason:'隔离库出车测试',departurePhotos:[imageBase64]});return service.act(manager,trip.id,'approve',key());}
   async function photo(user,tripId,stage){
    const id=`file_${randomUUID()}`;
    await pool.query("insert into files(id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by) values($1,$2,'local','','test-fixture','image/jpeg',8,$3)",[id,stage==='departure'?'trip_departure_photo':'trip_return_photo',user.id]);
@@ -37,14 +37,14 @@ test('vehicle occupancy is exclusive across applications and released on return'
   }
   let a;
   await t.test('approval immediately departs and a duplicate request preserves its time',async()=>{
-   const input={...key(),vehicleId:car.id,reason:'自动出车',licensePhotos:[imageBase64]};
+   const input={...key(),vehicleId:car.id,reason:'自动出车',departurePhotos:[imageBase64]};
    const results=await Promise.all([service.create(first,input),service.create(first,input)]);
    a=results[0];assert.equal(a.status,'待审批');assert.equal(a.departureAt,undefined);
    assert.equal(results[1].id,a.id);
    a=await service.act(manager,a.id,'approve',key());assert.equal(a.status,'用车中');assert.ok(a.departureAt);
   });
   await t.test('an occupied vehicle rejects a new application without records or events',async()=>{
-   const input={...key(),vehicleId:car.id,reason:'应拒绝',licensePhotos:[imageBase64]};
+   const input={...key(),vehicleId:car.id,reason:'应拒绝',departurePhotos:[imageBase64]};
    await assert.rejects(()=>service.create(second,input),error=>error.status===409);
    assert.equal((await service.list(second)).length,0);
    assert.equal((await pool.query('select 1 from vehicle_trip_operations where actor_id=$1 and request_id=$2',[second.id,input.requestId])).rowCount,0);

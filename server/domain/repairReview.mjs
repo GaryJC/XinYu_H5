@@ -26,6 +26,7 @@ export function sendReview(task,actor,canInspect,people) {
     next.technicianId=next.technicianIds[0];
     next.technicianName=next.technicianIds.map(id=>people.find(person=>person.id===id)?.name||id).join('、');
   }
+  delete next.repairPhotoWaivers;
   next.stage='回审';
   next.version+=1;
   for(const key of ['completedAt','completedBy','inspectorId','inspectorName','inspectionClaimedAt','submittedAt','submissionNote','workerPauses','workerSubmissions','rejectedItemIds']) delete next[key];

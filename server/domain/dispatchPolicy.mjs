@@ -1,3 +1,4 @@
+import {photoWaiverActions,validatePhotoWaiverRequest,applyPhotoWaiver} from './repairPhotoWaiver.mjs';
 import { applyPlannedResponsibilities } from './dispatchPlanItems.mjs';
 import {validateInspectionDeferred} from './inspectionDeferred.mjs';
 import {addReviewProjects} from './reviewAssignment.mjs';
@@ -29,13 +30,14 @@ export function assertDispatchAccess(task, actor) {
   fail('任务已改派或不属于当前员工',403);
 }
 export function validateDispatchRequest(input) {
+  validatePhotoWaiverRequest(input||{});
   validatePartsIssue(input||{});
   validateReopenItems(input||{});
   validateRepairItemEdits(input||{});
   validateProjectReassignment(input||{});
   if(input?.itemAssignments!==undefined && input.action!=='assign') fail('项目预派工仅用于首次派工',400);
   validateInspectionDeferred(input||{});
-  const actions = ['complete-outsourced','update-technicians','update-due','send-review','submit-review','edit-repair-items','edit-parts','issue-parts','confirm-parts','record-parts','reopen-repair','start-order','submit-order','claim-inspection','reassign-inspection','retry-inspection-notifications','retry-scheduler-notifications','record-hours','assign','reassign','reoffer','cancel','accept','decline','start','finish','pick','pause','resume','submit','inspect','update','remind','retry-notification','reconcile'];
+  const actions = [...photoWaiverActions,'complete-outsourced','update-technicians','update-due','send-review','submit-review','edit-repair-items','edit-parts','issue-parts','confirm-parts','record-parts','reopen-repair','start-order','submit-order','claim-inspection','reassign-inspection','retry-inspection-notifications','retry-scheduler-notifications','record-hours','assign','reassign','reoffer','cancel','accept','decline','start','finish','pick','pause','resume','submit','inspect','update','remind','retry-notification','reconcile'];
   if (!input || !actions.includes(input.action) || !Number.isInteger(input.expectedVersion) || input.expectedVersion < 0 || typeof input.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(input.requestId)) fail('操作参数无效：需要版本号及唯一请求编号',400);
   for (const key of ['note','reason','pauseReason','technicianId','inspectorId','notificationId','notificationJobId']) {
     if (input[key] !== undefined && (typeof input[key] !== 'string' || input[key].length > 2000)) fail('文本参数无效',400);
@@ -68,6 +70,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   if (['草稿','待客户签字','待处理纸质委托书'].includes(task.orderStatus) || ['草稿','待客户签字','待处理纸质委托书'].includes(task.stage)) fail('客户签字后才能执行派工操作');
   if (task.version !== input.expectedVersion) fail('任务已更新，请刷新后重试');
   if(task.needsReview&&!['reconcile','remind','retry-notification','retry-scheduler-notifications'].includes(input.action))fail('历史任务需要管理员先核对归属和进度');
+  if(photoWaiverActions.includes(input.action))return applyPhotoWaiver(task,input,actor,people,now);
   if(input.action==='update-technicians') {
     if(!canEditDispatchTechnicians(task,actor)) fail('仅本店服务顾问、管理员或检验员可修改待结算工单的维修员工',403);
     const required=requiredDispatchTechnicians(task);
@@ -361,6 +364,10 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     next.repairItemIdFloor=Math.min(next.repairItemIdFloor||0,...task.items.map(item=>item.id));
     const workersCovered=allWorkersHaveItems(next);
     next.items=next.items.filter(item=>!deferred.includes(item.id));
+    if(rejected.length&&next.repairPhotoWaivers) {
+      const affected=task.items.filter(item=>rejected.includes(item.id));
+      next.repairPhotoWaivers=next.repairPhotoWaivers.filter(entry=>!affected.some(item=>!item.responsibleId||item.responsibleId===entry.applicantId));
+    }
     if(rejected.length) { next.reworkReason=input.reason; next.rejectedItemIds=rejected; next.stage=['暂停','回审'].includes(task.stage)?task.stage:'维修中'; next.rework=true; next.reworkCount=(task.reworkCount||0)+1; }
     else {
       const completed=next.items.every(i=>i.status==='已完工')&&workersCovered;

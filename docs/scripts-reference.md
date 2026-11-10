@@ -331,6 +331,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\apps\XinYu_H5\scripts
 | `SourcePath` | 部署脚本所在源码目录（云效应传临时解压目录） |
 | `ProcessName` | `xinyu-h5` |
 | `Port` | `8787` |
+| `DeploymentLockTimeoutSeconds` | `300`（0 表示不等待，最多 3600 秒） |
 
 执行顺序：
 

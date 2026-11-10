@@ -1,3 +1,4 @@
+import {PhotoWaiverRecord} from './RepairPhotoWaiverPanel';
 import type { DispatchDetail } from '../../../../shared/types';
 import { ActionHistory } from '../../shared/ui/ActionHistory';
 import { dispatchEventLabel, displayTime } from './dispatchLabels';
@@ -21,7 +22,8 @@ export function TechnicianTaskHistory({ detail }: { detail: DispatchDetail }) {
       detail: <>
         {event.detail.stage ? <p><span className="technician-history-label">任务状态</span>{event.detail.stage}</p> : null}
         {event.action === 'update-due' ? <p><span className="technician-history-label">预计完工</span>{displayTime(event.detail.previousDueAt)} → {displayTime(event.detail.dueAt)}</p> : null}
-        {event.detail.reason ? <p><span className="technician-history-label">说明</span>{event.detail.reason}</p> : null}
+        {event.detail.photoWaiver&&<PhotoWaiverRecord entry={event.detail.photoWaiver}/>}
+        {event.detail.reason && !event.detail.photoWaiver ? <p><span className="technician-history-label">说明</span>{event.detail.reason}</p> : null}
       </>,
     }))} />
   </div>;

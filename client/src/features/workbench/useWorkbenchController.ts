@@ -613,7 +613,7 @@ export function useWorkbenchController() {
     inspectorOptions,
     searchedOrders,
     archive,
-    counters, todoEntry, todoError, openTodo, returnFromTodo,
+    photoApprovalCount:todoCounts.photoApprovalCount, counters, todoEntry, todoError, openTodo, returnFromTodo,
     loginForDevelopment,
     selectOrder,
     startNewOrder,

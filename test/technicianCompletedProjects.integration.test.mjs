@@ -14,13 +14,13 @@ test('monthly project repository isolates owners and shops and counts each repai
   await client.connect();
   try {
     await client.query('begin');
-    await client.query('create temporary table work_orders(id text,shop_id text,vehicle_plate text,dispatch_no text) on commit drop');
+    await client.query('create temporary table work_orders(id text,shop_id text,vehicle_plate text,dispatch_no text,created_at timestamptz default now()) on commit drop');
     await client.query('create temporary table dispatch_tasks(order_id text,technician_id text,data jsonb) on commit drop');
     await client.query('create temporary table repair_items(order_id text,client_item_id integer,name text,status text) on commit drop');
     await client.query('create temporary table dispatch_repair_rounds(order_id text,round_no integer,snapshot jsonb) on commit drop');
     const done=(id,owner)=>({id,name:'同名项目',responsibleId:owner,status:'已完工',inspectedAt:'2026-11-01T00:00:00Z'});
     async function seed(id,shop,data) {
-      await client.query('insert into work_orders values($1,$2,$1,$1)',[id,shop]);
+      await client.query('insert into work_orders(id,shop_id,vehicle_plate,dispatch_no) values($1,$2,$1,$1)',[id,shop]);
       await client.query('insert into dispatch_tasks values($1,$2,$3)',[id,'A',data]);
     }
     const original={technicianIds:['A','B'],items:[done(1,'A'),done(2,'B')]};

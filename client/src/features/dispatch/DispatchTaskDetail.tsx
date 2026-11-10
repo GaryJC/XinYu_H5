@@ -1,3 +1,4 @@
+import {PhotoWaiverRecord} from './RepairPhotoWaiverPanel';
 import { useDispatchProjectFocus } from './useDispatchProjectFocus';
 import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { LoadingState } from "../../shared/ui/LoadingState";
@@ -121,7 +122,7 @@ export function DispatchTaskDetail({controller,user,readyForFocus=true}:{control
     <RepairWritebackStatus controller={controller} admin={hasRole(user, 'manager')}/>
     <TaskPartsSummary task={task}/>
     {outsourced&&waitingForParts?<Alert type="info" showIcon title="配件尚未全部备齐，请等待仓库确认后再开工或登记完工。"/>:null}
-    {owner||partsApplicant?<RepairPhotoPanel controller={controller} editable={!unsigned&&!task.needsReview&&(['待开工','维修中','暂停','回审'].includes(task.stage)||outsourced&&task.stage==='待检验')} onBlocked={setPhotoBlocked}/>:null}
+    {owner||partsApplicant||controller.manager?<RepairPhotoPanel user={user} controller={controller} editable={(owner||partsApplicant)&&!unsigned&&!task.needsReview&&(['待开工','维修中','暂停','回审'].includes(task.stage)||outsourced&&task.stage==='待检验')} onBlocked={setPhotoBlocked}/>:null}
     {partsApplicant&&!unsigned&&!task.needsReview&&['待开工','维修中','暂停','回审'].includes(task.stage)?<Button onClick={()=>setPartsDialog(true)} disabled={controller.busy}>{(task.partsRequirement?.issuedAt||task.partsRequirement?.preparedAt)?"追加配件申请":"补充／修改配件需求"}</Button>:null}
     {files.length?<><h3>维修附件</h3><Space wrap>{files.map(file=>file.mimeType.startsWith('image/')?<AuthenticatedImage key={file.id} fileId={file.id} alt={file.originalName} width={140} height={100}/>:<Button key={file.id} onClick={()=>void openFile(file.id,file.originalName)}>{file.originalName}</Button>)}</Space></>:null}
     {hasPendingInspection(task)&&!task.inspectorId&&controller.inspectionLead&&detail.inspectionNotification&&detail.inspectionNotification.status!=='ready'&&detail.inspectionNotification.status!=='obsolete'?<Alert type={detail.inspectionNotification.error?'warning':'info'} title={detail.inspectionNotification.error||'正在安排检验通知'} description="工单已进入待检验队列，可重试检验通知。"/>:null}
@@ -162,7 +163,8 @@ export function DispatchTaskDetail({controller,user,readyForFocus=true}:{control
       {event.detail.rejectedItemIds?.length?<p>退回项目：{event.detail.rejectedItemIds.map(id=>task.items.find(i=>i.id===id)?.name||id).join('、')}</p>:null}
       {event.detail.dueAt?<p>预计完工：{event.action==='update-due'?`${displayTime(event.detail.previousDueAt)} → `:''}{displayTime(event.detail.dueAt)}{event.detail.urgent?' · 加急':''}</p>:null}
       {event.detail.pauseReason?<p>{event.detail.pauseReason}</p>:null}
-      {event.detail.reason?<p>{event.detail.reason}</p>:null}{event.detail.note?<p>{event.detail.note}</p>:null}</>}))}/>
+      {event.detail.photoWaiver?<PhotoWaiverRecord entry={event.detail.photoWaiver}/>:null}
+      {event.detail.reason&&!event.detail.photoWaiver?<p>{event.detail.reason}</p>:null}{event.detail.note?<p>{event.detail.note}</p>:null}</>}))}/>
     </>}]} />
     </div>
     {actions.length?<div ref={setActionBar} className="task-detail-actions"><div ref={setProjectActionsTarget} className="project-actions-slot"/><Space wrap>{actions.map(action=><Button key={action} className={action==='inspect'?'task-inspection-submit':undefined} danger={action==='reopen-repair'} type={['assign','accept','submit','inspect','claim-inspection'].includes(action)?'primary':'default'} loading={controller.busy} disabled={controller.busy||photoBlocked||action==='inspect'&&!inspectionDraft.complete} onClick={()=>{

@@ -11,7 +11,7 @@ const todoAppearance: Record<string, { tone: string; icon: typeof Clock3 }> = {
  '维修中': { tone: 'blue', icon: Wrench },
 };
 
-export function TodoOverview({counters,canApprove,onTodo,onApprovals}:{counters:{label:string;value:number|undefined}[];canApprove:boolean;onTodo:(label:string)=>void;onApprovals:()=>void}) {
+export function TodoOverview({counters,canApprove,canApprovePhotos=false,photoApprovalCount,onTodo,onApprovals}:{counters:{label:string;value:number|undefined}[];canApprove:boolean;canApprovePhotos?:boolean;photoApprovalCount?:number;onTodo:(label:string)=>void;onApprovals:()=>void}) {
  const [expanded,setExpanded]=useState(false);
  const [approvalsOpen,setApprovalsOpen]=useState(false);
  const [count,setCount]=useState<number>();
@@ -24,10 +24,10 @@ export function TodoOverview({counters,canApprove,onTodo,onApprovals}:{counters:
   document.addEventListener('visibilitychange',refresh);
   return()=>{active=false;document.removeEventListener('visibilitychange',refresh);};
  },[canApprove]);
- const approvalCategories=[{key:'vehicle-trip',label:'出车申请',count,onOpen:onApprovals}];
+ const approvalCategories=[...(canApprove?[{key:'vehicle-trip',label:'出车申请',count,onOpen:onApprovals}]:[]),...(canApprovePhotos?[{key:'repair-photo',label:'无维修照片审批',count:photoApprovalCount,onOpen:()=>onTodo('无照片待审批')}]:[])];
  const approvalTotal=approvalCategories.every(category=>category.count!==undefined)?approvalCategories.reduce((sum,category)=>sum+(category.count||0),0):undefined;
  const order=['待客户签字','待派工','待检验','待审批','维修中'];
- const entries=[...counters,...(canApprove?[{label:'待审批',value:approvalTotal}]:[])]
+ const entries=[...counters,...(canApprove||canApprovePhotos?[{label:'待审批',value:approvalTotal}]:[])]
   .sort((a,b)=>order.indexOf(a.label)-order.indexOf(b.label));
  return <>
   <div className="workbench-section-heading"><div className="todo-overview-title"><h2>待办概览</h2>{entries.length>4&&<Button type="text" size="small" aria-label={expanded?'收起待办概览':'展开全部待办'} aria-expanded={expanded} aria-controls="todo-metrics" icon={expanded?<ChevronUp size={18}/>:<ChevronDown size={18}/>} onClick={()=>setExpanded(value=>!value)}>{expanded?'收起':`全部 ${entries.length} 项`}</Button>}</div></div>
@@ -42,7 +42,7 @@ export function TodoOverview({counters,canApprove,onTodo,onApprovals}:{counters:
     </button>;
    })}
   </section>
-  <Drawer title="待审批" placement="bottom" size="auto" open={canApprove&&approvalsOpen} onClose={()=>setApprovalsOpen(false)} styles={{wrapper:{maxHeight:'80vh'},body:{overflowY:'auto'}}}>
+  <Drawer title="待审批" placement="bottom" size="auto" open={(canApprove||canApprovePhotos)&&approvalsOpen} onClose={()=>setApprovalsOpen(false)} styles={{wrapper:{maxHeight:'80vh'},body:{overflowY:'auto'}}}>
    <div className="approval-category-list">{approvalCategories.map(category=><button type="button" key={category.key} aria-label={`查看${category.label}待审批事项`} onClick={()=>{setApprovalsOpen(false);category.onOpen();}}><span>{category.label}</span><span><strong>{category.count??'—'}</strong> 项<span aria-hidden="true"> ›</span></span></button>)}</div>
   </Drawer>
  </>;

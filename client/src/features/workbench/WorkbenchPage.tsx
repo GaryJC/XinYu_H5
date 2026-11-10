@@ -141,7 +141,7 @@ export function WorkbenchPage() {
         {!bindingRequired && currentUser && activeNav === "工作台" && (dispatchEnabled || !["technician", "inspector", "warehouse"].includes(role)) ? (
           <>
             {controller.todoError?<Alert type="warning" title={controller.todoError}/>:null}
-            <TodoOverview key={currentUser?.id} counters={counters} canApprove={!!currentUser&&hasRole(currentUser,'manager')} onTodo={controller.openTodo} onApprovals={()=>{setTripScope('pending');setActiveNav('出车申请');}}/>
+            <TodoOverview key={currentUser?.id} counters={counters} canApprovePhotos={dispatchEnabled&&!!currentUser&&hasAnyRole(currentUser,['manager','advisor'])} photoApprovalCount={controller.photoApprovalCount} canApprove={!!currentUser&&hasRole(currentUser,'manager')} onTodo={controller.openTodo} onApprovals={()=>{setTripScope('pending');setActiveNav('出车申请');}}/>
             <section className="workbench-shortcuts" aria-label="快捷入口">
               <div className="workbench-section-heading"><h2>快捷入口</h2></div>
               <div className="workbench-shortcut-grid">{visibleNavItems.filter(item => !['工作台', '车辆管理', '数据看板', '权限设置', '配件竞价', '工单全览'].includes(item.label)).map(item => {

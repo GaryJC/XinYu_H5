@@ -1,3 +1,4 @@
+import {hasApprovedPhotoWaiver} from '../../../../shared/repairPhotoWaiver.mjs';
 import { TechnicianTaskHistory } from './TechnicianTaskHistory';
 import { Camera, Package, Wrench } from 'lucide-react';
 import { useElementHeight } from '../../shared/ui/useElementHeight';
@@ -48,6 +49,11 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
   const itemsEditor=useRepairItemsEditor(task,ownController);
   const canEditItems=!task.needsReview&&(task.technicianIds??[task.technicianId]).includes(user.id)&&['待开工','维修中','暂停','回审'].includes(task.stage);
   const hasRepairPhoto=c.detail!.files.some(f=>['repair_progress_photo','repair_completed_photo'].includes(f.kind)&&(f.repairRound||0)===(task.repairRound||0)&&(!individual||f.uploadedBy===user.id));
+  const waiverScopeEdited=itemsEditor.editing&&(itemsEditor.rows.length!==task.items.length||itemsEditor.rows.some(row=>{
+    const original=task.items.find(item=>item.id===row.id);
+    return !original||original.name!==row.name.trim()||(original.responsibleId||user.id)!==(row.responsibleId||user.id);
+  }));
+  const photoReady=hasRepairPhoto||hasApprovedPhotoWaiver(wholeTask,user.id)&&!waiverScopeEdited;
   const editable=!task.needsReview && (task.technicianIds??[task.technicianId]).includes(user.id);
   const ownDone=individual&&task.items.length>0&&task.items.every(i=>['待检验','已完工'].includes(i.status))&&Boolean(task.workerSubmissions?.[user.id]||task.stage==='待检验'||task.items.every(i=>i.status==='已完工'));
   const nameplate=useVehicleNameplateUpload(c,editable&&!ownDone&&!task.feedback&&['待接单','待开工','维修中','暂停','回审'].includes(task.stage));
@@ -63,7 +69,7 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
   const label=primary==='accept'?'确认接单':primary==='resume'?'继续维修':primary==='start-order'?(task.rework&&task.rejectedItemIds?.length?'开始返工':'开始维修'):task.stage==='回审'?'提交回审':individual?'提交本人完工':'提交完工';
   const handoverField=itemsEditor.handover?<label className="repair-completion-note"><span>原因 / 交接说明（必填）</span><Input.TextArea aria-label="原因或交接说明" value={itemsEditor.handoverReason} maxLength={2000} rows={3} disabled={c.busy} onChange={e=>itemsEditor.setHandoverReason(e.target.value)}/></label>:null;
   async function confirm() {
-    if(dialog==='submit-order') {if(!hasRepairPhoto||blocked)return;if(await itemsEditor.save(true,note))setDialog(undefined);}
+    if(dialog==='submit-order') {if(!photoReady||blocked)return;if(await itemsEditor.save(true,note))setDialog(undefined);}
     if(dialog==='pause') {if(await c.act({action:dialog,pauseReason:reason,note}))setDialog(undefined);}
     if(dialog==='decline') {if(await c.act({action:dialog,reason:reason==='其他'?note:reason}))setDialog(undefined);}
   }
@@ -102,7 +108,7 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
 
     {individual?<Collapse items={[{key:'team',label:'全单项目进度',children:<RepairItemsEditor compact items={wholeTask.items} rows={wholeTask.items} onChange={()=>{}}/>}]}/>:null}
     <div ref={photosRef} tabIndex={-1} className="technician-section-anchor technician-photo-section" role="region" aria-label="维修拍照与记录">
-    <RepairPhotoPanel controller={c} ownerId={individual?user.id:undefined} editable={canPhoto&&!nameplate.uploading} onBlocked={photoBlocked}/>
+    <RepairPhotoPanel user={user} controller={c} ownerId={individual?user.id:undefined} editable={canPhoto&&!nameplate.uploading} onBlocked={photoBlocked}/>
     </div>
     <VehicleNameplatePhotos currentId={wholeTask.vehicleNameplateFileId} files={c.detail!.files} onUpload={editable&&!ownDone&&!task.feedback&&['待接单','待开工','维修中','暂停','回审'].includes(task.stage)?nameplate.upload:undefined} disabled={c.busy||blocked} uploading={nameplate.uploading} error={nameplate.error} historyLoading={nameplate.historyLoading} historyError={nameplate.historyError} onReloadHistory={nameplate.reloadHistory}/>
     <Collapse items={[{key:"sheet",label:"完整派工单与接车照片",children:<DispatchSheetSummary task={task} files={c.detail!.files}/>}]} />
@@ -112,12 +118,12 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
       {waitingForParts&&['待开工','维修中','回审'].includes(task.stage)?<Button type="primary" block disabled>{task.stage==='回审'?'提交回审':'提交完工'}</Button>:null}
       {primary?<Button type="primary" block loading={c.busy} disabled={c.busy||blocked||itemsEditor.editing} onClick={()=>{if(primary==='accept'){setPartsDialog(true);}else if(primary==='submit-order'){itemsEditor.begin();setNote('');setDialog(primary);}else void c.act({action:primary});}}>{label}</Button>:null}</div>{waitingForParts?<span role="status">本轮配件尚未备齐，暂不能{task.stage==='回审'?'提交回审':'提交完工'}</span>:null}{blocked?<span>请等待照片上传完成，或处理失败照片</span>:null}</div>:null}
     {partsDialog?<PartsRequirementDialog controller={materialController} accepting={task.stage==='待接单'} onUploading={photoBlocked} onClose={()=>setPartsDialog(false)}/>:null}
-    {dialog?<FormDialog open className="technician-completion-dialog" title={dialog==='submit-order'?(task.stage==='回审'?'确认提交回审？':'确认维修完成？'):dialog==='pause'?'暂停维修':'无法接单'} okText={dialog==='submit-order'?(task.stage==='回审'?'提交回审':'确认提交'):'确认'} onOk={()=>void confirm()} confirmLoading={c.busy} okButtonProps={{disabled:dialog==='submit-order'&&(!hasRepairPhoto||blocked||!itemsEditor.valid||itemsEditor.stale||primary!=='submit-order')}} onCancel={()=>{if(!c.busy){setDialog(undefined);itemsEditor.cancel();}}} cancelButtonProps={{disabled:c.busy}} closable={!c.busy} mask={{closable:false}}>
+    {dialog?<FormDialog open className="technician-completion-dialog" title={dialog==='submit-order'?(task.stage==='回审'?'确认提交回审？':'确认维修完成？'):dialog==='pause'?'暂停维修':'无法接单'} okText={dialog==='submit-order'?(task.stage==='回审'?'提交回审':'确认提交'):'确认'} onOk={()=>void confirm()} confirmLoading={c.busy} okButtonProps={{disabled:dialog==='submit-order'&&(!photoReady||blocked||!itemsEditor.valid||itemsEditor.stale||primary!=='submit-order')}} onCancel={()=>{if(!c.busy){setDialog(undefined);itemsEditor.cancel();}}} cancelButtonProps={{disabled:c.busy}} closable={!c.busy} mask={{closable:false}}>
       {dialog!=='submit-order'?<Select aria-label="问题原因" style={{width:'100%',marginBottom:16}} value={reason} onChange={setReason} options={(dialog==='pause'?['待配件','待客户确认','技术问题','其他']:['时间冲突','无法维修此项目','其他']).map(value=>({value,label:value}))}/>:null}
       {dialog==='submit-order'?<section><h3>{individual?'本人负责项目':'主要作业与增修项目'}</h3><RepairItemsEditor technicians={(task.executionMode==='outsourced'?c.people.contractors:c.people.technicians).filter(p=>individual?p.id===user.id:(task.technicianIds??[task.technicianId]).includes(p.id))} items={task.items} rows={itemsEditor.rows} onChange={itemsEditor.setRows} editing disabled={c.busy}/>{itemsEditor.stale?<Alert type="warning" title="工单已更新，请重新载入项目后编辑" action={<Button onClick={itemsEditor.begin}>重新载入</Button>}/>:null}</section>:null}
       {dialog==='submit-order'?handoverField:null}
       {dialog==='submit-order'&&primary==='start-order'?<Alert type="warning" showIcon title="请先返回并点击开始返工，仅需重新开工未通过的项目"/>:null}
-      {dialog==='submit-order'&&!hasRepairPhoto?<Alert type="warning" showIcon title="请先返回并上传本轮维修照片"/>:null}
+      {dialog==='submit-order'&&!photoReady?<Alert type="warning" showIcon title={waiverScopeEdited&&hasApprovedPhotoWaiver(wholeTask,user.id)?'项目已修改，请先返回保存项目，再重新申请无维修照片审批':'请先上传本轮维修照片或取得无维修照片审批'}/>:null}
       {dialog==='submit-order'||reason==='其他'?<label className="repair-completion-note"><span>{dialog==='submit-order'?'完工说明（选填）':'问题说明'}</span><Input.TextArea aria-label={dialog==='submit-order'?'完工说明（选填）':'问题说明'} placeholder={dialog==='submit-order'?'填写维修结果或注意事项':'请说明原因'} rows={3} maxLength={2000} value={note} onChange={e=>setNote(e.target.value)}/></label>:null}
       {c.error?<Alert type="error" title={c.error}/>:null}
     </FormDialog>:null}

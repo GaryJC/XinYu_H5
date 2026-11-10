@@ -10,7 +10,7 @@ const inspectionStatuses=[{value:'',label:'全部未完成'},{value:'待检验',
 export function DispatchFilterBar({controller:c,inspection}:{controller:DispatchController;inspection:boolean}) {
  const {token}=theme.useToken(),f=useDispatchFilterDraft(c.filters,c.setFilters);
  const advanced=advancedFilterCount(c.filters),active=activeFilterCount(c.filters);
- const statuses=[...(c.filters.search||c.filters.includeCompleted==='true'?[{value:'all',label:'全部工单'}]:[]),...(inspection?inspectionStatuses:statusFilters)];
+ const statuses=[...(c.filters.search||c.filters.includeCompleted==='true'?[{value:'all',label:'全部工单'}]:[]),...(inspection?inspectionStatuses:statusFilters).flatMap(option=>[option,...(c.manager&&option.value===(inspection?'':'待派工')?[{value:'无照片待审批',label:'无照片待审批'}]:[])])];
  const patch=(key:'executionMode'|'from'|'to'|'technicianId',value:string|undefined)=>{f.setDraft(d=>({...d,[key]:value,...(key==='technicianId'?{metric:undefined,workloadState:undefined}:{})}));f.setError('');};
  return <>
   <div className="dispatch-filter-bar" role="search" aria-label="工单搜索筛选" style={{background:token.colorBgContainer,borderColor:token.colorBorderSecondary,color:token.colorText}}>

@@ -1,0 +1,7 @@
+.photo-waiver-panel{display:grid;gap:12px;margin:16px 0;padding:16px;border:1px solid #dce5ef;border-radius:10px;min-width:0}
+.photo-waiver-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.photo-waiver-entry+.photo-waiver-entry{border-top:1px solid #e6ebf2;padding-top:12px}
+.photo-waiver-entry p,.photo-waiver-record p{margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.photo-waiver-entry .ant-tag{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.photo-waiver-reason{display:grid;gap:8px;margin:16px 0}
+@media(max-width:480px){.photo-waiver-panel{padding:12px}}
