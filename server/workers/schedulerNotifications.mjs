@@ -2,7 +2,6 @@ import { hasAnyRole } from "../../shared/roles.mjs";
 import {isDispatchNotificationSuppressed} from '../domain/notificationPolicy.mjs';
 import {randomUUID} from 'node:crypto';
 import {pool,transaction} from '../database/pool.mjs';
-import {localDispatchPeople} from '../repositories/dispatchRepository.mjs';
 import {syncSchedulerRoster} from '../integrations/dingtalk/schedulerRoster.mjs';
 import {notificationConfiguration} from '../integrations/dingtalk/notifications.mjs';
 export async function processSchedulerNotifications({database=pool,runTransaction=transaction,sync=syncSchedulerRoster,env=process.env}={}) {
@@ -34,11 +33,12 @@ export async function processSchedulerNotifications({database=pool,runTransactio
     const shopId=tasks[0].shop_id;
     const ids=notificationConfiguration(env)==='dingtalk'?await sync(shopId):undefined;
     await runTransaction(async client=>{
-      await client.query('select id from work_orders where id=$1 for update',[job.order_id]);
+      const {rows:orders}=await client.query('select id,advisor from work_orders where id=$1 for update',[job.order_id]);
       const {rows:current}=await client.query('select lease_id from dispatch_scheduler_notifications where event_id=$1 for update',[job.event_id]);
       if(current[0]?.lease_id!==lease)return;
-      const recipients=(await localDispatchPeople({shopId},client)).filter(p=>p.active && hasAnyRole(p, ['advisor','manager']) && (!ids || ids.includes(p.id)));
-      if(!recipients.length)throw new Error('暂无本店有效服务顾问或管理员，请检查钉钉角色后重试');
+      const {rows:owners}=await client.query("select id from users where active and shop_id=$1 and name=$2 and btrim(name)<>'' and (role in ('advisor','manager') or roles && array['advisor','manager']::text[])",[shopId,orders[0]?.advisor]);
+      const recipients=owners.filter(p=>!ids||ids.includes(p.id));
+      if(!recipients.length)throw new Error('本单暂无有效经办服务顾问或管理员，请核对经办人及钉钉角色后重试');
       for(const p of recipients) {
        await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),job.order_id,job.event_id,p.id,job.kind,JSON.stringify(job.payload)]);
       }
@@ -51,7 +51,10 @@ export async function processSchedulerNotifications({database=pool,runTransactio
 }
 
 export async function validateSchedulerRecipient(notification,user,{database=pool}={}) {
-  if(!user?.active || !hasAnyRole(user, ['advisor','manager']))return false;
-  const {rows}=await database.query('select shop_id from dispatch_tasks where order_id=$1',[notification.order_id]);
-  return Boolean(rows[0] && rows[0].shop_id===user.shopId);
+  if(!user?.active || user.id!==notification.recipient_id || !hasAnyRole(user, ['advisor','manager']))return false;
+  const {rows}=await database.query(`select 1 from work_orders w join users u on u.id=$2
+    where w.id=$1 and w.shop_id=$3 and u.shop_id=w.shop_id and u.active
+      and u.name=w.advisor and btrim(u.name)<>''
+      and (u.role in ('advisor','manager') or u.roles && array['advisor','manager']::text[])`,[notification.order_id,user.id,user.shopId]);
+  return rows.length>0;
 }

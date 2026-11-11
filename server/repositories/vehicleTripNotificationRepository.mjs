@@ -1,10 +1,10 @@
 import {randomUUID} from 'node:crypto';
 import {notificationNextState,notificationRecipient} from './dispatchNotificationRepository.mjs';
 import {VehicleTripRepository} from './vehicleTripRepository.mjs';
-import {tripNotificationKinds,tripNotificationCurrent,tripNotificationRecipient,tripManagerFanout} from '../domain/vehicleTripNotifications.mjs';
+import {isTripNotificationSuppressed,tripNotificationKinds,tripNotificationCurrent,tripNotificationRecipient,tripManagerFanout} from '../domain/vehicleTripNotifications.mjs';
 
 export async function enqueueTripNotification(database,user,requestId,action,trip) {
-  if(!Object.hasOwn(tripNotificationKinds,action))return;
+  if(!Object.hasOwn(tripNotificationKinds,action)||isTripNotificationSuppressed(action))return;
   await database.query(`insert into vehicle_trip_notification_jobs(id,trip_id,actor_id,request_id,action,payload)
     values($1,$2,$3,$4,$5,$6) on conflict(actor_id,request_id) do nothing`,
     [randomUUID(),trip.id,user.id,requestId,action,JSON.stringify({...trip,actorName:user.name})]);
@@ -20,6 +20,9 @@ export async function queueTripRecipients(job,managerIds,runTransaction) {
   return runTransaction(async database=>{
     const current=(await database.query('select lease_id from vehicle_trip_notification_jobs where id=$1 for update',[job.id])).rows[0];
     if(current?.lease_id!==job.lease_id)return;
+    if(isTripNotificationSuppressed(job.action)) {
+      await database.query("update vehicle_trip_notification_jobs set status='obsolete',error='',locked_until=null,lease_id=null,next_attempt_at=null where id=$1",[job.id]);return;
+    }
     const trip=await new VehicleTripRepository(database).getTrip(job.trip_id,true);
     if(!tripNotificationCurrent(job.action,trip,job.payload)) {
       await database.query("update vehicle_trip_notification_jobs set status='obsolete',locked_until=null,lease_id=null,next_attempt_at=null where id=$1",[job.id]);return;
@@ -50,6 +53,7 @@ export async function claimTripDelivery(database) {
 export async function tripDeliveryContext(row,database) {
   const job=(await database.query('select * from vehicle_trip_notification_jobs where id=$1',[row.job_id])).rows[0];
   if(!job)return {};
+  if(isTripNotificationSuppressed(job.action))return {job};
   const trip=await new VehicleTripRepository(database).getTrip(job.trip_id);
   const user=await notificationRecipient(row.recipient_id,database);
   return {job,trip,user};

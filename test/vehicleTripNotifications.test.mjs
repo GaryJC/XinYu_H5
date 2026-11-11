@@ -15,7 +15,7 @@ test('each trip event targets only authorized people, excludes self approval and
  for(const action of Object.keys(states)) {
   const current={...trip,status:states[action]};
   const recipient=['approve','reject','approve-return','reject-return'].includes(action)?employee:manager;
-  assert.equal(tripNotificationRecipient(action,current,recipient),true,action);
+  assert.equal(tripNotificationRecipient(action,current,recipient),action!=='return',action);
   for(const invalid of [{...recipient,active:false},{...recipient,shopId:'other'},{...employee,id:'stranger'}])assert.equal(tripNotificationRecipient(action,current,invalid),false,action);
   assert.equal(tripNotificationRecipient(action,{...current,status:'invalid'},recipient),false);
  }
@@ -81,8 +81,8 @@ test('trip payload uses the real DingTalk adapter contract without network or re
 test('obsolete return rounds never revive after resubmission', async()=>{
  const latest={...trip,status:'已还车',returnRound:2};
  assert.equal(tripNotificationRecipient('return',latest,manager,{...latest,returnRound:1}),false);
- assert.equal(tripNotificationRecipient('return',latest,manager,latest),true);
+ assert.equal(tripNotificationRecipient('return',latest,manager,latest),false);
  assert.equal(tripNotificationRecipient('create',trip,manager,{...trip,status:'用车中'}),false);
  const {sends,result}=await runWorker({context:{trip:latest,job:{action:'return',payload:{...latest,returnRound:1}}}});
- assert.equal(sends,0);assert.equal(result.status,'failed');
+ assert.equal(sends,0);assert.equal(result.status,'suppressed');
 });

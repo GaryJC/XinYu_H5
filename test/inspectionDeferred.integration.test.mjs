@@ -51,6 +51,7 @@ test('inspection deferred lifecycle persists atomically, dispatches directly and
   assert.equal(await validateDeferredNotification(reminders[0],inspector,pool),false);
   task=await getDispatchTask(pool,orderId,inspector);assert.equal(task.stage,'待接单');assert.equal(task.repairRound,1);assert.equal(task.items[0].id,1);
   assert.equal((await queryDispatchTasks(inspector,{stage:'待定'})).some(t=>t.orderId===orderId),true);
+  assert.equal((await pool.query("select count(*) from dispatch_notifications where kind='检验项目待定'")).rows[0].count,'0');
   let notifications=(await pool.query('select * from dispatch_notifications where order_id=$1 order by created_at',[orderId])).rows;
   const dispatch=notifications.find(n=>n.kind==='待定项目派工');assert.equal(dispatch.recipient_id,tech.id);assert.equal(await validateDeferredNotification(dispatch,tech,pool),true);
   const cancel={action:'cancel',id:rowId,expectedVersion:pending.version,requestId:randomUUID(),note:'本次不修'};

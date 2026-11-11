@@ -236,6 +236,17 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
         await new Promise(resolve=>server.close(resolve));await fs.rm(uploads,{recursive:true,force:true});
       }
     });
+    await t.test('signature review targets a manager only when that manager owns the order',async()=>{
+      const file=await seed('manager-owned-signature');
+      const token=await db.createSignatureTokenForOrder('manager-owned-signature',manager.name);
+      await db.signWorkOrderByToken(token.signatureToken,'客户',file);
+      const notices=(await pool.query("select * from dispatch_notifications where order_id='manager-owned-signature' and kind='需确认用户签字'")).rows;
+      assert.deepEqual(notices.map(n=>n.recipient_id),[manager.id]);
+      const {validateSignatureReviewRecipient}=await import('../server/repositories/customerSignatureReviewRepository.mjs');
+      assert.equal(await validateSignatureReviewRecipient(notices[0],manager,pool),true);
+      await pool.query("update work_orders set advisor='负责顾问' where id='manager-owned-signature'");
+      assert.equal(await validateSignatureReviewRecipient(notices[0],manager,pool),false);
+    });
     await t.test('supplemental paper and completed order signatures preserve workflow and do not sync twice',async()=>{
       const {customerSignatureSession}=await import('../server/domain/customerSignaturePolicy.mjs');
       for(const status of ['待处理纸质委托书','维修中','完成']) {

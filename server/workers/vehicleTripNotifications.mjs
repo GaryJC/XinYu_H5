@@ -2,7 +2,7 @@ import {pool,transaction} from '../database/pool.mjs';
 import {notificationConfiguration,sendWorkNotification} from '../integrations/dingtalk/notifications.mjs';
 import {vehicleTripMessageBody} from '../integrations/dingtalk/vehicleTripNotifications.mjs';
 import {syncManagerRoster} from '../integrations/dingtalk/managerRoster.mjs';
-import {tripNotificationRecipient,tripManagerFanout} from '../domain/vehicleTripNotifications.mjs';
+import {isTripNotificationSuppressed,tripNotificationRecipient,tripManagerFanout} from '../domain/vehicleTripNotifications.mjs';
 import {claimTripResolution,queueTripRecipients,failTripResolution,claimTripDelivery,tripDeliveryContext,finishTripDelivery} from '../repositories/vehicleTripNotificationRepository.mjs';
 export async function resolveTripRecipients({database=pool,runTransaction=transaction,sync=syncManagerRoster,env=process.env}={}) {
   const job=await claimTripResolution(database);if(!job)return false;
@@ -19,6 +19,7 @@ export async function processTripNotification({database=pool,claim=()=>claimTrip
     const {job,trip,user}=await context(row);
     const notification={...row,action:job?.action,payload:job?.payload};
     if(row.previous_status!=='pending')result={status:row.previous_status,error:row.error||''};
+    else if(isTripNotificationSuppressed(job?.action))result={status:'suppressed',error:'',retryable:false};
     else if(user?.id!==row.recipient_id||!tripNotificationRecipient(job?.action,trip,user,job?.payload))result={status:'failed',error:'申请状态或接收人权限已变化，通知已取消',retryable:false};
     else {started=true;deliveryUserId=user.dingtalk_user_id;result=await send(notification,user.dingtalk_user_id,{env,buildMessage:vehicleTripMessageBody,source:'vehicle-trip'});}
   } catch {result=started||row.previous_status!=='pending'?{status:'unknown',error:'发送结果不确定，请核对钉钉记录'}:{status:'failed',error:'发送前校验失败，将重试',retryable:true};}

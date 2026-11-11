@@ -90,15 +90,15 @@ test('scheduler notices include operator, reason and due reminders include a cle
 test('scheduler fanout checks role and store again before sending',async()=>{
  const {validateSchedulerRecipient}=await import('../server/workers/schedulerNotifications.mjs');
  const database={query:async()=>({rows:[{shop_id:'s'}]})};
- assert.equal(await validateSchedulerRecipient({order_id:'o'},{active:true,role:'advisor',shopId:'s'},{database}),true);
- assert.equal(await validateSchedulerRecipient({order_id:'o'},{active:true,role:'manager',shopId:'other'},{database}),false);
+ assert.equal(await validateSchedulerRecipient({order_id:'o',recipient_id:'a'},{id:'a',active:true,role:'advisor',shopId:'s'},{database}),true);
+ assert.equal(await validateSchedulerRecipient({order_id:'o',recipient_id:'a'},{id:'m',active:true,role:'manager',shopId:'other'},{database}),false);
  let sends=0,result;
  await processNotification({claim:async()=>({...notification,kind:'无法接单',previous_status:'pending'}),recipient:async()=>({active:true,role:'advisor',shopId:'other'}),validateScheduler:async()=>false,send:async()=>sends++,finish:async(_,r)=>{result=r;}});
  assert.equal(sends,0);assert.equal(result.retryable,false);
 });
 
 test('retired pushes stop before recipient reads, with submitted history unchanged',async()=>{
- for(const kind of ['纸质委托书已创建','维修暂停','即将到期']) {
+ for(const kind of ['纸质委托书已创建','维修暂停','即将到期','检验项目待定']) {
   for(const previous_status of ['pending','accepted','unknown','sent','failed','suppressed']) {
    let finished;
    const unexpected=async()=>assert.fail('retired push must not read people, query or send');

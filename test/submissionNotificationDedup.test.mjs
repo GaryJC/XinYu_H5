@@ -15,7 +15,8 @@ function fixture({kind='维修已提检',existing=[],leaseValid=true,mode='mock'
   }
   if(sql.includes('as notification_lease_id'))return {rows:[{order_id:'o',stage:'待检验',order_status:'维修中',shop_id:'s',technician_id:'worker',data:{items:[{id:1,name:'项目',status:'待检验',responsibleId:'worker'}],technicianIds:['worker']},latest_inspection_event_id:99,notification_lease_id:leases.inspection}]};
   if(sql.startsWith('select shop_id'))return {rows:[{shop_id:'s'}]};
-  if(sql.includes('from work_orders'))return {rows:[{id:'o',shop_id:'s',vehicle_plate:'沪ATEST',status:'维修中'}]};
+  if(sql.startsWith('select id from users where active'))return {rows:[{id:'advisor'}]};
+  if(sql.includes('from work_orders'))return {rows:[{id:'o',advisor:'advisor',shop_id:'s',vehicle_plate:'沪ATEST',status:'维修中'}]};
   if(sql.startsWith('select * from dispatch_tasks'))return {rows:[{stage:'待检验',shop_id:'s',technician_id:'worker',data:{items:[{id:1,name:'项目',status:'待检验',responsibleId:'worker'}],technicianIds:['worker']}}]};
   if(sql.startsWith('select lease_id'))return {rows:[{lease_id:leaseValid?leases[sql.includes('dispatch_inspection_notifications')?'inspection':'scheduler']:'other'}]};
   if(sql.startsWith('select max(id)'))return {rows:[{id:99}]};
@@ -56,7 +57,7 @@ test('different submissions and non-submission scheduler kinds retain their noti
  assert.equal(f.notices.filter(n=>n.recipient==='inspector').length,2);
  for(const kind of ['无法接单']) {
   const other=fixture({kind});await other.inspect();await other.schedule();
-  assert.ok(other.notices.some(n=>n.recipient==='manager'&&n.kind===kind));
+  assert.ok(!other.notices.some(n=>n.recipient==='manager'&&n.kind===kind));
   assert.ok(other.notices.some(n=>n.recipient==='advisor'&&n.kind===kind));
  }
 });

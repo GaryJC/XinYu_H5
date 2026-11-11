@@ -123,14 +123,39 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
     const {resolveTripRecipients,processTripNotification}=await import('../server/workers/vehicleTripNotifications.mjs');
     const {transaction}=await import('../server/database/pool.mjs');
     const queuedFor=async id=>(await pool.query('select * from vehicle_trip_notification_jobs where trip_id=$1 order by created_at',[id])).rows;
-    assert.deepEqual((await queuedFor(trip.id)).map(j=>j.action),['create','approve','return']);
+    assert.deepEqual((await queuedFor(trip.id)).map(j=>j.action),['create','approve']);
     assert.equal((await queuedFor(trip.id)).filter(j=>j.action==='approve').length,1,'concurrent approval queues one event');
     assert.equal((await queuedFor(trip.id)).filter(j=>j.action==='create').length,1,'identical concurrent create queues one event');
     assert.ok((await queuedFor(trip.id)).every(j=>!j.action.startsWith('upload:')));
+    // Old return jobs stop before roster access, while recorded delivery outcomes survive migration.
+    const oldReturnId=randomUUID();
+    await pool.query("insert into vehicle_trip_notification_jobs(id,trip_id,actor_id,request_id,action,payload) values($1,$2,$3,$4,'return',$5)",[oldReturnId,trip.id,employee.id,returnInput.requestId,JSON.stringify(returned)]);
+    await notificationRepo.queueTripRecipients({...((await queuedFor(trip.id)).find(j=>j.id===oldReturnId))},undefined,transaction);
+    assert.equal((await pool.query('select status from vehicle_trip_notification_jobs where id=$1',[oldReturnId])).rows[0].status,'obsolete');
+    const oldReturnNotices=[];
+    for(const status of ['pending','accepted','unknown','sent','failed']) {
+      const recipientId='return-history-'+status,id=randomUUID();
+      await pool.query("insert into users(id,name,role,shop_id) values($1,$1,'manager','shop-hq')",[recipientId]);
+      await pool.query("insert into vehicle_trip_notifications(id,job_id,recipient_id,status,error,task_id) values($1,$2,$3,$4,'preserve history','old-task')",[id,oldReturnId,recipientId,status]);
+      oldReturnNotices.push((await pool.query('select * from vehicle_trip_notifications where id=$1',[id])).rows[0]);
+    }
+    await pool.query(await fs.readFile('supabase/migrations/202611110005_targeted_notifications.sql','utf8'));
+    for(const old of oldReturnNotices) {
+      const current=(await pool.query('select * from vehicle_trip_notifications where id=$1',[old.id])).rows[0];
+      if(old.status==='pending')assert.equal(current.status,'suppressed');
+      else assert.deepEqual(current,old);
+    }
+    const late=oldReturnNotices[0];
+    await processTripNotification({database:pool,claim:async()=>({...late,previous_status:'pending'}),
+      finish:async(_,result)=>assert.equal(result.status,'suppressed'),send:async()=>assert.fail('retired return must never send')});
+    await pool.query('delete from vehicle_trip_notifications where job_id=$1',[oldReturnId]);
+    await pool.query('delete from vehicle_trip_notification_jobs where id=$1',[oldReturnId]);
+    await pool.query("delete from users where id like 'return-history-%'");
+
     const waiting=await create(employee,{...key(),vehicleId:cars[1].id,reason:'通知收车测试'});
     for(let i=0;i<100;i++)if(!await resolveTripRecipients({database:pool,runTransaction:transaction}))break;
     const deliveries=async id=>(await pool.query('select n.*,j.action,j.trip_id from vehicle_trip_notifications n join vehicle_trip_notification_jobs j on j.id=n.job_id where j.trip_id=$1 order by n.created_at',[id])).rows;
-    assert.deepEqual((await deliveries(trip.id)).map(n=>[n.action,n.recipient_id]).sort(),[['return',manager.id],['return',manager2.id]].sort(),'obsolete approval events do not send');
+    assert.deepEqual((await deliveries(trip.id)).map(n=>[n.action,n.recipient_id]).sort(),[],'returned trips have no broadcast; obsolete approval events do not send');
     const waitingTargets=(await deliveries(waiting.id)).map(n=>n.recipient_id);
     assert.ok(waitingTargets.includes(manager.id));assert.ok(waitingTargets.includes(manager2.id));
     assert.ok(!waitingTargets.includes(employee.id));assert.ok(!waitingTargets.includes(stranger.id));
@@ -145,7 +170,10 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
     // Real leases, retry schedule and platform acceptance without automatic result polling.
     await pool.query("update users set dingtalk_user_id='test-delivery-'||id where id=any($1::text[])",[[manager.id,manager2.id]]);
     await pool.query("update vehicle_trip_notifications set locked_until=now()+interval '1 hour'");
-    const target=(await deliveries(trip.id))[0];await pool.query('update vehicle_trip_notifications set locked_until=null where id=$1',[target.id]);
+    const deliveryTrip=await create(employee,{...key(),vehicleId:cars[7].id,reason:'发送结果测试'});
+    while(await resolveTripRecipients({database:pool,runTransaction:transaction})){}
+    await pool.query("update vehicle_trip_notifications set locked_until=now()+interval '1 hour'");
+    const target=(await deliveries(deliveryTrip.id))[0];await pool.query('update vehicle_trip_notifications set locked_until=null where id=$1',[target.id]);
     const [leaseA,leaseB]=await Promise.all([notificationRepo.claimTripDelivery(pool),notificationRepo.claimTripDelivery(pool)]);
     const claimed=leaseA||leaseB;assert.ok(claimed);assert.ok(!leaseA||!leaseB,'only one worker claims the target');
     await notificationRepo.finishTripDelivery({...claimed,lease_id:'stale'},{status:'sent'},pool);
@@ -155,7 +183,7 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
     assert.equal(saved.status,'pending');assert.ok(saved.next_attempt_at>new Date());
     await pool.query('update vehicle_trip_notifications set next_attempt_at=now() where id=$1',[target.id]);
     let sends=0,queries=0;
-    const transport={database:pool,send:async(notification,recipient)=>{sends++;assert.equal(notification.action,'return');assert.equal(notification.payload.id,trip.id);return {status:'accepted',taskId:'mock-trip-task'};},query:async()=>{queries++;return {status:'sent'};}};
+    const transport={database:pool,send:async(notification,recipient)=>{sends++;assert.equal(notification.action,'create');assert.equal(notification.payload.id,deliveryTrip.id);return {status:'accepted',taskId:'mock-trip-task'};},query:async()=>{queries++;return {status:'sent'};}};
     await processTripNotification(transport);
     await pool.query('update vehicle_trip_notifications set next_attempt_at=now() where id=$1',[target.id]);
     await processTripNotification(transport);

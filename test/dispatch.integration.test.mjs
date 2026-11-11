@@ -855,13 +855,22 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       let syncCalls=0;
       while(await processSchedulerNotifications({sync:async()=>{syncCalls++;return [];}})) {}
       assert.equal(syncCalls,0,'mock mode never calls DingTalk');
-      const expected=(await pool.query("select id from users where shop_id='shop-hq' and active and role in ('advisor','manager') order by id")).rows.map(r=>r.id);
+      const expected=[advisor.id];
       for(const kind of ['无法接单']) {
         const rows=(await pool.query("select recipient_id,payload from dispatch_notifications where order_id='scheduler-notices' and kind=$1 order by recipient_id",[kind])).rows;
         assert.deepEqual(rows.map(r=>r.recipient_id),expected);
         assert.equal(rows[0].payload.actorName,tech.name);
       }
       assert.equal((await pool.query("select 1 from dispatch_notifications where order_id='scheduler-notices' and kind='维修暂停'")).rowCount,0);
+      const {validateSchedulerRecipient}=await import('../server/workers/schedulerNotifications.mjs');
+      const declineNotice=(await pool.query("select * from dispatch_notifications where order_id='scheduler-notices' and kind='无法接单'")).rows[0];
+      assert.equal(await validateSchedulerRecipient(declineNotice,advisor,{database:pool}),true);
+      assert.equal(await validateSchedulerRecipient({...declineNotice,recipient_id:manager.id},manager,{database:pool}),false);
+      await pool.query('update work_orders set advisor=$2 where id=$1',['scheduler-notices',manager.name]);
+      assert.equal(await validateSchedulerRecipient(declineNotice,advisor,{database:pool}),false);
+      assert.equal(await validateSchedulerRecipient({...declineNotice,recipient_id:manager.id},manager,{database:pool}),true);
+      await pool.query('update work_orders set advisor=$2 where id=$1',['scheduler-notices',advisor.name]);
+
       assert.equal((await pool.query("select count(*) from dispatch_scheduler_notifications where order_id='scheduler-notices' and kind in ('维修已提检','回审已提交')")).rows[0].count,'0');
       await drainInspectionNotifications();
       const inspectionRecipients=(await pool.query("select recipient_id from dispatch_notifications where order_id='scheduler-notices' and kind='待检验' order by recipient_id")).rows.map(row=>row.recipient_id);
@@ -874,7 +883,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal(Number((await pool.query("select count(*) from dispatch_notifications where order_id='scheduler-notices'")).rows[0].count),count);
       await assert.rejects(()=>run(tech,'retry-scheduler-notifications',{notificationJobId:'1'}),e=>e.status===403);
       // Retired kinds cannot be revived by either authenticated retry action.
-      for(const kind of ['纸质委托书已创建','维修暂停','即将到期']) {
+      for(const kind of ['纸质委托书已创建','维修暂停','即将到期','检验项目待定']) {
         const noticeId=randomUUID();
         await pool.query("insert into dispatch_notifications(id,order_id,recipient_id,kind,payload,status,error) values($1,'scheduler-notices',$2,$3,'{}','failed','旧发送失败')",[noticeId,advisor.id,kind]);
         await assert.rejects(()=>run(advisor,'retry-notification',{notificationId:noticeId}),e=>e.status===409&&/停用/.test(e.message));
@@ -896,7 +905,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal(detail.task.feedback,'时间冲突');assert.match(detail.schedulerNotifications[0].error,/无权限/);
       await service.executeDispatchAction(advisor,'scheduler-failure',{action:'retry-scheduler-notifications',expectedVersion:failed.version,requestId:randomUUID(),notificationJobId:detail.schedulerNotifications[0].eventId});
       await processSchedulerNotifications({env,sync:async()=>[advisor.id,manager.id,'outside','disabled-advisor']});
-      assert.deepEqual((await pool.query("select recipient_id from dispatch_notifications where order_id='scheduler-failure' and kind='无法接单' order by recipient_id")).rows.map(r=>r.recipient_id),[advisor.id,manager.id].sort());
+      assert.deepEqual((await pool.query("select recipient_id from dispatch_notifications where order_id='scheduler-failure' and kind='无法接单' order by recipient_id")).rows.map(r=>r.recipient_id),[advisor.id]);
     });
     await t.test('deadline changes and all lead windows generate no reminder notifications',async()=>{
       const now=Date.now(),deadline=new Date(now+48*3600000).toISOString();
