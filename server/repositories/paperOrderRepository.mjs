@@ -16,10 +16,12 @@ export async function attachPaperPhotos(client, order, userId) {
   if (rows.length !== ids.length) throw new HttpError(400,'纸质委托书照片不存在、无权使用或已关联其他委托单');
   await client.query('update files set order_id=$2 where id=any($1::text[])',[ids,order.id]);
 }
-export async function enqueuePaperNotifications(client, order) {
+// These recipient records also grant the existing cross-shop paper-order read
+// access. Keep that audience snapshot even though creation pushes are disabled.
+export async function recordPaperRecipients(client, order) {
   const { rows } = await client.query("select id from users where active=true and (role in ('advisor','manager') or roles && array['advisor','manager']::text[])");
-  for (const user of rows) await client.query(`insert into dispatch_notifications(id,order_id,recipient_id,kind,payload)
-    values($1,$2,$3,'纸质委托书已创建',$4::jsonb) on conflict do nothing`,
+  for (const user of rows) await client.query(`insert into dispatch_notifications(id,order_id,recipient_id,kind,payload,status,next_attempt_at)
+    values($1,$2,$3,'纸质委托书已创建',$4::jsonb,'suppressed',null) on conflict do nothing`,
     [randomUUID(),order.id,user.id,JSON.stringify({ orderId:order.id, paperOrder:true, summary:`${order.advisor} 创建了纸质委托书，请选择关联润丰派工单或在钉钉补全开单。` })]);
 }
 export async function lockPaperOrder(client, id, actor) {

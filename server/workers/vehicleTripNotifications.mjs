@@ -1,5 +1,5 @@
 import {pool,transaction} from '../database/pool.mjs';
-import {notificationConfiguration,sendWorkNotification,queryWorkNotification} from '../integrations/dingtalk/notifications.mjs';
+import {notificationConfiguration,sendWorkNotification} from '../integrations/dingtalk/notifications.mjs';
 import {vehicleTripMessageBody} from '../integrations/dingtalk/vehicleTripNotifications.mjs';
 import {syncManagerRoster} from '../integrations/dingtalk/managerRoster.mjs';
 import {tripNotificationRecipient,tripManagerFanout} from '../domain/vehicleTripNotifications.mjs';
@@ -12,16 +12,17 @@ export async function resolveTripRecipients({database=pool,runTransaction=transa
   } catch(error) {await failTripResolution(job,error.message,database);}
   return true;
 }
-export async function processTripNotification({database=pool,claim=()=>claimTripDelivery(database),context=row=>tripDeliveryContext(row,database),finish=(row,result)=>finishTripDelivery(row,result,database),send=sendWorkNotification,query=queryWorkNotification,env=process.env}={}) {
+export async function processTripNotification({database=pool,claim=()=>claimTripDelivery(database),context=row=>tripDeliveryContext(row,database),finish=(row,result)=>finishTripDelivery(row,result,database),send=sendWorkNotification,env=process.env}={}) {
   const row=await claim();if(!row)return false;
-  let result,started=false;
+  let result,deliveryUserId,started=false;
   try {
     const {job,trip,user}=await context(row);
     const notification={...row,action:job?.action,payload:job?.payload};
-    if(row.previous_status!=='pending')result=await query(notification,user?.dingtalk_user_id,{env});
+    if(row.previous_status!=='pending')result={status:row.previous_status,error:row.error||''};
     else if(user?.id!==row.recipient_id||!tripNotificationRecipient(job?.action,trip,user,job?.payload))result={status:'failed',error:'申请状态或接收人权限已变化，通知已取消',retryable:false};
-    else {started=true;result=await send(notification,user.dingtalk_user_id,{env,buildMessage:vehicleTripMessageBody});}
+    else {started=true;deliveryUserId=user.dingtalk_user_id;result=await send(notification,user.dingtalk_user_id,{env,buildMessage:vehicleTripMessageBody});}
   } catch {result=started||row.previous_status!=='pending'?{status:'unknown',error:'发送结果不确定，请核对钉钉记录'}:{status:'failed',error:'发送前校验失败，将重试',retryable:true};}
+ if(started && deliveryUserId) result={...result,deliveryUserId};
   await finish(row,result);return true;
 }
 export function startVehicleTripNotifications() {

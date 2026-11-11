@@ -37,8 +37,8 @@ export async function failTripResolution(job,error,database) {
 }
 export async function claimTripDelivery(database) {
   return (await database.query(`with candidate as (
-    select id,status as previous_status from vehicle_trip_notifications where status in ('pending','accepted','unknown') and next_attempt_at<=now()
-      and (locked_until is null or locked_until<now()) and (status='pending' or task_id is not null)
+    select id,status as previous_status from vehicle_trip_notifications where status='pending' and next_attempt_at<=now()
+      and (locked_until is null or locked_until<now())
     order by created_at,id for update skip locked limit 1
   ) update vehicle_trip_notifications n set locked_until=now()+interval '90 seconds',lease_id=$1,
     status=case when c.previous_status='pending' then 'unknown' else n.status end,
@@ -57,7 +57,8 @@ export async function tripDeliveryContext(row,database) {
 export async function finishTripDelivery(row,result,database) {
   const {status,delay}=notificationNextState(row,result);
   await database.query(`update vehicle_trip_notifications set status=$3,task_id=coalesce($4,task_id),error=$5,retryable=$6,
+    delivery_user_id=coalesce($8::text,delivery_user_id),delivery_submitted_at=case when $8::text is not null then now() else delivery_submitted_at end,
     next_attempt_at=case when $7::integer is null then null else now()+make_interval(secs=>$7::integer) end,
     locked_until=null,lease_id=null where id=$1 and lease_id=$2`,
-    [row.id,row.lease_id,status,result.taskId||null,result.error||'',Boolean(result.retryable),delay]);
+    [row.id,row.lease_id,status,result.taskId||null,result.error||'',Boolean(result.retryable),delay,result.deliveryUserId||null]);
 }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import pg from 'pg';
 const adminUrl=process.env.PAPER_ORDER_TEST_ADMIN_URL;
-test('paper order creation, notification, import and signature-free completion transactions', {skip:!adminUrl,timeout:120000},async t=>{
+test('paper order creation, suppressed notification access, import and signature-free completion transactions', {skip:!adminUrl,timeout:120000},async t=>{
   const url=new URL(adminUrl);
   assert.ok(['127.0.0.1','localhost','[::1]'].includes(url.hostname));
   const name=`codex_paper_test_${process.pid}_${Date.now()}`;
@@ -36,19 +36,32 @@ test('paper order creation, notification, import and signature-free completion t
       assert.equal(electronic.status,'草稿');assert.equal(electronic.paperOrder,undefined);
     });
     let order;
-    await t.test('photo-only creation saves a tagged record and notifications atomically, with no dispatch or Runfeng outbox',async()=>{
+    await t.test('photo-only creation preserves cross-shop read recipients without queueing notification delivery',async()=>{
       order=await makePaper();
       assert.equal(order.status,'待处理纸质委托书');assert.equal(order.paperOrder.mode,'pending');
       assert.equal(order.files.length,1);assert.equal(order.files[0].kind,'other');
       assert.equal(order.vehicle.plate,'');assert.equal(order.repairItems.length,0);
       assert.equal((await pool.query('select count(*) from legacy_sync_outbox')).rows[0].count,'0');
       assert.equal((await pool.query('select count(*) from dispatch_tasks')).rows[0].count,'0');
-      const recipients=(await pool.query('select recipient_id from dispatch_notifications where order_id=$1',[order.id])).rows.map(r=>r.recipient_id);
+      const records=(await pool.query('select recipient_id,status,next_attempt_at,attempts,task_id from dispatch_notifications where order_id=$1',[order.id])).rows;
+      const recipients=records.map(r=>r.recipient_id);
       assert.ok(recipients.includes(actor.id));assert.ok(recipients.includes(advisor.id));assert.ok(recipients.includes(other.id));
+      assert.ok(records.every(row=>row.status==='suppressed'&&row.next_attempt_at===null&&row.attempts===0&&row.task_id===null));
+      const {claimNotification}=await import('../server/repositories/dispatchNotificationRepository.mjs');
+      assert.equal(await claimNotification(pool),undefined,'paper recipient records are never eligible for delivery');
       const {listWorkOrders}=await import('../server/db.mjs');
       const crossShop=await listWorkOrders(other.role,other);
       assert.ok(crossShop.some(row=>row.id===order.id));
       assert.ok(crossShop.every(row=>row.paperOrder));
+      await pool.query("insert into signature_tokens(token,order_id) values('paper-cross-shop-secret',$1)",[order.id]);
+      for(const query of [{},{page:'1',pageSize:'50'},{page:'1',pageSize:'50',view:'summary'}]) {
+        const result=await listWorkOrders(other.role,other,query);
+        const visible=Array.isArray(result)?result:result.items;
+        const paper=visible.find(row=>row.id===order.id);
+        assert.ok(paper,'suppressed recipient retains each archive view');
+        assert.equal(paper.signatureToken,undefined,'read access never exposes the signing token');
+      }
+      await pool.query("delete from signature_tokens where token='paper-cross-shop-secret'");
       const {assertFileReadAccess,assertFileAccess}=await import('../server/repositories/fileRepository.mjs');
       await assert.doesNotReject(()=>assertFileReadAccess(order.files[0].id,other,pool));
       await assert.rejects(()=>assertFileAccess(order.files[0].id,other,pool),/其他门店/);

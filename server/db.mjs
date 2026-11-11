@@ -3,7 +3,7 @@ import { saveDraftPendingRepairs } from './repositories/pendingRepairsRepository
 import { userRoles, hasRole, hasAnyRole } from "../shared/roles.mjs";
 import { queueCustomerSignatureReview } from "./repositories/customerSignatureReviewRepository.mjs";
 import { isRemoteSignatureToken } from "./domain/customerSignaturePolicy.mjs";
-import { assertPaperPhotoIds, attachPaperPhotos, enqueuePaperNotifications } from "./repositories/paperOrderRepository.mjs";
+import { assertPaperPhotoIds, attachPaperPhotos, recordPaperRecipients } from "./repositories/paperOrderRepository.mjs";
 import { attachDraftVehicleLicense } from "./repositories/draftVehicleLicenseRepository.mjs";
 import { assertNoActiveRepair } from './repositories/repairRoundRepository.mjs';
 import {readLicenseExceptions} from './repositories/vehicleLicenseExceptionRepository.mjs';
@@ -84,7 +84,8 @@ export async function listWorkOrders(role = "manager", user, query = {}) {
 }
 
 export function sanitizeVisibleOrders(orders, role, user) {
-  // Cross-shop paper-order notifications grant read access, never a signing capability.
+  // Paper-order recipient records grant cross-shop read access even when pushes
+  // are suppressed, never a signing capability.
   return orders.map((order) => user?.shopId && order.shop?.id === user.shopId
     && (hasRole(user, 'manager') || user.name && order.advisor === user.name)
     ? order
@@ -110,7 +111,7 @@ export async function createWorkOrder(draft, actor, actorUser) {
     await saveDraftPendingRepairs(client, order, actorUser);
     if (order.paperOrder) {
       await attachPaperPhotos(client, order, actorUser?.id);
-      await enqueuePaperNotifications(client, order);
+      await recordPaperRecipients(client, order);
     }
     await attachPreRepairPhotos(client, order, actorUser?.id);
     await attachDraftVehicleLicense(client, order, actorUser?.id);

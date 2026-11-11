@@ -9,12 +9,12 @@ const tech={id:'t',name:'技师',role:'technician',shopId:'s',active:true};
 const tech2={...tech,id:'t2',name:'技师二'};
 const inspector={...tech,id:'i',name:'检验员',role:'inspector'};
 const people=[tech,tech2,inspector];
-function database(task,{photo=true}={}) {
+function database(task,{photo=true,members=people}={}) {
  const calls=[];
  return {calls,async query(sql,params=[]) {
   calls.push({sql,params});
   if(sql.includes('from work_orders wo left join dispatch_tasks'))return {rows:[{order_id:'o',shop_id:'s',order_status:'维修中',stage:task.stage,version:task.version,technician_id:'t',data:task,repair_items:[]}]};
-  if(sql.includes('select id,name,role,active,shop_id'))return {rows:people.map(p=>({...p,shop_id:p.shopId}))};
+  if(sql.includes('select id,name,role,active,shop_id'))return {rows:members.map(p=>({...p,shop_id:p.shopId,inspector_role_member:p.inspectorRoleMember}))};
   if(sql.includes('select 1 from files'))return {rows:photo?[{}]:[]};
   if(sql.includes('insert into dispatch_events'))return {rows:[{id:99}]};
   return {rows:[],rowCount:1};
@@ -35,26 +35,38 @@ test('sending review queues a notification for each worker with task link data a
  }
  assert.equal(queued(db,'dispatch_inspection_notifications').length,0);
 });
-test('each personal review submission queues inspector and scheduler notifications',async()=>{
+test('each personal review submission queues only inspector notifications',async()=>{
  const task=initial();task.stage='回审';task.items.forEach(i=>i.status='维修中');
  let db=database(task);
  await executeDispatchActionInTransaction(db,tech,'o',input(task,'submit-review'));
  assert.equal(queued(db,'dispatch_inspection_notifications').length,1);
- assert.equal(queued(db,'dispatch_scheduler_notifications').length,1);
+ assert.equal(queued(db,'dispatch_scheduler_notifications').length,0);
  task.items[0].status='待检验';task.workerSubmissions={t:{at:'now',note:''}};
  db=database(task);
  await executeDispatchActionInTransaction(db,tech2,'o',input(task,'submit-review'));
  assert.equal(queued(db,'dispatch_inspection_notifications').length,1);
- const sched=queued(db,'dispatch_scheduler_notifications');assert.equal(sched.length,1);assert.equal(sched[0].params[2],'回审已提交');
+ assert.equal(queued(db,'dispatch_scheduler_notifications').length,0);
  const missingPhoto=database(task,{photo:false});
  await assert.rejects(()=>executeDispatchActionInTransaction(missingPhoto,tech2,'o',input(task,'submit-review')),/维修照片/);
  assert.equal(queued(missingPhoto,'dispatch_inspection_notifications').length,0);
 });
-for(const mode of ['mock','dingtalk']) test(`inspection worker includes independent managers in ${mode} mode`,async()=>{
+for(const action of ['submit','reassign-inspection'])test(`${action}: only assigned inspectors are notified without changing manager inspection permissions`,async()=>{
+ for(const roles of [['manager'],['manager','inspector']]) {
+  const target={...inspector,id:'manager',role:'manager',roles,inspectorRoleMember:roles.includes('inspector')};
+  const task={...initial(),stage:action==='submit'?'维修中':'待检验',technicianIds:['t'],items:[{id:1,name:'项目',responsibleId:'t',status:'待检验'}]};
+  const db=database(task,{members:[...people,target]});
+  await executeDispatchActionInTransaction(db,action==='submit'?tech:target,'o',{...input(task,action),inspectorId:target.id,reason:'检验交接'});
+  assert.equal(queued(db,'dispatch_scheduler_notifications').length,0);
+  const notices=queued(db,'dispatch_notifications').filter(n=>n.params[4]==='待检验');
+  assert.deepEqual(notices.map(n=>n.params[3]),roles.includes('inspector')?[target.id]:[]);
+ }
+});
+for(const mode of ['mock','dingtalk']) test(`inspection worker requires an independent inspector role in ${mode} mode`,async()=>{
  const task=initial();const calls=[];
  const manager={...inspector,id:'manager',role:'manager',inspectorRoleMember:false};
- const audience=[...people,manager,{...manager,id:'disabled',active:false},{...manager,id:'other',shopId:'other'},
-  {...manager,id:'participant'},{...manager,id:'responsible'},{...manager,id:'revoked'}];
+ const dual={...manager,id:'dual',roles:['manager','inspector'],inspectorRoleMember:true};
+ const audience=[...people,manager,dual,{...dual,id:'disabled',active:false},{...dual,id:'other',shopId:'other'},
+  {...dual,id:'participant'},{...dual,id:'responsible'},{...dual,id:'revoked',inspectorRoleMember:false}];
  task.participantIds=['participant'];task.items.push({id:3,status:'待检验',responsibleId:'responsible'});
 
  const db={async query(sql,params=[]) {
@@ -67,16 +79,16 @@ for(const mode of ['mock','dingtalk']) test(`inspection worker includes independ
   // The worker uses its generated lease to claim and then verify ownership.
   if(sql.includes('select lease_id'))return {rows:[{lease_id:calls[0].params[0]}]};
   if(sql.includes('select max(id)')){assert.match(sql,/dispatch_inspection_notifications/);return {rows:[{id:99}]};}
-  if(sql.includes('select id,name,role,active,shop_id'))return {rows:audience.map(p=>({...p,shop_id:p.shopId}))};
+  if(sql.includes('select id,name,role,active,shop_id'))return {rows:audience.map(p=>({...p,shop_id:p.shopId,inspector_role_member:p.inspectorRoleMember}))};
   return {rows:[],rowCount:1};
  }};
  await processInspectionNotifications({database:db,runTransaction:callback=>callback(db),sync:async()=>audience.filter(p=>p.id!=='revoked').map(p=>p.id),env:{APP_ENV:'test',DISPATCH_NOTIFICATION_MODE:mode,DINGTALK_AGENT_ID:'1',DINGTALK_APP_KEY:'test',DINGTALK_APP_SECRET:'test',DISPATCH_APP_URL:'https://example.com'}});
  const notices=calls.filter(c=>c.sql.includes('insert into dispatch_notifications'));
- assert.deepEqual(notices.map(n=>n.params[3]),mode==='mock'?['i','manager','revoked']:['i','manager']);
+ assert.deepEqual(notices.map(n=>n.params[3]),['i','dual']);
 });
-test('review scheduler notices recheck recipients before delivery and use the existing retry path',async()=>{
+test('legacy review submission notices recheck inspector membership before delivery',async()=>{
  const row={id:'n',kind:'回审已提交',previous_status:'pending',recipient_id:'a',attempts:1,payload:{orderId:'o'}};
  let sent=false,finished;
- await processNotification({claim:async()=>row,recipient:async()=>({active:true,role:'advisor'}),validateScheduler:async()=>false,send:async()=>{sent=true;},finish:async(_row,result)=>{finished=result;}});
+ await processNotification({claim:async()=>row,recipient:async()=>({active:true,role:'advisor'}),validateInspection:async()=>false,send:async()=>{sent=true;},finish:async(_row,result)=>{finished=result;}});
  assert.equal(sent,false);assert.equal(finished.status,'failed');assert.equal(finished.retryable,false);
 });

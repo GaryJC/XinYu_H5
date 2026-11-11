@@ -1,5 +1,5 @@
-import {hasSubmissionNotification} from '../repositories/dispatchNotificationRepository.mjs';
 import { hasAnyRole } from "../../shared/roles.mjs";
+import {isDispatchNotificationSuppressed} from '../domain/notificationPolicy.mjs';
 import {randomUUID} from 'node:crypto';
 import {pool,transaction} from '../database/pool.mjs';
 import {localDispatchPeople} from '../repositories/dispatchRepository.mjs';
@@ -12,6 +12,23 @@ export async function processSchedulerNotifications({database=pool,runTransactio
   ) update dispatch_scheduler_notifications j set lease_id=$1,locked_until=now()+interval '5 minutes',attempts=attempts+1 from candidate c where j.event_id=c.event_id returning j.*`,[lease]);
   const job=rows[0];if(!job)return false;
   try {
+    if(isDispatchNotificationSuppressed(job.kind)) {
+      await database.query("update dispatch_scheduler_notifications set status='suppressed',error='',next_attempt_at=null,locked_until=null,lease_id=null where event_id=$1 and lease_id=$2",[job.event_id,lease]);
+      return true;
+    }
+    // Older deployments queued submission notices for schedulers as well as
+    // inspectors. Hand these jobs to the inspector-only path without reading
+    // or notifying the advisor/manager roster.
+    if(['维修已提检','回审已提交'].includes(job.kind)) {
+      await runTransaction(async client=>{
+        await client.query('select id from work_orders where id=$1 for update',[job.order_id]);
+        const {rows:current}=await client.query('select lease_id from dispatch_scheduler_notifications where event_id=$1 for update',[job.event_id]);
+        if(current[0]?.lease_id!==lease)return;
+        await client.query('insert into dispatch_inspection_notifications(event_id,order_id) values($1,$2) on conflict do nothing',[job.event_id,job.order_id]);
+        await client.query("update dispatch_scheduler_notifications set status='ready',error='',locked_until=null,lease_id=null where event_id=$1",[job.event_id]);
+      });
+      return true;
+    }
     const {rows:tasks}=await database.query('select shop_id from dispatch_tasks where order_id=$1',[job.order_id]);
     if(!tasks[0])throw new Error('维修任务不存在');
     const shopId=tasks[0].shop_id;
@@ -23,7 +40,6 @@ export async function processSchedulerNotifications({database=pool,runTransactio
       const recipients=(await localDispatchPeople({shopId},client)).filter(p=>p.active && hasAnyRole(p, ['advisor','manager']) && (!ids || ids.includes(p.id)));
       if(!recipients.length)throw new Error('暂无本店有效服务顾问或管理员，请检查钉钉角色后重试');
       for(const p of recipients) {
-       if(['维修已提检','回审已提交'].includes(job.kind)&&await hasSubmissionNotification(client,job.order_id,job.event_id,p.id))continue;
        await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,$5,$6) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),job.order_id,job.event_id,p.id,job.kind,JSON.stringify(job.payload)]);
       }
       await client.query("update dispatch_scheduler_notifications set status='ready',error='',locked_until=null,lease_id=null where event_id=$1",[job.event_id]);

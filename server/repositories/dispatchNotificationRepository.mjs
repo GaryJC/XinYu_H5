@@ -6,9 +6,9 @@ import { pool } from '../database/pool.mjs';
 export async function claimNotification(database=pool) {
   const {rows}=await database.query(`with candidate as (
     select id,status as previous_status from dispatch_notifications
-    where status in ('pending','accepted','unknown') and next_attempt_at<=now()
+    where status='pending' and next_attempt_at<=now()
       and (locked_until is null or locked_until<now())
-      and (status='pending' or task_id is not null)
+
     order by next_attempt_at,id for update skip locked limit 1
   ) update dispatch_notifications n set locked_until=now()+interval '90 seconds',lease_id=$1,
     status=case when c.previous_status='pending' then 'unknown' else n.status end,
@@ -22,18 +22,16 @@ export async function claimNotification(database=pool) {
 export function notificationNextState(row,result) {
   let status=result.status; let delay=null;
   if(status==='failed' && result.retryable && row.attempts<5) {status='pending';delay=Math.min(3600,30*2**row.attempts);}
-  if(['accepted','unknown'].includes(status) && (result.taskId || row.task_id)) {
-    if(row.polls<20) delay=Math.min(1800,15*2**Math.min(row.polls,7));
-    else status='unknown';
-  }
+  // Platform acceptance is retained without paid automatic result polling.
   return {status,delay};
 }
 export async function finishNotification(row,result,database=pool) {
   const {status,delay}=notificationNextState(row,result);
   await database.query(`update dispatch_notifications set status=$3,task_id=coalesce($4,task_id),error=$5,retryable=$6,
+    delivery_user_id=coalesce($8::text,delivery_user_id),delivery_submitted_at=case when $8::text is not null then now() else delivery_submitted_at end,
     next_attempt_at=case when $7::integer is null then null else now()+make_interval(secs=>$7::integer) end,
     locked_until=null,lease_id=null,updated_at=now() where id=$1 and lease_id=$2`,
-    [row.id,row.lease_id,status,result.taskId||null,result.error||'',Boolean(result.retryable),delay]);
+    [row.id,row.lease_id,status,result.taskId||null,result.error||'',Boolean(result.retryable),delay,result.deliveryUserId||null]);
 }
 export async function notificationRecipient(id,database=pool) {
   const {rows}=await database.query(`select id,shop_id as "shopId",dingtalk_user_id,active,role,inspector_role_member, roles, ${outsourcingMembership} from users where id=$1`,[id]); return rows[0]?{...rows[0],inspectorRoleMember:rows[0].inspector_role_member,outsourcingRoleMember:rows[0].outsourcing_role_member}:undefined;

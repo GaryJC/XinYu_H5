@@ -1,0 +1,59 @@
+[
+  {
+    "width": 360,
+    "reads": 3,
+    "queries": 1,
+    "layout": {
+      "width": 328,
+      "contentPadding": "0px 16px 16px",
+      "summaryPadding": "14px 16px",
+      "overflow": false
+    },
+    "recoveryState": {
+      "disabled": false,
+      "attribute": null,
+      "color": "rgba(0, 0, 0, 0.443)",
+      "className": "ant-btn css-dev-only-do-not-override-1pi45l5 css-var-root ant-btn-default ant-btn-color-default ant-btn-variant-outlined ant-btn-sm"
+    },
+    "recoveredByClick": true,
+    "noErrors": true
+  },
+  {
+    "width": 390,
+    "reads": 3,
+    "queries": 1,
+    "layout": {
+      "width": 358,
+      "contentPadding": "0px 16px 16px",
+      "summaryPadding": "14px 16px",
+      "overflow": false
+    },
+    "recoveryState": {
+      "disabled": false,
+      "attribute": null,
+      "color": "rgba(0, 0, 0, 0.875)",
+      "className": "ant-btn css-dev-only-do-not-override-1pi45l5 css-var-root ant-btn-default ant-btn-color-default ant-btn-variant-outlined ant-btn-sm"
+    },
+    "recoveredByClick": true,
+    "noErrors": true
+  },
+  {
+    "width": 1440,
+    "reads": 3,
+    "queries": 1,
+    "layout": {
+      "width": 728,
+      "contentPadding": "0px 16px 16px",
+      "summaryPadding": "14px 16px",
+      "overflow": false
+    },
+    "recoveryState": {
+      "disabled": false,
+      "attribute": null,
+      "color": "rgba(0, 0, 0, 0.357)",
+      "className": "ant-btn css-dev-only-do-not-override-1pi45l5 css-var-root ant-btn-default ant-btn-color-default ant-btn-variant-outlined ant-btn-sm"
+    },
+    "recoveredByClick": true,
+    "noErrors": true
+  }
+]

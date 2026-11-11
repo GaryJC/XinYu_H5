@@ -46,17 +46,19 @@ test('scheduler roster selects only service advisors and managers and preserves 
  assert.deepEqual(audience,['0','1']);
 });
 
-test('inspection role discovery includes managers and deduplicates dual memberships',async()=>{
+test('inspection role discovery reads only inspector members, including dual memberships',async()=>{
+ const requested=[];
  const result=await listInspectorRoleMembers({token:async()=>'',fetcher:async(url,input)=>{
   const {role_id}=JSON.parse(input.body);
+  if(role_id)requested.push(role_id);
   return {ok:true,json:async()=>({errcode:0,result:url.pathname.endsWith('/list')
    ?{list:[{roles:[{id:1,name:'检验员'},{id:2,name:'门店管理员'},{id:3,name:'服务顾问'}]}]}
    :{list:(role_id===1?['inspector','dual']:['manager','dual']).map(userid=>({userid}))}})};
  }});
- assert.deepEqual(result.ids,['inspector','dual','manager']);
+ assert.deepEqual(result.ids,['inspector','dual']);assert.deepEqual(requested,[1]);
 });
 
-test('inspection audience includes active local managers without granting inspector membership',async()=>{
+test('inspection audience excludes plain managers and revoked inspector memberships',async()=>{
  const queries=[];
  const profiles=[
   {userId:'manager',roles:[{name:'门店管理员'}]},
@@ -72,6 +74,6 @@ test('inspection audience includes active local managers without granting inspec
   upsert:async({profile,mapping,existingUser})=>({id:profile.userId,...mapping,active:existingUser.active}),
   database:{query:async(...args)=>queries.push(args)}
  });
- assert.deepEqual(ids,['manager','dual']);
+ assert.deepEqual(ids,['dual']);
  assert.deepEqual(queries[0][1],['s',['dual']]);
 });

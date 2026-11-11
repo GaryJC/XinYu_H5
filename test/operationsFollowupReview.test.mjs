@@ -25,8 +25,8 @@ test('vehicle occupancy is exclusive across applications and released on return'
   for(const user of [first,second,manager])await pool.query('insert into users(id,name,role,roles,shop_id,active) values($1,$2,$3,array[$3],$4,true)',[user.id,user.name,user.role,user.shopId]);
   const {vehicleTripService:service}=await import('../server/services/vehicleTripService.mjs');
   const key=()=>({requestId:randomUUID()});
-  const car=await service.saveVehicle(manager,{plate:'鲁BTEST01',brand:'测试',model:'出车占用'});
-  const otherCar=await service.saveVehicle(manager,{plate:'鲁BTEST02',brand:'测试',model:'独立车辆'});
+  const car=await service.saveVehicle(manager,{plate:'鲁BTEST01',brand:'测试',model:'出车占用',insuranceStart:'2020-01-01',insuranceEnd:'2099-12-31'});
+  const otherCar=await service.saveVehicle(manager,{plate:'鲁BTEST02',brand:'测试',model:'独立车辆',insuranceStart:'2020-01-01',insuranceEnd:'2099-12-31'});
   const imageBase64=(await sharp({create:{width:40,height:20,channels:3,background:'#102030'}}).png().toBuffer()).toString('base64');
   async function request(user,vehicleId){const trip=await service.create(user,{...key(),vehicleId,reason:'隔离库出车测试',departurePhotos:[imageBase64]});return service.act(manager,trip.id,'approve',key());}
   async function photo(user,tripId,stage){
@@ -60,7 +60,7 @@ test('vehicle occupancy is exclusive across applications and released on return'
    assert.equal((await service.detail(first,a.id)).status,'已还车');
   });
   await t.test('concurrent applications on one vehicle have exactly one winner',async()=>{
-   const raceCar=await service.saveVehicle(manager,{plate:'鲁BTEST03',brand:'测试',model:'并发占用'});
+   const raceCar=await service.saveVehicle(manager,{plate:'鲁BTEST03',brand:'测试',model:'并发占用',insuranceStart:'2020-01-01',insuranceEnd:'2099-12-31'});
    const results=await Promise.allSettled([request(first,raceCar.id),request(second,raceCar.id)]);
    assert.equal(results.filter(result=>result.status==='fulfilled').length,1);
    assert.equal(results.find(result=>result.status==='rejected').reason.status,409);

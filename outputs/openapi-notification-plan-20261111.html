@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工作通知减量实施方案</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#1d3045;font:16px/1.75 system-ui,sans-serif}main{max-width:960px;margin:auto;padding:28px 18px 48px}h1{font-size:28px;line-height:1.35}h2{font-size:21px;margin:0 0 14px}p{margin:12px 0}section{background:white;border:1px solid #dce5ef;border-radius:16px;margin:20px 0;padding:24px}li{margin:10px 0}ol,ul{padding-left:24px}a{color:#155ac5;overflow-wrap:anywhere}.meta{color:#5c6c7f}.example{background:#edf4ff;padding:16px;border-radius:12px}.table{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:520px}th,td{padding:12px;text-align:left;vertical-align:top;border-bottom:1px solid #dce5ef}code{overflow-wrap:anywhere}@media(max-width:420px){section{padding:18px}h1{font-size:24px}}
+</style>
+</head>
+<body><main>
+<h1>批量发送、批量确认，逐人保留结果</h1>
+<p class="meta">2026年11月11日 · 基于当前仓库的实施建议。尚未修改业务代码或部署。</p>
+<section>
+<h2>员工收到的通知保持一致</h2>
+<p>保留通知内容、链接、接收资格、提醒频率和业务提交时的实时权限校验。优化发生在后台：同一次业务事件中，符合条件的相同消息共享一次发送任务。</p>
+<div class="example">例如同一条待检验通知发给3名合格检验员：原来3次发送＋3次查询；改后1次发送＋1次查询。三人仍各收到同一条通知。正常一次确认时，该组由6次降到2次；这是单组示例，不是整月降幅预测。</div>
+</section>
+<section>
+<h2>具体改动顺序</h2>
+<ol>
+<li><strong>先核算可合并比例。</strong>从现有数据库通知记录按业务来源、事件、内容统计单人和多人组，单列重试及查询次数。核算不调用钉钉，不输出通知正文、凭据或完整人员资料。历史记录缺少事件标识时采用保守估计，不按相似文字猜测。</li>
+<li><strong>先接入派工通知链路。</strong>保留原逐人记录和业务校验，新增持久化发送批次、成员关联、实际发送的钉钉账号快照、平台任务编号及批次租约。新增数据库迁移，保留现有接口和状态展示。</li>
+<li><strong>校验后再合并。</strong>逐人生成最终消息，仅同应用、同业务来源与门店、同事件及轮次、相同类型、完整正文和链接完全相同的待发送记录合并。配件通知会按人重新计算内容，必须在计算之后分组；不能只比较工单号或原始摘要。首版限制小批次，核对官方发送与结果查询限制后确定上限。没有可靠事件标识的旧记录继续单发。只合并已经就绪的通知，不额外等人凑批。</li>
+<li><strong>按批次查询，按人员归档。</strong>同一平台任务每轮只查询一次，再分别更新成功、失败、待确认人员。已确认成功者不随他人失败而重发；结果未就绪时沿用退避，不为查询已读状态持续轮询。</li>
+<li><strong>通过验收后复用于其他通知。</strong>依次接入出车、竞价、行驶证和保险通知，保留各自的业务权限和模板。签字重签、补签等没有普通派工事件编号的链路，先明确独立事件标识再接入；纸质委托的特殊分发规则单独核对。不同业务、不同轮次、不同项目的真实提醒不混成一条。</li>
+</ol>
+</section>
+<section>
+<h2>必须保留的可靠性边界</h2>
+<ul>
+<li>发送前仍检查员工启用状态、门店和岗位、当前项目归属、工单状态及原业务规则。多人维修、返工、回审、改派不能因为合并而共享错误权限或项目内容。</li>
+<li>批次和成员关联原子写入；多个后台进程只能领取同一批次一次。数据库事务结束后再调用钉钉，不持有数据库行锁等待远程发送。小批次和明确的租约时限必须覆盖校验与发送用时，旧租约不得覆盖新结果。</li>
+<li>有平台任务编号时，重启后继续查询；发送超时且没有任务编号时保留“结果待确认”，不自动重发。批量发送不能消除平台已接受但响应丢失的不可判定窗口。</li>
+<li>查询按实际发送的钉钉账号快照归属，避免员工后来解绑或换绑导致结果对应错人。部分失败只影响对应人员；人工重试明确失败者时新建批次，不重发已成功成员。</li>
+<li>已受理或结果未知的旧任务沿用旧恢复流程，不重新打包发送。缺失、未知或相互矛盾的结果不标记成功。</li>
+</ul>
+</section>
+<section>
+<h2>测试与验收</h2>
+<div class="table"><table>
+<thead><tr><th>检查</th><th>通过标准</th></tr></thead><tbody>
+<tr><td>调用次数</td><td>三人同消息夹具：3发＋3查变成1发＋1查；单人仍为1发＋1查；同一任务的并发查询只产生一次远程请求。</td></tr>
+<tr><td>内容与权限</td><td>逐人核对前后消息及链接一致；撤权、停用、改派、返工、跨轮次、部分备料及禁止自检规则有效。</td></tr>
+<tr><td>失败与恢复</td><td>部分成功、明确失败、未知结果、网络中断、保存任务编号失败、多进程抢占、旧租约回写、重启恢复和人工重试均有回归。</td></tr>
+<tr><td>本地检查</td><td>运行专项通知测试、npm run check 和隔离 PostgreSQL 发布检查；关键数据库套件零跳过，不发送真实测试通知。</td></tr>
+<tr><td>性能与开销</td><td>不增加定时扫描频率；新增领取查询有对应索引。对比同数据的队列 SQL 次数、P50/P95、锁等待与 RSS，并记录实际 OpenAPI 请求减少量；不以增加权限结果缓存换额度。</td></tr>
+</tbody></table></div>
+</section>
+<section>
+<h2>节省多少，取决于多人组占比</h2>
+<p>如果510条逐人通知最终能归为300个发送批次，且每批正常查询一次，相关调用就会从1020次降到600次，减少约41%。如果大多只有一个接收人，收益会明显更小。必须先统计，不能预先承诺减半或保证本月额度够用。</p>
+<p>免登、角色列表、角色成员、用户详情属于官方免计量清单，本轮省月额度以工作通知为重点。组织其他应用的消耗需要另行核对。</p>
+<p><a href="https://open.dingtalk.com/document/orgapp/basic-interfaces-such-as-log-off-and-address-book">钉钉官方：免计量基础接口清单</a> · <a href="https://open.dingtalk.com/document/orgapp-server/gets-the-result-of-sending-messages-asynchronously-to-the-enterprise">钉钉官方：工作通知发送结果</a></p>
+</section>
+</main></body></html>

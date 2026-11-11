@@ -17,14 +17,15 @@ export async function resolveRecipients(job,ids,runTransaction=transaction) {
 }
 export async function failResolution(job,error,db=pool) {await db.query("update procurement_notification_jobs set status=case when attempts<5 then 'pending' else 'failed' end,error=$3,lease_id=null,locked_until=null,next_attempt_at=now()+interval '1 minute' where id=$1 and lease_id=$2",[job.id,job.lease_id,error]);}
 export async function claimDelivery(db=pool) {
-  return (await db.query(`with c as (select id,status as previous_status from procurement_notifications where status in ('pending','accepted','unknown') and next_attempt_at<=now() and (locked_until is null or locked_until<now()) and (status='pending' or task_id is not null) order by created_at for update skip locked limit 1)
+  return (await db.query(`with c as (select id,status as previous_status from procurement_notifications where status='pending' and next_attempt_at<=now() and (locked_until is null or locked_until<now())  order by created_at for update skip locked limit 1)
     update procurement_notifications n set lease_id=$1,locked_until=now()+interval '90 seconds',status=case when c.previous_status='pending' then 'unknown' else n.status end,
       error=case when c.previous_status='pending' then '发送处理中；中断后需核对平台记录' else n.error end,attempts=attempts+case when c.previous_status='pending' then 1 else 0 end,
       polls=polls+case when c.previous_status='pending' then 0 else 1 end from c where n.id=c.id returning n.*,c.previous_status`,[randomUUID()])).rows[0];
 }
 export async function finishDelivery(row,result,db=pool) {
   const {status,delay}=notificationNextState(row,result);
-  await db.query(`update procurement_notifications set status=$3,task_id=coalesce($4,task_id),error=$5,retryable=$6,next_attempt_at=case when $7::integer is null then null else now()+make_interval(secs=>$7::integer) end,lease_id=null,locked_until=null,updated_at=now() where id=$1 and lease_id=$2`,[row.id,row.lease_id,status,result.taskId||null,result.error||'',!!result.retryable,delay]);
+  await db.query(`update procurement_notifications set status=$3,task_id=coalesce($4,task_id),error=$5,retryable=$6,
+    delivery_user_id=coalesce($8::text,delivery_user_id),delivery_submitted_at=case when $8::text is not null then now() else delivery_submitted_at end,next_attempt_at=case when $7::integer is null then null else now()+make_interval(secs=>$7::integer) end,lease_id=null,locked_until=null,updated_at=now() where id=$1 and lease_id=$2`,[row.id,row.lease_id,status,result.taskId||null,result.error||'',!!result.retryable,delay,result.deliveryUserId||null]);
 }
 export async function cleanupPortal(db=pool) {
   await db.query('delete from procurement_access_attempts where expires_at<now()');

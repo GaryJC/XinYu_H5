@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 process.env.DATABASE_URL ||= 'postgresql://test:test@127.0.0.1:5432/test';
-const { assertPaperPhotoIds, attachPaperPhotos, enqueuePaperNotifications } = await import('../server/repositories/paperOrderRepository.mjs');
+const { assertPaperPhotoIds, attachPaperPhotos, recordPaperRecipients } = await import('../server/repositories/paperOrderRepository.mjs');
 const { enqueueLegacySyncEvent, buildLegacySyncPayload } = await import('../server/repositories/legacySyncOutboxRepository.mjs');
 const { messageBody } = await import('../server/integrations/dingtalk/notifications.mjs');
 const { readLegacyWorkOrder } = await import('../server/repositories/legacyWorkOrderRepository.mjs');
@@ -29,17 +29,18 @@ test('pending paper orders never enqueue, imported paper orders never create aga
   assert.equal(payload.order.signatures.customer,'联系人');
   assert.deepEqual(payload.order.paperOrder.photoIds,['photo']);
 });
-test('creation notifies every active advisor and manager across all shops, with per-recipient deduplication',async()=>{
+test('creation preserves every active advisor and manager as read recipients without queueing pushes',async()=>{
   const inserts=[];
-  await enqueuePaperNotifications({query:async(sql,params)=>{
+  await recordPaperRecipients({query:async(sql,params)=>{
     if(sql.startsWith('select')) {assert.match(sql,/active=true/);assert.doesNotMatch(sql,/shop_id/);assert.match(sql,/role in \('advisor','manager'\)/);return {rows:[{id:'advisor-a'},{id:'advisor-b'},{id:'manager'}]};}
     inserts.push({sql,params});return {rows:[]};
   }},{id:'paper',shop:{id:'shop-hq'},advisor:'顾问'});
   assert.equal(inserts.length,3);
   assert.deepEqual(inserts.map(row=>row.params[2]),['advisor-a','advisor-b','manager']);
   assert.ok(inserts.every(row=>/on conflict do nothing/.test(row.sql)));
+  assert.ok(inserts.every(row=>/status,next_attempt_at/.test(row.sql)&&/'suppressed',null/.test(row.sql)));
 });
-test('paper notification opens the order detail instead of dispatch',()=>{
+test('historical paper notification links still open the order detail instead of dispatch',()=>{
   const body=messageBody({kind:'纸质委托书已创建',payload:{orderId:'WT-TEST',paperOrder:true,summary:'测试'}},'user',
     {DISPATCH_APP_URL:'https://repair.example/app',DINGTALK_AGENT_ID:'123'});
   assert.match(body.msg.markdown.text,/paperOrder=WT-TEST/);

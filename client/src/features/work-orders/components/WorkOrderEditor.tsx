@@ -203,7 +203,7 @@ export function WorkOrderEditor({ controller }: { controller: WorkbenchControlle
                   onConfirm={confirmVehicleLicenseOcr}
                 />
               </div>}
-              {draft.vehicleLicenseException?<div style={{marginTop:12}}><VehicleLicenseExceptionNotice exception={draft.vehicleLicenseException} current={licenseExceptionCurrent}/></div>:null}
+              {draft.vehicleLicenseException?<div style={{marginTop:12}}><VehicleLicenseExceptionNotice exception={draft.vehicleLicenseException} current={licenseExceptionCurrent} user={controller.currentUser}/></div>:null}
             </Form.Item>
             </>}
 

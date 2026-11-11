@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>钉钉工作通知清单 · 2026-11-11</title>
+<style>
+:root{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#17263d;background:#f3f6fa;font-size:15px;line-height:1.65}*{box-sizing:border-box}body{margin:0}main{max-width:1160px;margin:auto;padding:40px 24px 70px}h1{font-size:30px;line-height:1.3;margin:0 0 14px}h2{font-size:21px;margin:0;padding:22px 24px 14px}p{margin:10px 0}.meta{color:#5a6d86}.intro,.notes,section{background:#fff;border:1px solid #dae3ee;border-radius:16px;margin:20px 0}.intro,.notes{padding:20px 24px}.intro p:first-child,.notes p:first-child{margin-top:0}.intro p:last-child,.notes p:last-child{margin-bottom:0}.toolbar{display:flex;gap:12px;margin:24px 0 12px;flex-wrap:wrap}input,select{font:inherit;border:1px solid #b9c8dc;border-radius:10px;background:white;padding:11px 14px;color:inherit;min-width:0}input{flex:1;min-width:180px}input:focus,select:focus{outline:2px solid #2461d3;outline-offset:2px}table{border-collapse:collapse;width:100%;table-layout:fixed}th,td{padding:16px 24px;text-align:left;vertical-align:top;border-top:1px solid #e6ecf3;overflow-wrap:anywhere}th{color:#546782;font-size:13px;background:#f8fafc}th:nth-child(1){width:24%}th:nth-child(2){width:42%}th:nth-child(3){width:34%}.name{font-weight:650}.detail{color:#536680;margin-top:6px;font-size:13px}.pill{display:inline-block;font-size:12px;border-radius:6px;padding:2px 7px;margin-top:7px;background:#eaf1ff;color:#2557a3}.candidate{background:#fff2d9;color:#895600}.legacy{background:#edf0f4;color:#566170}section{overflow:hidden}.notice{border-left:3px solid #2461d3;padding-left:12px}a{color:#155dcc;overflow-wrap:anywhere}details{margin-top:15px}summary{cursor:pointer;font-weight:600}ul{padding-left:21px;margin-bottom:0}li{margin:6px 0}footer{color:#5a6d86;margin-top:30px;font-size:13px}#empty{padding:30px 0;color:#546782;display:none}
+@media(max-width:650px){main{padding:24px 14px 40px}h1{font-size:25px}.intro,.notes{padding:18px}h2{padding:18px;font-size:19px}table,tbody,tr,td{display:block;width:100%}thead{display:none}tr{border-top:1px solid #dce5f0;padding:16px 18px}td{border:0;padding:0}td+td{margin-top:10px}td[data-label]:before{content:attr(data-label);display:block;font-size:12px;color:#6a7b92;margin-bottom:3px}.name{font-size:16px}.toolbar{gap:10px}select{width:100%}section{margin:16px 0}}
+@media print{body{background:white}main{padding:0}.toolbar{display:none}section{break-inside:auto}tr{break-inside:avoid}details{display:block}}
+</style>
+<main>
+<p class="meta">维修应用 · 代码核对 · 2026 年 11 月 11 日</p>
+<h1>目前有哪些钉钉工作通知</h1>
+<div class="intro">
+<p><strong>本地已停用：纸质委托书已创建、行驶证缺失备案、维修暂停。尚未部署。</strong></p>
+<p>依据当前本地代码，逐个检查入队、收件人分发和发送入口。上一轮“关闭自动结果查询、提检仅通知检验员”已在本地完成但尚未部署；下方“待检验”按该版本说明，不能据此认定线上已切换。</p>
+<p class="meta">“自动”指业务操作后自动发送，并非持续轮询推送。除特别说明外，接收范围为本店有效员工。一件业务发给多人，当前会按人分别调用发送接口。</p>
+</div>
+<div class="toolbar"><input id="search" type="search" aria-label="搜索通知名称、触发条件或接收人" placeholder="搜索通知、角色或业务"><select id="filter" aria-label="筛选通知"><option value="all">全部通知</option><option value="current">当前流程</option><option value="candidate">可优先讨论的状态回执</option><option value="suppressed">本地已停用</option><option value="legacy">历史兼容</option></select></div>
+<p id="count" class="meta" aria-live="polite"></p>
+<div id="groups"></div><p id="empty">没有匹配的通知。</p>
+<div class="notes">
+<p><strong>这些操作目前没有独立钉钉推送</strong></p>
+<p>无维修照片审批的申请／通过／驳回、开工、恢复维修、普通项目完成、检验通过、维修全部完成、出车／还车照片上传。它们可能更新页面待办、业务状态和历史；若同时触发配件或提检流程，相关通知另算。</p>
+<p><strong>哪些地方看起来可能重复</strong></p>
+<ul><li>最后一家供应商报价时，可能同时产生“该供应商已提交报价”和“供应商报价已收齐”。</li><li>采购状态广播目前不排除操作者本人；仓管自己发布、修改或重发链接，可能也收到自己的操作回执。</li><li>“配件可领取”有时因修改申请后保留已备齐配件而重新生成，这是为替代已经失效的旧清单，不能仅按名称判定重复。</li><li>保险与工单临期提醒按阶段去重；后台扫描一次不等于推送一次。</li><li>“重试通知”处理的是原通知，不是新业务种类；结果查询只读取投递结果，也不是一条新推送。</li></ul>
+<p class="notice">“可优先讨论”仍只是候选标记。标注“本地已停用”的三类已完成停推改造，但尚未部署；纸质委托书原有只读访问记录保留。</p>
+<details><summary>核对依据</summary><ul>
+<li><a href="/Users/gary/repair-h5-dingtalk/server/services/dispatchService.mjs">维修、派工与配件事件</a>；<a href="/Users/gary/repair-h5-dingtalk/server/domain/partsSubmissionNotifications.mjs">个人配件申请</a></li>
+<li><a href="/Users/gary/repair-h5-dingtalk/server/workers/inspectionNotifications.mjs">检验员分发</a>；<a href="/Users/gary/repair-h5-dingtalk/server/repositories/inspectionDeferredRepository.mjs">待定项目</a>；<a href="/Users/gary/repair-h5-dingtalk/server/domain/dueReminderPolicy.mjs">工单临期</a></li>
+<li><a href="/Users/gary/repair-h5-dingtalk/server/repositories/customerSignatureReviewRepository.mjs">签字核对</a>；<a href="/Users/gary/repair-h5-dingtalk/server/repositories/paperOrderRepository.mjs">纸质委托书</a>；<a href="/Users/gary/repair-h5-dingtalk/server/repositories/vehicleNameplateRepository.mjs">铭牌更新</a></li>
+<li><a href="/Users/gary/repair-h5-dingtalk/server/services/procurementService.mjs">采购业务</a>；<a href="/Users/gary/repair-h5-dingtalk/server/repositories/procurementRepository.mjs">报价收齐提醒</a></li>
+<li><a href="/Users/gary/repair-h5-dingtalk/server/domain/vehicleTripNotifications.mjs">车辆通知</a>；<a href="/Users/gary/repair-h5-dingtalk/server/domain/vehicleTrips.mjs">车辆现行操作限制</a></li>
+<li><a href="/Users/gary/repair-h5-dingtalk/server/repositories/vehicleInsuranceRepository.mjs">保险阶段提醒</a>；<a href="/Users/gary/repair-h5-dingtalk/server/repositories/vehicleLicenseNotificationRepository.mjs">行驶证备案</a></li>
+</ul></details>
+</div>
+<footer>未连接生产数据库统计各类实际发送次数。本清单说明“哪些会发、何时发、给谁发”，不代表每类的实际调用量。</footer>
+</main>
+<script>
+// Each row: name, trigger, audience, note, optional candidate/legacy flag.
+const groups=[
+['派工与项目变动',[
+['新派工','指派、整单改派、重新发起接单或核对历史任务后，仍需继续维修。','新维修人员；外包任务为派工负责人。','自动'],
+['返工派工','完工后开启返工轮次。','本轮维修人员；外包为派工负责人。','自动'],
+['追加维修派工','完工后开启追加维修轮次。','本轮维修人员；外包为派工负责人。','自动'],
+['任务已改派','整单改派给其他人。','原维修人员；原外包为原派工负责人。','自动'],
+['派工已撤销','撤销已有派工。','原维修人员；外包为派工负责人。','自动'],
+['维修项目已删除','编辑维修项目时删除已有项目。','被删除项目的原负责人；未明确负责人则原维修人员。','自动'],
+['新增维修项目','已派工后新增项目。','新增项目负责人；未明确负责人则当前处理人员。','自动'],
+['项目改派','部分项目改派，或编辑项目时改变负责人。','受影响项目的新、旧负责人。','自动']]],
+['维修流转、检验与催办',[
+['无法接单','维修工反馈无法接单。','本店服务顾问和管理员。','自动'],
+['维修暂停','维修工暂停维修。','本店服务顾问和管理员（原收件范围）。','已停用推送；暂停状态、原因和操作记录保留。','suppressed'],
+['待检验','提检、个人提交完工、提交回审、重新指定检验人；检验归属释放后仍有待检项目。','有指定检验人时发给该人；未指定时发给本店具有检验员角色、且符合独立检验规则的人员。','上一轮本地优化：仅管理员身份不再收到；兼任检验员且有资格者仍可收到。尚未部署。'],
+['维修单回审','发送回审。','当前维修人员；外包为派工负责人。','自动'],
+['退回返工','检验时退回具体维修项目。','被退回项目的负责人。','自动'],
+['人工催办','明确点击“催办”。','待检时为指定检验人；有无法接单反馈时为派工人；其他情况为当前维修人员或外包负责人。','人工；同一工单对同一人至少间隔 10 分钟。'],
+['即将到期','距预计完工时间进入 48 小时、24 小时、1 小时窗口。','尚未完成本人工作的当前维修人员。','定时；同轮次、截止时间、窗口、收件人只发一次。错过的窗口不补发，纯外包不发。']]],
+['配件与车辆铭牌',[
+['配件申请','接单或登记配件需求，形成待备料申请。','本店仓管。','自动'],
+['配件申请已更新','修改未整批备齐／出库的申请，包括改为无需配件。','本店仓管。','自动；用于停止按旧清单备料。'],
+['配件需求已调整','仓管整理、修改配件需求。','对应个人申请人；非个人申请为当前处理人员。','自动'],
+['配件可领取','备料完成；重新接单时已有备齐配件；申请修改后仍保留备齐未出库配件。','本次配件指定领取人，按个人和具体配件分配。','自动；多人部分备料分别通知。'],
+['配件已出库','仓管确认本次配件已交接出库。','本次出库配件的领取人。','自动；出库后的状态回执。','candidate'],
+['车辆铭牌已更新','已有铭牌后重新上传，或改用另一张历史铭牌。','本店仓管。','自动；首次上传不发，避免按旧车型／VIN 采购。']]],
+['检验待定项目',[
+['检验项目待定','检验中把项目转为待定，包括外包完工登记中的待定项目。','本店服务顾问和管理员。','自动'],
+['待定项目派工','安排待定项目继续维修。','指定维修工；外包为派工负责人。','自动'],
+['待定维修已撤销','不再维修待定项目，或撤销已安排的待定维修。','本店服务顾问、管理员和相关项目负责人；有配件申请／历史时另通知仓管。','自动；包含停止施工和核对配件的提示。'],
+['待定项目处理提醒','点击“提醒原检验人”。','该待定项目的原检验人。','人工；同项目至少间隔 1 分钟，禁止提醒自己。']]],
+['开单、签字与备案',[
+['需确认用户签字','客户远程电子签字或远程补签完成。','本店管理员，以及该工单经办服务顾问。','自动；现场签字直接确认路径不发。'],
+['纸质委托书已创建','新建纸质委托书。','所有门店的有效服务顾问和管理员。','已停用推送；仍保留原收件人记录，维持原跨店只读访问规则。','suppressed'],
+['行驶证缺失备案','为新车未提供行驶证提交缺失备案。','本店管理员。','已停用推送；备案及本次跳过行驶证上传的规则保留。','suppressed']]],
+['采购与供应商报价',[
+['配件询价已发布','发布一条新的配件询价。','本店仓管。','自动；内部状态广播，不是向供应商发送邀请链接。','candidate'],
+['询价信息已更新','修改采购要求或报价截止时间。','本店仓管。','自动；采购要求变化可能使原报价需要重新确认，区别于单纯状态回执。'],
+['供应商邀请链接已重发','重新生成某供应商的邀请链接。','本店仓管。','自动；实际链接仍由业务页面生成并分享。','candidate'],
+['供应商表现报告已发布','发布供应商表现报告。','本店仓管。','自动；内部发布回执，报告链接功能独立。','candidate'],
+['采购提报审批','将采购方案提交审批。','本店管理员。','自动'],
+['采购审批通过','管理员批准采购。','本店仓管。','自动；通知可以继续采购。'],
+['采购审批驳回','管理员驳回采购。','本店仓管。','自动；包含原因，需要重新处理。'],
+['某供应商已提交报价','供应商提交或修改报价。','本店仓管。','自动；包含本次总价等摘要。重复请求编号不重复生成。'],
+['某供应商已放弃报价','供应商明确放弃本次报价。','本店仓管。','自动'],
+['供应商报价已收齐','当前采购要求版本下，全部受邀供应商均已报价，没有放弃者。','本店仓管。','自动；按询价、要求版本及完成类别去重。最后一家提交时可能与逐家通知同时产生。'],
+['全部供应商已响应','当前采购要求版本下，全部受邀供应商均已回应，其中有人放弃报价。','本店仓管。','自动；与“报价已收齐”属于不同完成类别。']]],
+['出车与还车：当前流程',[
+['出车申请待审批','员工提交出车申请及公里数照片。','本店其他管理员；不发给申请人本人。','自动'],
+['出车申请已批准','管理员批准申请，当前流程同时登记出车。','申请人。','自动'],
+['出车申请已驳回','管理员驳回出车申请。','申请人。','自动；包含驳回原因。'],
+['出车申请已取消','申请人取消尚未出车的申请。','本店其他管理员。','自动；状态回执。','candidate'],
+['车辆已归还','申请人提交还车照片并完成还车。','本店其他管理员。','自动；仅告知收车时间，目前无需再次审核。','candidate']]],
+['车辆保险',[
+['车辆保险即将到期，请续保','保险剩余时间进入 30 天、7 天、1 天范围。','本店管理员和服务顾问。','定时；每个保险截止日、每个阶段、每个接收人只发一次。'],
+['车辆保险今日到期，请续保','保险进入到期当天。','本店管理员和服务顾问。','定时；当天阶段一次。'],
+['车辆保险已到期，请续保','保险已过期。','本店管理员和服务顾问。','定时；已过期阶段一次，并非每天重复。更新保险后按新到期日计算。']]],
+['历史兼容：不要与当前常规流程混算',[
+['车辆已出车','历史“待出车”申请补办确认出车。','本店其他管理员。','当前新申请批准即出车，通常不走此事件；旧记录仍可触发。','legacy'],
+['收车审核通过','旧收车审核产生的历史通知。','申请人。','现行接口已禁止新触发；旧待发消息在状态与轮次仍匹配时可能发送。','legacy'],
+['收车审核退回','旧收车审核退回产生的历史通知。','申请人。','现行接口已禁止新触发；旧待发消息在状态与轮次仍匹配时可能发送。','legacy'],
+['维修已提检','旧版本发给调度人员的提检通知名称。','上一轮本地优化后：只允许符合条件的检验员。','不再新建该类调度通知；旧任务转入检验员链路，现行名称为“待检验”。该优化尚未部署。','legacy'],
+['回审已提交','旧版本发给调度人员的回审提交通知名称。','上一轮本地优化后：只允许符合条件的检验员。','与旧提检通知同样处理；新流程统一为“待检验”。该优化尚未部署。','legacy']]]
+];
+const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function render(){const q=document.getElementById('search').value.trim().toLowerCase(),f=document.getElementById('filter').value;let count=0;document.getElementById('groups').innerHTML=groups.map(([title,rows])=>{const chosen=rows.filter(r=>(!q||r.join(' ').toLowerCase().includes(q))&&(f==='all'||f==='current'&&!['legacy','suppressed'].includes(r[4])||r[4]===f));count+=chosen.length;return chosen.length?`<section><h2>${escape(title)}</h2><table><thead><tr><th>通知</th><th>何时触发</th><th>发给谁／发送规则</th></tr></thead><tbody>${chosen.map(r=>`<tr><td><div class="name">${escape(r[0])}</div>${r[4]?`<span class="pill ${r[4]}">${r[4]==='legacy'?'历史兼容':r[4]==='suppressed'?'本地已停用':'可优先讨论精简'}</span>`:''}</td><td data-label="触发">${escape(r[1])}</td><td data-label="接收人">${escape(r[2])}<div class="detail">${escape(r[3])}</div></td></tr>`).join('')}</tbody></table></section>`:''}).join('');document.getElementById('count').textContent=`当前显示 ${count} 个通知名称（相同名称的多种触发合并展示）`;document.getElementById('empty').style.display=count?'none':'block'}
+document.getElementById('search').addEventListener('input',render);document.getElementById('filter').addEventListener('change',render);render();
+</script>
+</html>

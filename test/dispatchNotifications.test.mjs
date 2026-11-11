@@ -42,24 +42,43 @@ test('network interruption and 5xx results never trigger blind resend',async()=>
     assert.equal(result.status,'unknown');assert.deepEqual(notificationNextState({attempts:1,polls:0},result),{status:'unknown',delay:null});
   }
 });
-test('explicit transient failure retries with a bound and queries have a separate bound',async()=>{
+test('explicit transient failures retry but accepted or uncertain results do not schedule queries',async()=>{
   const result=await sendWorkNotification(notification,'worker',options(async()=>response({},429)));
   assert.equal(result.retryable,true);assert.equal(notificationNextState({attempts:1},result).status,'pending');
   assert.equal(notificationNextState({attempts:5},result).status,'failed');
   assert.equal(notificationNextState({attempts:1,polls:20,task_id:'99'},{status:'accepted'}).delay,null);
-  assert.equal(notificationNextState({attempts:1,polls:20,task_id:'99'},{status:'accepted'}).status,'unknown');
+  assert.equal(notificationNextState({attempts:1,polls:20,task_id:'99'},{status:'accepted'}).status,'accepted');
 });
-test('unknown task with platform ID is queried after restart instead of resent',async()=>{
+test('unknown task with platform ID is neither queried nor resent by the worker',async()=>{
   const row={...notification,previous_status:'unknown',task_id:'99',recipient_id:'u'};
   let sent=0,queried=0,finished;
   await processNotification({claim:async()=>row,recipient:async()=>({active:true,dingtalk_user_id:'worker'}),send:async()=>{sent++;},query:async()=>{queried++;return {status:'sent'};},finish:async(_row,result)=>{finished=result;}});
-  assert.equal(sent,0);assert.equal(queried,1);assert.equal(finished.status,'sent');
+  assert.equal(sent,0);assert.equal(queried,0);assert.equal(finished.status,'unknown');
 });
 test('inactive employee receives no new notification; malformed result remains unknown',async()=>{
   let sends=0,finished;
   await processNotification({claim:async()=>({...notification,previous_status:'pending'}),recipient:async()=>({active:false}),send:async()=>{sends++;},finish:async(_,result)=>{finished=result;}});
   assert.equal(sends,0);assert.equal(finished.status,'failed');
   assert.equal((await queryWorkNotification({...notification,task_id:'99'},'worker',options(async()=>response({errcode:0})))).status,'unknown');
+});
+
+test('manual result interpretation never treats unknown or contradictory recipients as delivered',async()=>{
+  for(const [send_result,status] of [
+    [{unread_user_id_list:['actual']},'sent'],
+    [{read_user_id_list:['actual']},'sent'],
+    [{forbidden_list:[{userid:'actual',code:143106}]},'failed'],
+    [{failed_user_id_list:['actual']},'failed'],
+    [{read_user_id_list:['actual'],failed_user_id_list:['actual']},'unknown'],
+    [{read_user_id_list:['different-account']},'accepted'],
+    [{},'accepted'],
+    [[], 'unknown']
+  ]) {
+    const result=await queryWorkNotification({task_id:'123'},'actual',options(async()=>response({errcode:0,send_result})));
+    assert.equal(result.status,status);
+    assert.equal(notificationNextState({task_id:'123',polls:0},result).delay,null,'result checks never schedule another paid call');
+  }
+  const invalid=await queryWorkNotification({task_id:'123'},'actual',options(async()=>response({send_result:{read_user_id_list:['actual']}})));
+  assert.equal(invalid.status,'unknown');
 });
 
 test('obsolete due reminders are never sent and pre-send validation failures can retry safely',async()=>{
@@ -82,8 +101,20 @@ test('scheduler fanout checks role and store again before sending',async()=>{
  assert.equal(await validateSchedulerRecipient({order_id:'o'},{active:true,role:'advisor',shopId:'s'},{database}),true);
  assert.equal(await validateSchedulerRecipient({order_id:'o'},{active:true,role:'manager',shopId:'other'},{database}),false);
  let sends=0,result;
- await processNotification({claim:async()=>({...notification,kind:'维修暂停',previous_status:'pending'}),recipient:async()=>({active:true,role:'advisor',shopId:'other'}),validateScheduler:async()=>false,send:async()=>sends++,finish:async(_,r)=>{result=r;}});
+ await processNotification({claim:async()=>({...notification,kind:'无法接单',previous_status:'pending'}),recipient:async()=>({active:true,role:'advisor',shopId:'other'}),validateScheduler:async()=>false,send:async()=>sends++,finish:async(_,r)=>{result=r;}});
  assert.equal(sends,0);assert.equal(result.retryable,false);
+});
+
+test('paper and pause pushes stop before recipient reads, with submitted history unchanged',async()=>{
+ for(const kind of ['纸质委托书已创建','维修暂停']) {
+  for(const previous_status of ['pending','accepted','unknown','sent','failed','suppressed']) {
+   let finished;
+   const unexpected=async()=>assert.fail('retired push must not read people, query or send');
+   await processNotification({claim:async()=>({...notification,kind,previous_status}),recipient:unexpected,send:unexpected,query:unexpected,finish:async(_,value)=>{finished=value;}});
+   assert.equal(finished.status,previous_status==='pending'?'suppressed':previous_status);
+   assert.equal(notificationNextState({attempts:1},finished).delay,null);
+  }
+ }
 });
 
 test('parts notifications reject recipients who lost warehouse or shop membership',async()=>{
@@ -118,14 +149,14 @@ test('obsolete pickup messages are canceled before sending; database failures re
  await processNotification({...deps,validateParts:async()=>true});assert.equal(sent,1);
 });
 
-test('inspection delivery rechecks manager rights, shop, participants and current task state',async()=>{
+test('inspection delivery requires inspector membership, shop, independence and current task state',async()=>{
  const {validateInspectionRecipient:validate}=await import('../server/repositories/dispatchRepository.mjs');
- const user={id:'m',active:true,role:'manager',shopId:'s',inspectorRoleMember:false};
+ const user={id:'m',active:true,role:'manager',roles:['manager','inspector'],shopId:'s',inspectorRoleMember:true};
  const row={id:'inspection',order_id:'o',recipient_id:'m',kind:'待检验',previous_status:'pending'};
  const task={order_id:'o',shop_id:'s',order_status:'维修中',stage:'待检验',technician_id:'t',repair_items:[],data:{items:[{id:1,status:'待检验',responsibleId:'t'}]}};
  const database={query:async()=>({rows:[task]})};
  assert.equal(await validate(row,user,database),true);
- for(const patch of [{active:false},{shopId:'other'},{role:'advisor'},{role:'inspector',inspectorRoleMember:false}]) {
+ for(const patch of [{active:false},{shopId:'other'},{role:'advisor',roles:['advisor']},{role:'manager',roles:['manager']},{inspectorRoleMember:false}]) {
   assert.equal(await validate(row,{...user,...patch},database),false);
  }
  for(const data of [{participantIds:['m']},{technicianIds:['m']},{items:[{id:1,responsibleId:'m'}]},{items:[{id:1,startedBy:'m'}]},{items:[{id:1,finishedBy:'m'}]},{needsReview:true}]) {

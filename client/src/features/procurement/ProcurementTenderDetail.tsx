@@ -1,4 +1,5 @@
 import {ProcurementTermsView} from './ProcurementTermsView';
+import { NotificationRecords } from '../notifications/NotificationRecords';
 export {ProcurementTermsView} from './ProcurementTermsView';
 import { CopyTextButton } from "../../shared/ui/CopyTextButton";
 import {procurementWinnerIds} from '../../../../shared/procurementWinners.mjs';
@@ -57,6 +58,7 @@ export function ProcurementTenderDetail({controller:c,user}:{controller:Procurem
       </Space>
     </Space></Card>:<Alert type={t.status==='awarded'?'success':'info'} title={statusLabels[t.status]} description={t.status==='awarded'?`中标：${t.invitations.filter(i=>procurementWinnerIds(t).includes(i.supplierId)).map(i=>i.supplierName).join('、')}。${t.reason||'按最低有效报价确认'}${procurementWinnerIds(t).length>1?'；实际采购数量线下确定。':''}`:t.reason}/>}
     <ProcurementPurchaseApproval key={`${t.id}-${t.purchaseApproval?.submittedAt||'new'}`} tender={t} user={user} controller={c}/>
+    <NotificationRecords key={t.id} source="procurement" resourceId={t.id}/>
     <ActionHistory title="操作记录" items={d.audit.map(a=>({key:a.id,title:procurementAuditLabel(a.action),actor:a.actor,time:dateTime(a.at),detail:a.detail.reason?<p>{String(a.detail.reason)}</p>:undefined}))}/>
     <Drawer className="procurement-drawer" title="编辑询价信息与截止时间" size={760} open={!!editing} destroyOnHidden onClose={()=>setEditing(undefined)}>
       {editing?<div className="procurement">{c.error?<Alert type="error" title={c.error}/>:null}<TenderForm key={`${editing.id}-${editing.version}`} tender={editing} suppliers={c.suppliers} busy={c.busy} onCancel={()=>setEditing(undefined)} onSave={async body=>{Modal.confirm({title:'确认保存询价修改？',content:`只修改截止时间，原报价继续有效；修改采购要求，原报价需由供应商重新确认。${editing.status==='closed'?'本次报价已停止，保存后将重新开放报价。':''}`,onOk:async()=>{const saved=await c.action({...body,action:'update',expectedVersion:editing.version,reopen:editing.status==='closed'});if(saved)setEditing(undefined);}});}}/></div>:null}

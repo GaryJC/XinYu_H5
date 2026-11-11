@@ -317,7 +317,7 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       const finished=(await service.dispatchDetail(manager,'individual')).task;
       assert.equal(finished.stage,'待检验');assert.deepEqual(finished.items.map(i=>i.finishedBy),['t','u']);
       assert.equal((await pool.query("select count(*) from dispatch_inspection_notifications where order_id='individual'")).rows[0].count,'2');
-      assert.equal((await pool.query("select count(*) from dispatch_scheduler_notifications where order_id='individual' and kind='维修已提检'")).rows[0].count,'2');
+      assert.equal((await pool.query("select count(*) from dispatch_scheduler_notifications where order_id='individual' and kind='维修已提检'")).rows[0].count,'0');
       assert.equal(finished.partsRequests.length,2);
     });
     await t.test('batch preparation is atomic, idempotent and aggregates actual recipients across applications',async()=>{

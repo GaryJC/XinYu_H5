@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import pg from 'pg';
 import {randomUUID} from 'node:crypto';
 const adminUrl=process.env.LICENSE_EXCEPTION_TEST_ADMIN_URL;
-test('vehicle license exception persistence, signature rules, administrator fanout and notification delivery',{skip:!adminUrl,timeout:120000},async()=>{
+test('vehicle license exception persistence and signature rules remain intact without administrator pushes',{skip:!adminUrl,timeout:120000},async()=>{
  const url=new URL(adminUrl);assert.ok(['127.0.0.1','localhost','[::1]'].includes(url.hostname));
  const admin=new pg.Client({connectionString:adminUrl});await admin.connect();
  const name=`codex_license_test_${Date.now()}_${process.pid}`;let pool;
@@ -33,6 +33,7 @@ test('vehicle license exception persistence, signature rules, administrator fano
   // Exception reporting is available regardless of company vehicle lookup status.
   const results=await Promise.all([report(advisor,order.id,body,options),report(advisor,order.id,body,options)]);
   assert.equal(results[0].id,results[1].id);
+  assert.equal(results[0].notificationStatus,'suppressed');
   assert.equal((await report(advisor,order.id,{...body,requestId:randomUUID()},options)).id,results[0].id);
   order=await db.getWorkOrderDetail(order.id,manager);assert.equal(order.vehicleLicenseException.reason,body.reason);
   assert.equal((await pool.query('select count(*) from vehicle_license_exceptions')).rows[0].count,'1');
@@ -52,17 +53,17 @@ test('vehicle license exception persistence, signature rules, administrator fano
   for(const id of Object.values(photos))await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,original_name,mime_type,size_bytes,uploaded_by) values($1,$2,'repair_order_photo','local','local','test','test.png','image/png',10,$3)",[id,other.id,advisor.id]);
   await db.updateWorkOrder({...other,inspection:{...other.inspection,preRepairPhotos:photos}},advisor.name,'接车照片',advisor);
   for(const signatureMode of ['onsite','remote'])await assert.rejects(()=>db.createSignatureTokenForOrder(other.id,advisor.name,{signatureMode}),/行驶证/);
-  await Promise.all([worker.resolveLicenseExceptionManagers(),worker.resolveLicenseExceptionManagers()]);
-  const targets=(await pool.query('select recipient_id from vehicle_license_exception_notifications order by recipient_id')).rows.map(r=>r.recipient_id);assert.deepEqual(targets,['m1','m2']);
-  let sent=0,queried=0;
-  const send=async(_n,_recipient,config)=>{sent++;assert.equal(typeof config.buildMessage,'function');return {status:'accepted',taskId:`mock-${sent}`};};
-  while(await worker.processLicenseExceptionNotification({send})){}
-  assert.equal(sent,2);
-  await pool.query('update vehicle_license_exception_notifications set next_attempt_at=now()');
-  while(await worker.processLicenseExceptionNotification({send,query:async()=>{queried++;return {status:'sent'};}})){}
-  assert.equal(sent,2);assert.equal(queried,2);
-  assert.equal((await pool.query("select count(*) from vehicle_license_exception_notifications where status='sent'")).rows[0].count,'2');
+  const forbidden=()=>assert.fail('disabled license notifications must not perform roster reads, sends or queries');
+  assert.equal(await worker.resolveLicenseExceptionManagers({database:pool,sync:forbidden}),false);
+  assert.equal(await worker.processLicenseExceptionNotification({database:pool,send:forbidden,query:forbidden}),false);
+  assert.equal((await pool.query('select count(*) from vehicle_license_exception_notifications')).rows[0].count,'0');
   const before=await db.getWorkOrderDetail(order.id,advisor);
+  assert.equal(before.vehicleLicenseException.notificationStatus,'suppressed');
+  // Historical delivery evidence remains readable when only some recipients were sent.
+  await pool.query("insert into vehicle_license_exception_notifications(id,exception_id,recipient_id,status,task_id,delivery_user_id,delivery_submitted_at) values($1,$2,'m1','accepted','old-task','ding-m1',now()),($3,$2,'m2','suppressed',null,null,null)",[randomUUID(),results[0].id,randomUUID()]);
+  assert.equal((await db.getWorkOrderDetail(order.id,advisor)).vehicleLicenseException.notificationStatus,'accepted');
+  assert.equal(await worker.processLicenseExceptionNotification({database:pool,send:forbidden,query:forbidden}),false);
+  assert.equal((await pool.query("select status from vehicle_license_exception_notifications where task_id='old-task'")).rows[0].status,'accepted');
   const edited=await db.updateWorkOrder({...before,vehicle:{...before.vehicle,plate:'鲁B862P7',vin:'LZWADAGA8NB072733'}},advisor.name,'待签字修正车辆',advisor);
   const changed={...body,requestId:randomUUID(),vehiclePlate:edited.vehicle.plate,vehicleVin:edited.vehicle.vin};
   const replacement=await report(advisor,order.id,changed,options);

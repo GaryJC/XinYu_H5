@@ -293,14 +293,15 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal(one.status,'unknown');
       await notifications.finishNotification({...one,lease_id:randomUUID()},{status:'sent'});
       assert.equal((await pool.query('select status from dispatch_notifications where id=$1',[one.id])).rows[0].status,'unknown');
-      await notifications.finishNotification(one,{status:'accepted',taskId:'mock-1'});
+      await notifications.finishNotification(one,{status:'accepted',taskId:'mock-1',deliveryUserId:'original-ding-user'});
       await notifications.finishNotification(two,{status:'failed',error:'test',retryable:false});
       await pool.query("update dispatch_notifications set next_attempt_at=now() where id=$1",[one.id]);
       let claimed;
       // Other due notifications may precede this one; drain safely using mock only.
       for(let i=0;i<30;i++){const row=await notifications.claimNotification();if(!row)break;await worker.processNotification({claim:async()=>row});if(row.id===one.id){claimed=row;break;}}
-      assert.equal(claimed.previous_status,'accepted');
-      assert.equal((await pool.query('select status from dispatch_notifications where id=$1',[one.id])).rows[0].status,'sent');
+      assert.equal(claimed,undefined,'accepted tasks are never reclaimed for automatic queries');
+      const accepted=(await pool.query('select * from dispatch_notifications where id=$1',[one.id])).rows[0];
+      assert.equal(accepted.status,'accepted');assert.equal(accepted.delivery_user_id,'original-ding-user');assert.ok(accepted.delivery_submitted_at);
       await pool.query("update dispatch_notifications set locked_until=now()-interval '1 second' where status='unknown' and task_id is null");
       // A crashed send without platform ID is intentionally not eligible for automatic resending.
       const rows=(await pool.query("select id from dispatch_notifications where status='unknown' and task_id is null")).rows;
@@ -693,9 +694,9 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await assertFileReadAccess(photo.id,inspector);
       await assert.rejects(()=>uploadRepairPhoto(tech,'whole',{...photoBody,requestId:randomUUID()},{save}),e=>e.status===409);
       await drainInspectionNotifications();
-      assert.equal((await pool.query("select count(*) from dispatch_notifications where order_id='whole' and kind='待检验'")).rows[0].count,'3');
+      assert.deepEqual((await pool.query("select recipient_id from dispatch_notifications where order_id='whole' and kind='待检验' order by recipient_id")).rows.map(row=>row.recipient_id),[inspector.id,otherInspector.id]);
       await drainInspectionNotifications();
-      assert.equal((await pool.query("select count(*) from dispatch_notifications where order_id='whole' and kind='待检验'")).rows[0].count,'3');
+      assert.equal((await pool.query("select count(*) from dispatch_notifications where order_id='whole' and kind='待检验'")).rows[0].count,'2');
       const command={action:'claim-inspection',expectedVersion:whole.version,requestId:randomUUID()};
       const results=await Promise.allSettled([service.executeDispatchAction(inspector,'whole',command),service.executeDispatchAction(otherInspector,'whole',{...command,requestId:randomUUID()})]);
       assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
@@ -829,7 +830,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await assert.rejects(()=>service.myRepairCounts(manager),e=>e.status===403);
       await assert.rejects(()=>service.myRepairCounts({...tech,active:false}),e=>e.status===403);
     });
-    await t.test('refusal, pause and submission notify all same-store dispatchers and managers exactly once',async()=>{
+    await t.test('refusal notifies schedulers, pause stays in history, submission notifies only inspectors',async()=>{
       await pool.query("insert into users(id,name,role,shop_id,active) values('advisor2','另一派工员','advisor','shop-hq',true),('disabled-advisor','停用派工员','advisor','shop-hq',false)");
       await seed('scheduler-notices');
       let local=(await service.executeDispatchAction(advisor,'scheduler-notices',{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianId:tech.id,dueAt})).task;
@@ -841,7 +842,13 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       const refusal=await run(tech,'decline',{reason:'工作量已满'});
       await service.executeDispatchAction(tech,'scheduler-notices',refusal);
       await run(advisor,'reoffer');await run(tech,'accept');
-      await run(tech,'pause',{pauseReason:'待配件',note:'滤芯缺货'});await run(tech,'resume');
+      await run(tech,'pause',{pauseReason:'待配件',note:'滤芯缺货'});
+      assert.equal(local.stage,'暂停');
+      const pauseEvent=(await pool.query("select id,detail from dispatch_events where order_id='scheduler-notices' and action='pause'")).rows[0];
+      assert.equal(pauseEvent.detail.pauseReason,'待配件');assert.equal(pauseEvent.detail.note,'滤芯缺货');
+      assert.equal((await pool.query("select 1 from audit_logs where order_id='scheduler-notices' and action='派工：pause'")).rowCount,1);
+      assert.equal((await pool.query("select 1 from dispatch_scheduler_notifications where order_id='scheduler-notices' and kind='维修暂停'")).rowCount,0);
+      await run(tech,'resume');
       await progressPhoto('scheduler-notices');
       await run(tech,'submit-order');
       const {processSchedulerNotifications}=await import('../server/workers/schedulerNotifications.mjs');
@@ -849,16 +856,36 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       while(await processSchedulerNotifications({sync:async()=>{syncCalls++;return [];}})) {}
       assert.equal(syncCalls,0,'mock mode never calls DingTalk');
       const expected=(await pool.query("select id from users where shop_id='shop-hq' and active and role in ('advisor','manager') order by id")).rows.map(r=>r.id);
-      for(const kind of ['无法接单','维修暂停','维修已提检']) {
+      for(const kind of ['无法接单']) {
         const rows=(await pool.query("select recipient_id,payload from dispatch_notifications where order_id='scheduler-notices' and kind=$1 order by recipient_id",[kind])).rows;
         assert.deepEqual(rows.map(r=>r.recipient_id),expected);
         assert.equal(rows[0].payload.actorName,tech.name);
-        if(kind==='维修暂停')assert.equal(rows[0].payload.reason,'待配件：滤芯缺货');
       }
+      assert.equal((await pool.query("select 1 from dispatch_notifications where order_id='scheduler-notices' and kind='维修暂停'")).rowCount,0);
+      assert.equal((await pool.query("select count(*) from dispatch_scheduler_notifications where order_id='scheduler-notices' and kind in ('维修已提检','回审已提交')")).rows[0].count,'0');
+      await drainInspectionNotifications();
+      const inspectionRecipients=(await pool.query("select recipient_id from dispatch_notifications where order_id='scheduler-notices' and kind='待检验' order by recipient_id")).rows.map(row=>row.recipient_id);
+      assert.deepEqual(inspectionRecipients,[inspector.id,'inspector2']);
+      const inspectionNotice=(await pool.query("select * from dispatch_notifications where order_id='scheduler-notices' and kind='待检验' and recipient_id=$1",[inspector.id])).rows[0];
+      assert.equal(await repo.validateInspectionRecipient(inspectionNotice,inspector,pool),true);
+      assert.equal(await repo.validateInspectionRecipient({...inspectionNotice,recipient_id:manager.id},manager,pool),false);
       const count=Number((await pool.query("select count(*) from dispatch_notifications where order_id='scheduler-notices'")).rows[0].count);
       await processSchedulerNotifications();
       assert.equal(Number((await pool.query("select count(*) from dispatch_notifications where order_id='scheduler-notices'")).rows[0].count),count);
       await assert.rejects(()=>run(tech,'retry-scheduler-notifications',{notificationJobId:'1'}),e=>e.status===403);
+      // Retired kinds cannot be revived by either authenticated retry action.
+      for(const kind of ['纸质委托书已创建','维修暂停']) {
+        const noticeId=randomUUID();
+        await pool.query("insert into dispatch_notifications(id,order_id,recipient_id,kind,payload,status,error) values($1,'scheduler-notices',$2,$3,'{}','failed','旧发送失败')",[noticeId,advisor.id,kind]);
+        await assert.rejects(()=>run(advisor,'retry-notification',{notificationId:noticeId}),e=>e.status===409&&/停用/.test(e.message));
+        assert.equal((await pool.query('select status from dispatch_notifications where id=$1',[noticeId])).rows[0].status,'failed');
+        const list=await (await import('../server/services/notificationQueryService.mjs')).listNotificationDeliveries(advisor,'dispatch','scheduler-notices');
+        assert.equal(list.find(n=>n.id===noticeId).canRetry,false);
+      }
+      await pool.query("insert into dispatch_scheduler_notifications(event_id,order_id,kind,payload,status,error) values($1,'scheduler-notices','维修暂停','{}','failed','旧名单失败')",[pauseEvent.id]);
+      await assert.rejects(()=>run(advisor,'retry-scheduler-notifications',{notificationJobId:String(pauseEvent.id)}),e=>e.status===409&&/停用/.test(e.message));
+      assert.equal((await pool.query('select status from dispatch_scheduler_notifications where event_id=$1',[pauseEvent.id])).rows[0].status,'failed');
+      assert.ok(!(await service.dispatchDetail(advisor,'scheduler-notices')).schedulerNotifications.some(job=>job.kind==='维修暂停'),'retired resolution failures expose no retry prompt');
       // A failing production roster must leave the repair action committed and retryable.
       await seed('scheduler-failure');
       let failed=(await service.executeDispatchAction(advisor,'scheduler-failure',{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianId:tech.id,dueAt})).task;

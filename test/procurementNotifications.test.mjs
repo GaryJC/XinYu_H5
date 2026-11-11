@@ -17,7 +17,7 @@ test('delivery revalidates store and warehouse audience, and never blindly resen
   }
   let sends=0,queries=0;
   await deliverProcurementNotification({claim:async()=>({previous_status:'unknown',task_id:'1'}),recipient:async()=>({}),send:async()=>{sends++;},query:async()=>{queries++;return {status:'sent'};},finish:async()=>{}});
-  assert.equal(sends,0);assert.equal(queries,1);
+  assert.equal(sends,0);assert.equal(queries,0);
 });
 test('recipient resolution requests only the warehouse roster for ordinary notices',async()=>{
   let options,ids;

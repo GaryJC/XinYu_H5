@@ -1,5 +1,5 @@
 import { CopyTextButton } from "../../shared/ui/CopyTextButton";
-import { ProcurementNotifications } from './ProcurementNotifications';
+import { NotificationRecords } from '../notifications/NotificationRecords';
 import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { SupplierList,TenderList } from './ProcurementLists';
@@ -34,7 +34,7 @@ export function ProcurementPage({user}:{user:UserProfile}) {
     <Drawer size="large" title="供应商表现报告 · 内部预览" open={!!c.report&&(reportVisible||initialReport)} onClose={()=>{setReportVisible(false);c.setReport(undefined);}}>
       {c.report?<div className="procurement">{c.error?<Alert type="error" title={c.error}/>:null}<Space wrap><Button type="primary" loading={c.busy} onClick={()=>void c.publishReport()}>{c.report.publishedAt?'重发报告链接（旧链接失效）':'发布并生成分享链接'}</Button><Button danger loading={c.busy} onClick={()=>Modal.confirm({title:'撤销全部现有报告链接？',onOk:c.revokeReport})}>撤销报告链接</Button></Space>
         <ProcurementReportView report={c.report.snapshot}/>
-        <ProcurementNotifications notifications={c.report.notifications||[]}/>
+        <NotificationRecords key={c.report.id} source="procurement" resourceId={c.report.id}/>
         <ActionHistory title="访问及反馈记录" items={(c.report.activity||[]).map(a=>({key:a.id,title:procurementAuditLabel(a.action),actor:a.actor,time:dateTime(a.at),detail:a.detail.feedback?<p>{String(a.detail.feedback)}</p>:undefined}))}><p>访问记录表示信息匹配后打开，无法证明是联系人本人操作。</p></ActionHistory>
       </div>:null}
     </Drawer>

@@ -223,7 +223,7 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
         {refreshReport}
         {signature.error && <Alert type="error" showIcon title="发起签字失败" description={signature.error} style={{ marginBottom: 12 }} />}
         {deleteError ? <Alert type="error" showIcon title="删除草稿失败" description={deleteError} style={{ marginBottom: 12 }} /> : null}
-        {detailOrder?.vehicleLicenseException?<div style={{marginBottom:16}}><VehicleLicenseExceptionNotice exception={detailOrder.vehicleLicenseException} current={isCurrentVehicleLicenseException(detailOrder.vehicleLicenseException,detailOrder.vehicle)}/></div>:null}
+        {detailOrder?.vehicleLicenseException?<div style={{marginBottom:16}}><VehicleLicenseExceptionNotice exception={detailOrder.vehicleLicenseException} current={isCurrentVehicleLicenseException(detailOrder.vehicleLicenseException,detailOrder.vehicle)} user={currentUser}/></div>:null}
         {detailOrder && <SignatureReview order={detailOrder} user={currentUser} onUpdated={controller.acceptRefreshedOrder} />}
         {detailOrder ? <OrderDetail key={detailOrder.id} order={detailOrder} isMobile={isMobile} user={currentUser} onUpdated={controller.acceptRefreshedOrder} onOpenRepairs={openRepairProjects}/> : null}
         </>}

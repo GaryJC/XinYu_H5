@@ -1,4 +1,5 @@
 import {insuranceState} from '../../../../shared/vehicleInsurance.mjs';
+import { NotificationRecords } from '../notifications/NotificationRecords';
 import { ListPagination } from '../../shared/ui/ListPagination';
 import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { LoadingState } from "../../shared/ui/LoadingState";
@@ -119,6 +120,7 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
         </section>}
         {mine && ['待审批', '待出车'].includes(detail.status) && <Button danger loading={state.pending === 'cancel'} disabled={state.busy} onClick={() => void state.act('cancel')}>取消申请</Button>}
         <ActionHistory title="操作记录" items={detail.history.map((entry,index)=>({key:index,title:actions[entry.action]||entry.action,actor:entry.actorName,time:time(entry.at)}))}/>
+        <NotificationRecords key={detail.id} source="vehicle-trip" resourceId={detail.id}/>
       </>}
     </Drawer>
     <Modal className="trip-reject-modal" centered width={480} title={<span className="trip-reject-title"><span><CircleAlert size={22} /></span>驳回申请</span>} open={rejectOpen && Boolean(detail) && detail?.status === '待审批'}

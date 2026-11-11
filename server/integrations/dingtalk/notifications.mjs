@@ -53,11 +53,16 @@ export async function queryWorkNotification(notification, recipient, {env=proces
     url.searchParams.set('access_token',await token());
     const response=await fetcher(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agent_id:Number(env.DINGTALK_AGENT_ID),task_id:notification.task_id}),signal:AbortSignal.timeout(10000)});
     const payload=await response.json().catch(()=>null);
-    if(!response.ok || !payload || payload.errcode || !payload.send_result) return {status:'unknown',error:'暂时无法查询发送结果'};
+    if(!response.ok || !payload || payload.errcode!==0 || !payload.send_result || typeof payload.send_result!=='object' || Array.isArray(payload.send_result)) return {status:'unknown',error:'暂时无法查询发送结果'};
     const result=payload.send_result;
     const includes=(list,id)=>Array.isArray(list)?list.map(String).includes(String(id)):String(list||'').split(',').includes(String(id));
-    if(includes(result.read_user_id_list,recipient) || includes(result.unread_user_id_list,recipient)) return {status:'sent'};
-    if(['failed_user_id_list','invalid_user_id_list','forbidden_user_id_list'].some(key=>includes(result[key],recipient))) return {status:'failed',error:'钉钉明确返回收件人发送失败',retryable:false};
+    if(!recipient) return {status:'unknown',error:'缺少实际发送账号，需核对平台记录'};
+    const sent=includes(result.read_user_id_list,recipient) || includes(result.unread_user_id_list,recipient);
+    const failed=['failed_user_id_list','invalid_user_id_list','forbidden_user_id_list'].some(key=>includes(result[key],recipient))
+      || (Array.isArray(result.forbidden_list)&&result.forbidden_list.some(entry=>String(entry?.userid)===String(recipient)));
+    if(sent&&failed) return {status:'unknown',error:'平台返回的发送结果不一致，请稍后手动核对'};
+    if(failed) return {status:'failed',error:'钉钉明确返回收件人发送失败',retryable:false};
+    if(sent) return {status:'sent'};
     return {status:'accepted',error:'等待钉钉发送结果'};
-  } catch { return {status:'unknown',error:'发送结果查询超时，将继续查询'}; }
+  } catch { return {status:'unknown',error:'发送结果查询超时，可稍后手动查询'}; }
 }

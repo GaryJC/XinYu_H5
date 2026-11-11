@@ -1,4 +1,5 @@
 import {pendingPhotoWaivers} from '../../shared/repairPhotoWaiver.mjs';
+import {suppressedDispatchNotificationKinds} from '../domain/notificationPolicy.mjs';
 import {photoWaiverActions} from '../domain/repairPhotoWaiver.mjs';
 import {sortDispatchTasks} from '../domain/dispatchTaskSort.mjs';
 import { warehouseRequests, matchesPartsStatus, sortWarehouseRequests } from '../../shared/warehouseRequests.mjs';
@@ -9,6 +10,7 @@ import {writePendingRepairs} from '../repositories/pendingRepairsRepository.mjs'
 import {enqueueDeferredNotifications} from '../repositories/inspectionDeferredRepository.mjs';
 import {partsSubmissionNotifications} from '../domain/partsSubmissionNotifications.mjs';
 import {hasPendingInspection} from '../../shared/repairProgress.mjs';
+import {canReceiveInspectionNotification} from '../domain/inspectionNotificationAudience.mjs';
 import { readPendingRepairs } from '../repositories/pendingRepairsRepository.mjs';
 import { inspectionReturnStats } from '../domain/inspectionReturnStats.mjs';
 import { listInspectionReturns } from '../repositories/inspectionReturnRepository.mjs';
@@ -140,19 +142,20 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
     if(input.action==='retry-scheduler-notifications') {
       if(!input.notificationJobId) throw new HttpError(400,'请选择派工通知任务');
       const result=await client.query(`update dispatch_scheduler_notifications set status='pending',error='',attempts=0,next_attempt_at=now(),locked_until=null,lease_id=null,updated_at=now()
-        where event_id::text=$1 and order_id=$2 and error<>'' and status in ('pending','failed') and (locked_until is null or locked_until<now()) returning event_id`,[input.notificationJobId,id]);
-      if(!result.rowCount) throw new HttpError(409,'该通知任务无需重试或正在处理中');
+        where event_id::text=$1 and order_id=$2 and kind<>all($3::text[]) and error<>'' and status in ('pending','failed') and (locked_until is null or locked_until<now()) returning event_id`,[input.notificationJobId,id,suppressedDispatchNotificationKinds]);
+      if(!result.rowCount) throw new HttpError(409,'该通知任务已停用、无需重试或正在处理中');
       return;
     }
     if(input.action==='retry-notification') {
       if(!input.notificationId) throw new HttpError(400,'请选择通知');
-      const result=await client.query(`update dispatch_notifications n set status='pending',error='',attempts=0,polls=0,task_id=null,next_attempt_at=now(),updated_at=now(),locked_until=null,lease_id=null
+      const result=await client.query(`update dispatch_notifications n set status='pending',error='',attempts=0,polls=0,task_id=null,delivery_user_id=null,delivery_submitted_at=null,result_queried_at=null,next_attempt_at=now(),updated_at=now(),locked_until=null,lease_id=null
         where n.id::text=$1 and n.order_id=$2 and n.status='failed' and (n.locked_until is null or n.locked_until<now())
+        and n.kind<>all($3::text[])
         and not (n.kind in ('维修已提检','回审已提交','待检验') and exists(
           select 1 from dispatch_notifications sibling where sibling.order_id=n.order_id and sibling.event_id=n.event_id
           and sibling.recipient_id=n.recipient_id and sibling.id<>n.id
-          and sibling.kind in ('维修已提检','回审已提交','待检验') and sibling.status<>'failed')) returning n.id`,[input.notificationId,id]);
-      if(!result.rowCount) throw new HttpError(409,'仅明确失败且没有同次提检通知在发送或已送达时可重试；结果未知时请先核对钉钉记录');
+          and sibling.kind in ('维修已提检','回审已提交','待检验') and sibling.status<>'failed')) returning n.id`,[input.notificationId,id,suppressedDispatchNotificationKinds]);
+      if(!result.rowCount) throw new HttpError(409,'已停用的通知不能重试；其他通知仅明确失败且没有同次提检通知在发送或已送达时可重试');
       return;
     }
     const recipients=[];
@@ -181,9 +184,9 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
       if(['assign','reassign','reoffer','reconcile','reopen-repair'].includes(input.action) && next.stage!=='维修完成') addHandlers(next,input.action==='reopen-repair'?(next.roundKind==='additional'?'追加维修派工':'返工派工'):'新派工');
       if(['reassign','cancel'].includes(input.action)) addHandlers(task,input.action==='cancel'?'派工已撤销':'任务已改派');
     }
-    const schedulerKind={decline:'无法接单',pause:'维修暂停','submit-review':'回审已提交','submit-order':'维修已提检',submit:'维修已提检'}[input.action];
-    if(schedulerKind && (!['submit-order','submit-review'].includes(input.action)||hasPendingInspection(next))) {
-      const payload={orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,actorName:actor.name,reason:input.action==='pause'?[input.pauseReason,input.note].filter(Boolean).join('：'):input.reason||input.note||''};
+    const schedulerKind={decline:'无法接单'}[input.action];
+    if(schedulerKind) {
+      const payload={orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,actorName:actor.name,reason:input.reason||input.note||''};
       await client.query('insert into dispatch_scheduler_notifications(event_id,order_id,kind,payload) values($1,$2,$3,$4)',[event.id,id,schedulerKind,JSON.stringify(payload)]);
     }
     if(hasPendingInspection(next)&&(['submit-review','submit-order','retry-inspection-notifications'].includes(input.action)
@@ -199,7 +202,8 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
       const issuedIds=input.partsIssue?[...new Set(input.partsIssue.map(row=>row.recipientId))]:parts?.recipientIds||[];
       issuedIds.forEach(id=>add(id,'配件已出库'));
     }
-    if(input.action==='submit' || input.action==='reassign-inspection') add(next.inspectorId,'待检验');
+    if((input.action==='submit' || input.action==='reassign-inspection')
+      && canReceiveInspectionNotification(next,people.find(person=>person.id===next.inspectorId))) add(next.inspectorId,'待检验');
     if(input.action==='send-review') addHandlers(next,'维修单回审');
     if(input.action==='inspect' && input.rejectedItemIds?.length) {
       const owners=new Set(next.items.filter(item=>input.rejectedItemIds.includes(item.id)).map(item=>item.responsibleId).filter(Boolean));

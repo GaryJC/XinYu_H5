@@ -142,7 +142,8 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
     const obsolete=(await deliveries(waiting.id))[0];let sent=0;
     await processTripNotification({database:pool,claim:async()=>({...obsolete,previous_status:'pending'}),finish:async(_,result)=>{assert.equal(result.status,'failed');assert.equal(result.retryable,false);},send:async()=>{sent++;}});
     assert.equal(sent,0);
-    // Real leases, retry schedule, platform acceptance and result polling, with a mocked transport.
+    // Real leases, retry schedule and platform acceptance without automatic result polling.
+    await pool.query("update users set dingtalk_user_id='test-delivery-'||id where id=any($1::text[])",[[manager.id,manager2.id]]);
     await pool.query("update vehicle_trip_notifications set locked_until=now()+interval '1 hour'");
     const target=(await deliveries(trip.id))[0];await pool.query('update vehicle_trip_notifications set locked_until=null where id=$1',[target.id]);
     const [leaseA,leaseB]=await Promise.all([notificationRepo.claimTripDelivery(pool),notificationRepo.claimTripDelivery(pool)]);
@@ -159,7 +160,7 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
     await pool.query('update vehicle_trip_notifications set next_attempt_at=now() where id=$1',[target.id]);
     await processTripNotification(transport);
     saved=(await pool.query('select * from vehicle_trip_notifications where id=$1',[target.id])).rows[0];
-    assert.equal(saved.status,'sent');assert.equal(sends,1);assert.equal(queries,1);
+    assert.equal(saved.status,'accepted');assert.equal(sends,1);assert.equal(queries,0);assert.ok(saved.delivery_user_id);assert.ok(saved.delivery_submitted_at);
     // Production roster failures do not fall back to whichever managers have logged in locally.
     const rosterTrip=await create(employee,{...key(),vehicleId:cars[2].id,reason:'通讯录故障测试'});
     await pool.query("update vehicle_trip_notification_jobs set locked_until=now()+interval '1 hour' where trip_id<>$1 and status='pending'",[rosterTrip.id]);

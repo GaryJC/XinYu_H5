@@ -48,15 +48,15 @@ async function runWorker({row={},context={},...extra}={}) {
  return {result,sends,queries};
 }
 test('trip worker sends current messages and cancels stale or unauthorized messages',async()=>{
- assert.deepEqual(await runWorker(),{result:{status:'accepted',taskId:'1'},sends:1,queries:0});
+ assert.deepEqual(await runWorker(),{result:{status:'accepted',taskId:'1',deliveryUserId:'ding-m'},sends:1,queries:0});
  for(const context of [{trip:{...trip,status:'待出车'}},{user:{...manager,active:false}},{user:{...manager,role:'employee'}},{user:{...manager,id:'another'}},{user:undefined}]) {
   const {result,sends}=await runWorker({context});assert.equal(sends,0);assert.equal(result.status,'failed');assert.equal(result.retryable,false);
  }
 });
-test('accepted or uncertain messages query the platform without sending again even if trip has moved on',async()=>{
+test('accepted or uncertain messages remain unchanged without automatic queries or resends',async()=>{
  for(const previous_status of ['accepted','unknown']) {
   const result=await runWorker({row:{previous_status,task_id:'123'},context:{trip:{...trip,status:'已还车'}}});
-  assert.deepEqual(result,{result:{status:'sent'},sends:0,queries:1});
+  assert.deepEqual(result,{result:{status:previous_status,error:''},sends:0,queries:0});
  }
 });
 test('pre-send failures retry, ambiguous sends stop automatic resends',async()=>{

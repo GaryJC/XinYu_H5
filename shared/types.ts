@@ -327,7 +327,7 @@ export type PaperOrderResolution = { mode: "dingtalk" } | { mode: "runfeng"; dis
 export type VehicleLicenseException = {
   id:string; reason:string; vehiclePlate:string; vehicleVin:string;
   reportedBy:string; reportedName:string; reportedAt:string;
-  notificationStatus:'pending'|'queued'|'failed'|'sent'|'unknown'; notificationError:string;
+  notificationStatus:'pending'|'queued'|'accepted'|'failed'|'sent'|'unknown'|'suppressed'; notificationError:string;
 };
 export type WorkOrder = {
   isBaiyuanOrder?: boolean;
@@ -509,9 +509,17 @@ export type TechnicianSummary = {
 } & Record<DispatchMetric, number>;
 export type DispatchNotification = {
   id: string; recipientName: string; kind: string;
-  status: "pending" | "accepted" | "sent" | "failed" | "unknown";
+  status: "pending" | "accepted" | "sent" | "failed" | "unknown" | "suppressed";
   error: string; createdAt: string; attempts: number; taskId?: string;
 };
+export type NotificationSource = 'dispatch' | 'procurement' | 'vehicle-trip' | 'license-exception' | 'vehicle-insurance';
+export type NotificationDelivery = {
+  id: string; kind: string; recipientName: string;
+  status: 'pending' | 'accepted' | 'sent' | 'failed' | 'unknown' | 'suppressed';
+  error: string; createdAt: string; canQuery: boolean;
+  attempts?: number; queryUnavailableReason?: string; simulated?: boolean; canRetry?: boolean;
+};
+export type NotificationQueryResult = Pick<NotificationDelivery, 'status' | 'error'>;
 export type DispatchEvent = {
   id: string; actorName: string; action: string; at: string;
   detail: { photoWaiver?:RepairPhotoWaiver; deferredItemIds?:number[]; deferredReason?:string; roundKind?: 'additional' | 'rework'; preparationGroups?:Array<PartsPreparationGroup & {partsRequirement:PartsRequirement}>; partsIssue?:Array<{index:number;recipientId:string}>; partsPreparation?:Array<{index:number;recipientId:string}>; reassignItemIds?:number[]; previousItems?:DispatchItem[]; partsRequirement?:PartsRequirement; repairRound?:number; items?:DispatchItem[]; reworkItemIds?:number[]; additionalItems?:string[]; workHours?: number; previousWorkHours?: number; note?: string; reason?: string; technicianName?: string; previousTechnicianName?: string; dueAt?: string; previousDueAt?: string; urgent?: boolean; stage: DispatchStage; itemId?: number; rejectedItemIds?: number[]; pauseReason?: string };

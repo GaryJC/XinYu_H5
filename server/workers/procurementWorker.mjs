@@ -4,7 +4,7 @@ import { pool } from '../database/pool.mjs';
 import { freezeDue } from '../repositories/procurementRepository.mjs';
 import * as repository from '../repositories/procurementNotificationRepository.mjs';
 import { notificationRecipient } from '../repositories/dispatchNotificationRepository.mjs';
-import { notificationConfiguration,sendWorkNotification,queryWorkNotification } from '../integrations/dingtalk/notifications.mjs';
+import { notificationConfiguration,sendWorkNotification } from '../integrations/dingtalk/notifications.mjs';
 import { procurementMessageBody } from '../integrations/dingtalk/procurementNotifications.mjs';
 import { syncManagerRoster } from '../integrations/dingtalk/managerRoster.mjs';
 export async function resolveProcurementRecipients({claim=repository.claimResolution,resolve=repository.resolveRecipients,fail=repository.failResolution,sync=syncManagerRoster,env=process.env}={}) {
@@ -12,15 +12,16 @@ export async function resolveProcurementRecipients({claim=repository.claimResolu
   try {const ids=notificationConfiguration(env)==='dingtalk'?await sync(job.shop_id,{roleKeys:[procurementNotificationRole(job.payload)]}):undefined;await resolve(job,ids);}
   catch(e){await fail(job,e.message||'接收人同步失败');}return true;
 }
-export async function deliverProcurementNotification({claim=repository.claimDelivery,finish=repository.finishDelivery,recipient=notificationRecipient,send=sendWorkNotification,query=queryWorkNotification,env=process.env}={}) {
+export async function deliverProcurementNotification({claim=repository.claimDelivery,finish=repository.finishDelivery,recipient=notificationRecipient,send=sendWorkNotification,env=process.env}={}) {
   const row=await claim();if(!row)return false;
-  let result,started=false;
+  let result,deliveryUserId,started=false;
   try {
     const user=await recipient(row.recipient_id);
-    if(row.previous_status!=='pending')result=await query(row,user?.dingtalk_user_id,{env});
+    if(row.previous_status!=='pending')result={status:row.previous_status,error:row.error||''};
     else if(!user?.active||user.shopId!==row.shop_id||!hasAnyRole(user, [procurementNotificationRole(row.payload)]))result={status:'failed',error:'收件人不属于本次通知的接收岗位',retryable:false};
-    else {started=true;result=await send(row,user.dingtalk_user_id,{env,buildMessage:procurementMessageBody});}
+    else {started=true;deliveryUserId=user.dingtalk_user_id;result=await send(row,user.dingtalk_user_id,{env,buildMessage:procurementMessageBody});}
   }catch{result=started||row.previous_status!=='pending'?{status:'unknown',error:'发送结果不确定，请核对钉钉记录'}:{status:'failed',error:'发送前校验失败',retryable:true};}
+ if(started && deliveryUserId) result={...result,deliveryUserId};
   await finish(row,result);return true;
 }
 export function startProcurementWorker() {

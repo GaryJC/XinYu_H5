@@ -1,4 +1,4 @@
-import { hasAnyRole } from "../../../shared/roles.mjs";
+import { hasRole } from "../../../shared/roles.mjs";
 import {pendingDingTalkRead} from './pendingRead.mjs';
 import { pool } from '../../database/pool.mjs';
 import { getDingTalkAccessToken } from './accessToken.mjs';
@@ -38,11 +38,10 @@ export async function listDingTalkRoleMembers(roleKeys,{fetcher=fetch,token=getD
   }
   return {ids:[...ids],accessToken};
 }
-export const listInspectorRoleMembers=options=>listDingTalkRoleMembers(['inspector','manager'],options);
+export const listInspectorRoleMembers=options=>listDingTalkRoleMembers(['inspector'],options);
 export async function syncInspectorRoster(shopId,{list=()=>listInspectorRoleMembers({coalesce:true}),profile=getDingTalkUserProfile,find=findUserByDingTalkUserId,upsert=upsertUserFromDingTalk,snapshot=saveDingTalkUserSnapshot,database=pool}={}) {
   const {ids,accessToken}=await list();
-  const eligible=[],inspectorIds=[];
-  const inspectionNames=definitions.filter(d=>['inspector','manager'].includes(d.role)).flatMap(d=>d.names);
+  const eligible=[];
   const inspectorNames=definitions.find(d=>d.role==='inspector').names;
   // Never use a partially fetched roster as the notification audience.
   const profiles=[];
@@ -52,11 +51,10 @@ export async function syncInspectorRoster(shopId,{list=()=>listInspectorRoleMemb
     const mapping=resolveDingTalkOrganizationMapping(p,{shopId:existing?.shopId||shopId});
     await snapshot(p);
     const user=await upsert({profile:p,mapping,existingUser:existing});
-    if(user?.active && user.shopId===shopId && hasAnyRole(user, ['inspector','manager']) && p.roles.some(r=>inspectionNames.includes(r.name))) {
+    if(user?.active && user.shopId===shopId && hasRole(user, 'inspector') && p.roles.some(r=>inspectorNames.includes(r.name))) {
       eligible.push(user.id);
-      if(p.roles.some(r=>inspectorNames.includes(r.name))) inspectorIds.push(user.id);
     }
   }
-  await database.query('update users set inspector_role_member=(id=any($2::text[])) where shop_id=$1 and dingtalk_user_id is not null',[shopId,inspectorIds]);
+  await database.query('update users set inspector_role_member=(id=any($2::text[])) where shop_id=$1 and dingtalk_user_id is not null',[shopId,eligible]);
   return eligible;
 }

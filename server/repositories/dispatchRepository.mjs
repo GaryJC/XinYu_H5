@@ -1,4 +1,5 @@
 import {currentPhotoWaiver,hasApprovedPhotoWaiver} from '../../shared/repairPhotoWaiver.mjs';
+import {suppressedDispatchNotificationKinds} from '../domain/notificationPolicy.mjs';
 import { verifyTechnicianMembership } from "../integrations/dingtalk/technicianRoster.mjs";
 import { createPendingRead } from '../domain/pendingRead.mjs';
 import {hasPendingInspection} from '../../shared/repairProgress.mjs';
@@ -9,6 +10,7 @@ import { readRepairRounds } from './repairRoundRepository.mjs';
 import { pool } from '../database/pool.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 import { assertDispatchAccess, canInspect, dispatchMetric, technicianIds } from '../domain/dispatchPolicy.mjs';
+import {canReceiveInspectionNotification} from '../domain/inspectionNotificationAudience.mjs';
 const projection = `select wo.id as order_id, wo.shop_id, wo.vehicle_plate, wo.dispatch_no, wo.arrival_date, wo.created_at,
   (select count(*)::integer from jsonb_array_elements(wo.pending_repairs) p where p->>'state'='pending' and coalesce(p->>'source','customer')<>'inspection') as pending_repair_count,
   (select count(*)::integer from jsonb_array_elements(wo.pending_repairs) p where p->>'source'='inspection' and p->>'inspectionState' in ('pending','scheduled')) as inspection_deferred_count,
@@ -39,11 +41,19 @@ export async function getDispatchTask(client, id, actor, lock=false) {
 }
 // Recheck queued inspection messages against the current task before delivery.
 export async function validateInspectionRecipient(notification, user, client=pool) {
-  if(!user?.active) return false;
-  const {rows}=await client.query(`${projection} where wo.id=$1`,[notification.order_id]);
+  if(!user?.active || !hasRole(user,'inspector')) return false;
+  const {rows}=await client.query(`select current_task.*,source.id as notification_event_id,source.detail as notification_event_detail,
+    (select max(e.id) from dispatch_events e where e.order_id=current_task.order_id
+      and (e.action in ('submit','reassign-inspection') or exists(select 1 from dispatch_inspection_notifications j where j.event_id=e.id))) as latest_inspection_event_id
+    from (${projection} where wo.id=$1) current_task
+    left join dispatch_events source on source.id=$2 and source.order_id=current_task.order_id`,[notification.order_id,notification.event_id??null]);
   if(!rows[0]) return false;
-  const task=mapTask(rows[0]);
-  return hasPendingInspection(task) && !task.needsReview && (!task.inspectorId || task.inspectorId===user.id) && Boolean(canInspect(task,user));
+  const row=rows[0],task=mapTask(row);
+  if(notification.event_id!=null && (String(row.notification_event_id)!==String(notification.event_id)
+    || (row.notification_event_detail?.repairRound||0)!==(task.repairRound||0)
+    || BigInt(row.latest_inspection_event_id||0)>BigInt(notification.event_id))) return false;
+  if(notification.payload?.repairRound!==undefined && notification.payload.repairRound!==(task.repairRound||0))return false;
+  return hasPendingInspection(task) && !task.needsReview && (!task.inspectorId || task.inspectorId===user.id) && canReceiveInspectionNotification(task,user);
 }
 // Advisory snapshot before external roster discovery. The worker must still
 // lock and recheck the task, latest event and lease before changing any queue.
@@ -133,7 +143,7 @@ export async function dispatchDetail(actor,id,client=pool) {
     ${hasAnyRole(actor, ['manager','advisor'])?'':'and n.recipient_id=$2'} order by n.created_at desc`,hasAnyRole(actor, ['manager','advisor'])?[id]:[id,actor.id]);
   const {rows:files}=await client.query("select nameplate_source_file_id,repair_round,id,kind,original_name,mime_type,size_bytes,created_at,uploaded_by,(select name from users where users.id=files.uploaded_by) as uploaded_name from files where order_id=$1 and kind in ('vehicle_nameplate_photo','repair_completed_photo','repair_parts_photo','repair_progress_photo','repair_order_photo','damage_photo','other') order by created_at",[id]);
   const {rows:jobs}=await client.query('select status,error from dispatch_inspection_notifications where order_id=$1 order by event_id desc limit 1',[id]);
-  const schedulerNotifications=hasAnyRole(actor, ['manager','advisor'])?(await client.query('select event_id::text as "eventId",kind,status,error from dispatch_scheduler_notifications where order_id=$1 order by event_id desc limit 20',[id])).rows:undefined;
+  const schedulerNotifications=hasAnyRole(actor, ['manager','advisor'])?(await client.query('select event_id::text as "eventId",kind,status,error from dispatch_scheduler_notifications where order_id=$1 and kind<>all($2::text[]) order by event_id desc limit 20',[id,suppressedDispatchNotificationKinds])).rows:undefined;
   const repairRounds=await readRepairRounds(client,id);
   const catalog=new Map();
   for(const r of repairRounds) for(const i of r.task.items) catalog.set(i.id,{id:i.id,name:i.name});

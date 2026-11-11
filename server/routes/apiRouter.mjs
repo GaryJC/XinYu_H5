@@ -1,4 +1,5 @@
 import { handlePurchaseDocuments } from './purchaseDocumentRouter.mjs';
+import { handleNotifications } from './notificationRouter.mjs';
 import { isOrderEntryRequest } from "../domain/orderEntryAccess.mjs";
 import { businessAnalytics } from '../services/businessAnalyticsService.mjs';
 import { operationsDashboard } from "../services/operationsDashboardService.mjs";
@@ -84,6 +85,8 @@ export async function handleApiRequest(req, res, url) {
 
   if (!url.pathname.startsWith("/api/")) return false;
   const currentUser = requireAuthenticatedUser(await authenticateRequest(req));
+
+  if (await handleNotifications(req, res, url, currentUser)) return true;
 
 
   if (req.method === "GET" && url.pathname === "/api/auth/me") {

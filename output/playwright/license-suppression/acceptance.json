@@ -1,0 +1,26 @@
+[
+  {
+    "width": 360,
+    "reads": 1,
+    "posts": 0,
+    "noOverflow": true,
+    "currentNoticeHasNoNotificationPanel": true,
+    "legacyPanelLoadsOnDemand": true
+  },
+  {
+    "width": 390,
+    "reads": 1,
+    "posts": 0,
+    "noOverflow": true,
+    "currentNoticeHasNoNotificationPanel": true,
+    "legacyPanelLoadsOnDemand": true
+  },
+  {
+    "width": 1440,
+    "reads": 1,
+    "posts": 0,
+    "noOverflow": true,
+    "currentNoticeHasNoNotificationPanel": true,
+    "legacyPanelLoadsOnDemand": true
+  }
+]

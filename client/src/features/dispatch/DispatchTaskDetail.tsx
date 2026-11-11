@@ -1,4 +1,5 @@
 import {PhotoWaiverRecord} from './RepairPhotoWaiverPanel';
+import { NotificationRecords } from '../notifications/NotificationRecords';
 import { useDispatchProjectFocus } from './useDispatchProjectFocus';
 import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { LoadingState } from "../../shared/ui/LoadingState";
@@ -151,7 +152,7 @@ export function DispatchTaskDetail({controller,user,readyForFocus=true}:{control
     <Collapse items={[{key:"sheet",label:"完整派工单与接车照片",children:<DispatchSheetSummary task={task} files={files}/>}]} />
     <RepairRoundHistory detail={detail}/>
     <Collapse items={[{key:"history",label:"通知与操作记录",children:<>
-    <ActionHistory title="通知记录" emptyText="暂无通知记录" items={notifications.map(n=>({key:n.id,title:n.kind,actor:n.recipientName,time:displayTime(n.createdAt),detail:<><Tag color={n.status==='failed'?'red':n.status==='sent'?'green':'default'}>{notificationLabels[n.status]}</Tag><p>尝试 {n.attempts} 次</p>{n.error?<p role="status">{n.error}</p>:null}{controller.manager&&n.status==='failed'?<Button size="small" loading={controller.busy} disabled={controller.busy} onClick={()=>void controller.act({action:'retry-notification',notificationId:n.id})}>重试通知</Button>:null}</>}))}><p>消息发送成功不代表维修工已接单。结果未知时不会自动重发。</p></ActionHistory>
+    {controller.manager?<NotificationRecords key={task.orderId} source="dispatch" resourceId={task.orderId} retryBusy={controller.busy} onRetry={id=>controller.act({action:'retry-notification',notificationId:id})}/>:<ActionHistory title="通知记录" emptyText="暂无通知记录" items={notifications.map(n=>({key:n.id,title:n.kind,actor:n.recipientName,time:displayTime(n.createdAt),detail:<><Tag color={n.status==='failed'?'red':n.status==='sent'?'green':'default'}>{notificationLabels[n.status]}</Tag><p>尝试 {n.attempts} 次</p>{n.error?<p role="status">{n.error}</p>:null}</>}))}><p>平台受理尚未确认送达。结果未知时不会自动重发。</p></ActionHistory>}
     <ActionHistory title="操作与交接记录" items={events.map(event=>({key:event.id,title:event.action==='due-reminder'?'即将到期提醒':dispatchEventLabel(event),actor:event.actorName,time:displayTime(event.at),detail:<><p>{event.detail.stage}{event.detail.repairRound?` · ${event.detail.roundKind==='additional'?'追加维修第':'返工第'} ${event.detail.repairRound} 轮`:""}</p>
       {event.detail.previousTechnicianName&&event.detail.previousTechnicianName!==event.detail.technicianName?<p>{event.detail.previousTechnicianName} → {event.detail.technicianName||'待派工'}</p>:null}
       {['accept','record-parts','edit-parts','confirm-parts','issue-parts'].includes(event.action)&&event.detail.partsRequirement?<PartsRequirementSummary value={event.detail.partsRequirement}/>:null}
