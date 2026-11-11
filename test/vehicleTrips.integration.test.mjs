@@ -347,18 +347,20 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
     const mockEnv={APP_ENV:'test',DISPATCH_NOTIFICATION_MODE:'mock'};
     await pool.query("update company_vehicles set active=true,insurance_start='2020-01-01',insurance_end=(now() at time zone 'Asia/Shanghai')::date+7 where id=$1",[car.id]);
     await queueInsuranceReminders({database:pool,env:mockEnv});
-    const queued=await pool.query('select * from vehicle_insurance_notifications where vehicle_id=$1',[car.id]);assert.ok(queued.rows.length>0);
-    await queueInsuranceReminders({database:pool,env:mockEnv});
-    assert.equal((await pool.query('select count(*)::int as n from vehicle_insurance_notifications where vehicle_id=$1',[car.id])).rows[0].n,queued.rows.length);
-    let insuranceSends=0;
-    await deliverInsuranceReminder({database:{query:(sql,args)=>sql.startsWith('select v.plate')?Promise.reject(new Error('temporary database failure')):pool.query(sql,args)},env:mockEnv,send:async()=>{insuranceSends++;return {status:'sent'};}});
-    assert.equal(insuranceSends,0);
-    assert.equal((await pool.query("select count(*)::int as n from vehicle_insurance_notifications where vehicle_id=$1 and status='pending'",[car.id])).rows[0].n,queued.rows.length);
-    await pool.query("update vehicle_insurance_notifications set next_attempt_at=now() where status='pending'");
-    await deliverInsuranceReminder({database:pool,env:mockEnv,send:async()=>{insuranceSends++;return {status:'accepted',taskId:'mock-insurance'};}});assert.equal(insuranceSends,1);
-    await pool.query("update company_vehicles set insurance_end='2099-12-31' where id=$1",[car.id]);
-    while(await deliverInsuranceReminder({database:pool,env:mockEnv,send:async()=>{insuranceSends++;return {status:'sent'};}})){}
-    assert.equal(insuranceSends,1,'renewed policy must not notify');
+    assert.equal((await pool.query('select count(*)::int as n from vehicle_insurance_notifications where vehicle_id=$1',[car.id])).rows[0].n,0);
+    const historical=[];
+    for(const [index,status] of ['pending','accepted','unknown','sent','failed'].entries()) {
+      const id=randomUUID();
+      await pool.query("insert into vehicle_insurance_notifications(id,vehicle_id,recipient_id,insurance_end,milestone,status,error) values($1,$2,$3,current_date,$4,$5,'history')",[id,car.id,manager.id,index,status]);
+      historical.push((await pool.query('select * from vehicle_insurance_notifications where id=$1',[id])).rows[0]);
+    }
+    await pool.query(await fs.readFile('supabase/migrations/202611110006_suppressed_insurance_notifications.sql','utf8'));
+    for(const row of historical) {
+      const saved=(await pool.query('select * from vehicle_insurance_notifications where id=$1',[row.id])).rows[0];
+      if(row.status==='pending'){assert.equal(saved.status,'suppressed');assert.equal(saved.next_attempt_at,null);}
+      else assert.deepEqual(saved,row);
+    }
+    assert.equal(await deliverInsuranceReminder({database:pool,env:mockEnv,send:async()=>assert.fail('insurance sending is disabled')}),false);
     await pool.query('update users set active=false where id=$1', [employee.id]);
     assert.equal((await get('/api/vehicle-trip-requests')).status, 401);
   } finally {

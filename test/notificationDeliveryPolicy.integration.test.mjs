@@ -24,9 +24,8 @@ test('active notification queues leave accepted and unknown deliveries for expli
       ['dispatch_notifications',()=>dispatch.claimNotification(database),(row,result)=>dispatch.finishNotification(row,result,database)],
       ['procurement_notifications',()=>procurement.claimDelivery(database),(row,result)=>procurement.finishDelivery(row,result,database)],
       ['vehicle_trip_notifications',()=>trip.claimTripDelivery(database),(row,result)=>trip.finishTripDelivery(row,result,database)],
-      ['vehicle_insurance_notifications',()=>insurance.claimInsurance(database),(row,result)=>insurance.finishInsurance(database,row,result)]
     ];
-    for(const table of [...queues.map(([table])=>table),'vehicle_license_exception_notifications'])await database.query(`create table ${table} (
+    for(const table of [...queues.map(([table])=>table),'vehicle_license_exception_notifications','vehicle_insurance_notifications'])await database.query(`create table ${table} (
       id text primary key,status text default 'pending',task_id text,error text default '',retryable boolean default false,
       attempts integer default 0,polls integer default 0,next_attempt_at timestamptz default now(),
       locked_until timestamptz,lease_id uuid,created_at timestamptz default now(),updated_at timestamptz default now(),insurance_end date default current_date
@@ -35,6 +34,8 @@ test('active notification queues leave accepted and unknown deliveries for expli
     await database.query("insert into vehicle_license_exception_notifications(id,status,task_id) values ('accepted','accepted','old-task'),('unknown','unknown','uncertain-task'),('pending','pending',null)");
     assert.equal(await license.claimLicenseDelivery(database),undefined,'even old pending license notices cannot be delivered');
     assert.equal((await database.query("select attempts from vehicle_license_exception_notifications where id='pending'")).rows[0].attempts,0);
+    await database.query("insert into vehicle_insurance_notifications(id,status) values('pending','pending')");
+    assert.equal(await insurance.claimInsurance(database),undefined);
     for(const [table,claim,finish] of queues) {
       await database.query(`insert into ${table}(id,status,task_id) values ('accepted','accepted','old-task'),('uncertain','unknown','other-task'),('lost','unknown',null),('new','pending',null)`);
       const row=await claim();assert.equal(row.id,'new',table);assert.equal(row.status,'unknown');

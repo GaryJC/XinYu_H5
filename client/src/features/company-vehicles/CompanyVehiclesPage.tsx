@@ -1,5 +1,4 @@
 import { Pencil } from 'lucide-react';
-import { NotificationRecords } from '../notifications/NotificationRecords';
 import {insuranceState} from '../../../../shared/vehicleInsurance.mjs';
 import { LoadingState } from "../../shared/ui/LoadingState";
 import { useActionFeedback } from "../../shared/ui/useActionFeedback";
@@ -32,7 +31,6 @@ export function CompanyVehiclesPage() {
         <Button icon={<Pencil size={16} aria-hidden="true" />} disabled={state.busy} onClick={() => edit(car)}>编辑车辆</Button>
         <Button danger={car.active} disabled={state.busy} onClick={() => Modal.confirm({ title: `${car.active ? '停用' : '启用'} ${car.plate}？`, content: car.active ? '停用后不能新申请或新出车，已出车仍可还车。' : '启用后可选择这辆车申请出车。', onOk: async () => { if (!await state.save({ ...car, active: !car.active }, car.id)) throw new Error('保存失败'); } })}>{car.active ? '停用' : '启用'}</Button>
       </Space>
-      <NotificationRecords source="vehicle-insurance" resourceId={car.id} title="保险通知记录"/>
     </Card>)}</div>
     <Modal open={Boolean(state.importData)} title="确认导入车辆及保险" okText="确认更新" cancelText="取消" confirmLoading={state.busy} onCancel={()=>!state.busy&&state.cancelImport()} onOk={()=>void state.confirmImport()}>
       <p>按新车牌号更新或新增；表外车辆保留，已有车辆启停状态不变。</p>
