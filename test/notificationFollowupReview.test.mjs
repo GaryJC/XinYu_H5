@@ -111,15 +111,15 @@ test('upcoming notices target unfinished workers and cancel queued delivery afte
   assert.equal(isCurrentDueReminder(task,reminder(task),tech,reminderTime),false);
   let sent=false,result;
   await processNotification({claim:async()=>reminder(task),recipient:async()=>tech,validateDue:(row,user)=>validateDueReminder(row,user,{database:reminderDatabase(task),now:reminderTime}),send:async()=>{sent=true;return {status:'sent'};},finish:async(_,value)=>{result=value;}});
-  assert.equal(sent,false);assert.equal(result.status,'failed');assert.equal(result.retryable,false);
+  assert.equal(sent,false);assert.equal(result.status,'suppressed');assert.notEqual(result.retryable,true);
  }
 });
 
-test('own unfinished additions, active repairs and pauses still receive upcoming reminders',async()=>{
+test('legacy eligible additions and pauses no longer pass delivery validation',async()=>{
  for(const status of ['待派工','待领料','待开工','维修中']) {
   const task=dueTask();task.items.push({id:3,responsibleId:'a',status});
   assert.deepEqual(dueReminderRecipients(task,[tech,other],reminderTime).map(p=>p.id),['a','b']);
-  assert.equal(await validateDueReminder(reminder(task),tech,{database:reminderDatabase(task),now:reminderTime}),true);
+  assert.equal(await validateDueReminder(reminder(task),tech,{database:reminderDatabase(task),now:reminderTime}),false);
  }
  for(const global of [false,true]) {
   const task=dueTask();task.items[0].status='维修中';
@@ -139,34 +139,4 @@ test('legacy unsubmitted completion and missing owner items retain reminder beha
  assert.deepEqual(dueReminderRecipients(task,noTechRoles,reminderTime),[]);
  assert.deepEqual(dueReminderRecipients(task,[{...tech,role:'advisor',roles:['advisor','technician']}],reminderTime).map(p=>p.id),['a']);
  assert.deepEqual(dueReminderRecipients({...task,executionMode:'outsourced'},[tech,other],reminderTime),[]);
-});
-
-test('deadline candidate limit ignores workers whose own work was already submitted or inspected', {skip:!process.env.DISPATCH_TEST_ADMIN_URL,timeout:30000},async()=>{
- const {default:pg}=await import('pg');
- const {dueReminderCandidates}=await import('../server/repositories/dueReminderRepository.mjs');
- const url=new URL(process.env.DISPATCH_TEST_ADMIN_URL);
- assert.ok(['localhost','127.0.0.1','[::1]'].includes(url.hostname),'Only a local test server is allowed');
- const client=new pg.Client({connectionString:url.toString(),connectionTimeoutMillis:5000});
- await client.connect();
- try {
-  await client.query('begin');
-  // Temporary tables shadow application names only on this test connection.
-  await client.query('create temporary table work_orders(id text,shop_id text,vehicle_plate text,dispatch_no text,status text) on commit drop');
-  await client.query('create temporary table dispatch_tasks(order_id text,technician_id text,inspector_id text,stage text,version integer,data jsonb) on commit drop');
-  await client.query('create temporary table users(id text,active boolean,role text,roles text[],shop_id text) on commit drop');
-  await client.query('create temporary table dispatch_due_reminders(order_id text,recipient_id text,repair_round integer,due_at timestamptz,lead_minutes integer) on commit drop');
-  await client.query("insert into users values('a',true,'technician','{}','s'),('b',true,'technician','{}','s')");
-  const blocked=dueTask();blocked.items[0].status='已完工';blocked.items[1].status='已完工';
-  await client.query("insert into work_orders select 'complete-'||n,'s','TEST','','维修中' from generate_series(1,110) n");
-  await client.query("insert into dispatch_tasks select id,'a',null,'维修中',1,$1::jsonb from work_orders",[JSON.stringify(blocked)]);
-  const pending=dueTask();pending.dueAt=new Date(reminderTime+1900000).toISOString();
-  await client.query("insert into work_orders values('pending','s','TEST','','维修中')");
-  await client.query("insert into dispatch_tasks values('pending','a',null,'维修中',1,$1)",[JSON.stringify(pending)]);
-  assert.deepEqual((await dueReminderCandidates(client,reminderTime)).map(task=>task.orderId),['pending']);
-  await client.query("insert into dispatch_due_reminders values('pending','b',0,$1,60)",[pending.dueAt]);
-  assert.deepEqual(await dueReminderCandidates(client,reminderTime),[],'the submitted coworker cannot keep a fully handled order in the candidate batch');
-  delete pending.workerSubmissions;
-  await client.query("update dispatch_tasks set data=$1 where order_id='pending'",[JSON.stringify(pending)]);
-  assert.deepEqual((await dueReminderCandidates(client,reminderTime)).map(task=>task.orderId),['pending'],'legacy work still requiring formal submission remains eligible');
- } finally {await client.query('rollback').catch(()=>{});await client.end();}
 });

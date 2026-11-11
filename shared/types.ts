@@ -513,6 +513,13 @@ export type DispatchNotification = {
   error: string; createdAt: string; attempts: number; taskId?: string;
 };
 export type NotificationSource = 'dispatch' | 'procurement' | 'vehicle-trip' | 'license-exception' | 'vehicle-insurance';
+export type NotificationUsage = {
+ trackingSince: string | null; date:string; page:number; pageSize:number; budget:number; completeDays:number; average:number|null;
+ daily:Array<{date:string;total:number;sends:number;queries:number;unresolved:number;coverage:'none'|'partial'|'full'}>;
+ groups:Array<{kind:string;total:number;sends:number;queries:number}>;
+ recipients:Array<{id:string;name:string;total:number}>;
+ rows:Array<{id:string;startedAt:string;operation:'send'|'query';source:NotificationSource;notificationId:string;resourceId:string;eventKey:string;recipientName:string;kind:string;outcome:string;httpStatus:number|null;apiCode:string|null;durationMs:number|null;platformTaskId:string|null}>;
+};
 export type NotificationDelivery = {
   id: string; kind: string; recipientName: string;
   status: 'pending' | 'accepted' | 'sent' | 'failed' | 'unknown' | 'suppressed';

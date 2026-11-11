@@ -192,7 +192,7 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
         assert.equal((await pool.query("select count(*) from legacy_sync_outbox where order_id='remote'")).rows[0].count,'0');
         assert.equal((await pool.query("select count(*) from dispatch_tasks where order_id='remote'")).rows[0].count,'0');
         const notices=(await pool.query("select * from dispatch_notifications where order_id='remote' and kind='需确认用户签字' order by recipient_id")).rows;
-        assert.deepEqual(notices.map(r=>r.recipient_id),['a','m']);
+        assert.deepEqual(notices.map(r=>r.recipient_id),['a']);
         const {messageBody}=await import('../server/integrations/dingtalk/notifications.mjs');
         const message=messageBody(notices[0],'customer-advisor',{DISPATCH_APP_URL:'https://example.com/',DINGTALK_AGENT_ID:'1'});
         assert.match(message.msg.markdown.text,/workOrder=remote/);assert.match(message.msg.markdown.text,/确认/);
@@ -205,25 +205,32 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
         await pool.query("insert into signature_tokens(token,order_id,expires_at) values($1,'remote',now()+interval '1 day')",[extraToken]);
         await assert.rejects(()=>db.signWorkOrderByToken(extraToken,'覆盖签名',order.customerSignatureFileId),e=>e.status===409);
         const {validateSignatureReviewRecipient}=await import('../server/repositories/customerSignatureReviewRepository.mjs');
-        assert.equal(await validateSignatureReviewRecipient(notices[1],manager,pool),true);
+        const advisor={...manager,id:'a',role:'advisor',name:'负责顾问'};
+        const oldManagerNotice={...notices[0],recipient_id:'m'};
+        assert.equal(await validateSignatureReviewRecipient(oldManagerNotice,manager,pool),false);
+        assert.equal(await validateSignatureReviewRecipient({...notices[0],recipient_id:'b'},{...advisor,id:'b'},pool),false);
+        assert.equal(await validateSignatureReviewRecipient(notices[0],{...advisor,active:false},pool),false);
+        assert.equal(await validateSignatureReviewRecipient(notices[0],{...advisor,shopId:'other'},pool),false);
+        assert.equal(await validateSignatureReviewRecipient(notices[0],{...advisor,role:'manager',roles:['manager','advisor']},pool),true);
+        assert.equal(await validateSignatureReviewRecipient(notices[0],advisor,pool),true);
         const resign=await db.createSignatureTokenForOrder('remote',manager.name,{renew:true});
         assert.equal(resign.signatures.customer,undefined);
         assert.equal(resign.customerSignatureReview,undefined);
         assert.equal((await post(`${root}/session`,{token})).status,404);
         assert.equal((await post(`${root}/session`,{token:resign.signatureToken})).body.expiresAt,null);
-        assert.equal(await validateSignatureReviewRecipient(notices[1],manager,pool),false);
+        assert.equal(await validateSignatureReviewRecipient(notices[0],advisor,pool),false);
         assert.equal((await post(`${root}/sign`,{token:resign.signatureToken,imageBase64:png,confirmed:true})).status,200);
         const resigned=await db.findWorkOrderById(pool,'remote');
         const newNotices=(await pool.query("select * from dispatch_notifications where order_id='remote' and kind='需确认用户签字' and status='pending' order by recipient_id")).rows;
-        assert.deepEqual(newNotices.map(r=>r.recipient_id),['a','m']);
+        assert.deepEqual(newNotices.map(r=>r.recipient_id),['a']);
         assert.equal(await validateSignatureReviewRecipient(newNotices[0],{...manager,id:'a',role:'advisor'},pool),true);
-        assert.equal(await validateSignatureReviewRecipient(notices[1],manager,pool),false);
+        assert.equal(await validateSignatureReviewRecipient(notices[0],advisor,pool),false);
         const approved=await Promise.all([db.confirmCustomerSignature('remote',{...manager,id:'a',role:'advisor',name:'负责顾问'}),db.confirmCustomerSignature('remote',manager)]);
         assert.equal(approved[0].customerSignatureReview.state,'confirmed');
         assert.equal(approved[0].customerSignatureFileId,resigned.customerSignatureFileId);
         assert.equal((await pool.query("select count(*) from legacy_sync_outbox where order_id='remote'")).rows[0].count,'1');
         assert.equal((await pool.query("select count(*) from dispatch_tasks where order_id='remote'")).rows[0].count,'1');
-        assert.equal(await validateSignatureReviewRecipient(notices[1],manager,pool),false);
+        assert.equal(await validateSignatureReviewRecipient(notices[0],advisor,pool),false);
         await assert.rejects(()=>db.confirmCustomerSignature('renew',manager),e=>e.status===409);
       } finally {
         await new Promise(resolve=>server.close(resolve));await fs.rm(uploads,{recursive:true,force:true});
@@ -234,6 +241,7 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       for(const status of ['待处理纸质委托书','维修中','完成']) {
         const id=`supplement-${status}`;
         const file=await seed(id,status);
+        await pool.query("update work_orders set advisor='负责顾问' where id=$1",[id]);
         if(status!=='完成')await pool.query("update work_orders set paper_order=$2 where id=$1",[id,JSON.stringify({mode:status==='待处理纸质委托书'?'pending':'runfeng',photoIds:[file]})]);
         // Imported records may have a textual signer but no signature image.
         await pool.query("insert into signatures(order_id,signer_type,signer_name) values($1,'customer','纸质签字')",[id]);

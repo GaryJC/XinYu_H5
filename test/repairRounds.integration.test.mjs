@@ -45,7 +45,7 @@ test('repair rounds persist independently, serialize concurrent reopen and prese
   assert.equal((await pool.query("select count(*) from dispatch_notifications where kind='返工派工' and order_id='closed'")).rows[0].count,'1');
   assert.ok((await svc.queryDispatchTasks(manager)).some(t=>t.orderId==='closed'));assert.ok((await svc.queryDispatchTasks(newTech,{stage:'待接单'})).some(t=>t.orderId==='closed'));assert.equal((await svc.myRepairCounts(newTech)).pendingAccept,1);
   assert.ok(!(await svc.queryDispatchTasks(manager,{stage:'完成'})).some(t=>t.orderId==='closed'));
-  await queueDueReminders();assert.equal((await pool.query("select count(*) from dispatch_due_reminders where order_id='closed' and repair_round=1")).rows[0].count,'1');
+  await queueDueReminders();assert.equal((await pool.query("select count(*) from dispatch_due_reminders where order_id='closed' and repair_round=1")).rows[0].count,'0');
   await processNotification({send:async()=>({status:'failed',error:'模拟发送失败',retryable:false})});assert.equal((await svc.dispatchDetail(manager,'closed')).task.stage,'待接单');
   async function act(user,action,extra={},id='closed') {const t=(await svc.dispatchDetail(manager,id)).task;const detail=await svc.executeDispatchAction(user,id,{action,expectedVersion:t.version,requestId:randomUUID(),...(action==='inspect'&&!extra.rejectedItemIds?.length?{workHours:2.5}:{}),...(action==='accept'?{partsRequirement:{mode:'none',items:[],photoIds:[]}}:{}),...extra});return detail.task;}
   await createFileRecord({orderId:'closed',kind:'repair_progress_photo',storageProvider:'local',bucket:'',objectKey:'historic',mimeType:'image/png',sizeBytes:4,uploadedBy:tech.id});

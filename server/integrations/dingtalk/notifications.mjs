@@ -1,3 +1,4 @@
+import {tracedNotificationFetch} from './notificationTracing.mjs';
 import { getDingTalkAccessToken } from './accessToken.mjs';
 export function notificationConfiguration(env=process.env) {
   const mode=env.DISPATCH_NOTIFICATION_MODE || 'disabled';
@@ -23,7 +24,7 @@ export function messageBody(notification, recipient, env=process.env) {
     msg:{msgtype:'markdown',markdown:{title:`${notification.kind} · ${data.plate || data.orderId}`,
       text:`### ${escape(notification.kind)} · ${escape(data.plate || data.orderId)}\n\n${escape(data.dispatchNo || data.orderId)}\n\n${escape(data.summary)}${data.actorName?`\n\n操作人：${escape(data.actorName)}`:''}${data.notice?`\n\n${escape(data.notice)}`:''}\n\n${data.customerSignature ? (data.supplemental ? '请核对补充签名并确认' : '需确认用户签字，确认后才进入后续流程') : data.paperOrder ? '创建人已上传纸质委托书照片' : `预计完工：${due}`}${data.reason?`\n\n${escape(data.reason)}`:''}\n\n[${data.customerSignature ? "查看委托单并确认签字" : data.paperOrder ? "查看纸质委托书" : "查看维修任务"}](${url.toString()})`}}};
 }
-export async function sendWorkNotification(notification, recipient, {env=process.env,fetcher=fetch,token=getDingTalkAccessToken,buildMessage=messageBody}={}) {
+export async function sendWorkNotification(notification, recipient, {env=process.env,fetcher=fetch,token=getDingTalkAccessToken,buildMessage=messageBody,source='dispatch',recorder,log}={}) {
   const mode=notificationConfiguration(env);
   if(mode==='mock') return {status:'accepted',taskId:`mock-${notification.id}`};
   if(mode!=='dingtalk') return {status:'failed',error:'通知发送尚未启用',retryable:false};
@@ -33,7 +34,8 @@ export async function sendWorkNotification(notification, recipient, {env=process
   try {
     const url=new URL('https://oapi.dingtalk.com/topapi/message/corpconversation/asyncsend_v2');
     url.searchParams.set('access_token',accessToken);
-    const response=await fetcher(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(buildMessage(notification,recipient,env)),signal:AbortSignal.timeout(10000)});
+    const request={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(buildMessage(notification,recipient,env)),signal:AbortSignal.timeout(10000)};
+    const response=await tracedNotificationFetch(url,request,{fetcher,env,source,notification,operation:'send',recorder,log});
     const payload=await response.json().catch(()=>null);
     if(response.status===429) return {status:'failed',error:'钉钉限流',retryable:true};
     if(!response.ok || !payload || payload.errcode===undefined) return {status:'unknown',error:'钉钉返回结果不确定，请核对平台记录'};
@@ -42,7 +44,7 @@ export async function sendWorkNotification(notification, recipient, {env=process
     return {status:'accepted',taskId:String(payload.task_id)};
   } catch { return {status:'unknown',error:'发送请求超时或连接中断，可能已发送，不自动重发'}; }
 }
-export async function queryWorkNotification(notification, recipient, {env=process.env,fetcher=fetch,token=getDingTalkAccessToken}={}) {
+export async function queryWorkNotification(notification, recipient, {env=process.env,fetcher=fetch,token=getDingTalkAccessToken,source='dispatch',recorder,log}={}) {
   if(notification.task_id?.startsWith('mock-')) {
     return env.DISPATCH_NOTIFICATION_MODE==='mock' && ['development','test'].includes(env.APP_ENV)
       ? {status:'sent'} : {status:'unknown',error:'模拟任务不能作为生产发送结果'};
@@ -51,7 +53,8 @@ export async function queryWorkNotification(notification, recipient, {env=proces
   try {
     const url=new URL('https://oapi.dingtalk.com/topapi/message/corpconversation/getsendresult');
     url.searchParams.set('access_token',await token());
-    const response=await fetcher(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agent_id:Number(env.DINGTALK_AGENT_ID),task_id:notification.task_id}),signal:AbortSignal.timeout(10000)});
+    const request={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agent_id:Number(env.DINGTALK_AGENT_ID),task_id:notification.task_id}),signal:AbortSignal.timeout(10000)};
+    const response=await tracedNotificationFetch(url,request,{fetcher,env,source,notification,operation:'query',recorder,log});
     const payload=await response.json().catch(()=>null);
     if(!response.ok || !payload || payload.errcode!==0 || !payload.send_result || typeof payload.send_result!=='object' || Array.isArray(payload.send_result)) return {status:'unknown',error:'暂时无法查询发送结果'};
     const result=payload.send_result;

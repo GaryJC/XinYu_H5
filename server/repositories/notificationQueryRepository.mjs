@@ -40,7 +40,7 @@ export async function notificationResource(source, id, database) {
 export async function notificationRecord(source, id, database) {
   const definition = notificationSource(source);
   notificationIdentifier(id, definition.uuid);
-  const extra = source === 'vehicle-trip' ? 'j.trip_id as resource_id' : source === 'procurement' ? 'coalesce(n.tender_id,n.report_id) as resource_id' : `n.${definition.resourceColumn} as resource_id`;
+  const extra = source === 'vehicle-trip' ? 'j.trip_id as resource_id,j.action' : source === 'procurement' ? 'coalesce(n.tender_id,n.report_id) as resource_id' : `n.${definition.resourceColumn} as resource_id`;
   const join = source === 'vehicle-trip' ? 'join vehicle_trip_notification_jobs j on j.id=n.job_id' : '';
   const { rows } = await database.query(`select n.*,${extra} from ${definition.table} n ${join} where n.id=$1`, [id]);
   return rows[0];

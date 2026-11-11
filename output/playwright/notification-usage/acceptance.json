@@ -1,0 +1,23 @@
+[
+  {
+    "width": 360,
+    "reads": 3,
+    "posts": 0,
+    "noOverflow": true,
+    "clearsOnIdentity": true
+  },
+  {
+    "width": 390,
+    "reads": 3,
+    "posts": 0,
+    "noOverflow": true,
+    "clearsOnIdentity": true
+  },
+  {
+    "width": 1440,
+    "reads": 3,
+    "posts": 0,
+    "noOverflow": true,
+    "clearsOnIdentity": true
+  }
+]

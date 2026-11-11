@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 
 const adminUrl = process.env.SUPPRESSION_TEST_ADMIN_URL;
+const dueMigration = '202611110004_suppressed_due_reminders.sql';
 const suppressionMigration = '202611110002_suppressed_notification_kinds.sql';
 
 test('notification suppression upgrades queued work without rewriting delivery history or paper read grants', { skip: !adminUrl, timeout: 120000 }, async t => {
@@ -20,7 +21,7 @@ test('notification suppression upgrades queued work without rewriting delivery h
     Object.assign(process.env, { DATABASE_URL: url.toString(), APP_ENV: 'test', DISPATCH_NOTIFICATION_MODE: 'mock' });
     database = new pg.Client({ connectionString: url.toString() });
     await database.connect();
-    for (const file of (await readdir('supabase/migrations')).filter(file => file.endsWith('.sql') && !['202608070005_remove_obsolete_runfeng_sync_role.sql', suppressionMigration].includes(file)).sort()) {
+    for (const file of (await readdir('supabase/migrations')).filter(file => file.endsWith('.sql') && !['202608070005_remove_obsolete_runfeng_sync_role.sql', suppressionMigration, dueMigration].includes(file)).sort()) {
       await database.query(await readFile(`supabase/migrations/${file}`, 'utf8'));
     }
     const statuses = ['pending', 'accepted', 'unknown', 'sent', 'failed'];
@@ -29,7 +30,7 @@ test('notification suppression upgrades queued work without rewriting delivery h
     await database.query("insert into work_orders(id,status,advisor,technician,inspector,shop_id,old_parts_handling,paper_order) values($1,'维修中','顾问','维修工','检验员','shop-hq','客户带走','{\"mode\":\"pending\",\"photoIds\":[\"historical-photo\"]}')", [orderId]);
     await database.query("insert into dispatch_tasks(order_id,shop_id,stage) values($1,'shop-hq','维修中')", [orderId]);
     const dispatchRows = [];
-    for (const kind of ['纸质委托书已创建', '维修暂停', '人工催办']) {
+    for (const kind of ['纸质委托书已创建', '维修暂停', '即将到期', '人工催办']) {
       for (const status of statuses) {
         const id = randomUUID();
         await database.query(`insert into dispatch_notifications(id,order_id,recipient_id,kind,payload,status,error,retryable,attempts,polls,task_id,
@@ -69,6 +70,7 @@ test('notification suppression upgrades queued work without rewriting delivery h
     const snapshot = async () => Object.fromEntries(await Promise.all(tables.map(async table => [table, (await database.query(`select * from ${table}`)).rows])));
     const before = await snapshot();
     await database.query(await readFile(`supabase/migrations/${suppressionMigration}`, 'utf8'));
+    await database.query(await readFile(`supabase/migrations/${dueMigration}`, 'utf8'));
     const after = await snapshot();
     const find = (rows, id, key = 'id') => rows.find(row => row[key] === id);
     const assertSuppressed = row => {
@@ -121,7 +123,7 @@ test('notification suppression upgrades queued work without rewriting delivery h
     await t.test('pending rows from an older writer are suppressed before reading recipients or calling OpenAPI', async () => {
       const { claimNotification, finishNotification } = await import('../server/repositories/dispatchNotificationRepository.mjs');
       const { processNotification } = await import('../server/workers/dispatchNotifications.mjs');
-      for (const kind of ['纸质委托书已创建', '维修暂停']) {
+      for (const kind of ['纸质委托书已创建', '维修暂停', '即将到期']) {
         const id = randomUUID(), recipientId = `late-${id}`;
         await database.query("insert into users(id,name,role,shop_id) values($1,'旧进程收件人','manager','other-shop')", [recipientId]);
         await database.query("insert into dispatch_notifications(id,order_id,recipient_id,kind,payload) values($1,$2,$3,$4,'{}')", [id, orderId, recipientId, kind]);

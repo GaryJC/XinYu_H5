@@ -81,14 +81,6 @@ test('manual result interpretation never treats unknown or contradictory recipie
   assert.equal(invalid.status,'unknown');
 });
 
-test('obsolete due reminders are never sent and pre-send validation failures can retry safely',async()=>{
- const row={...notification,order_id:'WT-1',recipient_id:'t',kind:'即将到期',previous_status:'pending'};
- let sends=0,finished;
- const dependencies={claim:async()=>row,recipient:async()=>({active:true,role:'technician',id:'t'}),send:async()=>{sends++;return {status:'sent'};},finish:async(_,result)=>{finished=result;}};
- await processNotification({...dependencies,validateDue:async()=>false});assert.equal(sends,0);assert.equal(finished.status,'failed');assert.equal(finished.retryable,false);
- await processNotification({...dependencies,validateDue:async()=>{throw new Error('db unavailable');}});assert.equal(sends,0);assert.equal(finished.retryable,true);
- await processNotification({...dependencies,validateDue:async()=>true});assert.equal(sends,1);
-});
 test('scheduler notices include operator, reason and due reminders include a clear instruction',()=>{
  const text=messageBody({...notification,kind:'维修暂停',payload:{...notification.payload,actorName:'维修工甲',reason:'待配件：缺少滤芯'}},'scheduler',env).msg.markdown.text;
  assert.match(text,/操作人：维修工甲/);assert.match(text,/待配件：缺少滤芯/);
@@ -105,8 +97,8 @@ test('scheduler fanout checks role and store again before sending',async()=>{
  assert.equal(sends,0);assert.equal(result.retryable,false);
 });
 
-test('paper and pause pushes stop before recipient reads, with submitted history unchanged',async()=>{
- for(const kind of ['纸质委托书已创建','维修暂停']) {
+test('retired pushes stop before recipient reads, with submitted history unchanged',async()=>{
+ for(const kind of ['纸质委托书已创建','维修暂停','即将到期']) {
   for(const previous_status of ['pending','accepted','unknown','sent','failed','suppressed']) {
    let finished;
    const unexpected=async()=>assert.fail('retired push must not read people, query or send');

@@ -66,7 +66,7 @@ export async function queryNotificationDelivery(user, source, id, { database = p
   try {
     await authorize(user, source, record.resource_id, database);
     let result;
-    try { result = await query(claimed, claimed.delivery_user_id, { env }); }
+    try { result = await query(claimed, claimed.delivery_user_id, { env, source }); }
     catch { result = { status: 'unknown', error: '暂时无法查询发送结果，请稍后手动查询' }; }
     if (!['accepted', 'unknown', 'sent', 'failed'].includes(result?.status)) result = { status: 'unknown', error: '钉钉返回结果无法确认，请稍后手动查询' };
     const output = { status: result.status, error: result.error || '' };

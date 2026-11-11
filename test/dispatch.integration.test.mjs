@@ -874,7 +874,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       assert.equal(Number((await pool.query("select count(*) from dispatch_notifications where order_id='scheduler-notices'")).rows[0].count),count);
       await assert.rejects(()=>run(tech,'retry-scheduler-notifications',{notificationJobId:'1'}),e=>e.status===403);
       // Retired kinds cannot be revived by either authenticated retry action.
-      for(const kind of ['纸质委托书已创建','维修暂停']) {
+      for(const kind of ['纸质委托书已创建','维修暂停','即将到期']) {
         const noticeId=randomUUID();
         await pool.query("insert into dispatch_notifications(id,order_id,recipient_id,kind,payload,status,error) values($1,'scheduler-notices',$2,$3,'{}','failed','旧发送失败')",[noticeId,advisor.id,kind]);
         await assert.rejects(()=>run(advisor,'retry-notification',{notificationId:noticeId}),e=>e.status===409&&/停用/.test(e.message));
@@ -898,37 +898,19 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await processSchedulerNotifications({env,sync:async()=>[advisor.id,manager.id,'outside','disabled-advisor']});
       assert.deepEqual((await pool.query("select recipient_id from dispatch_notifications where order_id='scheduler-failure' and kind='无法接单' order by recipient_id")).rows.map(r=>r.recipient_id),[advisor.id,manager.id].sort());
     });
-    await t.test('three deadline batches deduplicate across concurrent workers, recipients and rescheduling',async()=>{
+    await t.test('deadline changes and all lead windows generate no reminder notifications',async()=>{
       const now=Date.now(),deadline=new Date(now+48*3600000).toISOString();
       await seed('deadline');
       let local=(await service.executeDispatchAction(advisor,'deadline',{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianIds:[tech.id,tech2.id],dueAt:deadline})).task;
-      const {queueDueReminders,validateDueReminder}=await import('../server/workers/dueReminders.mjs');
-      await Promise.all([queueDueReminders({now}),queueDueReminders({now})]);
-      const count=async()=>Number((await pool.query("select count(*) from dispatch_notifications where order_id='deadline' and kind='即将到期'")).rows[0].count);
-      assert.equal(await count(),2);
-      await queueDueReminders({now:now+24*3600000});await queueDueReminders({now:now+24*3600000});assert.equal(await count(),4);
-      await queueDueReminders({now:now+47*3600000});await queueDueReminders({now:now+47*3600000});assert.equal(await count(),6);
-      const windows=(await pool.query("select lead_minutes,count(*)::integer as count from dispatch_due_reminders where order_id='deadline' group by lead_minutes order by lead_minutes")).rows;
-      assert.deepEqual(windows,[{lead_minutes:60,count:2},{lead_minutes:1440,count:2},{lead_minutes:2880,count:2}]);
-      const last=(await pool.query("select * from dispatch_notifications where order_id='deadline' and recipient_id=$1 and payload->>'leadMinutes'='60'",[tech.id])).rows[0];
-      assert.equal(await validateDueReminder(last,tech,{now:now+47*3600000}),true);
+      const {queueDueReminders}=await import('../server/workers/dueReminders.mjs');
+      for(const hours of [0,24,47,50]) await Promise.all([queueDueReminders({now:now+hours*3600000}),queueDueReminders({now:now+hours*3600000})]);
       const newDue=new Date(now+49*3600000).toISOString();
       local=(await service.executeDispatchAction(advisor,'deadline',{action:'update',expectedVersion:local.version,requestId:randomUUID(),dueAt:newDue})).task;
-      assert.equal(await validateDueReminder(last,tech,{now:now+47*3600000}),false);
-      await queueDueReminders({now:now+47*3600000});assert.equal(await count(),8);
-      local=(await service.executeDispatchAction(advisor,'deadline',{action:'reassign',expectedVersion:local.version,requestId:randomUUID(),technicianId:unique.id,dueAt:newDue,reason:'换班'})).task;
-      await queueDueReminders({now:now+47*3600000});assert.equal(await count(),9);
-      assert.equal((await pool.query("select count(*) from dispatch_events where order_id='deadline' and action='due-reminder' and actor_id is not null")).rows[0].count,'0');
-      await queueDueReminders({now:now+50*3600000});assert.equal(await count(),9,'overdue orders receive no new upcoming notices');
-      // Newly created orders already within one hour only receive the one-hour batch.
-      await seed('last-hour');
-      const soon=new Date(now+1800000).toISOString();
-      await service.executeDispatchAction(advisor,'last-hour',{action:'assign',expectedVersion:0,requestId:randomUUID(),technicianId:tech.id,dueAt:soon});
-      await queueDueReminders({now});
-      assert.deepEqual((await pool.query("select lead_minutes from dispatch_due_reminders where order_id='last-hour'")).rows,[{lead_minutes:60}]);
-      await pool.query("update dispatch_tasks set stage='待检验' where order_id='last-hour'");
-      const queued=(await pool.query("select * from dispatch_notifications where order_id='last-hour' and kind='即将到期'")).rows[0];
-      assert.equal(await validateDueReminder(queued,tech,{now}),false);
+      assert.equal(local.dueAt,newDue);
+      await queueDueReminders({now:now+48*3600000});
+      assert.equal((await pool.query("select count(*) from dispatch_notifications where order_id='deadline' and kind='即将到期'")).rows[0].count,'0');
+      assert.equal((await pool.query("select count(*) from dispatch_due_reminders where order_id='deadline'")).rows[0].count,'0');
+      assert.equal((await pool.query("select count(*) from dispatch_events where order_id='deadline' and action='due-reminder'")).rows[0].count,'0');
     });
     await t.test('inspection writebacks are atomic, immutable, idempotent and recover after failure',async()=>{
       const id='writeback-case';await seed(id);

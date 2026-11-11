@@ -14,7 +14,7 @@ export async function deliverInsuranceReminder({database=pool,send=sendWorkNotif
  try{const c=await insuranceContext(database,row);
  if(row.previous_status!=='pending')result={status:row.previous_status,error:row.error||''};
  else if(!c?.active||!c.vehicle_active||c.shop_id!==c.vehicle_shop||!hasAnyRole(c,['manager','advisor'])||c.end_date!==row.end_date||insuranceReminder(c.end_date)!==row.milestone)result={status:'failed',error:'保险或收件人状态已变化，取消过时通知'};
- else {started=true;deliveryUserId=c.dingtalk_user_id;result=await send({...row,payload:c},c.dingtalk_user_id,{env,buildMessage:insuranceMessageBody});}
+ else {started=true;deliveryUserId=c.dingtalk_user_id;result=await send({...row,payload:c},c.dingtalk_user_id,{env,buildMessage:insuranceMessageBody,source:'vehicle-insurance'});}
  }catch{result=started||row.previous_status!=='pending'?{status:'unknown',error:'发送结果不确定，请核对通知记录'}:{status:'failed',error:'发送前校验失败，将重试',retryable:true};}
  if(started && deliveryUserId) result={...result,deliveryUserId};
  await finishInsurance(database,row,result);return true;

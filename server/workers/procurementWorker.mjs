@@ -19,7 +19,7 @@ export async function deliverProcurementNotification({claim=repository.claimDeli
     const user=await recipient(row.recipient_id);
     if(row.previous_status!=='pending')result={status:row.previous_status,error:row.error||''};
     else if(!user?.active||user.shopId!==row.shop_id||!hasAnyRole(user, [procurementNotificationRole(row.payload)]))result={status:'failed',error:'收件人不属于本次通知的接收岗位',retryable:false};
-    else {started=true;deliveryUserId=user.dingtalk_user_id;result=await send(row,user.dingtalk_user_id,{env,buildMessage:procurementMessageBody});}
+    else {started=true;deliveryUserId=user.dingtalk_user_id;result=await send(row,user.dingtalk_user_id,{env,buildMessage:procurementMessageBody,source:'procurement'});}
   }catch{result=started||row.previous_status!=='pending'?{status:'unknown',error:'发送结果不确定，请核对钉钉记录'}:{status:'failed',error:'发送前校验失败',retryable:true};}
  if(started && deliveryUserId) result={...result,deliveryUserId};
   await finish(row,result);return true;
