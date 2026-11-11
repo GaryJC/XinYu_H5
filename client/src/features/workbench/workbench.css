@@ -173,12 +173,12 @@ button.workbench-metric:focus-visible { outline: 3px solid #366fbb; outline-offs
 .workbench-shell .sidebar .nav-item.ant-btn-primary { background: #2a4365; color: #fff; box-shadow: inset 3px 0 #6d9eff; }
 .workbench-shell .sidebar .nav-item:hover { color: #fff; background: #253e5f; }
 .workbench-navigation .nav-item:focus-visible { outline: 2px solid #6d9eff; outline-offset: 2px; }
-.workbench-create.ant-btn { font-weight: 600; box-shadow: 0 4px 10px #2563eb18; }
+
 .workbench-shell .topbar p { max-width: none; white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 767px) {
  .workbench-shell .topbar { position: relative; }
- .workbench-shell .topbar-title { padding-right: 118px; }
- .workbench-create.ant-btn { position: absolute; right: 0; top: 18px; min-height: 44px; }
+ .workbench-shell .topbar-title { padding-right: 60px; }
+ .personal-message-entry { position: absolute; right: 4px; top: 12px; }
  .workbench-metric-label { gap: 6px; }
  .metric-icon { width: 28px; height: 28px; border-radius: 8px; }
  .workbench-shell .role-switcher { margin-left: auto; }

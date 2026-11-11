@@ -16,7 +16,7 @@ export function notificationTraceKind(source,notification) {
 export async function tracedNotificationFetch(url,request,{fetcher,env,source='dispatch',notification,operation,recorder,log=console.info}) {
  const enabled=recorder||env.APP_ENV!=='test';
  if(!enabled)return fetcher(url,request);
- const id=randomUUID(),context={id,source,operation,notificationId:String(notification.id),kind:notificationTraceKind(source,notification)};
+ const id=randomUUID(),context={id,source,operation,notificationId:String(notification.id),kind:notificationTraceKind(source,notification),batchId:notification.delivery_batch_id||null};
  let persistence=recorder;
  let saved=false;
  try {

@@ -1,9 +1,22 @@
+import {personalWorkbench,personalInbox,readPersonalMessages} from '../services/personalWorkbenchService.mjs';
 import {notificationUsage} from '../services/notificationUsageService.mjs';
 import { readJson, sendJson } from '../http/response.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 import { listNotificationDeliveries, queryNotificationDelivery } from '../services/notificationQueryService.mjs';
 
 export async function handleNotifications(req, res, url, user) {
+  if(url.pathname==='/api/personal-workbench') {
+    if(req.method!=='GET')throw new HttpError(405,'不支持的请求方法');
+    sendJson(res,200,await personalWorkbench(user,url.searchParams));return true;
+  }
+  if(url.pathname==='/api/inbox') {
+    if(req.method!=='GET')throw new HttpError(405,'不支持的请求方法');
+    sendJson(res,200,await personalInbox(user,url.searchParams));return true;
+  }
+  if(url.pathname==='/api/inbox/read') {
+    if(req.method!=='POST')throw new HttpError(405,'不支持的请求方法');
+    sendJson(res,200,await readPersonalMessages(user,await readJson(req)));return true;
+  }
   if(url.pathname==='/api/notifications/usage') {
     if(req.method!=='GET')throw new HttpError(405,'不支持的请求方法');
     sendJson(res,200,await notificationUsage(user,url.searchParams));return true;

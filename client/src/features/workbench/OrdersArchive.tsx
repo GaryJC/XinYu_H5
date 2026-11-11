@@ -1,3 +1,4 @@
+import {RefreshButton} from '../../shared/ui/RefreshButton';
 const ArchiveOrderTable=lazy(()=>import("./ArchiveOrderTable").then(m=>({default:m.ArchiveOrderTable})));
 import { lazy } from "../../shared/ui/recoverableLazy";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
@@ -127,7 +128,7 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
         {overview && <h2>工单全览</h2>}
         <div className="workbench-archive-actions">
         {["advisor","manager"].includes(role)&&<PendingRepairFollowups user={controller.currentUser||undefined}/>}
-        <Button type="text" aria-label="刷新列表" icon={<RefreshCw size={16} aria-hidden="true" />} loading={ordersLoading} onClick={() => void controller.refreshWorkbench()}>刷新</Button>
+        <RefreshButton type="text" aria-label="刷新列表" loading={ordersLoading} onClick={() => void controller.refreshWorkbench()} label="刷新"/>
         {["advisor", "manager"].includes(role) && <Popconfirm title="更新全部润丰委托单？" description={<div className="archive-refresh-description">更新全部已同步且有权限的委托单，不受搜索和分页影响。保留签名、照片和维修进度；更新期间请保持页面打开。</div>} okText="开始更新" cancelText="取消" onConfirm={() => void legacyRefresh.refreshAll()} disabled={Boolean(legacyRefresh.progress)}>
           <Button type="text" aria-label="全部从润丰更新" loading={Boolean(legacyRefresh.progress)} disabled={Boolean(legacyRefresh.progress)}>
             {legacyRefresh.progress ? `正在更新 ${legacyRefresh.progress.done}/${legacyRefresh.progress.total}` : "润丰更新"}

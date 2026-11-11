@@ -1,3 +1,4 @@
+import {deliverNotificationGroup} from './notificationBatches.mjs';
 import {pool,transaction} from '../database/pool.mjs';
 import {notificationConfiguration,sendWorkNotification} from '../integrations/dingtalk/notifications.mjs';
 import {vehicleTripMessageBody} from '../integrations/dingtalk/vehicleTripNotifications.mjs';
@@ -12,7 +13,7 @@ export async function resolveTripRecipients({database=pool,runTransaction=transa
   } catch(error) {await failTripResolution(job,error.message,database);}
   return true;
 }
-export async function processTripNotification({database=pool,claim=()=>claimTripDelivery(database),context=row=>tripDeliveryContext(row,database),finish=(row,result)=>finishTripDelivery(row,result,database),send=sendWorkNotification,env=process.env}={}) {
+export async function processTripNotification({database=pool,claim=()=>claimTripDelivery(database),context=row=>tripDeliveryContext(row,database),finish=(row,result)=>finishTripDelivery(row,result,database),send=sendWorkNotification,env=process.env,prepareOnly=false}={}) {
   const row=await claim();if(!row)return false;
   let result,deliveryUserId,started=false;
   try {
@@ -21,8 +22,9 @@ export async function processTripNotification({database=pool,claim=()=>claimTrip
     if(row.previous_status!=='pending')result={status:row.previous_status,error:row.error||''};
     else if(isTripNotificationSuppressed(job?.action))result={status:'suppressed',error:'',retryable:false};
     else if(user?.id!==row.recipient_id||!tripNotificationRecipient(job?.action,trip,user,job?.payload))result={status:'failed',error:'申请状态或接收人权限已变化，通知已取消',retryable:false};
-    else {started=true;deliveryUserId=user.dingtalk_user_id;result=await send(notification,user.dingtalk_user_id,{env,buildMessage:vehicleTripMessageBody,source:'vehicle-trip'});}
+    else {if(prepareOnly)return {notification,recipient:user.dingtalk_user_id};started=true;deliveryUserId=user.dingtalk_user_id;result=await send(notification,user.dingtalk_user_id,{env,buildMessage:vehicleTripMessageBody,source:'vehicle-trip'});}
   } catch {result=started||row.previous_status!=='pending'?{status:'unknown',error:'发送结果不确定，请核对钉钉记录'}:{status:'failed',error:'发送前校验失败，将重试',retryable:true};}
+ if(prepareOnly)return {result};
  if(started && deliveryUserId) result={...result,deliveryUserId};
   await finish(row,result);return true;
 }
@@ -31,7 +33,7 @@ export function startVehicleTripNotifications() {
   let running,stopped=false;
   const tick=()=>{if(running||stopped)return;running=(async()=>{
     for(let i=0;i<10&&!stopped;i++)if(!await resolveTripRecipients())break;
-    for(let i=0;i<10&&!stopped;i++)if(!await processTripNotification())break;
+    for(let i=0;i<10&&!stopped;i++)if(!await deliverNotificationGroup('vehicle-trip',{prepare:row=>processTripNotification({claim:async()=>row,prepareOnly:true}),finish:(row,result)=>finishTripDelivery(row,result,pool),buildMessage:vehicleTripMessageBody}))break;
   })().catch(e=>console.error('出车申请通知：',e.message)).finally(()=>{running=undefined;});};
   const timer=setInterval(tick,5000);timer.unref();tick();
   return async()=>{stopped=true;clearInterval(timer);await running;};

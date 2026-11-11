@@ -1,3 +1,4 @@
+import {RefreshButton} from '../../shared/ui/RefreshButton';
 import {dispatchNumberSortOptions} from '../../../../shared/dispatchNumberSort.mjs';
 import {Alert,Button,Checkbox,Drawer,Input,Select,Tabs,theme} from 'antd';
 import {ClockCircleOutlined,FilterOutlined,ThunderboltOutlined} from '@ant-design/icons';
@@ -14,7 +15,7 @@ export function DispatchFilterBar({controller:c,inspection}:{controller:Dispatch
  const patch=(key:'executionMode'|'from'|'to'|'technicianId',value:string|undefined)=>{f.setDraft(d=>({...d,[key]:value,...(key==='technicianId'?{metric:undefined,workloadState:undefined}:{})}));f.setError('');};
  return <>
   <div className="dispatch-filter-bar" role="search" aria-label="工单搜索筛选" style={{background:token.colorBgContainer,borderColor:token.colorBorderSecondary,color:token.colorText}}>
-   <Input.Search aria-label="搜索派工任务" placeholder="车牌 / 委托单号 / 派工号" allowClear value={f.search} onChange={e=>f.setSearch(e.target.value)} onSearch={f.submitSearch} onCompositionStart={()=>{f.composing.current=true;}} onCompositionEnd={()=>{f.composing.current=false;}} enterKeyHint="search" autoComplete="off"/>
+   <div className="search-refresh-toolbar"><Input.Search aria-label="搜索派工任务" placeholder="车牌 / 委托单号 / 派工号" allowClear value={f.search} onChange={e=>f.setSearch(e.target.value)} onSearch={f.submitSearch} onCompositionStart={()=>{f.composing.current=true;}} onCompositionEnd={()=>{f.composing.current=false;}} enterKeyHint="search" autoComplete="off"/><RefreshButton label="刷新派工任务" title={c.updatedAt?`刷新 · 更新于 ${c.updatedAt}`:"刷新"} loading={c.loading} onClick={()=>{c.setError('');void c.refresh();}}/></div>
    <Tabs className="dispatch-status-tabs" aria-label="工单状态筛选" activeKey={c.filters.stage||(c.filters.includeCompleted==='true'?'all':'')} type="line" tabBarGutter={0} onChange={stage=>c.setFilters(current=>selectStatusFilters(current,stage))} items={statuses.map(({value,label})=>({key:value,label:<span className="dispatch-status-label"><span>{label}</span><strong className="dispatch-status-count">{c.list.counts?.[value]??'—'}</strong></span>}))}/>
    <p className="dispatch-status-scroll-hint">左右滑动查看更多状态 ↔</p>
    <div className="dispatch-quick-filters">

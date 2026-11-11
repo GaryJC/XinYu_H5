@@ -1,3 +1,4 @@
+import {RefreshButton} from '../../shared/ui/RefreshButton';
 import { createRequestId } from "../../shared/api/requestId";
 import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { LoadingState } from "../../shared/ui/LoadingState";
@@ -26,7 +27,7 @@ export function SupplierPortalPage() {
       <p className="procurement-muted">无需加入钉钉企业，无密码、无短信。请使用采购员登记的信息，仅本次受邀供应商可参与报价。信息不匹配请联系采购员。</p>
       {!p.token?<Alert type="warning" title="缺少邀请凭证，请打开采购员发送的完整邀请链接。"/>:null}
     </Form></Card>:data.kind==='report'?<><ProcurementReportView report={data.report}/><Card title="合作反馈"><Input.TextArea aria-label="合作反馈" placeholder="希望沟通合作价格、部分配件可优惠，或对统计口径有疑问…" maxLength={1000} value={feedback} onChange={e=>setFeedback(e.target.value)} rows={3}/><Button style={{marginTop:12}} type="primary" loading={p.busy} disabled={!feedback.trim()} onClick={()=>void p.feedback(feedback)}>提交反馈</Button></Card></>:<>
-      <Card title={`${data.supplierName} · ${data.terms.partName}`} extra={<Button loading={p.busy} onClick={()=>void p.refresh()}>刷新状态</Button>}>
+      <Card title={`${data.supplierName} · ${data.terms.partName}`} extra={<RefreshButton loading={p.busy} onClick={()=>void p.refresh()} label="刷新状态"/>}>
         <Alert type={data.status==='awarded'?'success':'info'} title={`${statusLabels[data.status]} · ${data.result}`} description={`报价截止：${dateTime(data.deadline)}。供应商之间的报价互不可见。`}/>
         {data.quotes[0]&&data.quotes[0].termsVersion!==data.termsVersion?<Alert type="warning" showIcon title="采购要求已修改，请核对最新信息并重新提交报价。原报价暂不参与比价。"/>:null}
         <ProcurementTermsView terms={data.terms} portal/>

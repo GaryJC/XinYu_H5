@@ -1,7 +1,8 @@
+import {RefreshButton} from '../../shared/ui/RefreshButton';
 import { CopyTextButton } from "../../shared/ui/CopyTextButton";
 import { NotificationRecords } from '../notifications/NotificationRecords';
 import { ActionHistory } from "../../shared/ui/ActionHistory";
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import { SupplierList,TenderList } from './ProcurementLists';
 import { hasAnyRole } from "../../../../shared/roles.mjs";
 import { useState } from 'react';
@@ -21,7 +22,7 @@ export function ProcurementPage({user}:{user:UserProfile}) {
   const [reportVisible,setReportVisible]=useState(initialReport);
   if(!hasAnyRole(user, ['manager','warehouse']))return <Alert type="error" title="仅门店管理员和仓管可使用配件竞价"/>;
   return <section className="procurement" aria-label="配件竞价管理">
-    <div className="procurement-heading"><div><h2>配件竞价</h2><span className="procurement-muted">更新于 {c.refreshAt||'加载中'}</span></div><Space><Button icon={<ReloadOutlined/>} loading={c.busy} onClick={()=>void c.run(c.load)}>刷新</Button><Button type="primary" icon={<PlusOutlined/>} disabled={c.busy} onClick={()=>setCreateOpen(true)}>新建配件询价</Button></Space></div>
+    <div className="procurement-heading"><div><h2>配件竞价</h2><span className="procurement-muted">更新于 {c.refreshAt||'加载中'}</span></div><Space><RefreshButton loading={c.busy} onClick={()=>void c.run(c.load)} label="刷新"/><Button type="primary" icon={<PlusOutlined/>} disabled={c.busy} onClick={()=>setCreateOpen(true)}>新建配件询价</Button></Space></div>
     {c.error?<Alert role="alert" type="error" showIcon title={c.error}/>:null}
     <Tabs activeKey={tab} onChange={setTab} items={[
       {key:'tenders',label:'询价记录',children:<Card className="procurement-list-card"><TenderList controller={c} onOpen={id=>void c.run(()=>c.openTender(id))}/></Card>},

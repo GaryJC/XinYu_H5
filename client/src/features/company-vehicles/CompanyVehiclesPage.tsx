@@ -1,3 +1,4 @@
+import {RefreshButton} from '../../shared/ui/RefreshButton';
 import { Pencil } from 'lucide-react';
 import {insuranceState} from '../../../../shared/vehicleInsurance.mjs';
 import { LoadingState } from "../../shared/ui/LoadingState";
@@ -19,7 +20,7 @@ export function CompanyVehiclesPage() {
     setEditor(vehicle);
   }
   return <section className="company-vehicles-page" aria-label="公司车辆管理">
-    <header className="company-vehicles-heading"><div><h2>公司车辆管理</h2></div><Space wrap><Upload accept=".xlsx" showUploadList={false} disabled={state.busy} beforeUpload={file=>{void state.previewImport(file);return false;}}><Button disabled={state.busy}>导入保险 Excel</Button></Upload><Button type="primary" disabled={state.busy} onClick={() => edit('new')}>录入车辆</Button><Button loading={state.loading} disabled={state.busy} onClick={() => void state.refresh()}>刷新车辆</Button></Space></header>
+    <header className="company-vehicles-heading"><div><h2>公司车辆管理</h2></div><Space wrap><Upload accept=".xlsx" showUploadList={false} disabled={state.busy} beforeUpload={file=>{void state.previewImport(file);return false;}}><Button disabled={state.busy}>导入保险 Excel</Button></Upload><Button type="primary" disabled={state.busy} onClick={() => edit('new')}>录入车辆</Button><RefreshButton loading={state.loading} disabled={state.busy} onClick={() => void state.refresh()} label="刷新车辆"/></Space></header>
     <Input.Search aria-label="搜索公司车辆" placeholder="搜索车牌 / 品牌 / 车型" allowClear value={state.search} onChange={event => state.setSearch(event.target.value)} />
     {state.error && <Alert type="error" showIcon title={state.error} />}
     {!state.busy && !state.vehicles.length && <Empty description="暂无公司车辆，请录入" />}

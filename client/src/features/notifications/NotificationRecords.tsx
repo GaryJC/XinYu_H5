@@ -1,3 +1,4 @@
+import {RefreshButton} from '../../shared/ui/RefreshButton';
 import { Alert, Button, Tag } from 'antd';
 import type { NotificationSource } from '../../../../shared/types';
 import { ActionHistory } from '../../shared/ui/ActionHistory';
@@ -17,7 +18,7 @@ export function NotificationRecords({ source, resourceId, title = '通知记录'
     <summary>{title}</summary>
     {state.open ? <div className="notification-records-content">
       <div className="notification-records-toolbar"><p>平台已受理尚未确认送达，需要时可查询结果。</p>
-        <Button size="small" loading={state.loading} disabled={state.busy || retryBusy} onClick={() => void state.load()}>刷新记录</Button>
+        <RefreshButton size="small" loading={state.loading} disabled={state.busy || retryBusy} onClick={() => void state.load()} label="刷新记录"/>
       </div>
       {state.error ? <Alert showIcon type="error" title={state.error} /> : null}
       {state.refreshError ? <Alert showIcon type="warning" title={state.refreshError} /> : null}

@@ -1,3 +1,4 @@
+import {RefreshButton} from '../../shared/ui/RefreshButton';
 import { userRoles, hasRole } from "../../../../shared/roles.mjs";
 import { useState } from 'react';
 import { Alert,Button,Card,Collapse,Descriptions,Drawer,Empty,Form,Grid,Input,Select,Space,Table,Tabs,Tag } from 'antd';
@@ -32,7 +33,7 @@ export function AccessSettingsPage({users}:{users:UserProfile[]}){
     ]}/>}
   </div>;
   return <section className="access-page" aria-label="权限设置">
-    <div className="access-heading"><div><h2>页面与权限</h2><p>部门和角色在钉钉分配；员工打开应用后自动识别身份，无需手动登录。</p></div><Button loading={c.loading} onClick={()=>void c.refresh()}>刷新识别结果</Button></div>
+    <div className="access-heading"><div><h2>页面与权限</h2><p>部门和角色在钉钉分配；员工打开应用后自动识别身份，无需手动登录。</p></div><RefreshButton loading={c.loading} onClick={()=>void c.refresh()} label="刷新识别结果"/></div>
     {c.error?<Alert type="error" showIcon title="权限数据读取失败" description={c.error} action={<Button disabled={c.loading} onClick={()=>void c.refresh()}>重试</Button>}/>:null}
     <Card className="access-main-card"><Tabs items={[
       {key:'employees',label:'员工识别结果',children:employeePanel},

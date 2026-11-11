@@ -1,3 +1,4 @@
+import {RefreshButton} from '../../shared/ui/RefreshButton';
 import { CopyActionButton } from "../../shared/ui/CopyTextButton";
 import { Alert, Button, Input, Modal, Space } from 'antd';
 import type { WorkOrder } from '../../../../shared/types';
@@ -15,7 +16,7 @@ export function SignatureShare({ session, onRenew, onUpdated }: {
     <Input aria-label="客户签字链接" readOnly value={c.link} onFocus={event => event.target.select()}/>
     <Space wrap>
       <CopyActionButton disabled={c.busy} onClick={() => void c.copy()} label="复制客户签字链接" />
-      <Button loading={c.busy} onClick={() => void c.refresh()}>刷新签字状态</Button>
+      <RefreshButton loading={c.busy} onClick={() => void c.refresh()} label="刷新签字状态"/>
       <Button disabled={c.busy} onClick={() => Modal.confirm({ title: '重新发送客户签字链接？', content: '生成新链接后，旧链接立即失效。请将新链接重新发送给客户。', okText: '生成新链接', cancelText: '取消', onOk: c.renew })}>重新发送链接</Button>
     </Space>
     {c.message && <Alert role="status" type="info" showIcon title={c.message} style={{ marginTop: 8 }}/>}</section>;

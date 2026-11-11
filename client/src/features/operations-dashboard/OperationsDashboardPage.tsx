@@ -1,7 +1,8 @@
+import {RefreshButton} from '../../shared/ui/RefreshButton';
 import {compareDispatchNumbers, dispatchNumberSortOptions, type DispatchNumberSort} from '../../../../shared/dispatchNumberSort.mjs';
 import {useEffect,useMemo,useState} from 'react';
 import {Alert,Button,Empty,Select,Spin,Tag} from 'antd';
-import {RefreshCcw,ArrowUpRight,Users,TriangleAlert,ChevronDown} from 'lucide-react';
+import {ArrowUpRight,Users,TriangleAlert,ChevronDown} from 'lucide-react';
 import type {OperationsMetric} from '../../../../shared/types';
 import {useOperationsDashboard} from './useOperationsDashboard';
 import './operations-dashboard.css';
@@ -18,7 +19,7 @@ export function OperationsDashboardPage({onOpen,embedded=false,refreshKey}:{onOp
  return <section className={`operations-dashboard ${embedded?'dispatch-workload workload-board operations-embedded':''}`} aria-label={embedded?'工作负荷看板':'数据看板'}>
   {embedded&&<h3><button className="workload-board-toggle" type="button" aria-expanded={expanded} aria-controls="dispatch-workload-content" onClick={()=>setExpanded(value=>!value)}><span>工作负荷看板{c.data&&<small> · {workers.length} 人</small>}</span><span className="workload-board-toggle-hint">{expanded?'收起':'展开'}<ChevronDown size={16} style={{transform:expanded?'rotate(180deg)':undefined}}/></span></button></h3>}
   {(!embedded||expanded)&&<div id={embedded?'dispatch-workload-content':undefined} className="operations-dashboard-content">
-  {!embedded&&<header className="operations-header"><div><h2>数据看板</h2></div><Button icon={<RefreshCcw size={15}/>} loading={c.loading} onClick={()=>void c.refresh()}>刷新数据</Button></header>}
+  {!embedded&&<header className="operations-header"><div><h2>数据看板</h2></div><RefreshButton loading={c.loading} onClick={()=>void c.refresh()} label="刷新数据"/></header>}
   {c.error&&<Alert type="error" showIcon title={c.error} description="当前数据可能不是最新，请刷新重试。"/>}
   {!c.data?c.loading?<Spin/>:<Empty description="暂无看板数据"/>:<>
    {!embedded&&<div className="operations-timestamp">当前快照 · {time(c.data.generatedAt)} · 按本店可见任务统计</div>}

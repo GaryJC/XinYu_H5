@@ -1,3 +1,4 @@
+import {RefreshButton} from '../../shared/ui/RefreshButton';
 import {insuranceState} from '../../../../shared/vehicleInsurance.mjs';
 import { NotificationRecords } from '../notifications/NotificationRecords';
 import { ListPagination } from '../../shared/ui/ListPagination';
@@ -40,7 +41,7 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
     </div>)}</div></section> : null;
   }
   return <section className="trip-page" aria-label="出车申请">
-    <header className="trip-page-heading"><div><h2>出车申请</h2></div><Button loading={state.pending === 'list'} disabled={state.busy} onClick={() => void state.refresh()}>刷新申请</Button></header>
+    <header className="trip-page-heading"><div><h2>出车申请</h2></div><RefreshButton loading={state.pending === 'list'} disabled={state.busy} onClick={() => void state.refresh()} label="刷新申请"/></header>
     {state.error && <Alert type="error" showIcon title={state.error} />}
     <Card className="trip-create-card" title={<span className="trip-section-heading"><CarFront size={20} />申请用车</span>}>
       <p>驾驶员：{user.name}</p>

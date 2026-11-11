@@ -117,6 +117,7 @@ test('notification records distinguish platform acceptance, simulation and unava
     require(name) {
       if (name === 'antd') return { Alert: 'Alert', Button: 'Button', Tag: 'Tag' };
       if (name.endsWith('/ActionHistory')) return { ActionHistory: 'History' };
+      if (name.endsWith('/RefreshButton')) return { RefreshButton: 'RefreshButton' };
       if (name.endsWith('/LoadingState')) return { LoadingState: 'Loading' };
       if (name === './notifications.css') return {};
       if (name === './useNotificationRecords') return { useNotificationRecords: () => ({ open: true, busy: false, items: [row(), row({ id: 'old', canQuery: false, queryUnavailableReason: '旧记录缺少发送账号快照' }), row({ id: 'mock', status: 'sent', canQuery: false, simulated: true }), row({ id: 'suppressed', status: 'suppressed', canQuery: false, canRetry: false }), row({ id: 'retired-failure', status: 'failed', canQuery: false, canRetry: false }), row({ id: 'retry', status: 'failed', canQuery: false, canRetry: true })] }) };

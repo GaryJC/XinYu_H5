@@ -63,7 +63,7 @@ export function useWorkbenchController() {
   const authenticatedUser = useRef<UserProfile | undefined>(undefined);
   if (currentUser) authenticatedUser.current = currentUser;
 
-  const archive = useArchiveFilters(currentUser, activeNav === '工单全览', ['工作台','工单全览'].includes(activeNav));
+  const archive = useArchiveFilters(currentUser, activeNav === '工单全览', ['工作台','工单全览'].includes(activeNav)&&hasAnyRole(currentUser,['manager','advisor']));
   const orders = archive.items, setOrders = archive.setItems, ordersLoading = archive.loading;
   const selectedOrder = (selectedRecord?.id===selectedId?selectedRecord:undefined);
   const actor = currentUser?.name || roles[role].name;
@@ -174,13 +174,13 @@ export function useWorkbenchController() {
   useEffect(()=>{
     if(!currentUser)return;
     const generation=sessionGeneration.current;
-    if(['工作台','工单全览'].includes(activeNav))void loadDashboard(currentUser.role,generation);
+    if(['工作台','工单全览'].includes(activeNav)&&hasAnyRole(currentUser,['manager','advisor']))void loadDashboard(currentUser.role,generation);
     if(activeNav==='权限设置')void loadUsers(generation);
     if(activeNav==='委托开单')void loadDepartments(generation);
   },[currentUser?.id,currentUser?.legacyEmployeeCode,activeNav]);
 
   useEffect(() => {
-    if (!visibleNavItems.some((item) => item.label === activeNav)) {
+    if (activeNav!=='消息' && !visibleNavItems.some((item) => item.label === activeNav)) {
       setActiveNav(visibleNavItems[0]?.label || "工作台");
     }
   }, [activeNav, visibleNavItems]);

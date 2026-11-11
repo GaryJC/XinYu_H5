@@ -1,10 +1,10 @@
+import {RefreshButton} from '../../shared/ui/RefreshButton';
 import {CompletedProjectFilterBar} from './CompletedProjectFilterBar';
 import type { CompletedProjectFilters, UserProfile } from '../../../../shared/types';
 import { TechnicianProjectDetail } from './TechnicianProjectDetail';
 import { useState } from 'react';
-import { Alert, Button, DatePicker, Empty, Grid } from 'antd';
+import { Alert, DatePicker, Empty, Grid } from 'antd';
 import dayjs from 'dayjs';
-import { RefreshCw } from 'lucide-react';
 import { usePagedList } from '../../shared/hooks/usePagedList';
 import { ListPagination } from '../../shared/ui/ListPagination';
 import { LoadingState } from '../../shared/ui/LoadingState';
@@ -21,7 +21,7 @@ export function TechnicianCompletedProjects({ user }: { user: UserProfile }) {
   return <section className="completed-projects" aria-label="完工项目核对">
     <div className="completed-projects-toolbar">
       <DatePicker picker="month" value={dayjs(`${month}-01`)} allowClear={false} inputReadOnly aria-label="核对月份" format="YYYY年MM月" onChange={value => { if (value) {setMonth(value.format('YYYY-MM'));setFilters(current=>({sort:current.sort}));} }} />
-      <Button icon={<RefreshCw size={16} aria-hidden="true" />} loading={list.loading} onClick={() => void list.refresh()}>刷新</Button>
+      <RefreshButton loading={list.loading} onClick={() => void list.refresh()} label="刷新"/>
     </div>
     <CompletedProjectFilterBar filters={filters} setFilters={setFilters}/>
     <div className="completed-projects-total"><span>{user.name} · {filters.from||filters.to?`${filters.from||'不限'} 至 ${filters.to||'不限'}`:dayjs(`${month}-01`).format('YYYY年M月')} · 已完工项目</span><strong>{list.error || list.loading && !list.items.length ? '—' : list.counts?.projects ?? 0}<small> 项</small></strong></div>

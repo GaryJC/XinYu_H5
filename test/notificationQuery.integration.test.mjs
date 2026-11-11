@@ -111,7 +111,7 @@ test('manual notification results are authorized, one-shot, and durable across a
       await assert.rejects(() => service.queryNotificationDelivery(actors.manager, 'dispatch', id, { query: noRemote }), error => error.status === 409);
     });
     await t.test('missing snapshots, task IDs, and expired tasks make no OpenAPI requests', async () => {
-      for (const sql of ["delivery_user_id=null", "delivery_submitted_at=null", "task_id=null", "delivery_submitted_at=now()-interval '24 hours'", "status='failed'", "status='pending'"]) {
+      for (const sql of ["delivery_user_id=null", "delivery_submitted_at=null", "task_id=null", "delivery_submitted_at=now()-interval '25 hours'", "status='failed'", "status='pending'"]) {
         const id = await createNotice('dispatch'); await pool.query(`update dispatch_notifications set ${sql} where id=$1`, [id]);
         await assert.rejects(() => service.queryNotificationDelivery(actors.manager, 'dispatch', id, { query: noRemote }), error => error.status === 409);
         const item = (await service.listNotificationDeliveries(actors.manager, 'dispatch', orderId)).find(row => row.id === id);

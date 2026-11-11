@@ -35,7 +35,7 @@
 .dispatch-filter-footer .ant-btn{min-height:44px;font-size:16px}
 @media(min-width:768px){.dispatch-filter-bar{padding:20px}.ant-drawer-section.dispatch-filter-drawer{max-width:640px;margin-inline:auto}.dispatch-quick-filters{gap:12px}}
 @media(max-width:359px){.dispatch-quick-filters{gap:4px}.dispatch-quick-filters>.ant-btn{padding-inline:7px;gap:3px}.dispatch-quick-filters>.dispatch-filter-clear{padding-inline:0}.dispatch-filter-bar .dispatch-status-tabs .ant-tabs-tab{padding-inline:8px}}
-@media(max-width:359px){.dispatch-quick-filters{flex-wrap:nowrap}.dispatch-quick-filters>.ant-btn:not(:first-child):not(.dispatch-filter-clear) .ant-btn-icon{display:none}}
+@media(max-width:359px){.dispatch-quick-filters{flex-wrap:wrap}.dispatch-quick-filters>.ant-btn:not(:first-child):not(.dispatch-filter-clear) .ant-btn-icon{display:none}}
 
 .dispatch-status-scroll-hint{display:none}
 /* Older WebViews cannot evaluate :has; keep the swipe hint discoverable. */

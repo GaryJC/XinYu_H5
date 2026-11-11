@@ -1,3 +1,4 @@
+import {deliverNotificationGroup} from './notificationBatches.mjs';
 import {procurementNotificationRole} from '../domain/procurementNotificationAudience.mjs';
 import { hasAnyRole } from "../../shared/roles.mjs";
 import { pool } from '../database/pool.mjs';
@@ -12,15 +13,16 @@ export async function resolveProcurementRecipients({claim=repository.claimResolu
   try {const ids=notificationConfiguration(env)==='dingtalk'?await sync(job.shop_id,{roleKeys:[procurementNotificationRole(job.payload)]}):undefined;await resolve(job,ids);}
   catch(e){await fail(job,e.message||'接收人同步失败');}return true;
 }
-export async function deliverProcurementNotification({claim=repository.claimDelivery,finish=repository.finishDelivery,recipient=notificationRecipient,send=sendWorkNotification,env=process.env}={}) {
+export async function deliverProcurementNotification({claim=repository.claimDelivery,finish=repository.finishDelivery,recipient=notificationRecipient,send=sendWorkNotification,env=process.env,prepareOnly=false}={}) {
   const row=await claim();if(!row)return false;
   let result,deliveryUserId,started=false;
   try {
     const user=await recipient(row.recipient_id);
     if(row.previous_status!=='pending')result={status:row.previous_status,error:row.error||''};
     else if(!user?.active||user.shopId!==row.shop_id||!hasAnyRole(user, [procurementNotificationRole(row.payload)]))result={status:'failed',error:'收件人不属于本次通知的接收岗位',retryable:false};
-    else {started=true;deliveryUserId=user.dingtalk_user_id;result=await send(row,user.dingtalk_user_id,{env,buildMessage:procurementMessageBody,source:'procurement'});}
+    else {if(prepareOnly)return {notification:row,recipient:user.dingtalk_user_id};started=true;deliveryUserId=user.dingtalk_user_id;result=await send(row,user.dingtalk_user_id,{env,buildMessage:procurementMessageBody,source:'procurement'});}
   }catch{result=started||row.previous_status!=='pending'?{status:'unknown',error:'发送结果不确定，请核对钉钉记录'}:{status:'failed',error:'发送前校验失败',retryable:true};}
+ if(prepareOnly)return {result};
  if(started && deliveryUserId) result={...result,deliveryUserId};
   await finish(row,result);return true;
 }
@@ -29,7 +31,7 @@ export function startProcurementWorker() {
   const tick=()=>{if(running||stopped)return;running=(async()=>{
     await freezeDue(pool);
     if(Date.now()-lastCleanup>3600000){await repository.cleanupPortal();lastCleanup=Date.now();}
-    if(mode!=='disabled'){await resolveProcurementRecipients();for(let i=0;i<10&&!stopped;i++)if(!await deliverProcurementNotification())break;}
+    if(mode!=='disabled'){await resolveProcurementRecipients();for(let i=0;i<10&&!stopped;i++)if(!await deliverNotificationGroup('procurement',{prepare:row=>deliverProcurementNotification({claim:async()=>row,prepareOnly:true}),finish:repository.finishDelivery,buildMessage:procurementMessageBody}))break;}
   })().catch(e=>console.error('配件竞价后台任务：',e.message)).finally(()=>{running=undefined;});};
   const timer=setInterval(tick,5000);timer.unref();tick();
   return async()=>{stopped=true;clearInterval(timer);await running;};

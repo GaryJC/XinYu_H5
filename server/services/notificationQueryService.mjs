@@ -1,3 +1,5 @@
+import {transaction} from '../database/pool.mjs';
+import * as batches from '../repositories/notificationBatchRepository.mjs';
 import { pool } from '../database/pool.mjs';
 import {isDispatchNotificationSuppressed} from '../domain/notificationPolicy.mjs';
 import { HttpError } from '../http/HttpError.mjs';
@@ -53,13 +55,14 @@ export async function listNotificationDeliveries(user, source, resourceId, { dat
     };
   });
 }
-export async function queryNotificationDelivery(user, source, id, { database = pool, query = queryWorkNotification, now = Date.now, env = process.env } = {}) {
+export async function queryNotificationDelivery(user, source, id, { database = pool, query = queryWorkNotification, now = Date.now, env = process.env, runTransaction=transaction } = {}) {
   repository.notificationSource(source);
   const record = await repository.notificationRecord(source, id, database);
   if (!record) throw missing();
   await authorize(user, source, record.resource_id, database);
   const unavailable = notificationQueryUnavailableReason(record, now());
   if (unavailable) throw new HttpError(409, unavailable);
+  if(record.delivery_batch_id)return queryBatchDelivery(user,source,record,{database,query,env,runTransaction});
   const claimed = await repository.claimNotificationQuery(source, record, database);
   if (!claimed) throw new HttpError(409, '通知状态已变化或刚刚已查询，请刷新后重试');
   let saved = false;
@@ -82,4 +85,28 @@ export async function queryNotificationDelivery(user, source, id, { database = p
     }
     throw error;
   }
+}
+
+async function queryBatchDelivery(user,source,record,{database,query,env,runTransaction}){
+ const batch=await batches.claimBatchQuery(source,record,database);
+ if(!batch)throw new HttpError(409,'该批通知正在查询或刚刚已查询，请30秒后再试');
+ let saved=false;
+ try{
+  await authorize(user,source,record.resource_id,database);
+  const members=await batches.batchQueryMembers(source,batch,database);
+  if(!members.some(m=>String(m.id)===String(record.id)))throw new HttpError(409,'通知状态已变化');
+  let result;
+  try{result=await query({...record,task_id:batch.task_id},members.map(m=>m.batch_user_id),{env,source});}
+  catch{result={status:'unknown',error:'暂时无法查询发送结果，请稍后手动查询'};}
+  const results=members.map(member=>{
+   const value=Array.isArray(result?.recipients)?result.recipients.find(r=>r.recipient===member.batch_user_id):result;
+   return {id:String(member.id),status:['accepted','unknown','sent','failed'].includes(value?.status)?value.status:'unknown',error:value?.error||''};
+  });
+  if(!await batches.saveBatchQuery(source,batch,results,runTransaction))throw new HttpError(409,'查询租约已变化，请刷新后查看');
+  saved=true;
+  await authorize(user,source,record.resource_id,database);
+  const own=results.find(r=>r.id===String(record.id));return {status:own.status,error:own.error};
+ }finally{
+  if(!saved)try{await batches.releaseBatchQuery(batch,database);}catch(error){console.error('[notification-query-cleanup]',{code:error.code});}
+ }
 }

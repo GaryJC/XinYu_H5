@@ -1,6 +1,6 @@
 import {pendingPhotoWaivers} from '../../../../shared/repairPhotoWaiver.mjs';
 import { useDetailScrollLock } from '../../shared/ui/useDetailScrollLock';
-import { ChevronRight, RefreshCw } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { ListPagination } from '../../shared/ui/ListPagination';
 import { LoadingState } from "../../shared/ui/LoadingState";
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
@@ -33,7 +33,6 @@ export function DispatchPage({user,view,initialStage}:{user:UserProfile;view:str
   if(view==='配件申请' && hasRole(user, 'warehouse')) return <WarehousePartsPage controller={c}/>;
   if(view==='我的维修' && (hasAnyRole(user, ['technician','outsourcing'])||user.outsourcingRoleMember)) return <TechnicianRepairPage controller={c} user={user}/>;
   return <section className="dispatch-page" aria-label={view}>
-    <div className="dispatch-heading"><div>{c.updatedAt&&<p>更新于 {c.updatedAt}</p>}</div><Button icon={<RefreshCw size={16} aria-hidden="true" />} onClick={()=>{c.setError('');void c.refresh();}} loading={c.loading}>刷新</Button></div>
     {c.error?<Alert type="error" showIcon closable title={c.error} onClose={()=>c.setError('')}/>:null}
     <DispatchFilterBar controller={c} inspection={inspection}/>
     {c.manager&&view==='派工台'?<DispatchWorkloadChart refreshKey={c.updatedAt} filters={c.filters} onClear={clearWorkload} onSelect={(technicianId,workloadState)=>c.setFilters(f=>({sort:f.sort,search:f.search,includeCompleted:f.includeCompleted,technicianId,workloadState}))}/>:c.inspectionLead?<DispatchWorkloadBoard summaries={c.summaries} filters={c.filters} onSelect={(technicianId,metric)=>{

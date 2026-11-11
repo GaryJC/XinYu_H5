@@ -1,3 +1,4 @@
+import {RefreshButton} from '../../shared/ui/RefreshButton';
 import {compareDispatchNumbers, dispatchNumberSortOptions, type DispatchNumberSort} from '../../../../shared/dispatchNumberSort.mjs';
 import {useState} from 'react';
 import {Alert,Button,Card,Empty,Input,Select,Spin,Tag} from 'antd';
@@ -10,7 +11,7 @@ import './warehouse-stock.css';
 export function WarehouseStockSearch({orderId,requirement}:{orderId:string;requirement?:PartsRequirement}) {
   const [sort,setSort]=useState<DispatchNumberSort>('dispatch-desc');
   const c=useWarehouseVehicleHistory(orderId,requirement?.mode==='list'?requirement.items[0]?.name||'':'');
-  return <Card size="small" title="本车历史用料" className="warehouse-stock" extra={<Button size="small" loading={c.loading} disabled={c.stockLoading} onClick={c.reload}>刷新历史</Button>}>
+  return <Card size="small" title="本车历史用料" className="warehouse-stock" extra={<RefreshButton size="small" loading={c.loading} disabled={c.stockLoading} onClick={c.reload} label="刷新历史"/>}>
     {c.loading?<div className="warehouse-stock-loading" role="status"><Spin/> 正在按车牌查询维修历史…</div>:null}
     {c.error?<Alert type="error" showIcon title={c.error} action={<Button size="small" onClick={c.reload}>重试</Button>}/>:null}
     {c.history?.status==='no_history'?<Alert type="info" showIcon title="本车暂无历史维修记录，已跳过仓库匹配" description="新车先按当前配件需求备料，无需完成历史型号匹配。"/>:null}

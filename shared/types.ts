@@ -518,7 +518,7 @@ export type NotificationUsage = {
  daily:Array<{date:string;total:number;sends:number;queries:number;unresolved:number;coverage:'none'|'partial'|'full'}>;
  groups:Array<{kind:string;total:number;sends:number;queries:number}>;
  recipients:Array<{id:string;name:string;total:number}>;
- rows:Array<{id:string;startedAt:string;operation:'send'|'query';source:NotificationSource;notificationId:string;resourceId:string;eventKey:string;recipientName:string;kind:string;outcome:string;httpStatus:number|null;apiCode:string|null;durationMs:number|null;platformTaskId:string|null}>;
+ rows:Array<{id:string;startedAt:string;operation:'send'|'query';source:NotificationSource;notificationId:string;resourceId:string;eventKey:string;recipientName:string;kind:string;outcome:string;httpStatus:number|null;apiCode:string|null;durationMs:number|null;batchId?:string|null;recipientCount?:number;platformTaskId:string|null}>;
 };
 export type NotificationDelivery = {
   id: string; kind: string; recipientName: string;
@@ -772,3 +772,9 @@ export interface PurchaseDocumentPreview {
   rates:Array<{name:string;percent:number|null;price:number|null}>;
   docs:Array<{id:string;file:string;sheet:string;code:string;model:string;plate:string;date:string;template:string;kept:number;paint:number;excluded:number;total:number}>;
 }
+
+export type PersonalBusinessTarget = { targetKey: 'dispatchOrder' | 'workOrder' | 'vehicleTrip' | 'procurementTender' | 'procurementReport'; targetId: string };
+export type PersonalTodo = PersonalBusinessTarget & { id: string; category: string; title: string; summary: string };
+export type PersonalMessage = PersonalBusinessTarget & { id: string; title: string; summary: string; plate: string; createdAt: string; readAt: string | null };
+export type PersonalInboxPage = { items: PersonalMessage[]; nextCursor: string | null };
+export type PersonalWorkbench = { unread: number; latestId: string; todos: PersonalTodo[]; updatedAt: string };

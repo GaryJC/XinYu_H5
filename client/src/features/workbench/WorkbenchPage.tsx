@@ -1,11 +1,13 @@
+import {usePersonalWorkbench} from '../personal-workbench/usePersonalWorkbench';
+import {PersonalMessageBell,PersonalNotificationPage} from '../personal-workbench/PersonalWorkbench';
 import { lazy } from "../../shared/ui/recoverableLazy";
 import { TodoOverview } from "./TodoOverview";
 import { LoadingState } from "../../shared/ui/LoadingState";
 import { userRoles } from "../../../../shared/roles.mjs";
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
 import { EmployeeBindingGate } from "../employee-binding/EmployeeBindingGate";
-import { Suspense, useState } from "react";
-import { ArrowLeft, ArrowUp, ClipboardCheck, Menu, Plus, ChevronRight, RefreshCcw, UserRound } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
+import { ArrowLeft, ArrowUp, ClipboardCheck, Menu, ChevronRight, RefreshCcw, UserRound } from "lucide-react";
 import { Alert, Button, Drawer, FloatButton, Grid, Layout, Select, Space } from "antd";
 import { DevelopmentPersonaKey } from "../../../../shared/types";
 import "./workbench.css";
@@ -47,7 +49,10 @@ export function WorkbenchPage() {
     devLoginLoading, loginForDevelopment
   } = controller;
 
-  const bindingRequired = currentUser && hasRole(currentUser, 'technician') && !currentUser.legacyEmployeeCode && !['出车申请', '车辆管理', '委托开单', '进货单生成'].includes(activeNav);
+  const personal = usePersonalWorkbench(currentUser?.id);
+  useEffect(()=>{personal.setOpen(activeNav==='消息');},[activeNav,personal.setOpen]);
+
+  const bindingRequired = currentUser && hasRole(currentUser, 'technician') && !currentUser.legacyEmployeeCode && !['消息', '出车申请', '车辆管理', '委托开单', '进货单生成'].includes(activeNav);
 
   const navigation = (
     <div className="navigation-shell workbench-navigation">
@@ -89,13 +94,11 @@ export function WorkbenchPage() {
           <div className="topbar-title">
             <div>
               <h1>{activeNav}</h1>
-              <p>{currentUser?.name ? `${currentUser.name} · ` : ''}{currentUser ? userRoles(currentUser).map(item => roles[item].name).join(' / ') : '请先登录'}{activeNav === '工作台' ? ` · ${dashboard?.total ?? '—'} 张委托单` : ''}</p>
+              <p>{currentUser?.name ? `${currentUser.name} · ` : ''}{currentUser ? userRoles(currentUser).map(item => roles[item].name).join(' / ') : '请先登录'}</p>
             </div>
           </div>
           <div className="topbar-actions">
-            {activeNav === '工作台' && visibleNavItems.some(item => item.label === '委托开单') && (
-              <Button type="primary" className="workbench-create" icon={<Plus size={17} aria-hidden="true" />} onClick={() => setActiveNav('委托开单')}>委托开单</Button>
-            )}
+            {currentUser&&<PersonalMessageBell controller={personal} onOpen={()=>setActiveNav('消息')}/>}
             {!isMobile ? <div className="sync-state"><RefreshCcw size={15} /><span>{syncLabel}</span></div> : null}
             {isDevelopmentAuth ? (
               <Select
@@ -131,6 +134,8 @@ export function WorkbenchPage() {
           </div>
         </header>
 
+        {activeNav==='消息'&&currentUser&&<PersonalNotificationPage key={currentUser.id} controller={personal}/>}
+
         {bindingRequired && <EmployeeBindingGate key={currentUser.id} user={currentUser} onBound={controller.setCurrentUser} onDefer={() => setActiveNav('出车申请')} />}
         {activeNav === '出车申请' && currentUser && <Suspense fallback={<LoadingState label="正在加载出车申请…" />}><VehicleTripsPage key={currentUser.id} user={currentUser} initialScope={tripScope} /></Suspense>}
         {activeNav === '车辆管理' && currentUser && hasRole(currentUser, 'manager') && <Suspense fallback={<LoadingState label="正在加载车辆管理…" />}><CompanyVehiclesPage key={currentUser.id} /></Suspense>}
@@ -142,7 +147,7 @@ export function WorkbenchPage() {
         {!dispatchEnabled && ["technician", "inspector", "warehouse"].includes(role) ? <Alert type="info" showIcon title="维修与检验功能暂未开放" /> : null}
 
         {controller.todoEntry?.nav===activeNav?<Button icon={<ArrowLeft size={16} aria-hidden="true" />} onClick={controller.returnFromTodo}>返回工作台</Button>:null}
-        {!bindingRequired && currentUser && activeNav === "工作台" && (dispatchEnabled || !["technician", "inspector", "warehouse"].includes(role)) ? (
+        {!bindingRequired && currentUser && activeNav === "工作台" && hasAnyRole(currentUser,["manager","advisor"]) ? (
           <>
             {controller.todoError?<Alert type="warning" title={controller.todoError}/>:null}
             <TodoOverview key={currentUser?.id} counters={counters} canApprovePhotos={dispatchEnabled&&!!currentUser&&hasAnyRole(currentUser,['manager','advisor'])} photoApprovalCount={controller.photoApprovalCount} canApprove={!!currentUser&&hasRole(currentUser,'manager')} onTodo={controller.openTodo} onApprovals={()=>{setTripScope('pending');setActiveNav('出车申请');}}/>
@@ -153,7 +158,7 @@ export function WorkbenchPage() {
                 return <button type="button" key={item.label} onClick={() => setActiveNav(item.label)}><span className="shortcut-icon"><Icon size={21} aria-hidden="true" /></span><span className="shortcut-label">{item.label}</span><ChevronRight className="shortcut-arrow" size={16} aria-hidden="true" /></button>;
               })}</div>
             </section>
-            <Suspense fallback={<LoadingState label="正在加载工单…" />}><OrdersArchive controller={controller} /></Suspense>
+            {hasAnyRole(currentUser,['manager','advisor'])&&<Suspense fallback={<LoadingState label="正在加载工单…" />}><OrdersArchive controller={controller} /></Suspense>}
           </>
         ) : null}
 

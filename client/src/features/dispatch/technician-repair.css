@@ -1,4 +1,3 @@
-.technician-page .technician-page-heading { justify-content: flex-end; }
 .technician-search-panel { padding: 16px; background: #fff; border: 1px solid #e2e8f1; border-radius: 16px; }
 .technician-page .technician-search-panel .repair-task-tabs { margin-top: 12px; width: 100%; overflow: visible; box-shadow: none; }
 .technician-page .repair-task-tabs .ant-segmented-group { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); width: 100%; gap: 8px; }
@@ -124,3 +123,14 @@
 .technician-page .repair-category-actionable .technician-category { flex-direction: column; gap: 0; font-size: 13px; line-height: 20px; }
 
 .technician-task-card .technician-card-dispatch-number { font-size: 16px; font-weight: 600; color: #405571; }
+
+/* Match the personal todo filters: intrinsic width, wrapping rows, one selected tone. */
+.technician-status-filters { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.technician-status-filters button { display:inline-flex; align-items:center; gap:8px; min-height:38px; max-width:100%; padding:8px 12px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; color:#475569; font:inherit; font-size:13px; line-height:20px; white-space:nowrap; cursor:pointer; }
+.technician-status-filters button[aria-pressed=true] { background:#eaf1ff; border-color:#bfdbfe; color:#1d4ed8; }
+.technician-status-filters button:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
+.technician-status-count { font-variant-numeric:tabular-nums; }
+
+.technician-search-toolbar { display:flex; align-items:center; gap:8px; min-width:0; }
+.technician-search-toolbar > .ant-input-search { flex:1; min-width:0; }
+.technician-search-toolbar > .technician-refresh { flex:0 0 36px; width:36px; height:40px; padding:0; color:#64748b; }
