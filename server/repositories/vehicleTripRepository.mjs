@@ -4,7 +4,7 @@ import { hasRole } from '../../shared/roles.mjs';
 
 const iso = value => value ? new Date(value).toISOString() : undefined;
 function vehicle(row) {
-  return row && { id: row.id, shopId: row.shop_id, plate: row.plate, brand: row.brand, model: row.model, active: row.active };
+  return row && { id: row.id, shopId: row.shop_id, plate: row.plate, brand: row.brand, model: row.model, active: row.active, insuranceStart: row.insurance_start ? String(row.insurance_start).slice(0,10) : undefined, insuranceEnd: row.insurance_end ? String(row.insurance_end).slice(0,10) : undefined, insuranceDetails: row.insurance_details || {} };
 }
 function trip(row) {
   return row && { id: row.id, shopId: row.shop_id, applicantId: row.applicant_id, applicantName: row.applicant_name,
@@ -18,21 +18,21 @@ export class VehicleTripRepository {
   constructor(database = pool) { this.database = database; }
   transaction(run) { return transaction(client => run(new VehicleTripRepository(client))); }
   async listVehicles(user, all) {
-    const { rows } = await this.database.query('select * from company_vehicles where shop_id=$1 and ($2 or active) order by plate', [user.shopId, Boolean(all && hasRole(user, 'manager'))]);
+    const { rows } = await this.database.query('select *,insurance_start::text,insurance_end::text from company_vehicles where shop_id=$1 and ($2 or active) order by plate', [user.shopId, Boolean(all && hasRole(user, 'manager'))]);
     return rows.map(vehicle);
   }
   async getVehicle(id, lock = false) {
-    return vehicle((await this.database.query(`select * from company_vehicles where id=$1${lock ? ' for update' : ''}`, [id])).rows[0]);
+    return vehicle((await this.database.query(`select *,insurance_start::text,insurance_end::text from company_vehicles where id=$1${lock ? ' for update' : ''}`, [id])).rows[0]);
   }
   async isVehicleInUse(vehicleId, exceptTripId) {
     const {rows}=await this.database.query("select 1 from vehicle_trip_requests where vehicle_id=$1 and status in ('用车中','待收车审核') and ($2::text is null or id<>$2) limit 1",[vehicleId,exceptTripId]);
     return rows.length>0;
   }
   async saveVehicle(id, shopId, input, existing) {
-    const values = [id, shopId, input.plate, input.brand, input.model, input.active];
+    const values = [id, shopId, input.plate, input.brand, input.model, input.active, input.insuranceStart, input.insuranceEnd, JSON.stringify(input.insuranceDetails)];
     const sql = existing
-      ? 'update company_vehicles set plate=$3,brand=$4,model=$5,active=$6,updated_at=now() where id=$1 and shop_id=$2 returning *'
-      : 'insert into company_vehicles(id,shop_id,plate,brand,model,active) values($1,$2,$3,$4,$5,$6) returning *';
+      ? 'update company_vehicles set plate=$3,brand=$4,model=$5,active=$6,insurance_start=$7,insurance_end=$8,insurance_details=$9,updated_at=now() where id=$1 and shop_id=$2 returning *,insurance_start::text,insurance_end::text'
+      : 'insert into company_vehicles(id,shop_id,plate,brand,model,active,insurance_start,insurance_end,insurance_details) values($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *,insurance_start::text,insurance_end::text';
     return vehicle((await this.database.query(sql, values)).rows[0]);
   }
   async listTrips(user, query = {}) {

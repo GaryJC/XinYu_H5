@@ -650,10 +650,13 @@ export type OrderOverview = { order: WorkOrder; dispatch: DispatchDetail };
 export type OrderPhotoExportRequest = { categories: OrderPhotoCategory[] };
 export type OrderPhotoExportDownload = { path: string; fileName: string; expiresAt: string; photoCount: number };
 
+export type VehicleInsuranceDetails = Partial<Record<"originalPlate"|"registrationNote"|"condition"|"department"|"owner"|"payer"|"insurer",string>>;
+export type CompanyVehicleImportRow = {plate:string;model:string;insuranceStart:string;insuranceEnd:string;insuranceDetails:VehicleInsuranceDetails};
 export type CompanyVehicle = {
+  insuranceStart?:string; insuranceEnd?:string; insuranceDetails?:VehicleInsuranceDetails;
   id: string; shopId: string; plate: string; brand: string; model: string; active: boolean;
 };
-export type CompanyVehicleInput = Pick<CompanyVehicle, "plate" | "brand" | "model" | "active">;
+export type CompanyVehicleInput = Pick<CompanyVehicle, "plate" | "brand" | "model" | "active" | "insuranceStart" | "insuranceEnd" | "insuranceDetails">;
 export type VehicleTripStatus = "待审批" | "待出车" | "用车中" | "待收车审核" | "已还车" | "已驳回" | "已取消";
 export type VehicleTripStage = "departure" | "return" | "signature";
 export type VehicleTripAction = "approve" | "reject" | "cancel" | "depart" | "return" | "approve-return" | "reject-return";

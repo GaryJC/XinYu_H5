@@ -1,3 +1,4 @@
+import {insuranceState} from '../../../../shared/vehicleInsurance.mjs';
 import { ListPagination } from '../../shared/ui/ListPagination';
 import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { LoadingState } from "../../shared/ui/LoadingState";
@@ -44,7 +45,7 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
       <p>驾驶员：{user.name}</p>
       <Form name="vehicle-trip-create" form={form} layout="vertical" disabled={state.busy} onFinishFailed={() => feedback.warning("请选择车辆并填写用车事由")} onFinish={async values => { if (await state.create(values)) form.resetFields(); }}>
         <Form.Item label="公司车辆" name="vehicleId" rules={[{ required: true, message: '请选择车辆' }]}>
-          <Select showSearch optionFilterProp="label" placeholder="请选择公司车辆" options={state.vehicles.map(car => ({ value: car.id, label: `${car.plate} · ${car.brand} ${car.model}` }))} />
+          <Select showSearch optionFilterProp="label" placeholder="请选择公司车辆" options={state.vehicles.map(car => ({ value: car.id, disabled:insuranceState(car)!=='保险有效', label: `${car.plate} · ${car.brand} ${car.model}${insuranceState(car)!=='保险有效'?' · '+insuranceState(car):''}` }))} />
         </Form.Item>
         {!state.busy && !state.vehicles.length && <Alert type="info" title="暂无可用车辆，请联系管理员录入或启用车辆" />}
         <Form.Item label="用车事由" name="reason" rules={[{ required: true, whitespace: true, message: '请填写用车事由' }]}><Input.TextArea rows={3} maxLength={500} showCount /></Form.Item>

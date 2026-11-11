@@ -1,11 +1,12 @@
 import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { useEffect, useRef, useState } from 'react';
-import type { CompanyVehicle, CompanyVehicleInput } from '../../../../shared/types';
+import type { CompanyVehicle, CompanyVehicleInput, CompanyVehicleImportRow } from '../../../../shared/types';
 import { companyVehicleApi } from './companyVehicleApi';
 
 export function useCompanyVehicles() {
   const feedback = useActionFeedback();
   const [vehicles, setVehicles] = useState<CompanyVehicle[]>([]);
+  const [importData,setImportData]=useState<{fileBase64:string;rows:CompanyVehicleImportRow[]}>();
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -24,6 +25,13 @@ export function useCompanyVehicles() {
   const filteredVehicles = vehicles.filter(vehicle =>
     [vehicle.plate, vehicle.brand, vehicle.model].some(value => value.toLocaleLowerCase().includes(query))
   );
-  return { vehicles, filteredVehicles, search, setSearch, busy, loading, error, refresh: () => run(load),
+  return { importData, cancelImport:()=>setImportData(undefined),
+    previewImport:(file:File)=>run(async()=>{
+      if(!file.name.toLowerCase().endsWith('.xlsx')||file.size>3*1024*1024)throw new Error('请选择不超过 3 MB 的 .xlsx 文件');
+      const fileBase64=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('文件读取失败'));reader.readAsDataURL(file);});
+      const result=await companyVehicleApi.importFile(fileBase64,true);setImportData({fileBase64,rows:result.rows||[]});
+    }),
+    confirmImport:()=>run(async()=>{if(!importData)return;await companyVehicleApi.importFile(importData.fileBase64,false);setImportData(undefined);await load();},'车辆及保险信息已更新'),
+    vehicles, filteredVehicles, search, setSearch, busy, loading, error, refresh: () => run(load),
     save: (input: CompanyVehicleInput, id?: string) => run(async () => { const saved = await companyVehicleApi.save(input, id); setVehicles(current => [saved, ...current.filter(v => v.id !== saved.id)].sort((a, b) => a.plate.localeCompare(b.plate))); }, id ? '车辆信息已保存' : '公司车辆已录入') };
 }

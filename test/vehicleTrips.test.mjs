@@ -6,7 +6,7 @@ const manager = { ...employee, id: 'manager', role: 'manager' };
 const trip = { id: 'trip', applicantId: employee.id, shopId: employee.shopId, status: '待审批' };
 const status = (code) => e => e.status === code;
 test('vehicle plate normalization, required fields and active flag validation', () => {
-  assert.deepEqual(vehicleInput({ plate: ' 鲁 bd09326 ', brand: '北汽', model: ' EX360 ' }), { plate: '鲁BD09326', brand: '北汽', model: 'EX360', active: true });
+  assert.deepEqual(vehicleInput({ plate: ' 鲁 bd09326 ', brand: '北汽', model: ' EX360 ' }), { plate: '鲁BD09326', brand: '北汽', model: 'EX360', active: true, insuranceStart:null,insuranceEnd:null,insuranceDetails:Object.fromEntries(['originalPlate','registrationNote','condition','department','owner','payer','insurer'].map(k=>[k,''])) });
   for (const input of [{}, { plate: '鲁B1', brand: '', model: 'x' }, { plate: '鲁B1', brand: 'a', model: 'x', active: 'false' }]) assert.throws(() => vehicleInput(input), status(400));
   assert.throws(() => requireVehicleManager(employee), status(403));
 });

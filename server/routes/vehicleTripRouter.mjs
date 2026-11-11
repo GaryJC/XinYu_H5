@@ -26,6 +26,10 @@ export async function handleVehicleTrips(req, res, url, user) {
     res.end(stored.body);
     return true;
   }
+  if (url.pathname === '/api/company-vehicles/import') {
+    if(req.method!=='POST')throw new HttpError(405,'不支持的请求方法');
+    sendJson(res,200,await service.importVehicles(user,await readInput(req)));return true;
+  }
   if (url.pathname === '/api/company-vehicles') {
     if (req.method === 'GET') sendJson(res, 200, await service.vehicles(user, url.searchParams.get('all') === 'true'));
     else if (req.method === 'POST') sendJson(res, 201, await service.saveVehicle(user, await readInput(req)));

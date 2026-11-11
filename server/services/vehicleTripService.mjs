@@ -1,3 +1,5 @@
+import {assertVehicleInsured} from '../domain/vehicleInsurance.mjs';
+import {parseInsuranceWorkbook} from '../domain/vehicleInsuranceImport.mjs';
 import {enqueueTripNotification} from '../repositories/vehicleTripNotificationRepository.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
@@ -42,12 +44,13 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
     async vehicles(user, all = false) { requireTripUser(user); return repository.listVehicles(user, all); },
     async saveVehicle(user, input, id) {
       requireVehicleManager(user);
-      const normalized = vehicleInput(input);
+      let normalized = vehicleInput(input);
       try {
         return await repository.transaction(async repo => {
           if (id) {
             const existing = await repo.getVehicle(id, true);
             if (!existing || existing.shopId !== user.shopId) throw new HttpError(404, '车辆不存在');
+            normalized=vehicleInput({...existing,...input});
           }
           return repo.saveVehicle(id || `cv_${randomUUID()}`, user.shopId, normalized, Boolean(id));
         });
@@ -55,6 +58,22 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
         if (error.code === '23505') throw new HttpError(409, '该车牌号已存在，请勿重复录入');
         throw error;
       }
+    },
+    async importVehicles(user, input) {
+      requireVehicleManager(user);
+      const rows=await parseInsuranceWorkbook(input.fileBase64);
+      if(input.preview!==false)return {rows};
+      return repository.transaction(async repo=>{
+        await repo.database.query('select pg_advisory_xact_lock(hashtextextended($1,0))',['insurance-import:'+user.shopId]);
+        const existing=await repo.listVehicles(user,true);
+        for(const row of rows){
+          const found=existing.find(car=>car.plate===row.plate);
+          const car=found?await repo.getVehicle(found.id,true):undefined;
+          const normalized=vehicleInput({...car,...row,brand:car?.brand||row.model,active:car?.active??true});
+          await repo.saveVehicle(car?.id||`cv_${randomUUID()}`,user.shopId,normalized,Boolean(car));
+        }
+        return {count:rows.length};
+      });
     },
     async list(user, query) { requireTripUser(user); return repository.listTrips(user, query); },
     async detail(user, id) {
@@ -72,6 +91,7 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
       return operation(user, normalized, 'create', null, async repo => {
         const car = await repo.getVehicle(normalized.vehicleId, true);
         if (!car || car.shopId !== user.shopId || !car.active) throw new HttpError(409, '车辆不存在或已停用，请重新选择');
+        assertVehicleInsured(car);
         if (await repo.isVehicleInUse(car.id)) throw new HttpError(409, '车辆正在使用中或等待收车审核，请选择其他车辆');
         const trip = await repo.createTrip(`trip_${randomUUID()}`, user, car, normalized);
         const ids = [];
@@ -93,6 +113,7 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
         if (['depart', 'approve'].includes(action)) {
           const car = await repo.getVehicle(trip.vehicleId, true);
           if (!car?.active) throw new HttpError(409, '车辆已停用，不能出车');
+          assertVehicleInsured(car);
           // The vehicle lock serializes departures across different applications.
           if (await repo.isVehicleInUse(trip.vehicleId, id)) throw new HttpError(409, '车辆正在使用中或等待收车审核，请等待审核通过后再出车');
         }

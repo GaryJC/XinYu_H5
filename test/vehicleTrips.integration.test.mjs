@@ -39,10 +39,11 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
     const key = () => ({ requestId: randomUUID() });
     const imageBase64 = (await sharp({ create: { width: 80, height: 40, channels: 3, background: '#102030' } }).png().toBuffer()).toString('base64');
     const create = (user, input) => svc.create(user, { departurePhotos: [imageBase64], ...input });
+    await pool.query("update company_vehicles set insurance_start='2020-01-01',insurance_end='2099-12-31'");
     const cars = await svc.vehicles(employee); assert.equal(cars.length, 8);
     assert.deepEqual(cars.map(v => v.plate).sort(), ['鲁B60778','鲁BDT7922','鲁BDS3250','鲁BDQ2235','鲁BD56565','鲁BB62767','鲁BD09326','鲁BA86281'].sort());
     await fails(svc.saveVehicle(employee, { plate: '鲁BTEST', brand: '测试', model: '测试' }), 403);
-    const car = await svc.saveVehicle(manager, { plate: ' 鲁 btest ', brand: '测试', model: '测试' }); assert.equal(car.plate, '鲁BTEST');
+    const car = await svc.saveVehicle(manager, { plate: ' 鲁 btest ', brand: '测试', model: '测试',insuranceStart:'2020-01-01',insuranceEnd:'2099-12-31' }); assert.equal(car.plate, '鲁BTEST');
     await fails(svc.saveVehicle(manager, { plate: '鲁BTEST', brand: '其他', model: '其他' }), 409);
     await fails(svc.saveVehicle(stranger, car, car.id), 404);
     const input={...key(),vehicleId:car.id,reason:'外出办事',note:''};
@@ -52,6 +53,10 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
     assert.equal(trip.id,retry.id);assert.equal(trip.status,'待审批');assert.equal(trip.departureAt,undefined);assert.equal(trip.departureEvidence,'mileage');
     await fails(create(employee,{...input,reason:'更改'}),409);
     await fails(create(employee,{...input,departurePhotos:[imageBase64,imageBase64]}),409);
+    await svc.saveVehicle(manager,{...car,insuranceStart:'2020-01-01',insuranceEnd:'2020-02-01'},car.id);
+    await fails(svc.act(manager,trip.id,'approve',key()),409);
+    await fails(create(employee,{...key(),vehicleId:car.id,reason:'expired'}),409);
+    await svc.saveVehicle(manager,car,car.id);
     const photo=(await svc.detail(manager,trip.id)).attachments[0];assert.equal(photo.confirmed,true);
     await svc.authorizeFile(manager,photo.fileId);
     await fails(svc.authorizeFile(other,photo.fileId),404);await fails(svc.authorizeFile(stranger,photo.fileId),404);
@@ -275,10 +280,56 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
         await reviewer.getByRole('combobox',{name:'筛选出车申请',exact:true}).waitFor();
         assert.equal(await reviewer.getByRole('button',{name:/查看申请：.*，用车中$/}).count(),0);
         await reviewer.screenshot({path:'output/playwright/trip-approval-correction/pending-desktop.png',animations:'disabled'});
+        await reviewer.setViewportSize({width:390,height:844});
+        await reviewer.getByRole('button',{name:'打开菜单',exact:true}).click();
+        await reviewer.getByRole('button',{name:'车辆管理',exact:true}).click();
+        await reviewer.getByRole('heading',{name:'公司车辆管理',exact:true}).waitFor();
+        const UIX=await import('xlsx'),uiBook=UIX.utils.book_new();
+        UIX.utils.book_append_sheet(uiBook,UIX.utils.aoa_to_sheet([
+          ['原车号','新车牌号','车型','登记及年审时间','保险终保时间','车辆状况','车辆使用部门','产权归属','投保付款单位','承保公司'],
+          ['旧牌照',car.plate,'测试车辆','2020--1--1','2020.1.1-2099.12.31','车况良好','维修及客户服务部门长文字换行测试','公司','公司','保险公司承保服务中心长文字换行测试']
+        ]),'Sheet1');
+        await reviewer.locator('input[type="file"]').setInputFiles({name:'保险.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:UIX.write(uiBook,{type:'buffer',bookType:'xlsx'})});
+        const preview=reviewer.getByRole('dialog',{name:'确认导入车辆及保险',exact:true});await preview.waitFor();await preview.locator('.ant-card').first().scrollIntoViewIfNeeded();
+        await reviewer.screenshot({path:'output/playwright/trip-approval-correction/insurance-import-mobile.png',animations:'disabled'});
+        await preview.getByRole('button',{name:'确认更新',exact:true}).click();await preview.waitFor({state:'hidden'});
+        await reviewer.getByRole('searchbox',{name:'搜索公司车辆',exact:true}).fill(car.plate);
+        await reviewer.locator('.company-vehicle-grid').getByText('保险公司承保服务中心长文字换行测试',{exact:false}).waitFor();
+        await reviewer.screenshot({path:'output/playwright/trip-approval-correction/insurance-vehicle-mobile.png',animations:'disabled'});
         const denied=await openNotice(other,'create',created,true);
         await denied.getByText('申请不存在或无权访问',{exact:true}).first().waitFor();
       } finally {await browser.close();}
     }
+    const XLSX=await import('xlsx');
+    const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([
+      ['公司车辆保险承保明细表'],['原车号','新车牌号','车型','登记及年审时间','保险终保时间','车辆状况','车辆使用部门','产权归属','投保付款单位','承保公司'],
+      ['旧车牌',car.plate,'测试车型','2020--1--1','2020.1.1-2099.12.31','状态','部门','产权','付款','保险公司']
+    ]),'Sheet1');
+    const importInput={fileBase64:XLSX.write(book,{type:'base64',bookType:'xlsx'})};
+    await fails(svc.importVehicles(employee,importInput),403);
+    assert.equal((await svc.importVehicles(manager,importInput)).rows.length,1);
+    await svc.saveVehicle(manager,{...car,active:false},car.id);
+    await svc.importVehicles(manager,{...importInput,preview:false});
+    const imported=(await svc.vehicles(manager,true)).find(v=>v.id===car.id);
+    assert.equal(imported.active,false);assert.equal(imported.insuranceEnd,'2099-12-31');assert.equal(imported.insuranceDetails.owner,'产权');
+    await svc.importVehicles(manager,{...importInput,preview:false});
+    assert.equal((await svc.vehicles(manager,true)).filter(v=>v.plate===car.plate).length,1);
+    const {queueInsuranceReminders,deliverInsuranceReminder}=await import('../server/workers/vehicleInsuranceNotifications.mjs');
+    const mockEnv={APP_ENV:'test',DISPATCH_NOTIFICATION_MODE:'mock'};
+    await pool.query("update company_vehicles set active=true,insurance_start='2020-01-01',insurance_end=(now() at time zone 'Asia/Shanghai')::date+7 where id=$1",[car.id]);
+    await queueInsuranceReminders({database:pool,env:mockEnv});
+    const queued=await pool.query('select * from vehicle_insurance_notifications where vehicle_id=$1',[car.id]);assert.ok(queued.rows.length>0);
+    await queueInsuranceReminders({database:pool,env:mockEnv});
+    assert.equal((await pool.query('select count(*)::int as n from vehicle_insurance_notifications where vehicle_id=$1',[car.id])).rows[0].n,queued.rows.length);
+    let insuranceSends=0;
+    await deliverInsuranceReminder({database:{query:(sql,args)=>sql.startsWith('select v.plate')?Promise.reject(new Error('temporary database failure')):pool.query(sql,args)},env:mockEnv,send:async()=>{insuranceSends++;return {status:'sent'};}});
+    assert.equal(insuranceSends,0);
+    assert.equal((await pool.query("select count(*)::int as n from vehicle_insurance_notifications where vehicle_id=$1 and status='pending'",[car.id])).rows[0].n,queued.rows.length);
+    await pool.query("update vehicle_insurance_notifications set next_attempt_at=now() where status='pending'");
+    await deliverInsuranceReminder({database:pool,env:mockEnv,send:async()=>{insuranceSends++;return {status:'accepted',taskId:'mock-insurance'};}});assert.equal(insuranceSends,1);
+    await pool.query("update company_vehicles set insurance_end='2099-12-31' where id=$1",[car.id]);
+    while(await deliverInsuranceReminder({database:pool,env:mockEnv,send:async()=>{insuranceSends++;return {status:'sent'};}})){}
+    assert.equal(insuranceSends,1,'renewed policy must not notify');
     await pool.query('update users set active=false where id=$1', [employee.id]);
     assert.equal((await get('/api/vehicle-trip-requests')).status, 401);
   } finally {

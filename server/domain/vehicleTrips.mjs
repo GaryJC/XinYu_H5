@@ -1,3 +1,4 @@
+import {insuranceInput} from './vehicleInsurance.mjs';
 import { hasRole } from '../../shared/roles.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 
@@ -18,7 +19,7 @@ export function vehicleInput(input) {
   const plate = tripText(input.plate, '车牌号', 30).replace(/\s/g, '').toUpperCase();
   if (!plate) throw new HttpError(400, '车牌号不能为空');
   if (input.active !== undefined && typeof input.active !== 'boolean') throw new HttpError(400, '车辆启用状态无效');
-  return { plate, brand: tripText(input.brand, '品牌', 50), model: tripText(input.model, '车型', 100), active: input.active ?? true };
+  return { ...insuranceInput(input), plate, brand: tripText(input.brand, '品牌', 50), model: tripText(input.model, '车型', 100), active: input.active ?? true };
 }
 export function assertTripAccess(trip, user) {
   requireTripUser(user);

@@ -39,3 +39,5 @@
 - 使用本机 `DISPATCH_TEST_ADMIN_URL` 运行 `test/vehicleTrips.integration.test.mjs` 和 `test/operationsFollowupReview.test.mjs`；测试创建并清理独立临时库。
 - `VEHICLE_TRIP_UI_TEST=true` 加 Playwright／Chrome 路径可验证手机申请、公里数预览、审批即出车、直接还车与待办跳转。
 - 沿用压缩和现有 16 MiB HTTP 上限；不增加普通列表关联查询或后台扫描。出车占用继续使用部分索引与行锁。未做大规模延迟基准。
+
+车辆在申请及审批／确认出车时须有生效且未过期的保险；详细导入和提醒规则见 [车辆保险](vehicle-insurance.md)。保险问题不阻止已经出车的车辆还车。

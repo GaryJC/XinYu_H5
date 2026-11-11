@@ -7,7 +7,7 @@
 .company-vehicle-grid .ant-card-head { border-bottom-color: #eef1f5; min-height: 64px; }
 .company-vehicle-grid .ant-card-head-title { font-size: 20px; letter-spacing: .5px; }
 .company-vehicle-grid .ant-card-body { padding: 20px 24px; }
-.company-vehicle-grid p { margin: 0 0 24px; color: #6d7e94; }
+.company-vehicle-grid p { margin: 0 0 12px; color: #6d7e94; }
 .company-vehicles-page .ant-btn { min-height: 40px; border-radius: 8px; }
 .company-vehicle-modal .ant-modal-container { padding: 26px; border-radius: 16px; }
 .company-vehicle-modal .ant-modal-header { margin-bottom: 24px; }
@@ -20,3 +20,11 @@
  .company-vehicle-modal .ant-modal-footer { display: flex; gap: 12px; }
  .company-vehicle-modal .ant-modal-footer .ant-btn { flex: 1; margin-inline-start: 0; }
 }
+
+.insurance-import-preview {max-height:55vh;overflow:auto;display:grid;gap:12px;margin-top:16px;}
+.insurance-import-preview p {margin:8px 0 0;overflow-wrap:anywhere;}
+.company-vehicle-grid p {overflow-wrap:anywhere;line-height:1.8;}
+
+.company-vehicle-insurance { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px 16px; margin-bottom: 20px; border-radius: 10px; background: #f7f9fc; color: #6d7e94; line-height: 1.6; overflow-wrap: anywhere; }
+.company-vehicle-insurance .ant-tag { margin: 0; }
+.company-vehicle-insurance > span { max-width: 100%; }
