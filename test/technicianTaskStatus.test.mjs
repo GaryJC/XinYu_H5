@@ -17,6 +17,7 @@ function load(filename) {
   cache.set(filename,mod);mod.filename=filename;mod.paths=Module._nodeModulePaths(dirname(filename));
   mod.require=name=>{
     if(name.endsWith('.css'))return {};
+    if(name.endsWith('/dispatchApi'))return {dispatchApi:{}};
     if(name.endsWith('/AuthenticatedImage'))return {AuthenticatedImage:({alt})=>React.createElement('img',{alt})};
     if(name.startsWith('.')) {
       const base=resolve(dirname(filename),name),local=[base,base+'.tsx',base+'.ts'].find(existsSync);
@@ -30,7 +31,7 @@ function load(filename) {
 const client=file=>load(fileURLToPath(new URL(`../client/src/features/dispatch/${file}`,import.meta.url)));
 const {technicianTaskStatus:status}=client('technicianTaskStatus.ts');
 const {taskStatusLabel}=client('dispatchLabels.ts');
-const {personalTask}=client('individualRepair.ts');
+const {personalTask,partsController}=client('individualRepair.ts');
 const {technicianPrimaryAction}=client('technicianPrimaryAction.ts');
 const {TechnicianTaskCard}=client('TechnicianTaskCard.tsx');
 const {TaskPartsSummary}=client('TaskPartsSummary.tsx');
@@ -101,4 +102,33 @@ test('manager and inspector parts summaries retain both personal requests and sh
   for(const text of ['共同配件','共用辅料','维修甲 · 配件','维修乙 · 配件'])assert.ok(shared.includes(text));
   assert.match(render(TaskPartsSummary,{task:{...task,executionMode:'outsourced'}}),/历史配件申请 · 维修甲/);
   assert.match(render(TaskPartsSummary,{task:{...task,partsRequirement:undefined,partsRequests:[]}}),/尚未登记/);
+});
+
+const {TechnicianTaskDetail}=client('TechnicianTaskDetail.tsx');
+const detail=(task,user)=>render(TechnicianTaskDetail,{controller:{detail:{task,files:[],events:[]},people:{technicians:[a,b],contractors:[],inspectors:[manager]},busy:false},user,onPhotoBlocked(){}});
+
+test('details scope returned projects, reasons and start/reinspection labels to the worker',()=>{
+ const initial={...base(),stage:'维修中',partsRequests:[{ownerId:'a',mode:'none',items:[]},{ownerId:'b',mode:'none',items:[]}],items:base().items.map(i=>({...i,status:i.responsibleId==='a'?'维修中':'待开工'}))};
+ const returned=act(act(initial,a,'submit-order'),manager,'inspect',{rejectedItemIds:[1],reason:'甲项目仍有异响'});
+ const own=detail(returned,a),peer=detail(returned,b);
+ assert.match(own,/需要返工/);assert.match(own,/甲项目仍有异响/);assert.match(own,/开始返工/);
+ assert.doesNotMatch(peer,/需要返工|开始返工|甲项目仍有异响/);assert.match(peer,/开始维修/);
+ assert.throws(()=>act(returned,b,'submit-order'),error=>/开工后才能提交/.test(error.message)&&!/返工/.test(error.message));
+ const started=act(returned,b,'start-order'),submitted=act(started,b,'submit-order');
+ assert.match(detail(submitted,b),/已提交，等待检验员领取/);assert.doesNotMatch(detail(submitted,b),/等待检验员领取复检/);
+ const both={...returned,items:returned.items.map(i=>i.responsibleId==='b'?{...i,rejectionReason:'乙项目重新紧固'}:i)};
+ assert.equal(personalTask(both,'a').reworkReason,'甲项目仍有异响');assert.equal(personalTask(both,'b').reworkReason,'乙项目重新紧固');
+ const legacy={...initial,rework:true,reworkReason:'历史整单返工'};assert.match(detail(legacy,b),/需要返工|历史整单返工/);
+ const round={...returned,repairRound:1,roundKind:'rework'};
+ assert.match(detail(round,a),/本轮检验退回，请重新维修指定项目/);assert.doesNotMatch(detail(round,b),/本轮检验退回|甲项目仍有异响|开始返工/);
+});
+
+test('personal refusal hides only its own controls and reoffer restores personal acceptance',()=>{
+ const refused=act({...base(),stage:'待接单',acceptedAt:undefined,partsRequests:undefined},a,'decline',{reason:'甲时间冲突'});
+ assert.match(detail(refused,a),/已反馈无法接单/);assert.doesNotMatch(detail(refused,a),/确认接单/);
+ assert.match(detail(refused,b),/确认接单/);assert.doesNotMatch(detail(refused,b),/已反馈无法接单|甲时间冲突/);
+ const accepted=act(refused,b,'accept',{partsRequirement:{mode:'none'}});
+ assert.doesNotMatch(detail(accepted,a),/开始维修|提交本人完工|暂停维修|编辑项目/);
+ const offered=act(accepted,manager,'reoffer');assert.match(detail(offered,a),/确认接单/);assert.match(detail(offered,b),/提交本人完工/);
+ const material=partsController({detail:{task:personalTask(offered,a.id)}},a.id);assert.equal(material.detail.task.stage,'待接单');
 });

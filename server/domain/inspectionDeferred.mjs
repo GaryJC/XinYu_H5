@@ -42,7 +42,7 @@ export function cancelInspectionDeferred(task,entry,actor,note,now,people=[]) {
   // Assigned coworkers who have not registered work yet still need to finish.
   next.technicianIds=(next.technicianIds||[next.technicianId]).filter(id=>id&&(!originalOwners.has(id)||next.items.some(item=>item.responsibleId===id)));
   next.technicianId=next.technicianIds[0];
-  if(next.workerPauses)next.workerPauses=Object.fromEntries(Object.entries(next.workerPauses).filter(([id])=>next.technicianIds.includes(id)));
+  for(const key of ['workerPauses','workerOffers'])if(next[key])next[key]=Object.fromEntries(Object.entries(next[key]).filter(([id])=>next.technicianIds.includes(id)));
   next.technicianName=next.executionMode==='outsourced'?next.contractor:next.technicianIds.map(id=>people.find(person=>person.id===id)?.name||next.items.find(item=>item.responsibleId===id)?.responsibleName||id).join('、');
  }
  if(next.rejectedItemIds)next.rejectedItemIds=next.rejectedItemIds.filter(id=>id!==entry.itemId);

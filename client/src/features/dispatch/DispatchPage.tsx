@@ -1,3 +1,4 @@
+import {hasDeclinedWork} from '../../../../shared/repairProgress.mjs';
 import {pendingPhotoWaivers} from '../../../../shared/repairPhotoWaiver.mjs';
 import { useDetailScrollLock } from '../../shared/ui/useDetailScrollLock';
 import { ChevronRight } from 'lucide-react';
@@ -29,7 +30,7 @@ export function DispatchPage({user,view,initialStage}:{user:UserProfile;view:str
   const clearWorkload=()=>c.setFilters(f=>({...f,workloadState:undefined,technicianId:undefined}));
   useEffect(()=>{if(c.filters.workloadState)taskHeading.current?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});},[c.filters.workloadState,c.filters.technicianId]);
   const chosen=c.summaries.find(s=>s.id===c.filters.technicianId);
-  function badges(t:DispatchTask) {return <Space className="dispatch-badges" size={[8,8]} wrap>{pendingPhotoWaivers(t).length>0&&<Tag color="orange">无照片待审批</Tag>}<Tag>{executionLabels[t.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(t)}</Tag>{!!t.inspectionDeferredCount&&<Tag color="orange">待定 × {t.inspectionDeferredCount}</Tag>}{t.pendingRepairCount?<Tag color="orange">存在待客户确认项目</Tag>:null}{t.urgent?<Tag color="red">加急</Tag>:null}{t.overdue?<Tag color="red">超期</Tag>:null}{t.repairRound?<Tag color="orange">{t.roundKind==='additional'?'追加维修第':'返工第'} {t.repairRound} 轮</Tag>:t.rework?<Tag color="orange">返工</Tag>:null}{t.feedback?<Tag color="orange">无法接单</Tag>:null}{t.needsReview?<Tag>待核对</Tag>:null}</Space>;}
+  function badges(t:DispatchTask) {return <Space className="dispatch-badges" size={[8,8]} wrap>{pendingPhotoWaivers(t).length>0&&<Tag color="orange">无照片待审批</Tag>}<Tag>{executionLabels[t.executionMode||'internal']}</Tag><Tag color="blue">{taskStatusLabel(t)}</Tag>{!!t.inspectionDeferredCount&&<Tag color="orange">待定 × {t.inspectionDeferredCount}</Tag>}{t.pendingRepairCount?<Tag color="orange">存在待客户确认项目</Tag>:null}{t.urgent?<Tag color="red">加急</Tag>:null}{t.overdue?<Tag color="red">超期</Tag>:null}{t.repairRound?<Tag color="orange">{t.roundKind==='additional'?'追加维修第':'返工第'} {t.repairRound} 轮</Tag>:t.rework?<Tag color="orange">返工</Tag>:null}{hasDeclinedWork(t)?<Tag color="orange">无法接单</Tag>:null}{t.needsReview?<Tag>待核对</Tag>:null}</Space>;}
   if(view==='配件申请' && hasRole(user, 'warehouse')) return <WarehousePartsPage controller={c}/>;
   if(view==='我的维修' && (hasAnyRole(user, ['technician','outsourcing'])||user.outsourcingRoleMember)) return <TechnicianRepairPage controller={c} user={user}/>;
   return <section className="dispatch-page" aria-label={view}>

@@ -1,3 +1,4 @@
+import {declinedWorkOffers,hasDeclinedWork} from '../../shared/repairProgress.mjs';
 import {pendingPhotoWaivers} from '../../shared/repairPhotoWaiver.mjs';
 import {suppressedDispatchNotificationKinds} from '../domain/notificationPolicy.mjs';
 import {photoWaiverActions} from '../domain/repairPhotoWaiver.mjs';
@@ -181,12 +182,13 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
       const affected=new Set([...task.items,...next.items].filter(i=>changedProjectIds.includes(i.id)).map(i=>i.responsibleId).filter(Boolean));
       affected.forEach(id=>add(id,'项目改派'));
     } else {
-      if(['assign','reassign','reoffer','reconcile','reopen-repair'].includes(input.action) && next.stage!=='维修完成') addHandlers(next,input.action==='reopen-repair'?(next.roundKind==='additional'?'追加维修派工':'返工派工'):'新派工');
+      if(input.action==='reoffer'&&declinedWorkOffers(task).length&&!task.feedback)declinedWorkOffers(task).forEach(([id])=>recipients.push({recipient:id,kind:'新派工',payload:{summary:next.items.filter(item=>item.responsibleId===id).map(item=>item.name).join('、').slice(0,200),notice:'请重新确认本人接单。'}}));
+      else if(['assign','reassign','reoffer','reconcile','reopen-repair'].includes(input.action) && next.stage!=='维修完成') addHandlers(next,input.action==='reopen-repair'?(next.roundKind==='additional'?'追加维修派工':'返工派工'):'新派工');
       if(['reassign','cancel'].includes(input.action)) addHandlers(task,input.action==='cancel'?'派工已撤销':'任务已改派');
     }
     const schedulerKind={decline:'无法接单'}[input.action];
     if(schedulerKind) {
-      const payload={orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,actorName:actor.name,reason:input.reason||input.note||''};
+      const payload={orderId:id,plate:next.plate,dispatchNo:next.dispatchNo,summary:next.items.filter(i=>next.workerOffers?.[actor.id]?i.responsibleId===actor.id:true).map(i=>i.name).join('、').slice(0,200),dueAt:next.dueAt,actorId:actor.id,actorName:actor.name,reason:input.reason||input.note||''};
       await client.query('insert into dispatch_scheduler_notifications(event_id,order_id,kind,payload) values($1,$2,$3,$4)',[event.id,id,schedulerKind,JSON.stringify(payload)]);
     }
     if(hasPendingInspection(next)&&(['submit-review','submit-order','retry-inspection-notifications'].includes(input.action)
@@ -211,7 +213,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
     }
     if(['submit-order','submit-review'].includes(input.action)&&hasPendingInspection(next)&&next.inspectorId)add(next.inspectorId,'待检验');
     if(input.action==='remind') {
-      const targets=hasPendingInspection(task)?[task.inspectorId]:task.feedback?[task.assignedBy]:handlers(task);
+      const targets=hasPendingInspection(task)?[task.inspectorId]:hasDeclinedWork(task)?[task.assignedBy]:handlers(task);
       if(!targets.length) throw new HttpError(409,'没有可催办的处理人');
       for(const recipient of targets) {
       if(!people.some(p=>p.id===recipient && p.active)) throw new HttpError(409,'当前处理人已停用或不存在，请先调整责任人');

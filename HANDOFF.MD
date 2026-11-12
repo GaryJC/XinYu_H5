@@ -818,3 +818,22 @@
 - 新增PostgreSQL持久化场景覆盖none/preparedAt/issuedAt三种个人申请：开始维修、无照片拒绝且版本不变、补本人照片提交成功、repair_items和workerSubmissions正确落库、旧共同申请与同事数据不变、同事未备料仍拒绝。一次性本地PG17容器codex-personal-parts-review，禁真实通知；派工数据库套件48项全通过、零跳过，日志/tmp/personal-parts-review-pg.log。
 - npm run check：1160项、1120通过、40环境跳过、0失败，类型/构建/包体预算通过；日志/tmp/personal-parts-review-check.log。无新增数据库/OpenAPI请求、定时器或schema；本轮不声称生产性能实测。
 - 独立IAB临时页360px验收最后一项删除自动选none、长提示换行、面板padding及按钮间隔正常；截图outputs/parts-removal-review-mobile.jpg。未点击保存、不改本机业务数据，临时页已关、视口恢复，用户原页与草稿未操作。推送为源码同步，不等同生产部署。
+
+## 多人维修独立流程扩展排查（仅排查）— 2026-11-12
+
+- 用户要求再查是否有同类问题。基于01a8893现有代码，未改业务逻辑、未查询/修改生产、未自动推送；报告outputs/multi-repair-audit-20261112.html。
+- 确认问题1：多人待接单，甲decline写入整单feedback；乙accept（none）也报“已反馈无法接单，请等待服务顾问处理”。applyIndividualAction只分流accept/record-parts，不分流decline，scoped继承feedback；前端接单按钮也被同一字段隐藏。应隔离个人拒单和对应顾问待办/通知，不能只在UI忽略反馈。使用实际applyDispatchAction构造流程复现。
+- 确认问题2：甲提检被退回、乙未开工且未退回，isReworkTask(task,'b')为false，但实际TechnicianTaskDetail SSR包含“需要返工”、甲的退回原因和“开始返工”。personalTask保留整单rework/rejectedItemIds/reworkReason，详情69/89–92行直接使用；卡片已按个人判断，两者不一致。只确认显示误导，不宣称乙状态被写成返工。SSR替换dispatchApi为无网络stub（导入实际httpClient依赖window会在Node失败），其余详情与领域判断为实际实现，输出/tmp/multi-repair-unrelated-rework.html。
+- 另核实send-review现有整单限制：甲已检验通过、乙仍维修，整单维修中时发送回审拒绝。repairReview.test明确要求拒绝维修中，且sendReview会重开全单项目，故列为产品边界而非本次新缺陷；不能为了允许个人回审直接删除stage校验。
+- 17份相关领域/前端回归文件共169项通过、零跳过，日志/tmp/multi-repair-audit-tests.log；覆盖个人配件、暂停恢复、分别提检/检验、照片、回审、返工、任务分类与待办。现有通过用例没有覆盖以上两处，不能据此宣称多人流程全部无问题。
+
+
+## 多人拒单与返工提示隔离修复 — 2026-11-12
+
+- 用户明确要求修复并推送上轮确认的两处问题。内部多人拒单写入按员工保存的 workerOffers，保留整单进度；同事接单、开工、提交不受影响。顾问待办/列表标记/详情原因跟随个人拒单，即使同事已经施工也不会消失；重新发起接单只将拒单人置为pending，只通知对应员工，消息只列该员工项目。旧feedback归属未知，不推测拒单人，仍由顾问处理后解除。
+- 拒单本人必须经顾问重新发起后确认本人接单，不能经开工、编辑、配件申请、提检、照片豁免或仓库自动开工绕过；接单合并只改本人项目/申请，不重写同事的acceptedAt/assignedAt、检验状态或照片豁免范围。整单改派/撤销/返工重开清理旧个人接单状态，项目交接移除已离队人员状态；剩一人仍保留个人隔离。
+- personalTask按本人项目投影返工标记、退回项目和原因，修正详情警告、开始返工按钮及复检提示。服务端未开工错误也使用本人返工判断；全单进度和原有整单回审限制不改。本人none/preparedAt/issuedAt越过其他人旧共同申请的既有规则继续通过回归。
+- 本轮关键坑：重新接单时整单可能已是维修中，PartsRequirementDialog内部用controller.task.stage决定发accept还是record-parts；仅改详情按钮和accepting prop会误发record-parts。材料弹窗现沿用个人controller，实际浏览器点击确认已验证发accept且partsOwnerId为本人。尝试增加重新通知弹窗说明时发现原入口直接调用act，已移除无效分支；中间VM夹具缺新增模块的3项失败随该无效改动一并移除，最终检查全过。
+- 持久化复用dispatch_tasks.data JSON，不新增表/列，无schema migration。无新增SQL往返、OpenAPI调用、定时器或后台扫描；增加有限人员/项目集合的内存判断，通知人数从整队缩为拒单人。不声称已实测生产性能。包体预算通过（维修页gzip535851字节、工作台425328字节，为整路由估算）。
+- 验证：npm run check 1167项，1127通过、40环境跳过、0失败，类型/构建/包体预算通过。一次性本机PG17派工套件49项通过、零跳过，覆盖拒单持久化、同事提检、顾问待办、个人列表、幂等与旧版本冲突、重新通知收件人/站内消息、配件历史隔离；禁真实通知，容器codex-worker-offers-test已删除。日志/tmp/multi-repair-fix-{check,pg}.log。
+- 独立IAB临时页使用实际React组件和构造任务，未连接业务接口；360px确认同事返工时本人“开始维修”、拒单本人无施工入口、重新接单实际提交accept、顾问操作入口和长原因换行；scrollWidth=innerWidth=360，卡片padding及块间距正常。截图outputs/multi-repair-{independent,decline}-mobile.jpg，临时页与夹具清除、视口恢复，用户原页/草稿未操作。修复报告outputs/multi-repair-audit-20261112.html。源码推送不等同生产部署，本轮未改生产数据。

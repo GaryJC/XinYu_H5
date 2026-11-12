@@ -1,5 +1,5 @@
 import {hasRole,hasAnyRole} from '../../shared/roles.mjs';
-import {hasPendingInspection,personalRepairStage,isReworkTask} from '../../shared/repairProgress.mjs';
+import {hasPendingInspection,personalRepairStage,isReworkTask,hasDeclinedWork,personalFeedback} from '../../shared/repairProgress.mjs';
 import {pendingPhotoWaivers} from '../../shared/repairPhotoWaiver.mjs';
 import {canReceiveInspectionNotification} from './inspectionNotificationAudience.mjs';
 import {technicianIds} from './dispatchPolicy.mjs';
@@ -12,12 +12,12 @@ export function personalOrderTodos(task,user,review,pending=[]) {
   if(review?.state==='pending')categories.add('签字待确认');
   else if(task.stage==='待客户签字')categories.add('待客户签字');
   if(task.stage==='待派工')categories.add('待派工');
-  if(task.stage==='待接单'&&task.feedback)categories.add('无法接单待处理');
+  if(hasDeclinedWork(task))categories.add('无法接单待处理');
  }
  if(hasAnyRole(user,['manager','advisor'])&&pendingPhotoWaivers(task).some(e=>e.applicantId!==user.id))categories.add('无照片待审批');
  if(hasAnyRole(user,['technician','outsourcing'])&&technicianIds(task).includes(user.id)) {
   const stage=personalRepairStage(task,user.id);
-  if(!(stage==='待接单'&&task.feedback)&&['待接单','待开工','维修中','回审','暂停'].includes(stage))categories.add(isReworkTask(task,user.id)?'返修待处理':stage);
+  if(!personalFeedback(task,user.id)&&['待接单','待开工','维修中','回审','暂停'].includes(stage))categories.add(isReworkTask(task,user.id)?'返修待处理':stage);
   const parts=[task.partsRequirement,...(task.partsRequests||[])].filter(Boolean);
   if(['待接单','待开工','维修中','回审','暂停'].includes(stage)&&parts.some(p=>p.mode!=='none'&&(p.ownerId===user.id||p.items?.some(i=>i.recipientId===user.id))&&!p.issuedAt&&(p.preparedAt||p.items?.some(i=>i.recipientId===user.id&&i.preparedAt&&!i.issuedAt))))categories.add('配件可领取');
  }

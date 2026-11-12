@@ -3,7 +3,7 @@ import { NotificationRecords } from '../notifications/NotificationRecords';
 import { useDispatchProjectFocus } from './useDispatchProjectFocus';
 import { ActionHistory } from "../../shared/ui/ActionHistory";
 import { LoadingState } from "../../shared/ui/LoadingState";
-import {hasPendingInspection,hasUnpreparedParts} from '../../../../shared/repairProgress.mjs';
+import {hasPendingInspection,hasUnpreparedParts,hasDeclinedWork,declinedWorkOffers,personalWorkOffer} from '../../../../shared/repairProgress.mjs';
 import {TaskTechniciansEditor} from './TaskTechniciansEditor';
 import { PendingRepairsPanel } from '../pending-repairs/PendingRepairsPanel';
 import { TaskDueDateEditor } from './TaskDueDateEditor';
@@ -61,13 +61,13 @@ export function DispatchTaskDetail({controller,user,readyForFocus=true}:{control
     if(task.needsReview) {if(hasRole(user, 'manager')) actions.push('reconcile');}
     else {
       if(['待接单','待开工'].includes(task.stage)&&!task.firstStartedAt&&!task.startHistoryUnknown&&!task.items.some(i=>i.startAt||['维修中','待检验','已完工'].includes(i.status))) actions.push('cancel');
-      if(task.stage==='待接单'&&task.feedback) actions.push('reoffer');
+      if(hasDeclinedWork(task)) actions.push('reoffer');
       if(task.executionMode==='outsourced'&&task.stage!=='维修完成') actions.push('update');
     }
     if(!['待派工','维修完成'].includes(task.stage)) actions.push('remind');
   }
   if(task.stage==='维修完成'&&!unsigned&&!task.needsReview&&hasAnyRole(user, ['manager','advisor','inspector'])) actions.push('reopen-repair');
-  if(owner&&!unsigned&&!task.needsReview) {
+  if(owner&&!unsigned&&!task.needsReview&&!personalWorkOffer(task,user.id)) {
     if(task.stage==='待接单'&&!task.feedback&&(!outsourced||partsApplicant)) actions.push('accept','decline');
     if(['待开工','维修中'].includes(task.stage)) actions.push('pause');
     if(task.stage==='暂停') actions.push('resume');
@@ -100,6 +100,7 @@ export function DispatchTaskDetail({controller,user,readyForFocus=true}:{control
     {outsourced?<Alert type="info" title="外包维修由内部人员登记完工，无需提检" description={partsApplicant?'配件由您申请，备齐后由仓库通知您领取。':'配件由本单派工人申请。'}/>:null}
     {task.needsReview?<Alert type="warning" title="历史任务待核对" description="历史记录未能完整确认人员或进度；管理员核对后才能继续，不补造历史时间。"/>:null}
     {task.feedback?<Alert type="warning" title="无法接单 · 待服务顾问处理" description={task.feedback}/>:null}
+    {declinedWorkOffers(task).map(([id,offer])=><Alert key={id} type="warning" title={`${offer.name}无法接单 · 待服务顾问处理`} description={offer.reason}/>)}
     {task.stage==='暂停'?<Alert type="warning" title={`暂停：${task.pauseReason}`} description={`${task.pauseNote||''} · 自 ${displayTime(task.pausedAt)}，已暂停 ${Math.max(0,Math.floor((Date.now()-Date.parse(task.pausedAt||''))/60000))} 分钟`}/>:null}
     {hasPendingInspection(task)?<Alert type="info" title={task.inspectorName?`已由 ${task.inspectorName} 接手检验`:'等待检验员领取'}/>:null}
     {controller.error?<Alert type="error" showIcon title={controller.error}/>:null}

@@ -1,3 +1,4 @@
+import {personalFeedback} from '../../shared/repairProgress.mjs';
 import {transaction} from '../database/pool.mjs';
 import {HttpError} from '../http/HttpError.mjs';
 import {getDispatchTask} from '../repositories/dispatchRepository.mjs';
@@ -16,7 +17,7 @@ export async function ensureVehicleNameplate(actor,id,body,{runTransaction=trans
     const owner=task.executionMode==='outsourced'?(hasAnyRole(actor,['manager','advisor'])||actor.id===task.assignedBy&&hasAnyRole(actor,['inspector'])):hasAnyRole(actor,['technician'])&&technicianIds(task).includes(actor.id);
     if(!users[0]?.active||users[0].role!==actor.role||users[0].shop_id!==task.shopId||!owner||task.needsReview)throw new HttpError(403,'仅当前维修工可沿用历史铭牌');
     if(body.repairRound!==(task.repairRound||0))throw new HttpError(409,'维修轮次已变化，请刷新后重试');
-    if(!['待接单','待开工','维修中','暂停','回审'].includes(task.stage)||task.stage==='待接单'&&task.feedback||hasSubmittedPersonalWork(task,actor.id))throw new HttpError(409,'当前状态不能更换铭牌照片');
+    if(!['待接单','待开工','维修中','暂停','回审'].includes(task.stage)||personalFeedback(task,actor.id)||hasSubmittedPersonalWork(task,actor.id))throw new HttpError(409,'当前状态不能更换铭牌照片');
     const {rows:current}=await client.query("select id from files where order_id=$1 and kind='vehicle_nameplate_photo' order by (id=$2) desc,created_at desc,id desc limit 1",[id,task.vehicleNameplateFileId||'']);
     if(current[0])return {id:current[0].id};
     const source=await findVehicleNameplateHistory(client,task);

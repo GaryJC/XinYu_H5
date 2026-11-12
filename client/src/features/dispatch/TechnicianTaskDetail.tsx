@@ -25,7 +25,7 @@ import { EditOutlined } from '@ant-design/icons';
 import type { UserProfile } from '../../../../shared/types';
 import type { DispatchController } from './useDispatchController';
 import { FormDialog } from '../../shared/ui/BusinessForm';
-import {canStartRepairWithParts,hasUnpreparedSharedParts} from '../../../../shared/repairProgress.mjs';
+import {canStartRepairWithParts,hasUnpreparedSharedParts,personalWorkOffer} from '../../../../shared/repairProgress.mjs';
 import {partsStatus} from './partsProgress';
 import { RepairPhotoPanel } from './RepairPhotoPanel';
 import { dispatchEventLabel,displayTime } from './dispatchLabels';
@@ -45,16 +45,16 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
   const task=personalTask(wholeTask,user.id);
   const status=technicianTaskStatus(wholeTask,user.id);
   const ownController=individual?{...c,detail:{...c.detail!,task}}:c;
-  const materialController=partsController(c,individual?user.id:undefined);
+  const materialController=partsController(ownController,individual?user.id:undefined);
   const itemsEditor=useRepairItemsEditor(task,ownController);
-  const canEditItems=!task.needsReview&&(task.technicianIds??[task.technicianId]).includes(user.id)&&['待开工','维修中','暂停','回审'].includes(task.stage);
+  const canEditItems=!task.needsReview&&!task.feedback&&!personalWorkOffer(wholeTask,user.id)&&(task.technicianIds??[task.technicianId]).includes(user.id)&&['待开工','维修中','暂停','回审'].includes(task.stage);
   const hasRepairPhoto=c.detail!.files.some(f=>['repair_progress_photo','repair_completed_photo'].includes(f.kind)&&(f.repairRound||0)===(task.repairRound||0)&&(!individual||f.uploadedBy===user.id));
   const waiverScopeEdited=itemsEditor.editing&&(itemsEditor.rows.length!==task.items.length||itemsEditor.rows.some(row=>{
     const original=task.items.find(item=>item.id===row.id);
     return !original||original.name!==row.name.trim()||(original.responsibleId||user.id)!==(row.responsibleId||user.id);
   }));
   const photoReady=hasRepairPhoto||hasApprovedPhotoWaiver(wholeTask,user.id)&&!waiverScopeEdited;
-  const editable=!task.needsReview && (task.technicianIds??[task.technicianId]).includes(user.id);
+  const editable=!task.needsReview && !task.feedback && (!personalWorkOffer(wholeTask,user.id)||task.stage==='待接单') && (task.technicianIds??[task.technicianId]).includes(user.id);
   const ownDone=individual&&task.items.length>0&&task.items.every(i=>['待检验','已完工'].includes(i.status))&&Boolean(task.workerSubmissions?.[user.id]||task.stage==='待检验'||task.items.every(i=>i.status==='已完工'));
   const nameplate=useVehicleNameplateUpload(c,editable&&!ownDone&&!task.feedback&&['待接单','待开工','维修中','暂停','回审'].includes(task.stage));
   const blocked=repairBlocked||nameplate.uploading;

@@ -463,6 +463,7 @@ export type DispatchTask = DispatchExecution & {
   partsRequirement?:PartsRequirement;
   partsRequests?:PartsRequirement[];
   workerPauses?:Record<string,{pauseReason?:string;pauseNote?:string;pausedAt?:string;resumeStage?:DispatchStage}>;
+  workerOffers?:Record<string,{status:'declined'|'pending';name:string;reason?:string;at:string}>;
   workerSubmissions?:Record<string,{at:string;note:string}>;
   vehicleVin?:string; vehicleModel?:string; vehicleMileage?:string; customerName?:string; advisor?:string;
   roundKind?: 'additional' | 'rework'; repairRound?: number; roundReason?: string; roundOpenedAt?: string; roundOpenedBy?: string; roundOpenedName?: string;

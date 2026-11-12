@@ -1259,6 +1259,41 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         assert.ok(saved.every(item=>item.status==='维修中'));
       }
     });
+    await t.test('personal refusal persists independently through coworker completion and targeted reoffer',async()=>{
+      const id='personal-refusal';await seed(id);
+      let current=(await service.dispatchDetail(advisor,id)).task;
+      const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;return current;};
+      const {readPersonalWorkbench}=await import('../server/repositories/personalWorkbenchRepository.mjs');
+      const ownTodos=async(user)=>(await readPersonalWorkbench(user,pool)).todos.filter(todo=>todo.targetId===id).map(todo=>todo.category);
+      await run(advisor,'assign',{technicianIds:[tech.id,tech2.id],dueAt,repairItems:current.items.map((item,index)=>({...item,responsibleId:index?tech2.id:tech.id}))});
+      const assignedAt=current.assignedAt;
+      const request={action:'decline',expectedVersion:current.version,requestId:randomUUID(),reason:'甲时间冲突，请另行安排'};
+      current=(await service.executeDispatchAction(tech,id,request)).task;
+      const declinedVersion=current.version;
+      await service.executeDispatchAction(tech,id,request);assert.equal((await service.dispatchDetail(advisor,id)).task.version,declinedVersion);
+      assert.equal(current.feedback,undefined);assert.equal(current.workerOffers.tech.status,'declined');
+      const job=(await pool.query('select payload from dispatch_scheduler_notifications where order_id=$1',[id])).rows[0].payload;
+      assert.equal(job.actorId,tech.id);assert.equal(job.reason,request.reason);assert.equal(job.summary,'项目1');
+      await run(tech2,'accept',{partsRequirement:{mode:'none'}});
+      assert.equal(current.stage,'维修中');assert.equal(current.items[0].status,'待开工');assert.equal(current.items[1].status,'维修中');
+      assert.deepEqual(await ownTodos(advisor),['无法接单待处理']);assert.deepEqual(await ownTodos(tech),[]);
+      assert.equal((await service.queryDispatchTasks(tech,{search:id,stage:'待接单',personal:'true',page:'1'})).items.length,1);
+      const photo=await progressPhoto(id);await pool.query('update files set uploaded_by=$2 where id=$1',[photo,tech2.id]);
+      await run(tech2,'submit-order');const peer=structuredClone(current.items[1]),acceptedAt=current.acceptedAt;
+      await assert.rejects(()=>run(tech,'start-order'),e=>e.status===409&&/无法接单/.test(e.message));
+      await run(advisor,'reoffer');
+      assert.equal(current.workerOffers.tech.status,'pending');assert.equal(current.stage,'维修中');assert.equal(current.assignedAt,assignedAt);assert.equal(current.acceptedAt,acceptedAt);assert.deepEqual(current.items[1],peer);
+      const event=(await pool.query("select id from dispatch_events where order_id=$1 and action='reoffer'",[id])).rows[0];
+      const notices=(await pool.query('select recipient_id,payload from dispatch_notifications where event_id=$1',[event.id])).rows;
+      assert.deepEqual(notices.map(n=>n.recipient_id),[tech.id]);assert.equal(notices[0].payload.summary,'项目1');
+      const inbox=(await pool.query('select recipient_id from personal_inbox where event_key=$1',[`dispatch:${event.id}:新派工`])).rows;assert.deepEqual(inbox.map(n=>n.recipient_id),[tech.id]);
+      assert.deepEqual(await ownTodos(advisor),[]);assert.deepEqual(await ownTodos(tech),['待接单']);
+      await assert.rejects(()=>run(tech,'record-parts',{partsRequirement:{mode:'none'}}),e=>e.status===409&&/确认本人接单/.test(e.message));
+      await run(tech,'accept',{partsRequirement:{mode:'none'}});
+      assert.equal(current.workerOffers.tech,undefined);assert.equal(current.items[0].status,'维修中');assert.deepEqual(current.items[1],peer);
+      await assert.rejects(()=>service.executeDispatchAction(tech,id,{action:'decline',expectedVersion:declinedVersion,requestId:randomUUID(),reason:'旧页面'}),e=>e.status===409);
+      const persisted=(await pool.query('select status from repair_items where order_id=$1 order by item_no',[id])).rows;assert.deepEqual(persisted.map(i=>i.status),['维修中','待检验']);
+    });
     await t.test('satisfied personal materials bypass old shared demand without bypassing photo checks or altering coworkers',async()=>{
       for(const readiness of ['none','preparedAt','issuedAt']) {
         const id=`personal-ready-legacy-${readiness}`;await seed(id);

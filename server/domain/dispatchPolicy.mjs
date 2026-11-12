@@ -3,7 +3,7 @@ import { applyPlannedResponsibilities } from './dispatchPlanItems.mjs';
 import {validateInspectionDeferred} from './inspectionDeferred.mjs';
 import {addReviewProjects} from './reviewAssignment.mjs';
 import {prepareSettlementAssignment} from './settlementAssignment.mjs';
-import {hasPendingInspection,allWorkersHaveItems,canStartRepairWithParts} from '../../shared/repairProgress.mjs';
+import {hasPendingInspection,allWorkersHaveItems,canStartRepairWithParts,declinedWorkOffers} from '../../shared/repairProgress.mjs';
 import {canEditDispatchTechnicians,requiredDispatchTechnicians} from '../../shared/dispatchTechniciansPolicy.mjs';
 import { canEditDispatchDue } from '../../shared/dispatchDuePolicy.mjs';
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
@@ -145,6 +145,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
       next.participantIds=[...new Set([...(task.participantIds||[]),...task.items.flatMap(i=>[i.startedBy,i.finishedBy,...(['待检验','已完工'].includes(i.status)?[i.responsibleId]:[])]).filter(Boolean)])];
     }
     Object.assign(next,execution,{technicianIds:ids});
+    delete next.workerOffers;
     if(action==='reassign') {
       transferUnfinishedResponsibilities(next);
       // A new offer resets pauses from the previous team's acceptance.
@@ -170,13 +171,23 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   } else if(action==='cancel') {
     requireSchedule(); stage('待接单','待开工'); reason();
     if(task.firstStartedAt || task.startHistoryUnknown || task.items.some(i=>i.startAt || ['维修中','待检验','已完工'].includes(i.status))) fail('已开工任务只能改派，不能撤销');
-    Object.assign(next,{stage:'待派工',technicianIds:[],technicianId:undefined,technicianName:undefined,acceptedAt:undefined,assignedBy:undefined,assignedAt:undefined,feedback:undefined});
+    Object.assign(next,{stage:'待派工',technicianIds:[],technicianId:undefined,technicianName:undefined,acceptedAt:undefined,assignedBy:undefined,assignedAt:undefined,feedback:undefined,workerOffers:undefined});
     next.items.forEach(i=>i.status='待派工');
   } else if(action==='reoffer') {
-    requireSchedule(); stage('待接单');
-    if(task.executionMode==='outsourced') Object.assign(next,{stage:'待开工',acceptedAt:now});
-    else technicianIds(task).forEach(id=>person(id,['technician']));
-    next.feedback=undefined; next.assignedBy=actor.id; next.assignedAt=now;
+    requireSchedule();
+    const declined=declinedWorkOffers(task);
+    if(declined.length&&!task.feedback) {
+      stage('待接单','待开工','维修中','回审','暂停');
+      for(const [id,offer] of declined) {
+        person(id,['technician']);
+        next.workerOffers[id]={status:'pending',name:offer.name,at:now};
+      }
+    } else {
+      stage('待接单');
+      if(task.executionMode==='outsourced') Object.assign(next,{stage:'待开工',acceptedAt:now});
+      else technicianIds(task).forEach(id=>person(id,['technician']));
+      next.feedback=undefined;next.workerOffers=undefined;next.assignedBy=actor.id;next.assignedAt=now;
+    }
   } else if(action==='accept' || action==='decline') {
     if(task.executionMode==='outsourced') requirePartsApplicant();
     requireOwner(); stage('待接单');
@@ -407,9 +418,9 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     if(handover)reason();
   }
   if(['reassign','edit-repair-items'].includes(action))assertPersonalPartsHandover(task,next);
-  if(['reassign','edit-repair-items'].includes(action)&&next.workerPauses) {
+  if(['reassign','edit-repair-items'].includes(action)) {
     const retained=new Set(technicianIds(next));
-    next.workerPauses=Object.fromEntries(Object.entries(next.workerPauses).filter(([id])=>retained.has(id)));
+    for(const key of ['workerPauses','workerOffers'])if(next[key])next[key]=Object.fromEntries(Object.entries(next[key]).filter(([id])=>retained.has(id)));
   }
   if(['reassign','edit-repair-items'].includes(action)&&next.inspectorId&&hasPendingInspection(next)
     &&!canInspect(next,people.find(person=>person.id===next.inspectorId))) {

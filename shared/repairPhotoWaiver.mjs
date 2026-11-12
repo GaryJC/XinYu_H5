@@ -1,5 +1,5 @@
 import {hasAnyRole,hasRole} from './roles.mjs';
-import {isIndividualRepair} from './repairProgress.mjs';
+import {isIndividualRepair,personalWorkOffer} from './repairProgress.mjs';
 
 const workers=task=>task.technicianIds??(task.technicianId?[task.technicianId]:[]);
 const ownItems=(task,id)=>task.executionMode==='outsourced'?task.items:task.items.filter(item=>item.responsibleId===id||!item.responsibleId&&workers(task).length===1&&workers(task)[0]===id);
@@ -23,7 +23,7 @@ export function canRequestPhotoWaiver(task,actor) {
  if(!actor?.active||actor.shopId!==task.shopId||task.needsReview||['草稿','待客户签字','待处理纸质委托书'].includes(task.orderStatus))return false;
  if(!['待开工','维修中','暂停','回审',...(task.executionMode==='outsourced'?['待检验']:[])].includes(task.stage))return false;
  if(task.executionMode==='outsourced')return hasAnyRole(actor,['manager','advisor'])&&task.items.length>0;
- if(!hasRole(actor,'technician')||!workers(task).includes(actor.id))return false;
+ if(!hasRole(actor,'technician')||!workers(task).includes(actor.id)||personalWorkOffer(task,actor.id))return false;
  const own=ownItems(task,actor.id);
  if(!own.length||own.every(item=>item.status==='已完工'))return false;
  return !(isIndividualRepair(task)&&own.every(item=>['待检验','已完工'].includes(item.status))&&task.workerSubmissions?.[actor.id]);

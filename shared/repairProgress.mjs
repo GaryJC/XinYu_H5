@@ -2,13 +2,25 @@ export const hasPendingInspection = task => task.executionMode!=='outsourced' &&
 export const allWorkersHaveItems = task => (task.technicianIds ?? (task.technicianId?[task.technicianId]:[])).every(id=>[...task.items,...(task.deferredItems||[])].some(item=>item.responsibleId===id));
 
 // A personal pause survives team changes, including legacy tasks without personal parts requests.
-export const isIndividualRepair = task => task.executionMode!=='outsourced' && ((task.technicianIds??(task.technicianId?[task.technicianId]:[])).length>1||Boolean(task.partsRequests?.length)||Object.keys(task.workerPauses||{}).length>0);
+export const isIndividualRepair = task => task.executionMode!=='outsourced' && ((task.technicianIds??(task.technicianId?[task.technicianId]:[])).length>1||Boolean(task.partsRequests?.length)||Object.keys(task.workerPauses||{}).length>0||Object.keys(task.workerOffers||{}).length>0);
+
+// A declined/reopened personal offer must survive a coworker's acceptance.
+export function personalWorkOffer(task,ownerId) {
+ if(task.executionMode==='outsourced'||!['待接单','待开工','维修中','待检验','回审','暂停'].includes(task.stage))return undefined;
+ if(!(task.technicianIds??(task.technicianId?[task.technicianId]:[])).includes(ownerId))return undefined;
+ return task.workerOffers?.[ownerId];
+}
+export const declinedWorkOffers = task => Object.entries(task.workerOffers||{}).filter(([id])=>personalWorkOffer(task,id)?.status==='declined');
+export const hasDeclinedWork = task => Boolean(task.stage==='待接单'&&task.feedback||declinedWorkOffers(task).length);
+// Unknown legacy feedback remains a whole-task gate until a scheduler handles it.
+export const personalFeedback = (task,ownerId) => task.feedback||(personalWorkOffer(task,ownerId)?.status==='declined'?task.workerOffers[ownerId].reason:undefined);
 
 // Display and personal-list classification only; never replace the workflow stage.
 export function personalRepairStage(task,ownerId) {
  if(!isIndividualRepair(task)||task.needsReview||!['待开工','维修中','待检验','回审','暂停'].includes(task.stage))return task.stage;
  if(task.workerPauses?.[ownerId])return '暂停';
  if(task.stage==='暂停')return task.stage;
+ if(personalWorkOffer(task,ownerId))return '待接单';
  const own=task.items.filter(item=>item.responsibleId===ownerId);
  if(!own.length)return task.stage;
  if(task.stage==='回审') {
@@ -37,6 +49,7 @@ export function hasUnpreparedSharedParts(task,ownerId) {
 // Starting needs some usable material; completion still requires the full request.
 export function canStartRepairWithParts(task,ownerId=task.technicianId,sharedPartsRequirement) {
  if(task.executionMode==='outsourced')return !hasUnpreparedParts(task)&&!hasUnpreparedParts({partsRequirement:sharedPartsRequirement});
+ if(personalWorkOffer(task,ownerId))return false;
  const individual=isIndividualRepair(task);
  const personal=individual?task.partsRequests?.find(parts=>parts.ownerId===ownerId):task.partsRequirement;
  if(personal?.mode==='none')return true;

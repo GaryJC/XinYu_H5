@@ -29,7 +29,7 @@ export function sendReview(task,actor,canInspect,people) {
   delete next.repairPhotoWaivers;
   next.stage='回审';
   next.version+=1;
-  for(const key of ['completedAt','completedBy','inspectorId','inspectorName','inspectionClaimedAt','submittedAt','submissionNote','workerPauses','workerSubmissions','rejectedItemIds']) delete next[key];
+  for(const key of ['completedAt','completedBy','inspectorId','inspectorName','inspectionClaimedAt','submittedAt','submissionNote','workerPauses','workerOffers','workerSubmissions','rejectedItemIds']) delete next[key];
   for(const item of next.items) {
     item.status='维修中';
     for(const key of ['finishAt','finishedBy','inspectedBy','inspectorName','inspectedAt','completionRecordedAt','rejectionReason']) delete item[key];
