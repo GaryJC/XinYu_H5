@@ -7,3 +7,5 @@ export function hasUnpreparedParts(task:DispatchTask):boolean;
 export function canStartRepairWithParts(task:Partial<DispatchTask>,ownerId?:string,sharedPartsRequirement?:PartsRequirement):boolean;
 
 export function isReworkTask(task:DispatchTask,ownerId?:string):boolean;
+
+export function hasUnpreparedSharedParts(task:DispatchTask,ownerId:string):boolean;

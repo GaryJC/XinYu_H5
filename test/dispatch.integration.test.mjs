@@ -1259,6 +1259,35 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
         assert.ok(saved.every(item=>item.status==='维修中'));
       }
     });
+    await t.test('satisfied personal materials bypass old shared demand without bypassing photo checks or altering coworkers',async()=>{
+      for(const readiness of ['none','preparedAt','issuedAt']) {
+        const id=`personal-ready-legacy-${readiness}`;await seed(id);
+        const initial=await repo.getDispatchTask(pool,id,manager);
+        const parts={mode:'list',items:[{name:'旧共同配件',quantity:1,unit:'个'}],photoIds:[]};
+        const personal=readiness==='none'?{mode:'none',items:[],photoIds:[]}:{...structuredClone(parts),[readiness]:new Date().toISOString()};
+        Object.assign(initial,{stage:'待开工',acceptedAt:new Date().toISOString(),technicianIds:[tech.id,tech2.id],technicianId:tech.id,
+          partsRequirement:structuredClone(parts),partsRequests:[{ownerId:tech.id,...personal},{ownerId:tech2.id,...structuredClone(parts)}],
+          items:initial.items.map((item,index)=>({...item,status:'待开工',responsibleId:index?tech2.id:tech.id,responsibleName:index?tech2.name:tech.name}))});
+        await repo.saveDispatchTask(pool,initial);
+        let current=(await service.dispatchDetail(manager,id)).task;
+        const before=structuredClone(current);
+        const run=async(actor,action)=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID()})).task;};
+        await run(tech,'start-order');
+        const version=current.version;
+        await assert.rejects(()=>run(tech,'submit-order'),e=>e.status===409&&/维修照片/.test(e.message));
+        assert.equal((await service.dispatchDetail(manager,id)).task.version,version);
+        await progressPhoto(id);await run(tech,'submit-order');
+        const persisted=(await service.dispatchDetail(manager,id)).task;
+        assert.equal(persisted.items[0].status,'待检验');assert.ok(persisted.workerSubmissions[tech.id]);
+        assert.deepEqual(persisted.items[1],before.items[1]);
+        assert.deepEqual(persisted.partsRequirement,before.partsRequirement);
+        assert.deepEqual(persisted.partsRequests,before.partsRequests);
+        await assert.rejects(()=>run(tech2,'start-order'),e=>e.status===409);
+        await assert.rejects(()=>run(tech2,'submit-order'),e=>e.status===409);
+        const rows=(await pool.query('select status from repair_items where order_id=$1 order by item_no',[id])).rows;
+        assert.deepEqual(rows.map(row=>row.status),['待检验','待开工']);
+      }
+    });
     await t.test('mixed personal progress keeps warehouse requests actionable and aligns personal counts and inspection photo access',async()=>{
       const id='review-personal-warehouse';await seed(id);
       const warehouse={id:'warehouse',name:'仓管',role:'warehouse',shopId:'shop-hq',active:true};

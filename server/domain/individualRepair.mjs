@@ -1,4 +1,4 @@
-import {hasPendingInspection,allWorkersHaveItems,isIndividualRepair} from '../../shared/repairProgress.mjs';
+import {hasPendingInspection,allWorkersHaveItems,isIndividualRepair,hasUnpreparedSharedParts} from '../../shared/repairProgress.mjs';
 import { hasAnyRole } from "../../shared/roles.mjs";
 import {beginPendingItems} from './partsRequirement.mjs';
 import {HttpError} from '../http/HttpError.mjs';
@@ -34,7 +34,7 @@ export function applyIndividualAction(task,input,actor,people,now,apply,{persona
   if(input.action==='record-parts'&&own.length&&own.every(i=>['待检验','已完工'].includes(i.status)))throw new HttpError(409,'本人项目已提交，不能再申请领料');
   const requirement=personalParts(task,ownerId);
   if(warehouse&&!requirement)throw new HttpError(409,'领料申请不存在，请刷新');
-  if(scopedRepair&&['submit-order','pick'].includes(input.action)&&task.partsRequirement?.mode!=='none'&&task.partsRequirement&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt)
+  if(scopedRepair&&['submit-order','pick'].includes(input.action)&&hasUnpreparedSharedParts(task,ownerId))
     throw new HttpError(409,'历史共同配件尚未备齐，请等待仓库确认');
   if(input.repairItems?.some(row=>row.id!==undefined&&!own.some(i=>i.id===row.id)||row.responsibleId&&row.responsibleId!==ownerId))throw new HttpError(403,'只能编辑和提交本人负责的项目');
   if(input.itemId!==undefined&&!own.some(i=>i.id===input.itemId))throw new HttpError(403,'只能操作本人负责的项目');

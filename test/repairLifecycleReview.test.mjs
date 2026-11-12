@@ -51,18 +51,23 @@ for(const action of ['confirm-parts','issue-parts']) {
   assert.equal(task.stage,'维修中');
   assert.deepEqual(task.items[0],original.items[0]);assert.equal(task.items[1].status,'维修中');
   assert.equal(task.firstStartedAt,now);assert.deepEqual(task.participantIds,['b']);
-  assert.throws(()=>act(task,b,'submit-order'),/历史共同配件/);
+  const submitted=act(task,b,'submit-order');
+  assert.equal(submitted.items[1].status,'待检验');assert.deepEqual(submitted.items[0],task.items[0]);
+  assert.deepEqual(submitted.partsRequirement,original.partsRequirement);
   task=handle(task,action);assert.ok(task.items.every(item=>item.status==='维修中'));
   assert.equal(task.items[1].startedBy,'b');
  });
 }
 
-for(const action of ['accept','record-parts'])test(`${action} with no personal parts cannot bypass pending shared material`,()=>{
+for(const action of ['accept','record-parts'])test(`${action} with explicit no personal parts starts only the declaring worker despite shared material`,()=>{
  const task=base();delete task.partsRequests;
  if(action==='accept'){task.stage='待接单';delete task.acceptedAt;}
  const next=act(task,a,action,{partsRequirement:{mode:'none'}});
- assert.ok(next.acceptedAt);assert.equal(next.stage,'待开工');assert.deepEqual(next.items,task.items);
- assert.equal(next.firstStartedAt,undefined);
+ assert.ok(next.acceptedAt);assert.equal(next.stage,'维修中');
+ assert.equal(next.items[0].status,'维修中');assert.equal(next.firstStartedAt,now);
+ assert.deepEqual(next.items[1],task.items[1]);
+ assert.deepEqual(next.partsRequirement,task.partsRequirement);
+ assert.equal(act(next,a,'submit-order').items[0].status,'待检验');
 });
 
 test('warehouse removing unnecessary shared parts does not bypass a pending personal request',()=>{

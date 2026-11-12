@@ -25,7 +25,7 @@ import { EditOutlined } from '@ant-design/icons';
 import type { UserProfile } from '../../../../shared/types';
 import type { DispatchController } from './useDispatchController';
 import { FormDialog } from '../../shared/ui/BusinessForm';
-import {canStartRepairWithParts} from '../../../../shared/repairProgress.mjs';
+import {canStartRepairWithParts,hasUnpreparedSharedParts} from '../../../../shared/repairProgress.mjs';
 import {partsStatus} from './partsProgress';
 import { RepairPhotoPanel } from './RepairPhotoPanel';
 import { dispatchEventLabel,displayTime } from './dispatchLabels';
@@ -62,7 +62,7 @@ export function TechnicianTaskDetail({controller:c,user,onPhotoBlocked}:{control
   useEffect(()=>{onPhotoBlocked(blocked);return()=>onPhotoBlocked(false);},[blocked,onPhotoBlocked]);
   const canPhoto=editable&&!ownDone&&['待开工','维修中','暂停','回审'].includes(task.stage);
   const waitingForParts=Boolean(task.partsRequirement&&task.partsRequirement.mode!=='none'&&!task.partsRequirement.issuedAt&&!task.partsRequirement.preparedAt);
-  const legacyWaiting=individual&&wholeTask.partsRequirement&&wholeTask.partsRequirement.mode!=='none'&&!wholeTask.partsRequirement.issuedAt&&!wholeTask.partsRequirement.preparedAt;
+  const legacyWaiting=hasUnpreparedSharedParts(wholeTask,user.id);
   const primaryAction=technicianPrimaryAction(task,Boolean(legacyWaiting),canStartRepairWithParts(wholeTask,user.id));
   const primary=individual&&!ownDone&&task.stage==='维修中'&&task.items.some(i=>i.status==='待检验')&&!waitingForParts&&!legacyWaiting?primaryAction||'submit-order':primaryAction;
   const partsNotice=waitingForParts&&['待开工','维修中','暂停','回审'].includes(task.stage)?<Alert type="info" showIcon title={partsStatus(task.partsRequirement)==='部分备齐'?'部分备齐':'等待仓库备料'} description={task.stage==='回审'?'仓管确认本轮配件全部备齐后可提交回审。':'仓管确认本轮配件全部备齐后可提交完工。'}/>:null;

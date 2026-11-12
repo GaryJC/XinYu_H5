@@ -41,7 +41,8 @@ export function PartsRequirementDialog({controller:c,accepting,onClose,onUploadi
   const nameplate=useVehicleNameplateUpload(c);
   const [nameplateOpen,setNameplateOpen]=useState(false);
   const hasNameplate=c.detail!.files.some(file=>file.kind==='vehicle_nameplate_photo');
-  const needsNameplate=!inherited&&mode!=='none';
+  const submissionMode=mode==='list'&&saved?.mode==='list'&&saved.items.length>0&&!items.length?'none':mode;
+  const needsNameplate=!inherited&&submissionMode!=='none';
   const uploading=nameplate.uploading||uploads.some(u=>u.state==='uploading')||attachments.uploading;
   useEffect(()=>{onUploading?.(uploading);return()=>onUploading?.(false);},[uploading,onUploading]);
   const busy=c.busy||uploading||nameplate.checking;
@@ -55,14 +56,20 @@ export function PartsRequirementDialog({controller:c,accepting,onClose,onUploadi
     if(busy)return;
     setError('');if(stale){setError('工单或配件需求已更新，请关闭后重新打开核对');return;}
     if(uploads.length||attachments.uploads.length){setError('请等待照片上传完成，失败照片可重试或移除');return;}
-    if(!inherited&&mode==='list'&&(!items.length||items.some(i=>!i.name.trim()||!i.quantity||!i.unit.trim()))){setError('请填写配件名称、数量和单位');return;}
+    if(!inherited&&submissionMode==='list'&&(!items.length||items.some(i=>!i.name.trim()||!i.quantity||!i.unit.trim()))){setError('请填写配件名称、数量和单位');return;}
     if(!inherited&&mode==='photo'&&!photoIds.length){setError('请拍摄手写配件清单，或从相册选择');return;}
     if(needsNameplate) {
       try {if(!await nameplate.check()){setNameplateOpen(true);return;}}
       catch {setError('铭牌照片检查失败，请重试');return;}
     }
-    const requirement:PartsRequirement=inherited?task.partsRequirement!:{mode,items:mode==='list'?items:[],photoIds:mode==='photo'?photoIds:[],referencePhotoIds:mode==='none'?[]:referencePhotoIds};
+    const requirement:PartsRequirement=inherited?task.partsRequirement!:{mode:submissionMode,items:submissionMode==='list'?items:[],photoIds:submissionMode==='photo'?photoIds:[],referencePhotoIds:submissionMode==='none'?[]:referencePhotoIds};
     if(await c.act({action:acceptingNow?'accept':'record-parts',partsRequirement:requirement}))onClose();
+  }
+  function remove(index:number) {
+    if(busy||items[index]?.preparedAt||items[index]?.issuedAt)return;
+    const remaining=items.filter((_,i)=>i!==index);
+    setItems(remaining);setError('');
+    if(!remaining.length)setMode('none');
   }
   function add(name='',unit='个'){setMode('list');setItems(rows=>rows.some(i=>name&&i.name===name)?rows:rows.length<100?[...rows,{name,quantity:1,unit}]:rows);}
   return <><FormDialog rootClassName="parts-requirement-modal" open title={accepting?'确认接单 · 登记所需配件':adding?'追加配件申请':saved?'修改本人配件需求':'向仓库申请领料'} okText={inherited?'确认接单并保留原领料记录':accepting?(mode==='none'?'接单并开始维修':'接单并提交配件需求'):adding?'提交补料':saved?'保存修改':task.repairRound?'提交返工领料':'发送仓库'} onOk={()=>void confirm()} confirmLoading={c.busy||nameplate.checking} okButtonProps={{disabled:busy||stale}} cancelButtonProps={{disabled:busy}} closable={!busy} mask={{closable:false}} onCancel={()=>{if(!busy)onClose();}}>
@@ -81,7 +88,7 @@ export function PartsRequirementDialog({controller:c,accepting,onClose,onUploadi
           {title:'配件名称',dataIndex:'name',render:(_,item)=><Input aria-label={`配件 ${item.key+1} 名称`} value={item.name} disabled={busy||Boolean(item.preparedAt||item.issuedAt)} maxLength={200} placeholder="配件名称" onChange={e=>setItems(rows=>rows.map((r,i)=>i===item.key?{...r,name:e.target.value}:r))}/>},
           {title:'数量',width:82,render:(_,item)=><InputNumber aria-label={`配件 ${item.key+1} 数量`} min={0.01} max={99999} precision={2} controls={false} value={item.quantity} disabled={busy||Boolean(item.preparedAt||item.issuedAt)} onChange={v=>setItems(rows=>rows.map((r,i)=>i===item.key?{...r,quantity:v??0}:r))}/>},
           {title:'单位',width:60,render:(_,item)=><Input aria-label={`配件 ${item.key+1} 单位`} value={item.unit} maxLength={20} disabled={busy||Boolean(item.preparedAt||item.issuedAt)} onChange={e=>setItems(rows=>rows.map((r,i)=>i===item.key?{...r,unit:e.target.value}:r))}/>},
-          {title:'',width:44,render:(_,item)=><Button type="text" danger icon={<DeleteOutlined/>} aria-label={`移除配件 ${item.key+1}`} disabled={busy||Boolean(item.preparedAt||item.issuedAt)} onClick={()=>setItems(rows=>rows.filter((_,i)=>i!==item.key))}/>}
+          {title:'',width:44,render:(_,item)=><Button type="text" danger icon={<DeleteOutlined/>} aria-label={`移除配件 ${item.key+1}`} disabled={busy||Boolean(item.preparedAt||item.issuedAt)} onClick={()=>remove(item.key)}/>}
         ]}/>:<div className="parts-empty-selection">从下方选择常用配件，或点击“手动添加”</div>}
       </section>
       <section aria-label="常用配件"><div className="parts-section-heading"><h3>常用配件</h3><span>点击添加，可修改数量和单位</span></div>

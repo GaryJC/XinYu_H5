@@ -26,11 +26,20 @@ export function personalRepairStage(task,ownerId) {
 
 export const hasUnpreparedParts = task => [task.partsRequirement,...(task.executionMode==='outsourced'?task.partsRequests||[]:[])].some(parts=>parts&&parts.mode!=='none'&&!parts.issuedAt&&!parts.preparedAt);
 
+// A satisfied personal request supersedes the legacy shared gate only for that worker.
+export function hasUnpreparedSharedParts(task,ownerId) {
+ if(!isIndividualRepair(task))return false;
+ const personal=task.partsRequests?.find(parts=>parts.ownerId===ownerId);
+ if(personal&&!hasUnpreparedParts({partsRequirement:personal}))return false;
+ return hasUnpreparedParts({partsRequirement:task.partsRequirement});
+}
+
 // Starting needs some usable material; completion still requires the full request.
 export function canStartRepairWithParts(task,ownerId=task.technicianId,sharedPartsRequirement) {
  if(task.executionMode==='outsourced')return !hasUnpreparedParts(task)&&!hasUnpreparedParts({partsRequirement:sharedPartsRequirement});
  const individual=isIndividualRepair(task);
  const personal=individual?task.partsRequests?.find(parts=>parts.ownerId===ownerId):task.partsRequirement;
+ if(personal?.mode==='none')return true;
  const shared=sharedPartsRequirement??(individual?task.partsRequirement:undefined);
  const needs=parts=>Boolean(parts&&parts.mode!=='none');
  const ready=parts=>Boolean(parts?.preparedAt||parts?.issuedAt||parts?.items?.some(item=>item.preparedAt||item.issuedAt));

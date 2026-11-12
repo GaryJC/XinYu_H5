@@ -275,3 +275,61 @@ test('photo supplements create a new personal batch without resetting peers or o
  assert.equal(act(prepared,a,'submit-order').items[0].status,'待检验');
  assert.equal(prepared.partsRequests.find(p=>p.ownerId==='b').preparedAt,undefined);
 });
+
+test('explicit personal no-parts permits start and completion without changing legacy shared demand',()=>{
+ for(const solo of [false,true]) {
+  const original={...base(),stage:'待开工',technicianId:'b',technicianIds:solo?['b']:['a','b'],partsRequirement:{...parts('旧共同申请'),recordedBy:'a'},partsRequests:[{mode:'none',items:[],photoIds:[],ownerId:'b'}]};
+  original.items=original.items.filter(i=>!solo||i.responsibleId==='b').map(i=>({...i,status:'待开工',startedBy:undefined}));
+  const started=act(original,b,'start-order');
+  assert.equal(started.items.find(i=>i.responsibleId==='b').status,'维修中');
+  const submitted=act(started,b,'submit-order');
+  assert.equal(submitted.items.find(i=>i.responsibleId==='b').status,'待检验');
+  assert.deepEqual(submitted.partsRequirement,original.partsRequirement);
+  assert.deepEqual(submitted.partsRequests,original.partsRequests);
+  if(!solo) {
+   assert.deepEqual(submitted.items.find(i=>i.responsibleId==='a'),original.items.find(i=>i.responsibleId==='a'));
+   assert.throws(()=>act(submitted,a,'start-order'),/确认配件备齐/);
+   assert.throws(()=>act(submitted,a,'submit-order'),/历史共同配件/);
+  }
+ }
+});
+
+test('recording no-parts bypasses old shared demand but switching back restores personal material gate',()=>{
+ const original={...base(),stage:'待开工',partsRequirement:{...parts('旧申请'),recordedBy:'a'},items:base().items.map(i=>({...i,status:'待开工',startedBy:undefined}))};
+ const declared=act(original,b,'record-parts',{partsRequirement:{mode:'none'}});
+ assert.equal(declared.items[1].status,'维修中');
+ assert.deepEqual(declared.partsRequirement,original.partsRequirement);
+ const changed=act(declared,b,'record-parts',{partsRequirement:parts('新增配件')});
+ assert.throws(()=>act(changed,b,'submit-order'),/历史共同配件|确认配件备齐/);
+ const ownOnly={...changed,partsRequirement:undefined};
+ assert.throws(()=>act(ownOnly,b,'submit-order'),/确认配件备齐/);
+});
+
+test('fully prepared personal demand permits completion while old shared and coworkers demands remain pending',()=>{
+ for(const readyField of ['preparedAt','issuedAt'])for(const mode of ['list','photo'])for(const solo of [false,true]) {
+  const requirement=mode==='list'?parts('本人配件'):{mode:'photo',items:[],photoIds:['photo']};
+  const original={...base(),stage:'待开工',technicianId:'b',technicianIds:solo?['b']:['a','b'],partsRequirement:{...parts('他人旧申请'),recordedBy:'a'},partsRequests:[{...parts('甲的申请'),ownerId:'a'},{...requirement,ownerId:'b',[readyField]:'ready'}]};
+  original.items=original.items.filter(i=>!solo||i.responsibleId==='b').map(i=>({...i,status:'待开工',startedBy:undefined}));
+  const started=act(original,b,'start-order');
+  assert.equal(started.items.find(i=>i.responsibleId==='b').status,'维修中');
+  const submitted=act(started,b,'submit-order');
+  assert.equal(submitted.items.find(i=>i.responsibleId==='b').status,'待检验');
+  assert.deepEqual(submitted.partsRequirement,original.partsRequirement);
+  assert.deepEqual(submitted.partsRequests,original.partsRequests);
+  if(!solo) {
+   assert.deepEqual(submitted.items[0],original.items[0]);
+   assert.throws(()=>act(submitted,a,'start-order'),/确认配件备齐/);
+   assert.throws(()=>act(submitted,a,'submit-order'),/历史共同配件|确认配件备齐/);
+  }
+ }
+});
+
+test('partial personal preparation still blocks completion; ready personal review can be submitted',()=>{
+ const original={...base(),partsRequirement:parts('他人旧申请'),partsRequests:[{...parts('本人配件'),ownerId:'b',items:[{name:'已备料',quantity:1,unit:'个',preparedAt:'ready'},{name:'未备料',quantity:1,unit:'个'}]}]};
+ assert.throws(()=>act(original,b,'submit-order'),/历史共同配件|确认配件备齐/);
+ const review={...original,stage:'回审',partsRequests:original.partsRequests.map(p=>({...p,preparedAt:'ready'}))};
+ const submitted=act(review,b,'submit-review');
+ assert.equal(submitted.items[1].status,'待检验');
+ assert.deepEqual(submitted.items[0],original.items[0]);
+ assert.deepEqual(submitted.partsRequirement,original.partsRequirement);
+});

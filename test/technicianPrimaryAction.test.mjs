@@ -39,3 +39,31 @@ test('partially ready material permits starting but keeps completion blocked unt
  assert.throws(()=>act(started,'submit-order'),/确认配件备齐/);
  assert.equal(primary(partial,true,true),'start-order');
 });
+
+test('personal no-parts exposes start then submit despite pending legacy material',async()=>{
+ const {hasUnpreparedSharedParts,canStartRepairWithParts}=await import('../shared/repairProgress.mjs');
+ const whole={...task,rework:false,technicianIds:['t'],partsRequirement:{mode:'list',items:[{name:'旧配件',quantity:1,unit:'个'}]},partsRequests:[{ownerId:'t',mode:'none'}],items:[{id:2,name:'拆装扫刷挂板',status:'待开工',responsibleId:'t'}]};
+ const own={...whole,partsRequirement:whole.partsRequests[0]};
+ assert.equal(hasUnpreparedSharedParts(whole,'t'),false);
+ assert.equal(primary(own,hasUnpreparedSharedParts(whole,'t'),canStartRepairWithParts(whole,'t')),'start-order');
+ assert.equal(primary({...own,stage:'维修中',items:own.items.map(i=>({...i,status:'维修中'}))},hasUnpreparedSharedParts(whole,'t')),'submit-order');
+ const undeclared={...whole,technicianIds:['t','other'],partsRequests:[]};
+ assert.equal(hasUnpreparedSharedParts(undeclared,'t'),true);
+ assert.equal(canStartRepairWithParts(undeclared,'t'),false);
+ assert.equal(canStartRepairWithParts({...whole,executionMode:'outsourced'},'t'),false);
+});
+
+test('prepared and issued personal requests expose completion despite another legacy request',async()=>{
+ const {hasUnpreparedSharedParts,canStartRepairWithParts}=await import('../shared/repairProgress.mjs');
+ for(const field of ['preparedAt','issuedAt']) {
+  const ownParts={ownerId:'t',mode:'list',items:[{name:'本人配件',quantity:1,unit:'个'}],[field]:'ready'};
+  const whole={...task,rework:false,partsRequirement:{mode:'list',items:[{name:'其他人旧配件',quantity:1,unit:'个'}]},partsRequests:[ownParts],items:[{id:1,name:'维修',status:'待开工',responsibleId:'t'}]};
+  const own={...whole,partsRequirement:ownParts};
+  assert.equal(hasUnpreparedSharedParts(whole,'t'),false);
+  assert.equal(primary(own,hasUnpreparedSharedParts(whole,'t'),canStartRepairWithParts(whole,'t')),'start-order');
+  assert.equal(primary({...own,items:own.items.map(i=>({...i,status:'维修中'}))},hasUnpreparedSharedParts(whole,'t')),'submit-order');
+  const pending={...whole,partsRequests:[{...ownParts,[field]:undefined}]};
+  assert.equal(hasUnpreparedSharedParts(pending,'t'),true);
+  assert.equal(canStartRepairWithParts(pending,'t'),false);
+ }
+});
