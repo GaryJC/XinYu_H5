@@ -153,7 +153,7 @@ export function WorkbenchPage() {
             <TodoOverview key={currentUser?.id} counters={counters} canApprovePhotos={dispatchEnabled&&!!currentUser&&hasAnyRole(currentUser,['manager','advisor'])} photoApprovalCount={controller.photoApprovalCount} canApprove={!!currentUser&&hasRole(currentUser,'manager')} onTodo={controller.openTodo} onApprovals={()=>{setTripScope('pending');setActiveNav('出车申请');}}/>
             <section className="workbench-shortcuts" aria-label="快捷入口">
               <div className="workbench-section-heading"><h2>快捷入口</h2></div>
-              <div className="workbench-shortcut-grid">{visibleNavItems.filter(item => !['工作台', '车辆管理', '数据看板', '权限设置', '配件竞价', '工单全览'].includes(item.label)).map(item => {
+              <div className="workbench-shortcut-grid">{visibleNavItems.filter(item => !['工作台', '车辆管理', '数据看板', '权限设置', '配件竞价', '工单全览', '进货单生成'].includes(item.label)).map(item => {
                 const Icon = item.icon;
                 return <button type="button" key={item.label} onClick={() => setActiveNav(item.label)}><span className="shortcut-icon"><Icon size={21} aria-hidden="true" /></span><span className="shortcut-label">{item.label}</span><ChevronRight className="shortcut-arrow" size={16} aria-hidden="true" /></button>;
               })}</div>

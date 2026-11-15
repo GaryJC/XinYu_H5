@@ -247,3 +247,21 @@ test('spaced and compact plate choices preserve VIN conflict checks and select t
   }
   assert.equal(resolveVehicleCandidates(rows,'鲁BFP121','LTEST00000B000001','鲁B FP121').vehicle.plate,'鲁B FP121');
 });
+
+test('changed plate reports old Runfeng plate and requires updating the archive without returning a vehicle', () => {
+  const rows = [{ plate: '鲁B27EC4', vin: 'LWLNKR3G3FL064989', model: '历史车型' }];
+  for (const confirmed of [undefined, '鲁B27EC4']) {
+    const result = resolveVehicleCandidates(rows, '鲁BK69M5', 'LWLNKR3G3FL064989', confirmed);
+    assert.equal(result.status, 'conflict');
+    assert.equal(result.vehicle, undefined);
+    assert.match(result.message, /鲁BK69M5.*鲁B27EC4.*润丰系统更新.*重新查询/);
+  }
+  assert.equal(resolveVehicleCandidates([{ ...rows[0], plate: '鲁BK69M5' }], '鲁BK69M5', rows[0].vin).status, 'found');
+});
+
+test('plate-only hit with a different VIN does not overwrite the entered VIN', () => {
+  const result = resolveVehicleCandidates([{ plate: '鲁BK69M5', vin: 'OLDVIN00000000001' }], '鲁BK69M5', 'NEWVIN00000000001');
+  assert.equal(result.status, 'conflict');
+  assert.equal(result.vehicle, undefined);
+  assert.match(result.message, /VIN 不符.*润丰系统更新/);
+});

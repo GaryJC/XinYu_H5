@@ -39,3 +39,12 @@ test('initial choices do not duplicate the title as an error and preserve the ex
  for(const b of find(modal,'Button'))b.props.onClick();
  assert.deepEqual(h.selected,choices);
 });
+
+test('archive mismatch guidance offers a retry below the message',()=>{
+ const message='当前车牌与润丰档案不一致，请到润丰系统更新后重新查询';
+ const h=setup({found:false,status:'conflict',message});
+ const alert=find(h.render(),'Alert')[0];
+ assert.equal(alert.props.title,message);
+ assert.equal(alert.props.action,undefined);
+ assert.equal(alert.props.description.props.children,'重新查询');
+});

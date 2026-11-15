@@ -47,8 +47,10 @@
 .workbench-archive .archive-header { align-items: stretch; justify-content: flex-start; flex-direction: column; gap: 10px; margin-bottom: 12px; text-align: left; }
 .workbench-archive .archive-header h2 { font-size: 19px; margin: 0 0 6px; }
 .workbench-archive .archive-header p { color: #66788f; font-size: 12px; line-height: 1.7; }
-.workbench-archive-actions { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; max-width: 100%; justify-content: flex-start; }
-.archive-search { width: 100%; }
+.workbench-archive-actions { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; justify-content: space-between; }
+.archive-search-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.archive-search-row .archive-search { flex: 1; min-width: 0; }
+.archive-search-row .compact-refresh { flex-shrink: 0; }
 .archive-refresh-description { max-width: min(280px, 70vw); line-height: 1.7; }
 .workbench-archive .ant-btn { border-radius: 8px; }
 .workbench-archive .archive-filter-bar { padding: 0; background: transparent; margin: 16px 0; }

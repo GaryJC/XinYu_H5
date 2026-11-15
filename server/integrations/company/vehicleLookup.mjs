@@ -165,6 +165,14 @@ function plateSearchKey(plate) {
 
 export function resolveVehicleCandidates(candidates, normalizedPlate, normalizedVin, confirmedPlate) {
   const vinRows = normalizedVin ? candidates.filter(row => normalizeIdentifier(row.vin) === normalizedVin) : [];
+  // A VIN hit on an old plate must not silently replace the employee's current plate.
+  if (normalizedPlate && vinRows.length && !vinRows.some(row => plateSearchKey(row.plate) === normalizedPlate)) {
+    return {
+      status: "conflict",
+      message: `当前车牌（${normalizedPlate}）与该 VIN 在润丰档案中的车牌（${[...new Set(vinRows.map(row => row.plate))].join("、")}）不一致，已停止自动回填。请先核对行驶证；如车辆已换牌，请到润丰系统更新该车辆档案的车牌号，并核对车架号（VIN），保存后返回本平台点击“重新查询”。`,
+      conflicts: [...candidates.filter(row => plateSearchKey(row.plate) === normalizedPlate).map(row => ({ identifier: "plate", plate: row.plate, vin: row.vin })), ...vinRows.map(row => ({ identifier: "vin", plate: row.plate, vin: row.vin }))]
+    };
+  }
   const keys = new Set(normalizedPlate && candidates.some(row => plateSearchKey(row.plate) === normalizedPlate)
     ? [normalizedPlate] : vinRows.map(row => plateSearchKey(row.plate)));
   const plateChoices = [...new Set(candidates.filter(row => keys.has(plateSearchKey(row.plate))).map(row => row.plate).filter(Boolean))];
@@ -175,7 +183,7 @@ export function resolveVehicleCandidates(candidates, normalizedPlate, normalized
     candidates = candidates.filter(row => row.plate === confirmedPlate);
     if (normalizedVin && candidates.some(row => normalizeIdentifier(row.vin)) &&
         !candidates.some(row => normalizeIdentifier(row.vin) === normalizedVin)) {
-      return { status: "conflict", plateChoices, message: "所选车牌与当前 VIN 不符，请核对车牌或 VIN" };
+      return { status: "conflict", plateChoices, message: "所选车牌与当前 VIN 不符，已停止自动回填。请先核对行驶证上的车牌和车架号（VIN）；如车辆已换牌或润丰档案有误，请到润丰系统更新该车辆档案的车牌号及 VIN，保存后返回本平台重新查询" };
     }
     normalizedPlate = plateSearchKey(confirmedPlate);
     candidates = candidates.map(row => ({ ...row, plateMatched: true }));
@@ -186,10 +194,10 @@ export function resolveVehicleCandidates(candidates, normalizedPlate, normalized
     plateSearchKey(row.plate) === normalizedPlate && normalizeIdentifier(row.vin) === normalizedVin);
   const plateVins = new Set(candidates.filter(row => plateSearchKey(row.plate) === normalizedPlate)
     .map(row => normalizeIdentifier(row.vin)).filter(Boolean));
-  if (!exact && plateMatch && (vinMatch || plateVins.size > 1)) {
+  if (!exact && plateMatch && (vinMatch || plateVins.size > 1 || (normalizedVin && plateVins.size && !plateVins.has(normalizedVin)))) {
     return {
       status: "conflict",
-      message: vinMatch ? undefined : "该车牌对应多个 VIN，请核对并输入 VIN",
+      message: normalizedVin ? "当前车牌与润丰档案中的 VIN 不符，已停止自动回填。请先核对行驶证上的车牌和车架号（VIN）；如车辆已换牌或润丰档案有误，请到润丰系统更新该车辆档案的车牌号及 VIN，保存后返回本平台点击“重新查询”。" : "该车牌对应多个 VIN，请核对并输入 VIN",
       conflicts: [
         { identifier: "plate", plate: plateMatch.plate, vin: plateMatch.vin },
         ...(vinMatch ? [{ identifier: "vin", plate: vinMatch.plate, vin: vinMatch.vin }] : [])

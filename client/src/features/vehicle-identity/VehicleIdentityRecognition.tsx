@@ -94,6 +94,7 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
           {dismissedChoices === choices && <div style={{ display: "grid", gap: 12 }}>
             {plateChoiceError ? <Alert showIcon type="error" title={plateChoiceError} /> : null}
             <Button disabled={disabled} onClick={() => setDismissedChoices(undefined)}>选择润丰车牌</Button>
+            {plateChoiceError ? <Button disabled={disabled || historyLoading} onClick={onRetry}>重新查询</Button> : null}
           </div>}
         </>
       ) : history ? (
@@ -104,7 +105,9 @@ export function VehicleIdentityRecognition({ disabled, recognition, history, his
           action={history.found && history.vehicle && ((!history.models?.length && (!history.vehicle.model || !history.vehicle.modelLegacyCode))
             || (!(history.organizations?.length) && (!history.vehicle.organization?.name || !history.vehicle.organization.code)))
             ? <Button disabled={disabled} onClick={onRetry}>重新查询</Button> : undefined}
-          description={history.vehicle
+          description={history.status === "conflict"
+            ? <Button disabled={disabled || historyLoading} onClick={onRetry} style={{ marginTop: 8 }}>重新查询</Button>
+            : history.vehicle
             ? `车型：${(history.models?.length ?? 0) > 1 ? `${history.models?.length} 个可选车型` : history.vehicle.model || "-"}；所属单位：${(history.organizations?.length ?? 0) > 1 ? `${history.organizations?.length} 个可选单位` : history.vehicle.organization?.name || "-"}；VIN：${history.vehicle.vin || "-"}`
             : undefined}
         />
