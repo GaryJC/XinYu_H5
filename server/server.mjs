@@ -1,3 +1,4 @@
+import {startPendingReminders} from './workers/pendingReminders.mjs';
 import {startVehicleInsuranceNotifications} from './workers/vehicleInsuranceNotifications.mjs';
 import {drainServer} from './http/drainServer.mjs';
 import {startRuntimeMetrics} from './workers/runtimeMetrics.mjs';
@@ -27,6 +28,7 @@ const stopProcurement = startProcurementWorker();
 const stopLicenseNotifications = startVehicleLicenseExceptionNotifications();
 const stopInsuranceNotifications = startVehicleInsuranceNotifications();
 const stopTripNotifications = startVehicleTripNotifications();
+const stopPendingReminders=startPendingReminders();
 const distDir = path.resolve(config.distDir);
 
 const server = createServer(async (req, res) => {
@@ -67,7 +69,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
     deadline.unref();
     try {
       // Calling stop immediately prevents new leases while in-flight HTTP drains.
-      await drainServer(server,[stopInsuranceNotifications,stopMetrics,stopRepairWritebacks,stopNotifications,stopProcurement,stopLicenseNotifications,stopTripNotifications,stopLegacySyncRecovery],[closePool,closeSqlServerPool]);
+      await drainServer(server,[stopPendingReminders,stopInsuranceNotifications,stopMetrics,stopRepairWritebacks,stopNotifications,stopProcurement,stopLicenseNotifications,stopTripNotifications,stopLegacySyncRecovery],[closePool,closeSqlServerPool]);
       clearTimeout(deadline);process.exit(0);
     } catch(error) {console.error('[shutdown]',{code:error.code});process.exit(1);}
   });

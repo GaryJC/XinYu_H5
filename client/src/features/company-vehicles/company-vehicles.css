@@ -28,3 +28,10 @@
 .company-vehicle-insurance { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px 16px; margin-bottom: 20px; border-radius: 10px; background: #f7f9fc; color: #6d7e94; line-height: 1.6; overflow-wrap: anywhere; }
 .company-vehicle-insurance .ant-tag { margin: 0; }
 .company-vehicle-insurance > span { max-width: 100%; }
+
+.vehicle-import-guide { margin-bottom: 16px; padding: 12px 14px; border: 1px solid #dce6f3; border-radius: 10px; background: #f7faff; line-height: 1.7; overflow-wrap: anywhere; }
+.vehicle-import-guide summary { cursor: pointer; color: #245ed0; }
+.vehicle-import-guide ol { margin: 10px 0; padding-left: 22px; }
+.vehicle-import-guide li + li { margin-top: 8px; }
+.vehicle-import-guide p { margin: 10px 0 0; }
+.vehicle-import-guide .vehicle-import-columns { padding: 10px 12px; background: #fff; border-radius: 6px; }

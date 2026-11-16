@@ -1,6 +1,6 @@
 import { pagination } from '../domain/pagination.mjs';
 import { pool, transaction } from '../database/pool.mjs';
-import { hasRole } from '../../shared/roles.mjs';
+import { hasRole, hasAnyRole } from '../../shared/roles.mjs';
 
 const iso = value => value ? new Date(value).toISOString() : undefined;
 function vehicle(row) {
@@ -18,7 +18,7 @@ export class VehicleTripRepository {
   constructor(database = pool) { this.database = database; }
   transaction(run) { return transaction(client => run(new VehicleTripRepository(client))); }
   async listVehicles(user, all) {
-    const { rows } = await this.database.query('select *,insurance_start::text,insurance_end::text from company_vehicles where shop_id=$1 and ($2 or active) order by plate', [user.shopId, Boolean(all && hasRole(user, 'manager'))]);
+    const { rows } = await this.database.query('select *,insurance_start::text,insurance_end::text from company_vehicles where shop_id=$1 and ($2 or active) order by plate', [user.shopId, Boolean(all && hasAnyRole(user, ['manager', 'advisor']))]);
     return rows.map(vehicle);
   }
   async getVehicle(id, lock = false) {

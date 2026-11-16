@@ -7,7 +7,7 @@ import { hasRole } from '../../shared/roles.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 import { saveUploadedFile } from '../storage.mjs';
 import { VehicleTripRepository } from '../repositories/vehicleTripRepository.mjs';
-import { assertTripAccess, assertTripAction, assertTripUpload, requireTripUser, requireVehicleManager, tripText, vehicleInput, tripFileKinds } from '../domain/vehicleTrips.mjs';
+import { assertTripAccess, assertTripAction, assertTripUpload, requireTripUser, requireVehicleEditor, tripText, vehicleInput, tripFileKinds } from '../domain/vehicleTrips.mjs';
 
 export async function prepareTripImage(input, stage) {
   if (typeof input.imageBase64 !== 'string' || input.imageBase64.length > 14 * 1024 * 1024) throw new HttpError(400, '请选择不超过 10 MB 的图片');
@@ -43,7 +43,7 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
   return {
     async vehicles(user, all = false) { requireTripUser(user); return repository.listVehicles(user, all); },
     async saveVehicle(user, input, id) {
-      requireVehicleManager(user);
+      requireVehicleEditor(user);
       let normalized = vehicleInput(input);
       try {
         return await repository.transaction(async repo => {
@@ -60,7 +60,7 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
       }
     },
     async importVehicles(user, input) {
-      requireVehicleManager(user);
+      requireVehicleEditor(user);
       const rows=await parseInsuranceWorkbook(input.fileBase64);
       if(input.preview!==false)return {rows};
       return repository.transaction(async repo=>{

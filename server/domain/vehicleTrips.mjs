@@ -1,14 +1,18 @@
 import {insuranceInput} from './vehicleInsurance.mjs';
-import { hasRole } from '../../shared/roles.mjs';
+import { hasRole, hasAnyRole } from '../../shared/roles.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 
 export const tripFileKinds = { departure: 'trip_departure_photo', return: 'trip_return_photo', signature: 'trip_signature' };
 export function requireTripUser(user) {
   if (!user?.id || !user.active || !user.shopId) throw new HttpError(403, '当前员工无法使用出车申请');
 }
+export function requireVehicleEditor(user) {
+  requireTripUser(user);
+  if (!hasAnyRole(user, ['manager', 'advisor'])) throw new HttpError(403, '仅门店管理员或服务顾问可管理车辆');
+}
 export function requireVehicleManager(user) {
   requireTripUser(user);
-  if (!hasRole(user, 'manager')) throw new HttpError(403, '仅门店管理员可管理车辆或审批');
+  if (!hasRole(user, 'manager')) throw new HttpError(403, '仅门店管理员可审批');
 }
 export function tripText(value, label, max = 500, optional = false) {
   const text = typeof value === 'string' ? value.trim() : '';

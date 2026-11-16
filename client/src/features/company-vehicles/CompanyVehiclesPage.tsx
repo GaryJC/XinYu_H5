@@ -20,7 +20,20 @@ export function CompanyVehiclesPage() {
     setEditor(vehicle);
   }
   return <section className="company-vehicles-page" aria-label="公司车辆管理">
-    <header className="company-vehicles-heading"><div><h2>公司车辆管理</h2></div><Space wrap><Upload accept=".xlsx" showUploadList={false} disabled={state.busy} beforeUpload={file=>{void state.previewImport(file);return false;}}><Button disabled={state.busy}>导入保险 Excel</Button></Upload><Button type="primary" disabled={state.busy} onClick={() => edit('new')}>录入车辆</Button><RefreshButton loading={state.loading} disabled={state.busy} onClick={() => void state.refresh()} label="刷新车辆"/></Space></header>
+    <header className="company-vehicles-heading"><div><h2>公司车辆管理</h2></div><Space wrap><Upload accept=".xlsx" showUploadList={false} disabled={state.busy} beforeUpload={file=>{void state.previewImport(file);return false;}}><Button disabled={state.busy}>导入车辆及保险 Excel</Button></Upload><Button type="primary" disabled={state.busy} onClick={() => edit('new')}>录入车辆</Button><RefreshButton loading={state.loading} disabled={state.busy} onClick={() => void state.refresh()} label="刷新车辆"/></Space></header>
+    <details className="vehicle-import-guide">
+      <summary>如何用 Excel 录入车辆和保险？</summary>
+      <ol>
+        <li>准备 .xlsx 文件，每行一辆车，最多 500 辆、文件不超过 3 MB。保留以下全部列名，列顺序不限：</li>
+      </ol>
+      <p className="vehicle-import-columns">原车号、新车牌号、车型、登记及年审时间、保险终保时间、车辆状况、车辆使用部门、产权归属、投保付款单位、承保公司</p>
+      <ol start={2}>
+        <li>填写“新车牌号”“车型”和“保险终保时间”。保险列须填写完整起止日期，例如 <strong>2026.9.3-2027.9.2</strong>，不能只填到期日；同一文件内车牌不能重复。其他列可留空，但列名须保留。</li>
+        <li>点击“导入车辆及保险 Excel”选择文件，核对预览中的车牌、车型及保险日期，再点“确认更新”。</li>
+      </ol>
+      <p>按“新车牌号”匹配本店车辆：已有车辆更新车型及保险，新车自动录入；表外车辆不删除，已有品牌和启停状态保留。新车品牌暂取车型，导入后可点“编辑车辆”完善。</p>
+      <p>车辆换牌时，请先编辑原车辆的车牌号再导入，避免创建重复车辆。“原车号”只作备注，不用于匹配。</p>
+    </details>
     <Input.Search aria-label="搜索公司车辆" placeholder="搜索车牌 / 品牌 / 车型" allowClear value={state.search} onChange={event => state.setSearch(event.target.value)} />
     {state.error && <Alert type="error" showIcon title={state.error} />}
     {!state.busy && !state.vehicles.length && <Empty description="暂无公司车辆，请录入" />}

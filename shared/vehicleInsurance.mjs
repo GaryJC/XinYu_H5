@@ -7,5 +7,5 @@ export function insuranceState(car, today=insuranceToday()) {
 }
 export function insuranceReminder(end,today=insuranceToday()) {
   const days=Math.round((Date.parse(end)-Date.parse(today))/86400000);
-  return days<0?-1:days===0?0:days<=1?1:days<=7?7:days<=30?30:null;
+  return days===1?1:days===7?7:null;
 }

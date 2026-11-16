@@ -50,6 +50,7 @@ export function WorkbenchPage() {
   } = controller;
 
   const personal = usePersonalWorkbench(currentUser?.id);
+  useEffect(()=>{if(currentUser&&new URLSearchParams(location.search).has('personalTasks'))setActiveNav('消息');},[currentUser?.id]);
   useEffect(()=>{personal.setOpen(activeNav==='消息');},[activeNav,personal.setOpen]);
 
   const bindingRequired = currentUser && hasRole(currentUser, 'technician') && !currentUser.legacyEmployeeCode && !['消息', '出车申请', '车辆管理', '委托开单', '进货单生成'].includes(activeNav);
@@ -93,7 +94,7 @@ export function WorkbenchPage() {
         <header className="topbar">
           <div className="topbar-title">
             <div>
-              <h1>{activeNav}</h1>
+              <h1>{activeNav==='消息'?'我的事项':activeNav}</h1>
               <p>{currentUser?.name ? `${currentUser.name} · ` : ''}{currentUser ? userRoles(currentUser).map(item => roles[item].name).join(' / ') : '请先登录'}</p>
             </div>
           </div>
@@ -138,7 +139,7 @@ export function WorkbenchPage() {
 
         {bindingRequired && <EmployeeBindingGate key={currentUser.id} user={currentUser} onBound={controller.setCurrentUser} onDefer={() => setActiveNav('出车申请')} />}
         {activeNav === '出车申请' && currentUser && <Suspense fallback={<LoadingState label="正在加载出车申请…" />}><VehicleTripsPage key={currentUser.id} user={currentUser} initialScope={tripScope} /></Suspense>}
-        {activeNav === '车辆管理' && currentUser && hasRole(currentUser, 'manager') && <Suspense fallback={<LoadingState label="正在加载车辆管理…" />}><CompanyVehiclesPage key={currentUser.id} /></Suspense>}
+        {activeNav === '车辆管理' && currentUser && hasAnyRole(currentUser, ['manager', 'advisor']) && <Suspense fallback={<LoadingState label="正在加载车辆管理…" />}><CompanyVehiclesPage key={currentUser.id} /></Suspense>}
 
         {activeNav === "进货单生成" && currentUser && hasAnyRole(currentUser, ["advisor", "manager"]) && <Suspense fallback={<LoadingState label="正在加载进货单生成…" />}><PurchaseDocumentsPage key={currentUser.id}/></Suspense>}
 

@@ -23,7 +23,7 @@ export const navItems: Array<{ label: string; icon: typeof LayoutDashboard; role
   { label: "配件竞价", icon: Gavel, roles: ["warehouse", "manager"] },
   { label: "我的维修", icon: Wrench, roles: ["technician", "outsourcing"] },
   { label: "出车申请", icon: Route, roles: ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] },
-  { label: "车辆管理", icon: CarFront, roles: ["manager"] },
+  { label: "车辆管理", icon: CarFront, roles: ["manager", "advisor"] },
   { label: "数据看板", icon: BarChart3, roles: ["manager"] },
   { label: "权限设置", icon: ShieldCheck, roles: ["manager"] }
 ];

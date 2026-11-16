@@ -23,3 +23,11 @@
 .personal-message-link:focus-visible{outline:none}
 .personal-message-link:focus-visible::after{outline:2px solid #2563eb;outline-offset:-2px}
 .personal-read-action.ant-btn{position:relative;z-index:1}
+
+.personal-task-card { min-width:0; }
+.personal-task-card .personal-todo-row { width:100%; }
+.personal-task-history { margin:8px 0 0; padding:10px 14px; border-radius:8px; background:#f5f7fa; font-size:13px; line-height:1.7; overflow-wrap:anywhere; }
+.personal-task-history summary { cursor:pointer; color:#536b86; }
+.personal-task-history ol { padding-left:20px; margin:8px 0 0; }
+
+.personal-todo-toolbar { display:flex; justify-content:flex-end; margin-bottom:8px; }

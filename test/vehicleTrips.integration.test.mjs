@@ -347,7 +347,10 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
     const mockEnv={APP_ENV:'test',DISPATCH_NOTIFICATION_MODE:'mock'};
     await pool.query("update company_vehicles set active=true,insurance_start='2020-01-01',insurance_end=(now() at time zone 'Asia/Shanghai')::date+7 where id=$1",[car.id]);
     await queueInsuranceReminders({database:pool,env:mockEnv});
-    assert.equal((await pool.query('select count(*)::int as n from vehicle_insurance_notifications where vehicle_id=$1',[car.id])).rows[0].n,0);
+    const noticeCount=(await pool.query('select count(*)::int as n from vehicle_insurance_notifications where vehicle_id=$1',[car.id])).rows[0].n;
+    assert.ok(noticeCount>0);
+    await queueInsuranceReminders({database:pool,env:mockEnv});
+    assert.equal((await pool.query('select count(*)::int as n from vehicle_insurance_notifications where vehicle_id=$1',[car.id])).rows[0].n,noticeCount);
     const historical=[];
     for(const [index,status] of ['pending','accepted','unknown','sent','failed'].entries()) {
       const id=randomUUID();
@@ -361,6 +364,17 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
       else assert.deepEqual(saved,row);
     }
     assert.equal(await deliverInsuranceReminder({database:pool,env:mockEnv,send:async()=>assert.fail('insurance sending is disabled')}),false);
+    await queueInsuranceReminders({database:pool,env:mockEnv});
+    assert.equal((await pool.query("select count(*)::int as n from vehicle_insurance_notifications where vehicle_id=$1 and milestone=7 and status='pending'",[car.id])).rows[0].n,noticeCount);
+    let sentInsurance=0;
+    while(await deliverInsuranceReminder({database:pool,env:mockEnv,send:async()=>{sentInsurance++;return {status:'accepted',taskId:'test-insurance'};}})) {}
+    assert.equal(sentInsurance,noticeCount);
+    await queueInsuranceReminders({database:pool,env:mockEnv});
+    assert.equal(await deliverInsuranceReminder({database:pool,env:mockEnv,send:async()=>assert.fail('accepted reminders must not repeat')}),false);
+    await pool.query("update company_vehicles set insurance_end=(now() at time zone 'Asia/Shanghai')::date+1 where id=$1",[car.id]);
+    await queueInsuranceReminders({database:pool,env:mockEnv});
+    await pool.query("update company_vehicles set insurance_end='2099-12-31' where id=$1",[car.id]);
+    while(await deliverInsuranceReminder({database:pool,env:mockEnv,send:async()=>assert.fail('renewed policy must not send')})) {}
     await pool.query('update users set active=false where id=$1', [employee.id]);
     assert.equal((await get('/api/vehicle-trip-requests')).status, 401);
   } finally {

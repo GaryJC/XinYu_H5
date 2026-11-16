@@ -519,7 +519,7 @@ export type NotificationUsage = {
  daily:Array<{date:string;total:number;sends:number;queries:number;unresolved:number;coverage:'none'|'partial'|'full'}>;
  groups:Array<{kind:string;total:number;sends:number;queries:number}>;
  recipients:Array<{id:string;name:string;total:number}>;
- rows:Array<{id:string;startedAt:string;operation:'send'|'query';source:NotificationSource;notificationId:string;resourceId:string;eventKey:string;recipientName:string;kind:string;outcome:string;httpStatus:number|null;apiCode:string|null;durationMs:number|null;batchId?:string|null;recipientCount?:number;platformTaskId:string|null}>;
+ rows:Array<{id:string;startedAt:string;operation:'send'|'query';source:NotificationSource|'pending-reminder';notificationId:string;resourceId:string;eventKey:string;recipientName:string;kind:string;outcome:string;httpStatus:number|null;apiCode:string|null;durationMs:number|null;batchId?:string|null;recipientCount?:number;platformTaskId:string|null}>;
 };
 export type NotificationDelivery = {
   id: string; kind: string; recipientName: string;
@@ -775,7 +775,7 @@ export interface PurchaseDocumentPreview {
 }
 
 export type PersonalBusinessTarget = { targetKey: 'dispatchOrder' | 'workOrder' | 'vehicleTrip' | 'procurementTender' | 'procurementReport'; targetId: string };
-export type PersonalTodo = PersonalBusinessTarget & { id: string; category: string; title: string; summary: string };
-export type PersonalMessage = PersonalBusinessTarget & { id: string; title: string; summary: string; plate: string; createdAt: string; readAt: string | null };
+export type PersonalTodo = PersonalBusinessTarget & { id: string; category: string; title: string; summary: string; waitingSince?: string; waitingMinutes?: number; eventHistory?: Array<{at: string; label: string}>; reminderHistory?: Array<{at: string; label: string; status: string}> };
+export type PersonalMessage = PersonalBusinessTarget & { id: string; title: string; summary: string; plate: string; createdAt: string; readAt: string | null; noticeKind?: "action" | "result" };
 export type PersonalInboxPage = { items: PersonalMessage[]; nextCursor: string | null };
-export type PersonalWorkbench = { unread: number; latestId: string; todos: PersonalTodo[]; updatedAt: string };
+export type PersonalWorkbench = { unread: number; latestId: string; todos: PersonalTodo[]; todoCount?: number; followingCount?: number; following?: PersonalTodo[]; updatedAt: string };
