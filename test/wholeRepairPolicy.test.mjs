@@ -23,7 +23,7 @@ test('ownership, current role, version, self-inspection and administrative reass
  assert.throws(()=>action(task(),'start-order',inspector),e=>e.status===403);
  let t=action(action(task(),'start-order'),'submit-order');
  assert.throws(()=>action(t,'claim-inspection',{...inspector,shopId:'else'}),e=>e.status===403);
- assert.throws(()=>action(t,'claim-inspection',{...tech,role:'inspector'}),e=>e.status===403);
+ assert.equal(action(t,'claim-inspection',{...tech,role:'inspector'}).inspectorId,tech.id);
  const stale=t.version;t=action(t,'claim-inspection',inspector);
  assert.throws(()=>applyDispatchAction(t,{action:'claim-inspection',expectedVersion:stale,requestId:randomUUID()},second,people),e=>[403,409].includes(e.status));
  assert.throws(()=>action(t,'reassign-inspection',manager,{inspectorId:'i2'}),e=>e.status===400);
@@ -44,9 +44,20 @@ test('manager without inspector role can claim, reassign to self and complete in
  assert.equal(claimed.inspectorId,manager.id);
  assert.equal(action(claimed,'inspect',actor).stage,'维修完成');
  for(const patch of [{technicianIds:[actor.id]},{participantIds:[actor.id]},{items:[{id:1,status:'待检验',responsibleId:actor.id}]}]) {
-  assert.throws(()=>action({...pending,...patch},'claim-inspection',actor),e=>e.status===403);
+  assert.equal(action({...pending,...patch},'claim-inspection',actor).inspectorId,actor.id);
  }
  for(const patch of [{active:false},{shopId:'other'}]) {
   assert.throws(()=>action(pending,'claim-inspection',{...actor,...patch}),e=>e.status===403);
  }
+});
+
+test('prior outsourced operator with inspector membership can claim and inspect an additional round without erasing history',()=>{
+ const submitted=action(action(task(),'start-order'),'submit-order');
+ const current={...submitted,repairRound:1,participantIds:['i','t']};
+ const claimed=action(current,'claim-inspection',inspector);
+ assert.equal(claimed.inspectorId,'i');
+ const inspected=action(claimed,'inspect',inspector);
+ assert.equal(inspected.items[0].status,'已完工');
+ assert.deepEqual(inspected.participantIds,current.participantIds);
+ for(const actor of [{...inspector,active:false},{...inspector,shopId:'other'},{...inspector,inspectorRoleMember:false}])assert.throws(()=>action(current,'claim-inspection',actor),e=>e.status===403);
 });

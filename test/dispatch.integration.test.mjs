@@ -1386,7 +1386,7 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
       await run(warehouse,'confirm-parts',{partsOwnerId:tech2.id,partsPreparation:[{index:1,recipientId:tech2.id}]});
       await run(tech2,'submit-review');assert.equal(current.stage,'待检验');
     });
-    await t.test('assigning repair work to a claimed inspector releases the claim and notifies independent replacements exactly once',async()=>{
+    await t.test('assigning repair work to a claimed inspector preserves the claim and permits inspection',async()=>{
       const dual={id:'followup-dual',name:'兼任维修与检验',role:'inspector',roles:['inspector','technician'],active:true,shopId:'shop-hq'};
       await pool.query("insert into users(id,name,role,roles,active,shop_id,legacy_employee_code,legacy_employee_name,legacy_employee_department,legacy_employee_bound_at) values($1,$2,$3,$4,true,'shop-hq','D01',$2,'test',now())",[dual.id,dual.name,dual.role,dual.roles]);
       for(const route of ['reassign','edit-repair-items','review-add']) {
@@ -1406,19 +1406,31 @@ test('dispatch PostgreSQL migrations, concurrency, HTTP permissions and notifica
           :repairRows().filter(row=>route!=='reassign'||row.id===2).map(row=>row.id===2?{...row,responsibleId:dual.id}:row);
         const request={action:route==='reassign'?'reassign':'edit-repair-items',requestId:randomUUID(),expectedVersion:current.version,repairItems,reason:'专项维修交接',...(route==='reassign'?{reassignItemIds:[2]}:{})};
         current=(await service.executeDispatchAction(advisor,id,request)).task;
-        assert.equal(current.inspectorId,undefined);assert.equal(current.inspectionClaimedAt,undefined);assert.deepEqual(current.items[0],submitted);
+        assert.equal(current.inspectorId,dual.id);assert.ok(current.inspectionClaimedAt);assert.deepEqual(current.items[0],submitted);
         const event=(await pool.query('select id from dispatch_events where order_id=$1 and request_id=$2',[id,request.requestId])).rows[0].id;
-        assert.equal((await pool.query('select count(*) from dispatch_inspection_notifications where event_id=$1',[event])).rows[0].count,'1');
+        assert.equal((await pool.query('select count(*) from dispatch_inspection_notifications where event_id=$1',[event])).rows[0].count,'0');
         await service.executeDispatchAction(advisor,id,request);
-        // A later unrelated project edit must not invalidate the replacement notice.
-        await run(advisor,'edit-repair-items',{repairItems:[...repairRows(),{name:'乙的后续检查',responsibleId:tech2.id}]});
-        await drainInspectionNotifications();
-        assert.equal((await pool.query('select status from dispatch_inspection_notifications where event_id=$1',[event])).rows[0].status,'ready');
-        const notices=(await pool.query("select recipient_id from dispatch_notifications where event_id=$1 and kind='待检验'",[event])).rows.map(row=>row.recipient_id);
-        assert.ok(notices.includes(inspector.id));assert.ok(!notices.includes(dual.id));assert.equal(new Set(notices).size,notices.length);
-        await assert.rejects(()=>run(dual,'claim-inspection'),e=>e.status===403);
-        await run(inspector,'claim-inspection');await run(inspector,'inspect');assert.equal(current.items[0].status,'已完工');
+        await run(dual,'inspect');assert.equal(current.items[0].status,'已完工');
       }
+    });
+    await t.test('prior outsourced operator can inspect a later internal round and receive its notifications',async()=>{
+      const operator={id:'outsourced-operator-inspector',name:'外包经办兼检验',role:'advisor',roles:['advisor','inspector'],inspectorRoleMember:true,active:true,shopId:'shop-hq'};
+      await pool.query("insert into users(id,name,role,roles,active,shop_id,inspector_role_member,dingtalk_user_id) values($1,$2,$3,$4,true,'shop-hq',true,'ding-operator')",[operator.id,operator.name,operator.role,operator.roles]);
+      const id='outsourced-operator-later-inspection';await seed(id);
+      let current=(await service.dispatchDetail(operator,id)).task;
+      const run=async(actor,action,extra={})=>{current=(await service.executeDispatchAction(actor,id,{action,expectedVersion:current.version,requestId:randomUUID(),...extra})).task;};
+      await run(operator,'assign',{executionMode:'outsourced',outsourcingMode:'onsite',contractor:'外包单位',dueAt});
+      await run(operator,'record-parts',{partsRequirement:{mode:'none'}});await progressPhoto(id);
+      assert.ok(current.items.every(item=>item.startedBy===operator.id));await run(operator,'complete-outsourced');
+      assert.ok(current.participantIds.includes(operator.id));
+      await run(operator,'reopen-repair',{executionMode:'internal',technicianIds:[tech.id],additionalItems:['追加店内维修'],reason:'追加',dueAt});
+      await run(tech,'accept',{partsRequirement:{mode:'none'}});await progressPhoto(id,1);await run(tech,'submit-order');
+      assert.ok(current.participantIds.includes(operator.id));
+      await drainInspectionNotifications();
+      assert.ok((await pool.query("select id from dispatch_notifications where order_id=$1 and recipient_id=$2 and kind='待检验'",[id,operator.id])).rowCount>0);
+      await run(operator,'claim-inspection');assert.equal(current.inspectorId,operator.id);
+      await run(operator,'inspect');assert.equal(current.stage,'维修完成');
+      assert.ok(current.participantIds.includes(operator.id));
     });
     await t.test('A67808 mixed inspection, rollback isolation, and same-round withdrawal',async()=>{
       const id='mixed-round-a67808';await seed(id);

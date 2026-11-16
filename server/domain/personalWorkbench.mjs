@@ -1,3 +1,4 @@
+import {warehouseRequests,matchesPartsStatus} from '../../shared/warehouseRequests.mjs';
 import {hasRole,hasAnyRole} from '../../shared/roles.mjs';
 import {hasPendingInspection,personalRepairStage,isReworkTask,hasDeclinedWork,personalFeedback} from '../../shared/repairProgress.mjs';
 import {pendingPhotoWaivers} from '../../shared/repairPhotoWaiver.mjs';
@@ -23,6 +24,9 @@ export function personalOrderTodos(task,user,review,pending=[]) {
  }
  if(hasPendingInspection(task)&&(!task.inspectorId||task.inspectorId===user.id)&&canReceiveInspectionNotification(task,user))categories.add('待检验');
  if(canReceiveInspectionNotification(task,user)&&pending.some(p=>p.sourceInspectorId===user.id&&p.inspectionState==='pending'))categories.add('待定项目待处理');
- if(hasRole(user,'warehouse')&&!['维修完成','草稿','待客户签字'].includes(task.stage)&&[task.partsRequirement,...(task.partsRequests||[])].some(p=>p&&p.mode!=='none'&&!p.preparedAt&&!p.issuedAt))categories.add('配件待备齐');
- return [...categories].map(category=>({id:`order:${task.orderId}:${category}`,category,title:task.plate||task.dispatchNo||'维修委托',summary:task.items.map(i=>i.name).join('、').slice(0,180),targetKey:['签字待确认','待客户签字'].includes(category)?'workOrder':'dispatchOrder',targetId:task.orderId}));
+ const partsTodos=hasRole(user,'warehouse')?warehouseRequests([task]).filter(request=>matchesPartsStatus(request,'待备料')||matchesPartsStatus(request,'部分备齐')).map((request,index)=>{
+  const parts=request.partsRequirement;
+  return {id:`order:${task.orderId}:parts:${parts.ownerId||'legacy'}:${index}`,category:'配件待备齐',title:task.plate||task.dispatchNo||'维修委托',summary:`申请人：${parts.ownerName||parts.applicantName||parts.recordedName||task.technicianName||'未记录'}`,targetKey:'dispatchOrder',targetId:task.orderId};
+ }):[];
+ return [...partsTodos,...[...categories].map(category=>({id:`order:${task.orderId}:${category}`,category,title:task.plate||task.dispatchNo||'维修委托',summary:task.items.map(i=>i.name).join('、').slice(0,180),targetKey:['签字待确认','待客户签字'].includes(category)?'workOrder':'dispatchOrder',targetId:task.orderId}))];
 }

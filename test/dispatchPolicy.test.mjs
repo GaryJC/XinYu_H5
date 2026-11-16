@@ -73,8 +73,8 @@ test('stale requests, invalid dates, wrong roles and self inspection are rejecte
   const task=submitted();
   assert.throws(()=>applyDispatchAction(task,{action:'inspect',requestId:randomUUID(),expectedVersion:0},inspector,people),e=>e.status===409);
   assert.throws(()=>act(task,'inspect',advisor),e=>e.status===403);
-  assert.throws(()=>act({...task,technicianId:'m'},'inspect',manager),e=>e.status===403);
-  assert.throws(()=>act({...task,items:task.items.map(i=>({...i,startedBy:'m'}))},'inspect',manager),e=>e.status===403);
+  assert.equal(act({...task,technicianId:'m'},'inspect',manager).stage,'维修完成');
+  assert.equal(act({...task,items:task.items.map(i=>({...i,startedBy:'m'}))},'inspect',manager).stage,'维修完成');
   assert.throws(()=>validateDispatchRequest({action:'assign',expectedVersion:0,requestId:'valid123',dueAt:'tomorrow'}),e=>e.status===400);
   assert.throws(()=>validateDispatchRequest({action:'inspect',expectedVersion:0,requestId:'valid123',rejectedItemIds:[1,1]}),e=>e.status===400);
 });
@@ -243,7 +243,7 @@ test('multi-person handover and rejected historical work require explicit curren
   task=apply(task,'submit-order',second);
   assert.equal(task.stage,'待检验');old.active=true;
   const former={...technician,role:'manager'};
-  assert.throws(()=>apply(task,'inspect',former),/不能自检/);
+  assert.equal(apply(task,'inspect',former).stage,'维修完成');
 });
 
 test('completion range keeps a single supplied bound open while no dates still default to this month',()=>{

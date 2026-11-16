@@ -39,7 +39,7 @@ export async function processInspectionNotifications({database=pool,runTransacti
       if(mode==='dingtalk'&&ids===undefined)return true;
       const people=await localDispatchPeople({shopId},client);
       const recipients=people.filter(p=>canReceiveInspectionNotification(task,p) && (!ids || ids.includes(p.id)));
-      if(!recipients.length) throw new Error('暂无本店可独立检验的检验员，请检查钉钉角色、员工状态及维修参与情况后重试');
+      if(!recipients.length) throw new Error('暂无本店可用的检验员，请检查钉钉检验员角色及员工状态后重试');
       for(const p of recipients) {
        if(await hasSubmissionNotification(client,job.order_id,job.event_id,p.id))continue;
        await client.query(`insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,$2,$3,$4,'待检验',$5) on conflict(event_id,recipient_id,kind) do nothing`,[randomUUID(),job.order_id,job.event_id,p.id,JSON.stringify({orderId:job.order_id,plate:task.plate,dispatchNo:task.dispatchNo,summary:task.items.map(i=>i.name).join('、').slice(0,200),dueAt:task.dueAt})]);

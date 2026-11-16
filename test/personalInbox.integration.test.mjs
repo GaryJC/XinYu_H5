@@ -28,10 +28,36 @@ test('personal inbox commits independently, deduplicates and isolates read state
   await db.query("insert into dispatch_notifications(id,order_id,recipient_id,kind,payload) values($1,'o','a','人工催办','{}')",[randomUUID()]);
   await markInboxRead(user('a'),{through:message.id},db);assert.equal((await readInbox(user('a'),{unread:true},db)).items.length,1,'new arrivals survive read-all watermark');
   const inspectEvent=await event('submit-order');await db.query("insert into dispatch_inspection_notifications(event_id,order_id) values($1,'o')",[inspectEvent]);
-  assert.equal((await readInbox(user('i'),{},db)).items.length,1);assert.equal((await readInbox(user('w'),{},db)).items.length,0);
+  assert.equal((await readInbox(user('i'),{},db)).items.length,1);assert.equal((await readInbox(user('w'),{},db)).items.length,1,'assigned technician with inspector role receives the transaction inbox event');
   await db.query("update dispatch_tasks set data=jsonb_set(data,'{technicianIds}','null') where order_id='o'");
   const legacyEvent=await event('retry-inspection-notifications');await db.query("insert into dispatch_inspection_notifications(event_id,order_id) values($1,'o')",[legacyEvent]);
-  assert.equal((await readInbox(user('w'),{},db)).items.length,0,'JSON null arrays retain scalar technician exclusion');
+  assert.equal((await readInbox(user('w'),{},db)).items.length,2,'scalar technician history does not exclude a qualified inspector');
+
+
+  // Previous outsourced progress operators remain eligible after an internal round.
+  await db.query("insert into users(id,name,role,roles,shop_id) values('former-operator','former-operator','manager',array['manager','inspector'],'shop-hq')");
+  await db.query("update dispatch_tasks set data=data||$1::jsonb where order_id='o'",[JSON.stringify({repairRound:1,executionMode:'internal',participantIds:['former-operator','w'],items:[{id:1,name:'追加维修',status:'待检验',responsibleId:'w',startedBy:'w',finishedBy:'w'}]})]);
+  for(const [id,patch] of [['disabled',{active:false}],['revoked',{inspector_role_member:false}],['other-shop',{shop_id:'else'}],['stale-primary',{roles:['advisor']}]]) {
+   await db.query("insert into users(id,name,role,roles,shop_id,active,inspector_role_member) values($1,$1,'inspector',$2,$3,$4,$5)",[id,patch.roles||['inspector'],patch.shop_id||'shop-hq',patch.active!==false,patch.inspector_role_member!==false]);
+  }
+  const enqueueInspection=async()=>{const id=await event('retry-inspection-notifications');await db.query("insert into dispatch_inspection_notifications(event_id,order_id) values($1,'o')",[id]);return id;};
+  const recipients=async id=>(await db.query("select recipient_id from personal_inbox where event_key=$1 order by recipient_id",[`dispatch:${id}:待检验`])).rows.map(r=>r.recipient_id);
+  const roundEvent=await enqueueInspection();
+  assert.deepEqual(await recipients(roundEvent),['former-operator','i','w'],'transactional inbox includes previous operators and current repair owners with inspector membership, but excludes invalid users');
+  await db.query("insert into dispatch_notifications(id,order_id,event_id,recipient_id,kind,payload) values($1,'o',$2,'former-operator','待检验','{}')",[randomUUID(),roundEvent]);
+  assert.deepEqual(await recipients(roundEvent),['former-operator','i','w'],'later delivery fanout does not duplicate the inbox event');
+  await db.query("update dispatch_tasks set inspector_id='former-operator' where order_id='o'");
+  assert.deepEqual(await recipients(await enqueueInspection()),['former-operator'],'current claim still restricts notification audience');
+  await db.query("update dispatch_tasks set inspector_id=null where order_id='o'");
+  const originalData=(await db.query("select data from dispatch_tasks where order_id='o'")).rows[0].data;
+  for(const patch of [{executionMode:'outsourced'},{needsReview:true},{items:[{id:1,status:'维修中'}]}]) {
+   await db.query("update dispatch_tasks set data=$1 where order_id='o'",[{...originalData,...patch}]);
+   assert.deepEqual(await recipients(await enqueueInspection()),[],'out-of-state jobs never create inbox actions');
+  }
+  await db.query("update dispatch_tasks set data=$1 where order_id='o'",[originalData]);
+  await db.query("update work_orders set status='待客户签字' where id='o'");
+  assert.deepEqual(await recipients(await enqueueInspection()),[],'unsigned orders remain excluded');
+  await db.query("update work_orders set status='维修中' where id='o'");
 
   const count=(await readInbox(user('a'),{},db)).items.length;
   await db.query('begin');await db.query("insert into dispatch_notifications(id,order_id,recipient_id,kind,payload) values($1,'o','a','人工催办','{}')",[randomUUID()]);await db.query('rollback');assert.equal((await readInbox(user('a'),{},db)).items.length,count);

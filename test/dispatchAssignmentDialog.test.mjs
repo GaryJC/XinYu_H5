@@ -14,6 +14,7 @@ function setup(mode='internal') {
   const draft={rows,change(next){draft.rows=next;},stale:false};
   const modules={
     react,'react/jsx-runtime':jsx,
+    '../../../../shared/inspectionEligibility.mjs':{allowsInspectionParticipation:()=>true},
     antd:{Alert:'Alert',Button:'Button',Checkbox:'Checkbox',Form:Object.assign('Form',{Item:'FormItem'}),Input:Object.assign(()=>null,{TextArea:'TextArea'}),InputNumber:'InputNumber',Radio:{Group:'RadioGroup'},Select:'Select'},
     './useDispatchProjectDraft':{useDispatchProjectDraft:()=>draft},
     './useProjectReassignment':{useProjectReassignment:()=>({})},

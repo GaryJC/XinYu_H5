@@ -44,5 +44,5 @@ test('review excludes roster-only workers so every reviewed project can reach in
  next=act(next,i,'claim-inspection');next=act(next,i,'inspect');
  assert.equal(next.stage,'维修完成');assert.deepEqual(original,before);
  assert.ok(next.participantIds.includes('c'));
- assert.throws(()=>act(next, {...c,role:'inspector'}, 'send-review'),e=>e.status===403);
+ assert.equal(act(next, {...c,role:'inspector'}, 'send-review').stage,'回审');
 });

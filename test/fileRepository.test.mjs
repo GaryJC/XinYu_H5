@@ -10,9 +10,9 @@ test('independent inspectors can preview a pending personal batch while coworker
  const file={shop_id:'s',stage:'维修中',kind:'repair_completed_photo',technician_ids:['a','b'],items:[{responsibleId:'a',status:'待检验'},{responsibleId:'b',status:'待开工'}]};
  const db=value=>({query:async()=>({rows:[value]})});
  for(const stage of ['维修中','待检验','暂停'])await assertFileReadAccess('photo',user,db({...file,stage}));
- for(const patch of [{execution_mode:'outsourced'},{needs_review:true},{shop_id:'other'},{items:[{status:'维修中'}]},{participant_ids:['i']},{items:[{status:'待检验',responsibleId:'i'}]},{items:[{status:'待检验',startedBy:'i'}]},{items:[{status:'待检验',finishedBy:'i'}]}])
+ for(const patch of [{execution_mode:'outsourced'},{needs_review:true},{shop_id:'other'},{items:[{status:'维修中'}]}])
   await assert.rejects(()=>assertFileReadAccess('photo',user,db({...file,...patch})),e=>e.status===403);
- for(const patch of [{active:false},{inspectorRoleMember:false},{id:'a'}])await assert.rejects(()=>assertFileReadAccess('photo',{...user,...patch},db(file)),e=>e.status===403);
+ for(const patch of [{active:false},{inspectorRoleMember:false}])await assert.rejects(()=>assertFileReadAccess('photo',{...user,...patch},db(file)),e=>e.status===403);
  await assert.rejects(()=>assertFileAccess('photo',user,db(file)),e=>e.status===403);
 });
 

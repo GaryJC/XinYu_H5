@@ -2,7 +2,7 @@ import {HttpError} from '../http/HttpError.mjs';
 import {editRepairItems} from './repairItemEditing.mjs';
 import {resolveRepairResponsibilities} from './repairResponsibilities.mjs';
 
-export function addReviewProjects(task,input,actor,people,now) {
+export function addReviewProjects(task,input,actor,people,now,canInspect) {
   if(task.executionMode==='outsourced')throw new HttpError(409,'外包回审项目由承包方处理');
   for(const item of task.items) {
     const row=input.repairItems.find(row=>row.id===item.id);
@@ -19,7 +19,7 @@ export function addReviewProjects(task,input,actor,people,now) {
   next.items=next.items.map(item=>structuredClone(task.items.find(previous=>previous.id===item.id)||item));
   next.technicianId=next.technicianIds[0];
   next.technicianName=next.technicianIds.map(id=>people.find(p=>p.id===id)?.name||id).join('、');
-  if(next.technicianIds.includes(next.inspectorId)) {
+  if(next.inspectorId&&!canInspect(next,people.find(person=>person.id===next.inspectorId))) {
     delete next.inspectorId;delete next.inspectorName;delete next.inspectionClaimedAt;
   }
   next.version=task.version+1;

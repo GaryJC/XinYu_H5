@@ -22,8 +22,8 @@ export async function readPersonalWorkbench(user,db=pool,{includeTodos=true}={})
     w.customer_signature_review,w.pending_repairs,d.stage,d.technician_id,d.inspector_id,d.data,
     '[]'::jsonb as repair_items from work_orders w left join dispatch_tasks d on d.order_id=w.id
     where w.shop_id=$1 and w.status<>'待处理纸质委托书'
-    and (w.status not in ('完成','待结算') or w.customer_signature_review->>'state'='pending'
-      or exists(select 1 from jsonb_array_elements(w.pending_repairs) p where p->>'sourceInspectorId'=$2 and p->>'inspectionState'='pending'))`,[user.shopId,user.id]);
+    and ($3::boolean or w.status not in ('完成','待结算') or w.customer_signature_review->>'state'='pending'
+      or exists(select 1 from jsonb_array_elements(w.pending_repairs) p where p->>'sourceInspectorId'=$2 and p->>'inspectionState'='pending'))`,[user.shopId,user.id,hasRole(user,'warehouse')]);
   for(const row of rows)todos.push(...personalOrderTodos(mapTask(row),user,row.customer_signature_review,row.pending_repairs));
  }
  const {rows:trips}=await db.query(`select id,status,vehicle_snapshot,reason,applicant_id from vehicle_trip_requests where shop_id=$1

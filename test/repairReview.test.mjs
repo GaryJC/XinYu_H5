@@ -29,7 +29,7 @@ test('review enforces state, permission, version, ownership and no self inspecti
  assert.throws(()=>act(t,'submit-order'),e=>e.status===409);
  assert.throws(()=>act(t,'submit-review',tech2),e=>e.status===403);
  assert.throws(()=>act(t,'submit-review',tech,{expectedVersion:1}),e=>e.status===409);
- assert.throws(()=>act({...task(),technicianIds:['i']},'send-review',inspector),e=>e.status===403);
+ assert.equal(act({...task(),technicianIds:['i']},'send-review',inspector).stage,'回审');
 });
 test('each technician edits and submits only their review projects; final submission enters inspection',()=>{
  const original={...task('维修完成'),technicianIds:['t','t2'],items:[...task('维修完成').items,{id:2,name:'其他项目',status:'已完工',responsibleId:'t2'}]};
@@ -114,11 +114,11 @@ test('schedulers add assigned review projects without changing existing work or 
  assert.throws(()=>applyDispatchAction(original,tampered,advisor,roster),e=>e.status===409);
 });
 
-test('adding the current inspector as a review worker releases their inspection claim',()=>{
+test('adding the current inspector as a review worker preserves their inspection claim',()=>{
  const advisor={...tech,id:'advisor',role:'advisor'},dual={...tech2,roles:['technician','inspector']};
  const original={...act(task('维修完成'),'send-review',inspector),inspectorId:dual.id,inspectorName:dual.name,inspectionClaimedAt:'old'};
  original.items[0].status='待检验';
  const next=applyDispatchAction(original,{action:'edit-repair-items',expectedVersion:original.version,requestId:randomUUID(),repairItems:[{id:1,name:original.items[0].name,responsibleId:tech.id},{name:'追加检查',responsibleId:dual.id}]},advisor,[...people.filter(p=>p.id!==dual.id),dual,advisor]);
- assert.equal(next.inspectorId,undefined);assert.equal(next.inspectionClaimedAt,undefined);assert.equal(original.inspectorId,dual.id);
- assert.throws(()=>applyDispatchAction(next,{action:'claim-inspection',expectedVersion:next.version,requestId:randomUUID()},dual,[...people,advisor]),e=>e.status===403);
+ assert.equal(next.inspectorId,dual.id);assert.equal(next.inspectionClaimedAt,original.inspectionClaimedAt);assert.equal(original.inspectorId,dual.id);
+ assert.throws(()=>applyDispatchAction(next,{action:'claim-inspection',expectedVersion:next.version,requestId:randomUUID()},dual,[...people,advisor]),/已被领取/);
 });

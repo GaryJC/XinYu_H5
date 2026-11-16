@@ -1,3 +1,4 @@
+import {allowsInspectionParticipation} from '../../shared/inspectionEligibility.mjs';
 import {photoWaiverActions,validatePhotoWaiverRequest,applyPhotoWaiver} from './repairPhotoWaiver.mjs';
 import { applyPlannedResponsibilities } from './dispatchPlanItems.mjs';
 import {validateInspectionDeferred} from './inspectionDeferred.mjs';
@@ -18,7 +19,7 @@ import { sendReview } from './repairReview.mjs';
 import { HttpError } from '../http/HttpError.mjs';
 export const DISPATCH_ROLES = ['manager','advisor','technician','inspector','warehouse','outsourcing'];
 export const technicianIds = task => task.technicianIds ?? (task.technicianId ? [task.technicianId] : []);
-export const canInspect = (task, actor) => actor?.active && (hasRole(actor, 'manager')||actor.inspectorRoleMember!==false) && hasAnyRole(actor, ['inspector','manager']) && actor.shopId===task.shopId && !technicianIds(task).includes(actor.id) && !(task.participantIds||[]).includes(actor.id) && !task.items.some(i=>i.responsibleId===actor.id || i.startedBy===actor.id || i.finishedBy===actor.id);
+export const canInspect = (task, actor) => actor?.active && (hasRole(actor, 'manager')||actor.inspectorRoleMember!==false) && hasAnyRole(actor, ['inspector','manager']) && actor.shopId===task.shopId && allowsInspectionParticipation(task,actor);
 const scheduling = ['manager','advisor'];
 const fail = (message, status = 409) => { throw new HttpError(status, message); };
 export function assertDispatchAccess(task, actor) {
@@ -88,7 +89,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   if(input.action==='send-review') return sendReview(task,actor,canInspect,people);
   if(task.executionMode!=='outsourced'&&task.stage==='回审'&&input.action==='edit-repair-items'&&hasAnyRole(actor,scheduling)
     &&input.repairItems?.some(row=>row.id===undefined)&&task.items.every(item=>input.repairItems.some(row=>row.id===item.id)))
-    return addReviewProjects(task,input,actor,people,now);
+    return addReviewProjects(task,input,actor,people,now,canInspect);
   if(task.executionMode!=='outsourced'&&(input.action==='submit-review' || task.stage==='回审'&&['edit-repair-items','start-order'].includes(input.action))) {
     if(task.stage!=='回审') fail('仅回审任务可提交回审');
     if(!technicianIds(task).includes(actor.id)||!hasRole(actor,'technician')) fail('仅当前维修工可编辑或提交回审',403);
@@ -346,11 +347,11 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     if(!next.items.length || next.items.some(i=>!['待检验','已完工'].includes(i.status))) fail('全部维修项目完成后才能提报');
     if(hasPendingInspection(task)&&task.inspectorId&&input.inspectorId!==task.inspectorId) fail('检验任务已被领取，请由检验员交接后再提交');
     const inspector=person(input.inspectorId,['inspector','manager']);
-    if(!canInspect(task,inspector) || technicianIds(task).includes(inspector.id) || (task.participantIds||[]).includes(inspector.id) || next.items.some(i=>i.startedBy===inspector.id || i.finishedBy===inspector.id)) fail('不能选择维修工本人检验',403);
+    if(!canInspect(next,inspector)) fail('不能选择维修工本人检验',403);
     next.inspectorId=inspector.id; next.inspectorName=inspector.name; next.stage='待检验'; next.submittedAt=now; next.submissionNote=input.note || '';
   } else if(action==='inspect') {
     if(!hasPendingInspection(task))fail('当前没有待检验项目');
-    if(!canInspect(task,actor) || !hasAnyRole(actor, ['manager','inspector']) || (!hasRole(actor, 'manager')&&task.inspectorId!==actor.id) || (actor.id===task.technicianId || technicianIds(task).includes(actor.id) || (task.participantIds||[]).includes(actor.id)) || next.items.some(i=>i.responsibleId===actor.id || i.startedBy===actor.id || i.finishedBy===actor.id)) fail('不能自检，或没有当前任务检验权限',403);
+    if(!canInspect(next,actor) || (!hasRole(actor, 'manager')&&task.inspectorId!==actor.id)) fail('不能自检，或没有当前任务检验权限',403);
     const rejected=input.rejectedItemIds || [],deferred=input.deferredItemIds||[];
     validateInspectionDeferred(input);
     if(deferred.some(id=>!task.items.some(item=>item.id===id&&item.status==='待检验')))fail('待定项目不在本次待检验项目中',400);
@@ -424,7 +425,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   }
   if(['reassign','edit-repair-items'].includes(action)&&next.inspectorId&&hasPendingInspection(next)
     &&!canInspect(next,people.find(person=>person.id===next.inspectorId))) {
-    // A claimed inspector who joins the repair team is no longer independent.
+    // Release claims only when current role/shop/participation policy no longer permits inspection.
     delete next.inspectorId;delete next.inspectorName;delete next.inspectionClaimedAt;
   }
   if(['finish','submit-order'].includes(action)&&!hasPendingInspection(task)&&hasPendingInspection(next)) {

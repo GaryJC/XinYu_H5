@@ -35,20 +35,19 @@ test('review additions with no parts or partial parts retain the legitimate star
  }
 });
 
-for(const action of ['reassign','edit-repair-items'])test(`${action} releases an active inspector claim if the inspector joins the repair team`,()=>{
+for(const action of ['reassign','edit-repair-items'])test(`${action} preserves an active inspector claim if the inspector joins the repair team`,()=>{
  let task=act(base(),a,'submit-order');task=act(task,inspector,'claim-inspection');
  const changedRows=(action==='reassign'?rows(task).filter(row=>row.id===2):rows(task)).map(row=>row.id===2?{...row,responsibleId:inspector.id}:row);
  const next=act(task,manager,action,{repairItems:changedRows,reason:'项目交接',...(action==='reassign'?{reassignItemIds:[2]}:{})});
  assert.deepEqual(next.items[0],task.items[0]);assert.equal(next.stage,'维修中');
- for(const key of ['inspectorId','inspectorName','inspectionClaimedAt'])assert.equal(next[key],undefined,key);
- assert.throws(()=>act(next,inspector,'claim-inspection'),e=>e.status===403);
- const claimed=act(next,other,'claim-inspection');assert.equal(act(claimed,other,'inspect').items[0].status,'已完工');
+ for(const key of ['inspectorId','inspectorName','inspectionClaimedAt'])assert.equal(next[key],task[key],key);
+ assert.equal(act(next,inspector,'inspect').items[0].status,'已完工');
 });
 
-test('adding a project for the claimed inspector also releases the claim; unrelated edits preserve it',()=>{
+test('adding projects preserves the inspector claim regardless of repair participation',()=>{
  let task=act(base(),a,'submit-order');task=act(task,inspector,'claim-inspection');
  const next=act(task,manager,'edit-repair-items',{repairItems:[...rows(task),{name:'新增专项检查',responsibleId:inspector.id}]});
- assert.equal(next.inspectorId,undefined);assert.equal(next.items.at(-1).status,'待开工');
+ assert.equal(next.inspectorId,inspector.id);assert.equal(next.items.at(-1).status,'待开工');
  const unchanged=act(task,manager,'edit-repair-items',{repairItems:[...rows(task),{name:'乙新增项目',responsibleId:b.id}]});
  for(const key of ['inspectorId','inspectorName','inspectionClaimedAt'])assert.equal(unchanged[key],task[key]);
  assert.deepEqual(task.items,act(base(),a,'submit-order').items);

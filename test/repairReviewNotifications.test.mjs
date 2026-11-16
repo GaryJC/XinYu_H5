@@ -61,7 +61,7 @@ for(const action of ['submit','reassign-inspection'])test(`${action}: only assig
   assert.deepEqual(notices.map(n=>n.params[3]),roles.includes('inspector')?[target.id]:[]);
  }
 });
-for(const mode of ['mock','dingtalk']) test(`inspection worker requires an independent inspector role in ${mode} mode`,async()=>{
+for(const mode of ['mock','dingtalk']) test(`inspection worker requires an active same-shop inspector role in ${mode} mode`,async()=>{
  const task=initial();const calls=[];
  const manager={...inspector,id:'manager',role:'manager',inspectorRoleMember:false};
  const dual={...manager,id:'dual',roles:['manager','inspector'],inspectorRoleMember:true};
@@ -84,7 +84,7 @@ for(const mode of ['mock','dingtalk']) test(`inspection worker requires an indep
  }};
  await processInspectionNotifications({database:db,runTransaction:callback=>callback(db),sync:async()=>audience.filter(p=>p.id!=='revoked').map(p=>p.id),env:{APP_ENV:'test',DISPATCH_NOTIFICATION_MODE:mode,DINGTALK_AGENT_ID:'1',DINGTALK_APP_KEY:'test',DINGTALK_APP_SECRET:'test',DISPATCH_APP_URL:'https://example.com'}});
  const notices=calls.filter(c=>c.sql.includes('insert into dispatch_notifications'));
- assert.deepEqual(notices.map(n=>n.params[3]),['i','dual']);
+ assert.deepEqual(notices.map(n=>n.params[3]),['i','dual','participant','responsible']);
 });
 test('legacy review submission notices recheck inspector membership before delivery',async()=>{
  const row={id:'n',kind:'回审已提交',previous_status:'pending',recipient_id:'a',attempts:1,payload:{orderId:'o'}};

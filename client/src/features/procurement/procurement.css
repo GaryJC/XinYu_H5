@@ -16,3 +16,8 @@
 @media (max-width: 767px), (pointer: coarse) {
  .procurement-form-actions { padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
 }
+
+.procurement-heading.procurement-toolbar{padding:0;gap:12px}
+
+.procurement-search-refresh{flex:1;max-width:380px;width:100%;min-width:0}.procurement-search-refresh .ant-input-search{max-width:none}
+@media(max-width:767px){.procurement-search-refresh{max-width:none}}

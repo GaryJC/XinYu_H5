@@ -9,10 +9,10 @@ test('personal todos isolate handler, shop, inactive and deduplicate multi-role 
  assert.equal(personalOrderTodos(task,{...person('a',['advisor']),active:false}).length,0);
  assert.equal(personalOrderTodos({...task,stage:'维修完成'},person('a',['advisor']),{state:'pending'})[0].category,'签字待确认');
 });
-test('inspection independence and current claim determine personal todo eligibility',()=>{
+test('inspection membership and current claim determine personal todo eligibility',()=>{
  const t={...task,stage:'待检验',technicianIds:['worker'],participantIds:['previous'],items:[{id:1,status:'待检验',responsibleId:'worker'}]};
- assert.equal(personalOrderTodos(t,person('worker',['technician','inspector'])).length,0);
- assert.equal(personalOrderTodos(t,person('previous',['inspector'])).length,0);
+ assert.equal(personalOrderTodos(t,person('worker',['technician','inspector'])).length,1);
+ assert.equal(personalOrderTodos(t,person('previous',['inspector'])).length,1);
  assert.equal(personalOrderTodos(t,person('inspect',['inspector']))[0].category,'待检验');
  assert.equal(personalOrderTodos({...t,inspectorId:'another'},person('inspect',['inspector'])).length,0);
  assert.equal(personalOrderTodos(t,person('admin',['manager'])).length,0);
@@ -27,4 +27,12 @@ test('declined acceptance moves the action to the current handler',()=>{
  assert.equal(personalOrderTodos(t,person('a',['advisor']))[0].category,'无法接单待处理');
  assert.equal(personalOrderTodos(t,person('worker',['technician'])).length,0);
  assert.equal(personalOrderTodos(t,person('other',['manager'])).length,0);
+});
+
+test('warehouse todos count individual pending applications using warehouse list eligibility',()=>{
+ const parts=(ownerId,extra={})=>({ownerId,mode:'list',items:[{name:'配件'}],...extra});
+ const t={...task,stage:'维修中',acceptedAt:'2026-11-16T00:00:00Z',partsRequirement:parts('legacy'),partsRequests:[parts('one'),parts('two',{items:[{name:'已备',preparedAt:'now'},{name:'未备'}]}),parts('done',{preparedAt:'now'}),parts('none',{mode:'none'})]};
+ const rows=personalOrderTodos(t,person('w',['warehouse']));
+ assert.equal(rows.length,3);assert.equal(new Set(rows.map(r=>r.id)).size,3);
+ for(const change of [{acceptedAt:undefined},{needsReview:true},{stage:'待检验'}])assert.equal(personalOrderTodos({...t,...change},person('w',['warehouse'])).length,0);
 });

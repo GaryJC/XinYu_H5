@@ -1,3 +1,4 @@
+import {allowsInspectionParticipation} from '../../../../shared/inspectionEligibility.mjs';
 import {PhotoWaiverRecord} from './RepairPhotoWaiverPanel';
 import { NotificationRecords } from '../notifications/NotificationRecords';
 import { useDispatchProjectFocus } from './useDispatchProjectFocus';
@@ -54,7 +55,7 @@ export function DispatchTaskDetail({controller,user,readyForFocus=true}:{control
   const outsourced=task.executionMode==='outsourced';
   const owner=outsourced?controller.manager:workers.includes(user.id)&&hasRole(user,'technician');
   const partsApplicant=outsourced?task.assignedBy===user.id&&hasAnyRole(user,['manager','advisor','inspector']):owner;
-  const inspect=hasPendingInspection(task) && (hasRole(user,'manager')||task.inspectorId===user.id) && hasAnyRole(user, ['manager','inspector']) && !workers.includes(user.id) && !task.participantIds?.includes(user.id) && !task.items.some(i=>i.responsibleId===user.id||i.startedBy===user.id||i.finishedBy===user.id);
+  const inspect=hasPendingInspection(task) && (hasRole(user,'manager')||task.inspectorId===user.id) && hasAnyRole(user, ['manager','inspector']) && allowsInspectionParticipation(task,user);
   const waitingForParts=hasUnpreparedParts(task);
   const actions:DispatchActionName[]=[];
   if(controller.manager&&!unsigned) {
@@ -76,7 +77,7 @@ export function DispatchTaskDetail({controller,user,readyForFocus=true}:{control
     }
     if(!outsourced&&!waitingForParts&&task.stage==='维修中'&&task.items.length&&task.items.every(i=>['待检验','已完工'].includes(i.status))) actions.push('submit');
   }
-  const independent=!workers.includes(user.id)&&!task.participantIds?.includes(user.id)&&!task.items.some(i=>i.responsibleId===user.id||i.startedBy===user.id||i.finishedBy===user.id);
+  const independent=allowsInspectionParticipation(task,user);
   if(!outsourced&&['待检验','维修完成'].includes(task.stage)&&(task.orderStatus!=='完成'||Boolean(task.repairRound))&&independent&&hasAnyRole(user,['inspector','manager'])&&!task.needsReview) actions.push('send-review');
   if(hasPendingInspection(task)&&!task.inspectorId&&independent&&hasAnyRole(user, ['inspector','manager'])&&!task.needsReview) actions.push('claim-inspection');
   if(hasPendingInspection(task)&&task.inspectorId&&hasAnyRole(user, ['manager','inspector'])) actions.push('reassign-inspection');

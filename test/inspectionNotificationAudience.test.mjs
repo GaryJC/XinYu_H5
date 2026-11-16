@@ -12,7 +12,8 @@ test('notification audience requires actual inspector membership while managers 
  assert.equal(canInspect(task,manager),true);
  assert.equal(canReceiveInspectionNotification(task,manager),false);
  assert.equal(canReceiveInspectionNotification(task,inspector),true);
- for(const change of [{active:false},{shopId:'other'},{inspectorRoleMember:false},{id:'worker'},{id:'previous-worker'}]) {
+ for(const id of ['worker','previous-worker'])assert.equal(canReceiveInspectionNotification(task,{...inspector,id}),true);
+ for(const change of [{active:false},{shopId:'other'},{inspectorRoleMember:false}]) {
   assert.equal(canReceiveInspectionNotification(task,{...inspector,...change}),false);
  }
 });

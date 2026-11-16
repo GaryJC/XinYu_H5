@@ -1,3 +1,4 @@
+import {allowsInspectionParticipation} from '../../../../shared/inspectionEligibility.mjs';
 import {InspectionItems} from './InspectionItems';
 import {RepairItemsEditor} from './RepairItemsEditor';
 import {useDispatchProjectDraft} from './useDispatchProjectDraft';
@@ -90,14 +91,14 @@ export function DispatchActionDialog({action,task,controller,onClose,inspectionR
       {action==='reassign'?<Alert type="info" showIcon title="改派交接范围" description={<>
         <p>未完成项目交给{execution.executionMode==='outsourced'?execution.contractor||'承包方':technicianIds.map(id=>controller.people.technicians.find(p=>p.id===id)?.name||id).join('、')||'新维修团队'}：{task.items.filter(i=>!['待检验','已完工'].includes(i.status)).map(i=>i.name).join('、')||'无'}。{execution.executionMode!=='outsourced'&&technicianIds.length>1?'接单后须逐项确认负责人。':''}</p>
         <p>待检验项目保留原维修责任：{task.items.filter(i=>i.status==='待检验').map(i=>`${i.name}（${i.responsibleName||'原负责人'}）`).join('、')||'无'}。</p>
-        <p>已通过项目保留负责人和检验结果，原维修参与人员不能自检。</p>
+        <p>已通过项目保留负责人和检验结果。</p>
       </>}/>:null}
       {assign?<Alert type="info" title={execution.executionMode==='outsourced'?'直接填写承包方姓名，由内部人员维护进度并登记完工，无需提检；配件由本单派工人申请。':'所选员工共同维护工单进度，任一人确认即代表工单接单；每次操作均记录实际操作人。'}/>:null}
       </FormSection>}
       {action==='assign'?<FormSection title="维修项目与负责人"><RepairItemsEditor items={task.items} rows={assignmentRows} onChange={projectDraft.change} editing disabled={controller.busy} showResponsibilities={execution.executionMode!=='outsourced'} technicians={controller.people.technicians}/>{execution.executionMode!=='outsourced'&&!controller.people.technicians.length?<Alert type="info" title="暂无可派维修工，请配置钉钉角色并让员工登录一次。"/>:null}{projectDraft.stale?<Alert type="warning" title="工单已更新，请关闭窗口重新派工"/>:null}</FormSection>:null}
       <FormSection className={action==='inspect'?'inspection-notes':undefined} title={scheduling ? "时间与备注" : action==='inspect'?'备注':"操作说明"}>
       {scheduling?<><Form.Item label="预计完工时间" required><Input aria-label="预计完工时间" type="datetime-local" value={dueAt} onChange={e=>setDueAt(e.target.value)}/></Form.Item><Checkbox checked={urgent} onChange={e=>setUrgent(e.target.checked)}>加急任务</Checkbox></>:null}
-      {['submit','reassign-inspection'].includes(action)?<Form.Item label="指定检验员" required><Select aria-label="指定检验员" placeholder="选择检验员或管理员" value={inspectorId} onChange={setInspectorId} options={controller.people.inspectors.filter(p=>!(task.technicianIds??[task.technicianId]).includes(p.id) && !task.participantIds?.includes(p.id) && !task.items.some(i=>i.startedBy===p.id||i.finishedBy===p.id)).map(p=>({value:p.id,label:personDisplayName(p,controller.people.inspectors)}))}/></Form.Item>:null}
+      {['submit','reassign-inspection'].includes(action)?<Form.Item label="指定检验员" required><Select aria-label="指定检验员" placeholder="选择检验员或管理员" value={inspectorId} onChange={setInspectorId} options={controller.people.inspectors.filter(p=>allowsInspectionParticipation(task,p)).map(p=>({value:p.id,label:personDisplayName(p,controller.people.inspectors)}))}/></Form.Item>:null}
       {action==='pause'?<Form.Item label="暂停原因"><Select aria-label="暂停原因" value={pauseReason} onChange={setPauseReason} options={['待配件','待客户确认','技术问题','其他'].map(value=>({value,label:value}))}/></Form.Item>:null}
 
       {(['reopen-repair','decline','cancel','reassign','reconcile','reassign-inspection'].includes(action)||(action==='record-hours'&&task.workHours!==undefined))?<Form.Item label={reopening?"返工原因":"原因 / 交接说明"} required={reopening}><Input.TextArea aria-label="原因或交接说明" value={reason} maxLength={2000} onChange={e=>setReason(e.target.value)} rows={3}/></Form.Item>:null}

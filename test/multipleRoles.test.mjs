@@ -27,15 +27,15 @@ test('advisor and inspector permissions are additive without granting administra
   assert.equal(action(claimed,'inspect',employee).stage,'维修完成');
 });
 
-test('multi-role membership never permits self inspection, disabled access or cross-shop access',()=>{
+test('inspector membership permits participation but never disabled or cross-shop access',()=>{
   for(const own of [
     {...task(),technicianId:employee.id},
     {...task(),participantIds:[employee.id]},
     {...task(),items:[{...task().items[0],startedBy:employee.id}]},
     {...task(),items:[{...task().items[0],responsibleId:employee.id}]}
   ]) {
-    assert.equal(canInspect(own,employee),false);
-    assert.throws(()=>action(own,'claim-inspection',employee),error=>error.status===403);
+    assert.equal(canInspect(own,employee),true);
+    assert.equal(action(own,'claim-inspection',employee).inspectorId,employee.id);
   }
   for(const actor of [{...employee,active:false},{...employee,shopId:'other'}]) {
     assert.throws(()=>assertDispatchAccess(task(),actor),error=>error.status===403);

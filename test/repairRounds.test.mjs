@@ -15,7 +15,7 @@ test('completed repair reopens selected projects only, with independent fresh pr
  assert.deepEqual(task.items.map(i=>[i.id,i.status]),[[1,'待开工'],[-1,'待开工']]);
  assert.throws(()=>act(task,'reopen-repair',manager,{...input(),expectedVersion:task.version}),/仅维修完成/);
  task=act(task,'accept');assert.equal(task.stage,'维修中');task=act(task,'pause',tech,{pauseReason:'待配件'});task=act(task,'resume');task=act(task,'submit-order');
- assert.equal(canInspect(task,{...tech,role:'inspector'}),false);
+ assert.equal(canInspect(task,{...tech,role:'inspector'}),true);
  task=act(task,'claim-inspection',inspector);task=act(task,'inspect',inspector,{rejectedItemIds:[-1],reason:'仍有渗漏'});
  assert.equal(task.repairRound,1);assert.equal(task.items[0].status,'已完工');task=act(task,'start-order');assert.equal(task.items[0].status,'已完工');task=act(task,'submit-order');task=act(task,'claim-inspection',inspector);task=act(task,'inspect',inspector);
  assert.equal(task.stage,'维修完成');assert.ok(task.items.every(i=>i.status==='已完工'));

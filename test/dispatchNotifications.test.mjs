@@ -151,8 +151,8 @@ test('inspection delivery requires inspector membership, shop, independence and 
  for(const patch of [{active:false},{shopId:'other'},{role:'advisor',roles:['advisor']},{role:'manager',roles:['manager']},{inspectorRoleMember:false}]) {
   assert.equal(await validate(row,{...user,...patch},database),false);
  }
- for(const data of [{participantIds:['m']},{technicianIds:['m']},{items:[{id:1,responsibleId:'m'}]},{items:[{id:1,startedBy:'m'}]},{items:[{id:1,finishedBy:'m'}]},{needsReview:true}]) {
-  assert.equal(await validate(row,user,{query:async()=>({rows:[{...task,data:{...task.data,...data}}]})}),false);
+ for(const data of [{participantIds:['m']},{technicianIds:['m']},{items:[{id:1,status:'待检验',responsibleId:'m'}]},{items:[{id:1,status:'待检验',startedBy:'m'}]},{items:[{id:1,status:'待检验',finishedBy:'m'}]},{needsReview:true}]) {
+  assert.equal(await validate(row,user,{query:async()=>({rows:[{...task,data:{...task.data,...data}}]})}),!data.needsReview);
  }
  for(const patch of [{stage:'维修完成'},{inspector_id:'other'},{order_status:'待客户签字'}]) {
   assert.equal(await validate(row,user,{query:async()=>({rows:[{...task,...patch}]})}),false);
