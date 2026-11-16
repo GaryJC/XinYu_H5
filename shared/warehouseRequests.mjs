@@ -12,7 +12,7 @@ export function matchesPartsStatus(task,status) {
   if(status==='all')return Boolean(task.partsRequirement && task.partsRequirement.mode!=='none');
   return (['待备料','部分备齐'].includes(status)?canProcessParts(task):true) && partsStatus(task.partsRequirement)===status;
 }
-export function sortWarehouseRequests(tasks,order = 'dispatch-desc') {
+export function sortWarehouseRequests(tasks,order = 'newest') {
   const time=task=>Date.parse(task.partsRequirement?.recordedAt||'');
   return [...tasks].sort((a,b)=>{
     if (order === 'dispatch-desc' || order === 'dispatch-asc') return compareDispatchNumbers(a,b,order);

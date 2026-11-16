@@ -24,7 +24,7 @@ export function WarehousePartsPage({controller:source}:{controller:DispatchContr
   const status=source.filters.partsStatus||'待备料';
   const setStatus=(partsStatus:string)=>source.setFilters(filters=>({...filters,partsStatus}));
   const [workOrderId,setWorkOrderId]=useState<string>();
-  const sortOrder=source.filters.partsSort||'dispatch-desc';
+  const sortOrder=source.filters.partsSort||'newest';
   const setSortOrder=(partsSort:WarehouseRequestSort)=>source.setFilters(filters=>({...filters,partsSort}));
   const [selectedOwner,setSelectedOwner]=useState<string>();
   const available=source.detail?warehouseRequests([source.detail.task]):[];
@@ -39,7 +39,7 @@ export function WarehousePartsPage({controller:source}:{controller:DispatchContr
   const pendingItems=available.filter(canProcessParts).reduce((count,t)=>count+(t.partsRequirement?.mode==='list'?t.partsRequirement.items.filter(i=>!i.preparedAt&&!i.issuedAt).length:0),0);
   const photoRequests=available.filter(t=>canProcessParts(t)&&t.partsRequirement?.mode==='photo').length;
   return <section className="dispatch-page" aria-label="配件申请">
-    <div className="dispatch-heading"><div><h2>配件申请</h2><p>待处理 {pendingCount} 单</p></div></div>
+    <div className="dispatch-heading"><div><p>待处理 {pendingCount} 单</p></div></div>
     {c.error?<Alert type="error" showIcon title={c.error}/>:null}
     <div className="warehouse-filters">
       <div className="search-refresh-toolbar"><Input.Search aria-label="搜索配件申请" placeholder="车牌 / 委托单号 / 派工号" allowClear onSearch={search=>c.setFilters({...searchAllFilters(search),partsStatus:search.trim()?'all':'待备料',partsSort:sortOrder})}/><RefreshButton loading={c.loading} onClick={()=>{void c.refresh();void c.refreshDetail();}} label="刷新配件申请"/></div>
