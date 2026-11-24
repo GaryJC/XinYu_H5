@@ -79,7 +79,7 @@ test('two reads of the same tender keep the most recent response',async()=>{
 
 test('vehicle lookup for an old draft must not populate a newly opened draft',async()=>{
  const gate=deferred();let draft={vehicle:{plate:''},customer:{}};
- const render=hook('../client/src/features/vehicle-identity/useVehicleIdentityRecognition.ts','useVehicleIdentityRecognition',{lookupVehicle:()=>gate.promise},[{setDraft:update=>{draft=update(draft);}}]);
+ const render=hook('../client/src/features/vehicle-identity/useVehicleIdentityRecognition.ts','useVehicleIdentityRecognition',{lookupVehicle:()=>gate.promise},[{get draft(){return draft;},setDraft:update=>{draft=update(draft);}}]);
  const loading=render().lookupDraftVehicle({plate:'OLD'});render().resetVehicleIdentityRecognition();draft={vehicle:{plate:'NEW'},customer:{}};
  gate.resolve({found:true,status:'found',vehicle:{plate:'OLD',vin:'old-vin',organization:{name:'旧客户',code:'old'}}});await loading;
  assert.equal(draft.vehicle.plate,'NEW');assert.equal(draft.customer.name,undefined);assert.equal(render().vehicleHistory,undefined);
@@ -88,7 +88,7 @@ test('vehicle lookup for an old draft must not populate a newly opened draft',as
 test('new vehicle lookup wins when an older request finishes later',async()=>{
  const gate=deferred();let draft={vehicle:{plate:''},customer:{}};
  const api={lookupVehicle:async({plate})=>plate==='OLD'?gate.promise:{found:true,status:'found',vehicle:{plate:'NEW'}}};
- const render=hook('../client/src/features/vehicle-identity/useVehicleIdentityRecognition.ts','useVehicleIdentityRecognition',api,[{setDraft:update=>{draft=update(draft);}}]);
+ const render=hook('../client/src/features/vehicle-identity/useVehicleIdentityRecognition.ts','useVehicleIdentityRecognition',api,[{get draft(){return draft;},setDraft:update=>{draft=update(draft);}}]);
  const old=render().lookupDraftVehicle({plate:'OLD'});await render().lookupDraftVehicle({plate:'NEW'});
  gate.resolve({found:true,status:'found',vehicle:{plate:'OLD'}});await old;
  assert.equal(draft.vehicle.plate,'NEW');assert.equal(render().vehicleHistory.vehicle.plate,'NEW');
@@ -101,7 +101,7 @@ test('both plate scans and manually entered VIN apply saved model and organizati
  const api={recognizeLicensePlate:async()=>({value:vehicle.plate}),lookupVehicle:async input=>{
   inputs.push(input);return {found:true,status:'found',vehicle};
  }};
- const render=hook('../client/src/features/vehicle-identity/useVehicleIdentityRecognition.ts','useVehicleIdentityRecognition',api,[{setDraft:update=>{draft=update(draft);}}]);
+ const render=hook('../client/src/features/vehicle-identity/useVehicleIdentityRecognition.ts','useVehicleIdentityRecognition',api,[{get draft(){return draft;},setDraft:update=>{draft=update(draft);}}]);
  await render().scanVehicleIdentifier('plate',{});
  assert.equal(inputs[0].plate,vehicle.plate);
  assert.equal(draft.vehicle.modelLegacyCode,'M');
@@ -116,7 +116,7 @@ test('both plate scans and manually entered VIN apply saved model and organizati
 test('late plate OCR cannot start a lookup or modify a reset draft',async()=>{
  const gate=deferred();let draft={vehicle:{plate:''},customer:{}},queries=0;
  const api={recognizeLicensePlate:()=>gate.promise,lookupVehicle:async()=>{queries++;return {found:false};}};
- const render=hook('../client/src/features/vehicle-identity/useVehicleIdentityRecognition.ts','useVehicleIdentityRecognition',api,[{setDraft:update=>{draft=update(draft);}}]);
+ const render=hook('../client/src/features/vehicle-identity/useVehicleIdentityRecognition.ts','useVehicleIdentityRecognition',api,[{get draft(){return draft;},setDraft:update=>{draft=update(draft);}}]);
  const scan=render().scanVehicleIdentifier('plate',{});await Promise.resolve();render().resetVehicleIdentityRecognition();draft={vehicle:{plate:'NEW'},customer:{}};
  gate.resolve({value:'OLD'});await scan;
  assert.equal(draft.vehicle.plate,'NEW');assert.equal(queries,0);assert.equal(render().identifierRecognition.plate.status,'未识别');

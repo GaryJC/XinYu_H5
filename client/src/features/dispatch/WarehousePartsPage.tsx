@@ -26,10 +26,16 @@ export function WarehousePartsPage({controller:source}:{controller:DispatchContr
   const [workOrderId,setWorkOrderId]=useState<string>();
   const sortOrder=source.filters.partsSort||'newest';
   const setSortOrder=(partsSort:WarehouseRequestSort)=>source.setFilters(filters=>({...filters,partsSort}));
-  const [selectedOwner,setSelectedOwner]=useState<string>();
+  const [selectedOwner,setSelectedOwner]=useState<string|undefined>(()=>new URLSearchParams(location.search).get('partsOwnerId')??undefined);
   const available=source.detail?warehouseRequests([source.detail.task]):[];
-  const owner=selectedOwner!==undefined&&available.some(t=>(t.partsRequirement?.ownerId||'')===selectedOwner)?selectedOwner:available.find(canProcessParts)?.partsRequirement?.ownerId||available[0]?.partsRequirement?.ownerId;
+  const selectedRequest=available.find(t=>(t.partsRequirement?.ownerId||'')===selectedOwner)??available.find(canProcessParts)??available[0];
+  const owner=selectedRequest?.partsRequirement?.ownerId;
   const c=partsController(source,owner);
+  function openRequest(task:typeof source.tasks[number]) {
+    const ownerId=task.partsRequirement?.ownerId||'';
+    setSelectedOwner(ownerId);
+    c.select(task.orderId,ownerId);
+  }
   const tasks=source.tasks;
   const counts=source.list.counts||{};
   const pendingCount=(counts['待备料']||0)+(counts['部分备齐']||0);
@@ -54,8 +60,8 @@ export function WarehousePartsPage({controller:source}:{controller:DispatchContr
     {c.loading && <LoadingState label="正在加载配件申请…" />}
     {!c.loading && !tasks.length?<Empty description="暂无配件申请"/>:null}
     {tasks.map(task=><Card key={`${task.orderId}-${task.partsRequirement?.ownerId||'legacy'}`} className="warehouse-request-card" size="small" title="配件申请" role="button" tabIndex={0} aria-label={`查看配件申请 ${task.plate||task.orderId} ${task.dispatchNo||task.orderId}`}
-      onClick={event=>{if(event.target instanceof Element&&event.target.closest('button'))return;setSelectedOwner(task.partsRequirement?.ownerId||'');c.select(task.orderId);}}
-      onKeyDown={event=>{if(event.target===event.currentTarget&&(event.key==='Enter'||event.key===' ')){event.preventDefault();setSelectedOwner(task.partsRequirement?.ownerId||'');c.select(task.orderId);}}}
+      onClick={event=>{if(event.target instanceof Element&&event.target.closest('button'))return;openRequest(task);}}
+      onKeyDown={event=>{if(event.target===event.currentTarget&&(event.key==='Enter'||event.key===' ')){event.preventDefault();openRequest(task);}}}
       extra={<Space size={4}><Tag color={task.partsRequirement?.issuedAt||task.partsRequirement?.preparedAt?'green':'orange'}>{partsStatus(task.partsRequirement)}</Tag></Space>}>
       <div className="warehouse-identifier" aria-label="车牌号">
         <div><span>车牌号</span><strong>{task.plate||'未填写'}</strong></div>

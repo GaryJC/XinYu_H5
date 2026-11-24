@@ -1,4 +1,5 @@
 import { hasRole } from '../../../../shared/roles.mjs';
+import { isOrderAdvisor } from '../../../../shared/orderOwnership.mjs';
 import { Alert } from 'antd';
 import type { UserProfile, WorkOrder } from '../../../../shared/types';
 import { OrderPhotoGallery } from './OrderPhotoGallery';
@@ -11,7 +12,7 @@ export function SubmittedOrderPhotos({order, user, onUpdated, section = 'all'}: 
 }) {
   const upload = useOrderPhotoUpload(order.id, user?.id, onUpdated, order.customer);
   const canUpload = order.status !== '草稿' && user?.active && user.shopId === order.shop.id
-    && (hasRole(user, 'manager') || hasRole(user, 'advisor') && user.name === order.advisor);
+    && (hasRole(user, 'manager') || hasRole(user, 'advisor') && isOrderAdvisor(order.advisorUserId, order.advisor, user));
   const busy = Boolean(upload.uploading);
   const collections = orderPhotoCollections(order);
   const showStandard = ['all', 'repair'].includes(section);

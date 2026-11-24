@@ -1,0 +1,9 @@
+.signature-repair-items { margin: 16px 0; }
+.signature-repair-items h2 { margin: 0 0 10px; font-size: 16px; }
+.signature-repair-list { border: 1px solid #e5e9f0; border-radius: 8px; overflow: hidden; }
+.signature-repair-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 12px; padding: 12px; }
+.signature-repair-row + .signature-repair-row { border-top: 1px solid #e5e9f0; }
+.signature-repair-name { min-width: 0; flex: 1 1 160px; overflow-wrap: anywhere; }
+.signature-repair-row strong { flex-shrink: 0; }
+.signature-repair-status { flex-shrink: 0; padding: 2px 8px; border-radius: 5px; background: #fff5df; color: #9a5900; font-size: 13px; }
+.signature-repair-note { margin: 10px 0 0; color: #657085; line-height: 1.6; }

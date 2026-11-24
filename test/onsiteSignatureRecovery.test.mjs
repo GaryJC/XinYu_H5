@@ -5,6 +5,8 @@ import path from 'node:path';
 import vm from 'node:vm';
 import ts from 'typescript';
 import * as roles from '../shared/roles.mjs';
+import * as orderOwnership from '../shared/orderOwnership.mjs';
+import {signatureRepairItems} from '../shared/signatureRepairItems.mjs';
 
 const root=path.resolve('client/src/features');
 const order={id:'onsite-order',shop:{id:'shop-hq'},advisor:'顾问',customer:{name:'客户'},status:'草稿',signatureToken:'session',signatures:{}};
@@ -17,6 +19,7 @@ function setup(flow,api,{failRefresh=false}={}) {
   vm.runInNewContext(code,{exports,require(name){
    if(name.endsWith('workOrderApi'))return {workOrderApi:api};
    if(name.endsWith('shared/roles.mjs'))return roles;
+   if(name.endsWith('shared/orderOwnership.mjs'))return orderOwnership;
    if(name==='react')return {useRef:value=>({current:value}),useState:initial=>[initial,()=>{}]};
    return load(path.resolve(path.dirname(file),`${name}.ts`));
   }});
@@ -89,6 +92,7 @@ test('the signing dialog reports saved-but-pending instead of confirmed after a 
    if(name.endsWith('useActionFeedback'))return {useActionFeedback:()=>({success:message=>messages.push(message),error:error=>{throw error;}})};
    if(name.endsWith('useSignatureMode'))return {useSignatureMode:()=>({mode:'onsite',busy:false})};
    if(name==='antd')return {Form:{Item:'form-item'},Grid:{useBreakpoint:()=>({md:false})},Radio:{Group:'radio-group'},Button:'button',Alert:'alert',Space:'space'};
+   if(name.endsWith('signatureRepairItems.mjs'))return {signatureRepairItems};
    if(name.endsWith('workOrderDomain'))return {sumLabor:()=>0};
    return new Proxy({},{get:(_,key)=>key});
   }});

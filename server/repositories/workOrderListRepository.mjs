@@ -49,7 +49,7 @@ export async function workOrderPageRows(scope, query, database = pool) {
   const summary=query.view==='summary';
   const fields=summary?['id','dispatch_no','arrival_date','status','created_at','updated_at','shop_id','shop_name','shop_address','shop_phone',
     'vehicle_is_military','vehicle_plate','vehicle_vin','vehicle_mileage','vehicle_model','vehicle_model_legacy_code','vehicle_purchase_date',
-    'customer_name','customer_legacy_code','customer_phone','customer_contact','customer_address','advisor','technician',
+    'customer_name','customer_legacy_code','customer_phone','customer_contact','customer_address','advisor','advisor_user_id','technician',
     'customer_signature_review','is_baiyuan_order','paper_order','legacy_approved','legacy_sync_status','legacy_sync_revision','legacy_synced_at','legacy_sync_error',
     'customer_vehicle_updated_at','customer_vehicle_updated_by','estimated_fee','settlement_amount'].map(column=>`wo.${column}`).join(','):'wo.*';
   const signature=summary?'':', st.token as signature_token, st.used as signature_token_used';
@@ -69,8 +69,8 @@ export async function archiveMetadata(scope, database = pool) {
 
 export async function refreshTargetIds(scope, user, database = pool) {
   const { rows } = await database.query(`select wo.id from work_orders wo ${scope.where}
-    and wo.shop_id=$${scope.params.length+1} and ($${scope.params.length+2} or wo.advisor=$${scope.params.length+3})
+    and wo.shop_id=$${scope.params.length+1} and ($${scope.params.length+2} or wo.advisor_user_id=$${scope.params.length+3} or (wo.advisor_user_id is null and wo.advisor=$${scope.params.length+4}))
     and wo.legacy_sync_status='synced' and wo.status not in ('草稿','待客户签字') order by wo.id`,
-    [...scope.params,user.shopId,user.role==='manager'||user.roles?.includes('manager')||false,user.name]);
+    [...scope.params,user.shopId,user.role==='manager'||user.roles?.includes('manager')||false,user.id,user.name]);
   return rows.map(r=>r.id);
 }

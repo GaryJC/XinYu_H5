@@ -36,3 +36,10 @@ test('archive hydration includes completed stages and mixed-role managers retain
  assert.equal(filterDispatchTasks(tasks,actor,{includeCompleted:'true'}).length,tasks.length);
  assert.deepEqual(filterDispatchTasks(tasks,{...actor,roles:['manager','warehouse']}).map(t=>t.orderId),['working','rework','review','draft']);
 });
+
+test('warehouse membership uses the same parts request list across primary roles',()=>{
+ const applications=[task('historical','维修完成','完成'),task('active','维修中','完成')];
+ const mixed={...actor,roles:['manager','warehouse']};
+ assert.deepEqual(filterDispatchTasks(applications,mixed,{partsStatus:'all'}),filterDispatchTasks(applications,{role:'warehouse'},{partsStatus:'all'}));
+ assert.deepEqual(filterDispatchTasks(applications,mixed),[]);
+});

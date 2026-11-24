@@ -225,11 +225,11 @@ export async function handleApiRequest(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/files") {
     requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
-    const body = await readJson(req);
-    if (String(body.kind).startsWith("trip_")) throw new HttpError(400, "出车附件请通过出车申请上传");
-    if (["repair_completed_photo", "repair_parts_photo", "repair_progress_photo"].includes(body.kind)) throw new HttpError(400, "维修照片请通过维修任务上传");
-    if (body.orderId) await assertWorkOrderAccess(body.orderId, currentUser);
-    sendJson(res, 201, await saveUploadedFile({ ...body, uploadedBy: currentUser.id }));
+    const { orderId, kind, fileName, mimeType, imageBase64 } = await readJson(req);
+    if (String(kind).startsWith("trip_")) throw new HttpError(400, "出车附件请通过出车申请上传");
+    if (["repair_completed_photo", "repair_parts_photo", "repair_progress_photo", "vehicle_nameplate_photo"].includes(kind)) throw new HttpError(400, "维修照片请通过维修任务上传");
+    if (orderId) await assertWorkOrderAccess(orderId, currentUser);
+    sendJson(res, 201, await saveUploadedFile({ orderId, kind, fileName, mimeType, imageBase64, uploadedBy: currentUser.id }));
     return true;
   }
 
@@ -289,15 +289,13 @@ export async function handleApiRequest(req, res, url) {
       sendJson(res, 400, { error: "委托单参数不一致" });
       return true;
     }
-    await assertWorkOrderAccess(workOrderMatch[1], currentUser);
     sendJson(res, 200, await updateWorkOrder(order, currentUser.name || actor, action, currentUser));
     return true;
   }
 
   if (workOrderMatch && req.method === "DELETE") {
     requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
-    await assertWorkOrderAccess(workOrderMatch[1], currentUser);
-    sendJson(res, 200, await deleteDraftWorkOrder(workOrderMatch[1]));
+    sendJson(res, 200, await deleteDraftWorkOrder(workOrderMatch[1], undefined, currentUser));
     return true;
   }
 
@@ -360,9 +358,8 @@ export async function handleApiRequest(req, res, url) {
   const tokenMatch = url.pathname.match(/^\/api\/work-orders\/([^/]+)\/signature-token$/);
   if (tokenMatch && req.method === "POST") {
     requireAnyRole(currentUser, orderEntry ? ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"] : ["advisor", "manager"]);
-    await assertWorkOrderAccess(tokenMatch[1], currentUser);
     const { actor, renew, signatureMode } = await readJson(req);
-    sendJson(res, 200, await createSignatureTokenForOrder(tokenMatch[1], currentUser.name || actor, { renew: renew === true, signatureMode }));
+    sendJson(res, 200, await createSignatureTokenForOrder(tokenMatch[1], currentUser.name || actor, { renew: renew === true, signatureMode, user: currentUser }));
     return true;
   }
 

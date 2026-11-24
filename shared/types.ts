@@ -353,6 +353,7 @@ export type WorkOrder = {
     name: string;
   };
   advisor: string;
+  advisorUserId?: string;
   technician: string;
   inspector: string;
   vehicle: {
@@ -465,7 +466,7 @@ export type DispatchTask = DispatchExecution & {
   workerPauses?:Record<string,{pauseReason?:string;pauseNote?:string;pausedAt?:string;resumeStage?:DispatchStage}>;
   workerOffers?:Record<string,{status:'declined'|'pending';name:string;reason?:string;at:string}>;
   workerSubmissions?:Record<string,{at:string;note:string}>;
-  vehicleVin?:string; vehicleModel?:string; vehicleMileage?:string; customerName?:string; advisor?:string;
+  vehicleVin?:string; vehicleModel?:string; vehicleMileage?:string; customerName?:string; advisor?:string; advisorUserId?:string;
   roundKind?: 'additional' | 'rework'; repairRound?: number; roundReason?: string; roundOpenedAt?: string; roundOpenedBy?: string; roundOpenedName?: string;
   repairCatalog?: Array<{id:number;name:string}>;
   repairItemIdFloor?: number;
@@ -630,13 +631,14 @@ export type ProcurementPortal = { kind: 'quote'; supplierName: string; tenderId:
 } | { kind: 'report'; report: ProcurementReport };
 
 
+export type SignatureRepairItem = {name: string; laborFee: number; confirmation?: 'pending' | 'approved' | 'inspection'};
 export type CustomerSignatureOrder = {
   id: string;
   shop: Pick<ShopProfile, "name" | "address" | "phone">;
   vehicle: Pick<WorkOrder["vehicle"], "plate" | "model" | "mileage">;
   customerName: string;
   faultDescription: string;
-  repairItems: { name: string; laborFee: number }[];
+  repairItems: SignatureRepairItem[];
   estimatedFee: number;
   feeNote: string;
   oldPartsHandling: WorkOrder["oldPartsHandling"];
@@ -755,7 +757,7 @@ export type TechnicianCompletedOrder = {
 export type CompletedProjectFilters = {from?:string;to?:string;sort?:DispatchNumberSort | 'completed-asc'|'completed-desc'};
 
 /** List metadata only; fetch the full order before editing, signing or printing. */
-export type WorkOrderListItem = Pick<WorkOrder, "id" | "dispatchNo" | "arrivalDate" | "status" | "createdAt" | "updatedAt" | "createdAtIso" | "updatedAtIso" | "shop" | "vehicle" | "customer" | "advisor" | "technician" | "dispatchStage" | "customerSignatureReview" | "isBaiyuanOrder" | "paperOrder" | "legacyApproved" | "legacySyncStatus" | "legacySyncRevision" | "legacySyncedAt" | "legacySyncError" | "customerVehicleUpdatedAt" | "customerVehicleUpdatedBy" | "estimatedFee" | "settlementAmount">;
+export type WorkOrderListItem = Pick<WorkOrder, "id" | "dispatchNo" | "arrivalDate" | "status" | "createdAt" | "updatedAt" | "createdAtIso" | "updatedAtIso" | "shop" | "vehicle" | "customer" | "advisor" | "advisorUserId" | "technician" | "dispatchStage" | "customerSignatureReview" | "isBaiyuanOrder" | "paperOrder" | "legacyApproved" | "legacySyncStatus" | "legacySyncRevision" | "legacySyncedAt" | "legacySyncError" | "customerVehicleUpdatedAt" | "customerVehicleUpdatedBy" | "estimatedFee" | "settlementAmount">;
 
 export interface PurchaseDocumentRules {
   mode:'original'|'fixed'|'range'; fixedPercent:number; minPercent:number; maxPercent:number; decimals:0|2;
@@ -774,7 +776,7 @@ export interface PurchaseDocumentPreview {
   docs:Array<{id:string;file:string;sheet:string;code:string;model:string;plate:string;date:string;template:string;kept:number;paint:number;excluded:number;total:number}>;
 }
 
-export type PersonalBusinessTarget = { targetKey: 'dispatchOrder' | 'workOrder' | 'vehicleTrip' | 'procurementTender' | 'procurementReport'; targetId: string };
+export type PersonalBusinessTarget = { targetKey: 'dispatchOrder' | 'workOrder' | 'vehicleTrip' | 'procurementTender' | 'procurementReport'; targetId: string; partsOwnerId?: string };
 export type PersonalTodo = PersonalBusinessTarget & { id: string; category: string; title: string; summary: string };
 export type PersonalMessage = PersonalBusinessTarget & { id: string; title: string; summary: string; plate: string; createdAt: string; readAt: string | null };
 export type PersonalInboxPage = { items: PersonalMessage[]; nextCursor: string | null };

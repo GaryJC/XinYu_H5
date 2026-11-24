@@ -9,6 +9,8 @@ import { FormDialog } from "../../shared/ui/BusinessForm";
 import { Summary } from "../../shared/ui/FormControls";
 import { sumLabor } from "../work-orders/domain/workOrderDomain";
 import { SignaturePad } from "./SignaturePad";
+import { SignatureRepairItems } from './SignatureRepairItems';
+import { signatureRepairItems } from '../../../../shared/signatureRepairItems.mjs';
 
 export type SignatureSession = { token: string; order: WorkOrder };
 
@@ -117,9 +119,7 @@ export function WorkOrderSignatureDialog({ session, completeSignature, onClose, 
                   <Summary label="预计费用" value={`¥${signatureSession.order.estimatedFee || sumLabor(signatureSession.order.repairItems)}`} />
                   <Summary label="旧件处置" value={signatureSession.order.oldPartsHandling} />
                 </div>
-                <div className="public-items">
-                  {signatureSession.order.repairItems.map((item) => <div key={item.id}><span>{item.name}</span></div>)}
-                </div>
+                <SignatureRepairItems items={signatureRepairItems(signatureSession.order)}/>
                 {!remote && <Form.Item
                   className="field"
                   label={(

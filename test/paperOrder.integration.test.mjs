@@ -84,7 +84,11 @@ test('paper order creation, suppressed notification access, import and signature
     await t.test('same-shop advisors may take pending orders, but foreign shops and unrelated employees cannot',async()=>{
       for(const user of [{...actor,shopId:'other'},{...actor,id:'unrelated-technician',name:'无关维修工',role:'technician'}]) await assert.rejects(()=>resolvePaperOrder(order.id,{mode:'dingtalk'},user),/无权/);
       order=await resolvePaperOrder(order.id,{mode:'dingtalk'},advisor);
-      assert.equal(order.status,'草稿');assert.equal(order.advisor,advisor.name);
+      assert.equal(order.status,'草稿');assert.equal(order.advisor,advisor.name);assert.equal(order.advisorUserId,advisor.id);
+      const namesake={...advisor,id:'paper-advisor-namesake'};
+      await pool.query("insert into users(id,name,role,shop_id) values($1,$2,'advisor',$3)",[namesake.id,namesake.name,namesake.shopId]);
+      await assert.rejects(()=>resolvePaperOrder(order.id,{mode:'runfeng',dispatchNo:'A123'},namesake),e=>e.status===403);
+      await assert.rejects(()=>submitPaperDingTalkOrder(order.id,namesake),e=>e.status===403);
       await assert.rejects(()=>resolvePaperOrder(order.id,{mode:'dingtalk'},advisor),/已处理/);
       const supplemental=await createSignatureTokenForOrder(order.id,advisor.name);
       assert.equal(supplemental.signaturePurpose,'supplement');assert.equal(supplemental.status,'草稿');
@@ -94,6 +98,7 @@ test('paper order creation, suppressed notification access, import and signature
       const technician={...actor,id:'paper-technician',name:'开单维修工',role:'technician'};
       await pool.query("insert into users(id,name,role,roles,shop_id) values($1,$2,'technician',array['technician'],$3)",[technician.id,technician.name,technician.shopId]);
       const own=await makePaper(technician);
+      await assert.rejects(()=>resolvePaperOrder(own.id,{mode:'dingtalk'},{...technician,id:'another-technician'}),e=>e.status===403);
       const draft=await resolvePaperOrder(own.id,{mode:'dingtalk'},technician);
       assert.equal(draft.status,'草稿');assert.equal(draft.advisor,technician.name);
     });
@@ -120,7 +125,7 @@ test('paper order creation, suppressed notification access, import and signature
       draft=await updateWorkOrder({...draft,faultDescription:'保留到关联成功的草稿内容',repairItems:[{id:1,name:'草稿项目'}]},advisor.name,'保存草稿',advisor);
       const source=structuredClone(snapshot);source.header={...source.header,reid:102,dh:202,pgd:'A125'};
       const importOrder=user=>resolvePaperOrder(draft.id,{mode:'runfeng',dispatchNo:'A125'},user,{readSource:async()=>source});
-      await assert.rejects(()=>importOrder({...advisor,name:'其他顾问'}),/自己负责/);
+      await assert.rejects(()=>importOrder({...advisor,id:'paper-advisor-namesake'}),/自己负责/);
       await assert.rejects(()=>importOrder(other),/无权/);
       await assert.rejects(()=>resolvePaperOrder(draft.id,{mode:'runfeng',dispatchNo:'A125'},advisor,
         {readSource:async()=>{throw new Error('Runfeng unavailable');}}),/unavailable/);
@@ -128,7 +133,8 @@ test('paper order creation, suppressed notification access, import and signature
       assert.equal(unchanged.paperOrder.mode,'dingtalk');assert.equal(unchanged.status,'草稿');
       assert.equal(unchanged.faultDescription,draft.faultDescription);
       assert.equal(unchanged.repairItems[0].name,'草稿项目');
-      const imported=await importOrder(advisor);
+      const imported=await importOrder({...advisor,name:'更名后的顾问'});
+      assert.equal(imported.advisorUserId,advisor.id);
       assert.equal(imported.paperOrder.mode,'runfeng');assert.equal(imported.dispatchNo,'A125');
       assert.equal(imported.status,'已委托');assert.equal(imported.legacySyncStatus,'synced');
       assert.deepEqual(imported.paperOrder.photoIds,draft.paperOrder.photoIds);

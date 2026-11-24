@@ -80,7 +80,7 @@ test('employees and unbound technicians can prepare their own PDFs while foreign
     const mock = t.mock.method(pool, 'query', async (sql, params) => {
       queries.push(sql);
       if (sql.includes('from users join auth_sessions')) return { rows: [user] };
-      if (sql.includes('select advisor, shop_id from work_orders')) return { rows: [{ advisor: params[0] === 'other-owner' ? '其他员工' : user.name, shop_id: params[0] === 'other-shop' ? 'other' : user.shop_id }] };
+      if (sql.includes('select advisor, advisor_user_id, shop_id from work_orders')) return { rows: [{ advisor: params[0] === 'other-owner' ? '其他员工' : user.name, shop_id: params[0] === 'other-shop' ? 'other' : user.shop_id }] };
       throw new Error(`Unexpected query: ${sql}`);
     });
     try {
@@ -107,7 +107,7 @@ test('employees and unbound technicians can prepare their own PDFs while foreign
       await assert.rejects(() => handleApiRequest(anonymous, {}, new URL('/api/work-orders/own-order', 'http://localhost')), error => error.status === 401);
       await assert.rejects(() => request('other-owner'), error => error.status === 403);
       await assert.rejects(() => request('other-shop'), error => error.status === 403);
-      assert.ok(queries.some(sql => sql.includes('select advisor, shop_id')));
+      assert.ok(queries.some(sql => sql.includes('select advisor, advisor_user_id, shop_id')));
     } finally { mock.mock.restore(); }
   }
 });

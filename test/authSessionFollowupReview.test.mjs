@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import vm from 'node:vm';
 import ts from 'typescript';
 import * as rolePolicy from '../shared/roles.mjs';
+import * as orderOwnership from '../shared/orderOwnership.mjs';
 import * as repairCompletion from '../shared/repairCompletion.mjs';
 import * as pendingRepairLimits from '../shared/pendingRepairLimits.mjs';
 
@@ -111,9 +112,9 @@ function hooks() {
   function render(){cursor=0;dirty=false;value=renderHook();const effects=pending;pending=[];effects.forEach(effect=>effect());}
   return {react,start(fn){renderHook=fn;render();},async flush(){for(let i=0;i<12;i++){await Promise.resolve();if(dirty)render();}},get value(){if(dirty)render();return value;}};
 }
-function workbench() {
+function workbench(search='',initialUser={id:'user-a',name:'顾问甲',role:'advisor',shopId:'shop-hq'}) {
   const h=hooks(),b=browser(),resets={ocr:0,identity:0,prePhotos:0,paperPhotos:0},loginCalls=[];
-  const globals={window:b.window,location:{href:'http://localhost/',search:''},navigator:{userAgent:'Chrome'}};
+  const globals={window:b.window,location:{href:`http://localhost/${search}`,search},navigator:{userAgent:'Chrome'}};
   const http=load('client/src/shared/api/httpClient.ts',{}, {...globals,fetch:()=>{throw new Error('Unexpected fetch');}});
   const domain=load('client/src/features/work-orders/domain/workOrderDomain.ts',{
     '../../../../../shared/legacyInputValidation.mjs':legacyInputValidation,
@@ -122,7 +123,7 @@ function workbench() {
     '../../../../../shared/repairCompletion.mjs':repairCompletion,'../../../../../shared/pendingRepairLimits.mjs':pendingRepairLimits
   });
   const draft=load('client/src/features/work-orders/hooks/useWorkOrderDraft.ts',{react:h.react,'../domain/workOrderDomain':domain});
-  let restoredUser={id:'user-a',name:'顾问甲',role:'advisor',shopId:'shop-hq'};
+  let restoredUser=initialUser;
   const api={me:async()=>restoredUser,dashboard:async()=>({total:0,statusCounts:{}}),users:async()=>[],departments:async()=>[],
     async loginForDevelopment(persona){const wait=deferred();loginCalls.push({persona,...wait});const user=await wait.promise;http.setAuthToken(`token-${user.id}`);return {user};}};
   const dependencies={
@@ -132,6 +133,7 @@ function workbench() {
     '../../../../shared/workOrderEditPolicy.mjs':{isUnsignedOrderEditable:()=>true},
     './useArchiveFilters':{useArchiveFilters:()=>{const [items,setItems]=h.react.useState([]);return {items,setItems,filteredOrders:items,filters:{search:''},refresh:async()=>{},setFilters(){}};}},
     '../../../../shared/roles.mjs':rolePolicy,
+    '../../../../shared/orderOwnership.mjs':orderOwnership,
     '../work-orders/hooks/usePaperOrderPhotos':{usePaperOrderPhotos:()=>({reset(){resets.paperPhotos++;},isUploading:()=>false})},
     '../work-orders/domain/vehicleLicenseException':{},'../../shared/api/requestId':{createRequestId:()=> 'request-id'},
     '../pre-repair-photos/usePreRepairPhotos':{usePreRepairPhotos:()=>({reset(){resets.prePhotos++;},isUploading:()=>false})},
@@ -141,7 +143,7 @@ function workbench() {
     '../work-orders/hooks/createWorkOrderWorkflowActions':{createWorkOrderWorkflowActions:()=>({})},
     '../vehicle-license-ocr/useVehicleLicenseOcr':{useVehicleLicenseOcr:()=>({isUploading:()=>false,ocrState:{vehicleLicense:{status:'未识别'}},resetOcr(){resets.ocr++;}})},
     '../vehicle-identity/useVehicleIdentityRecognition':{useVehicleIdentityRecognition:()=>({lookupDraftVehicle(){},resetVehicleIdentityRecognition(){resets.identity++;}})},
-    './workbenchConfig':{navItems:[{label:'委托开单',roles:['advisor','manager']}],primaryNavByRole:{advisor:'委托开单',manager:'委托开单'}},
+    './workbenchConfig':{navItems:[{label:'委托开单',roles:['advisor','manager']},{label:'配件申请',roles:['warehouse']},{label:'派工台',roles:['advisor','manager']}],primaryNavByRole:{advisor:'委托开单',manager:'委托开单'}},
     '../dispatch/dispatchAvailability':{dispatchEnabled:false,isDispatchNavigation:()=>false}
   };
   // The baseline has no subscription API; all other dependencies still execute its real controller.
@@ -149,6 +151,22 @@ function workbench() {
   h.start(useWorkbenchController);
   return {...b,h,http,resets,loginCalls,domain,api,setRestoredUser:user=>{restoredUser=user;}};
 }
+
+test('workbench draft editing and deletion use advisor ID before its name snapshot',async()=>{
+ for(const [account,allowed] of [
+  [{id:'different',name:'顾问甲',role:'advisor',shopId:'shop-hq'},false],
+  [{id:'owner',name:'更名顾问',role:'advisor',shopId:'shop-hq'},true],
+ ]) {
+  const h=workbench('',account);await h.h.flush();
+  const order={...h.domain.createEmptyDraft('顾问甲'),id:'owned-order',status:'草稿',advisorUserId:'owner'};
+  let deletes=0;h.api.deleteDraft=async()=>{deletes++;};
+  h.h.value.selectOrder(order);await h.h.flush();
+  assert.equal(h.h.value.canEditForm,allowed);
+  const error=await h.h.value.deleteDraft(order);
+  assert.equal(deletes,allowed?1:0);
+  if(!allowed)assert.match(error,/自己创建/);
+ }
+});
 
 test('switching test identity clears selected customer, vehicle, photos and recognition state',async()=>{
   const h=workbench();await h.h.flush();
@@ -165,6 +183,17 @@ test('concurrent test login attempts cannot change identity out of response orde
   const h=workbench();await h.h.flush();const first=h.h.value.loginForDevelopment('manager');const second=h.h.value.loginForDevelopment('advisor');
   assert.equal(h.loginCalls.length,1);h.loginCalls[0].resolve({id:'user-b',name:'管理员乙',role:'manager'});await Promise.all([first,second]);await h.h.flush();
   assert.equal(h.h.value.currentUser.id,'user-b');
+});
+
+test('parts todo links open the warehouse page for secondary warehouse members including shared requests',async()=>{
+ for(const query of ['partsOwnerId=worker','partsOwnerId=']){
+  const h=workbench(`?dispatchOrder=o&${query}`,{id:'mixed',name:'双岗',role:'manager',roles:['manager','warehouse'],shopId:'shop-hq'});
+  await h.h.flush();
+  assert.equal(h.h.value.activeNav,'配件申请');
+ }
+ const manager=workbench('?dispatchOrder=o&partsOwnerId=worker',{id:'manager',name:'经理',role:'manager',shopId:'shop-hq'});
+ await manager.h.flush();
+ assert.equal(manager.h.value.activeNav,'派工台');
 });
 
 test('cross-tab storage restores the matching identity and clears its predecessor draft',async()=>{

@@ -41,7 +41,8 @@ export function workOrderValues(order) {
     parseDate(order.updatedAt),
     order.paperOrder ? JSON.stringify(order.paperOrder) : null,
     order.vehicle?.isMilitary === true,
-    order.isBaiyuanOrder === true
+    order.isBaiyuanOrder === true,
+    order.advisorUserId ?? null
   ];
 }
 
@@ -69,6 +70,7 @@ export function rowToWorkOrder(row, repairItems, signatures, auditLog, ocrRecord
       name: row.department_name || ""
     },
     advisor: row.advisor,
+    advisorUserId: row.advisor_user_id ?? undefined,
     technician: row.technician,
     inspector: row.inspector,
     vehicle: {

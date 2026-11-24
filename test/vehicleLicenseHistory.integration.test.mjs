@@ -20,6 +20,10 @@ test('vehicle license reuse preserves old orders, selects one current image and 
   const firstFile=await photo(a);
   const first=await db.createWorkOrder({...draft,inspection:{vehicleLicenseFileId:firstFile}},a.name,a);
   assert.equal((await history.vehicleLicenseHistory(b,{vin})).fileId,firstFile);
+  // Model a previous visit independently of the database host's wall clock.
+  const oldSelection = '2020-01-01T10:00:00.000Z';
+  const seeded = await pool.query('update files set license_selected_at=$2 where id=$1 and license_selected_at is not null',[firstFile,oldSelection]);
+  assert.equal(seeded.rowCount,1);
   assert.equal((await history.vehicleLicenseHistory(b,{plate:'鲁 B862P7'})).vin,vin);
   assert.equal(await history.vehicleLicenseHistory({...b,shopId:'other'},{vin}),null);
   await assert.rejects(()=>history.authorizeLicensePreview({...b,shopId:'other'},{vin,fileId:firstFile}),e=>e.status===404);
@@ -35,6 +39,8 @@ test('vehicle license reuse preserves old orders, selects one current image and 
   assert.equal(second.inspection.vehicleLicenseFileId,newer);assert.ok(second.inspection.replacedPhotoIds.includes(reused.fileId));
   assert.equal((await history.vehicleLicenseHistory(a,{vin})).fileId,newer);
   await db.updateWorkOrder(first,a.name,'仅保存旧单',a);
+  const originalSelection = (await pool.query('select license_selected_at from files where id=$1',[firstFile])).rows[0].license_selected_at;
+  assert.equal(originalSelection.toISOString(),oldSelection);
   assert.equal((await history.vehicleLicenseHistory(a,{vin})).fileId,newer,'保存旧委托不改变默认照片');
   assert.equal((await db.findWorkOrderById(pool,first.id)).inspection.vehicleLicenseFileId,firstFile);
   const {saveWorkOrderPhoto}=await import('../server/services/workOrderPhotoService.mjs');

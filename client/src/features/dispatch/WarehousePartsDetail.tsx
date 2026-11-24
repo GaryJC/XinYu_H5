@@ -52,6 +52,8 @@ function WarehousePartsApplication({detail,controller}:{detail:DispatchDetail;co
 
 export function WarehousePartsDetail({detail,controller,onOpenOrder}:{detail:DispatchDetail;controller?:DispatchController;onOpenOrder?:()=>void}) {
   const {task}=detail, parts=task.partsRequirement;
+  const applications=warehouseRequests([controller?.detail?.task||task]);
+  applications.sort((a,b)=>Number(b.partsRequirement?.ownerId===parts?.ownerId)-Number(a.partsRequirement?.ownerId===parts?.ownerId));
   const events=partsHistoryEvents(detail.events).filter(e=>['accept','record-parts','edit-parts','confirm-parts','issue-parts'].includes(e.action)&&e.detail.partsRequirement);
   const issuedEvents=events.filter(event=>event.detail.partsRequirement?.ownerId===parts?.ownerId&&((event.action==='issue-parts'&&event.detail.partsRequirement?.issuedAt)||(event.action==='confirm-parts'&&event.detail.partsRequirement?.preparedAt&&!events.some(other=>other.action==='issue-parts'&&other.detail.partsRequirement?.issuedAt&&(other.detail.partsRequirement.batch??1)===(event.detail.partsRequirement?.batch??1)&&(other.detail.repairRound??0)===(event.detail.repairRound??0))))&&(event.detail.repairRound??0)===(task.repairRound??0)&&(event.detail.partsRequirement.batch??1)<(parts?.batch??1)).slice().reverse();
   return <div className="warehouse-detail">
@@ -63,7 +65,7 @@ export function WarehousePartsDetail({detail,controller,onOpenOrder}:{detail:Dis
     </section>
     <WarehouseRepairItems task={task} disabled={controller?.busy} onRefresh={controller?()=>Promise.all([controller.refresh(),controller.refreshDetail()]):undefined}/>
     <section className="warehouse-parts-applications" aria-label="所需配件"><h3>所需配件</h3>
-      {warehouseRequests([controller?.detail?.task||task]).map(application=>{
+      {applications.map(application=>{
         const scoped=controller?partsController(controller,application.partsRequirement?.ownerId):undefined;
         return <WarehousePartsApplication key={application.partsRequirement?.ownerId||'legacy'} detail={{...detail,task:application}} controller={scoped}/>;
       })}

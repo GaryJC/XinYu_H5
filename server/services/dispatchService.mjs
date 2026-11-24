@@ -105,9 +105,23 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
       const updated=reconcileInspectionDeferred(pending.items,task,next,input,currentActor,new Date().toISOString());
       if(JSON.stringify(updated)!==JSON.stringify(pending.items))await writePendingRepairs(client,id,updated);
     }
-    if(input.repairItems) {
+    const remainingIds=input.repairItems ? new Set(next.items.map(item=>item.id)) : undefined;
+    const removedProjects=remainingIds ? task.items.filter(item=>!remainingIds.has(item.id)) : [];
+    let removedConfirmations=[];
+    if(removedProjects.length) {
       const pending=await readPendingRepairs(client,id);
-      if(pending.items.some(p=>p.scheduled&&task.items.some(i=>i.id===p.itemId)&&!next.items.some(i=>i.id===p.itemId)))throw new HttpError(409,'已安排的客户确认项目不能直接删除，请保留项目及确认记录');
+      const removedById=new Map(removedProjects.map(item=>[item.id,item]));
+      removedConfirmations=pending.items.filter(entry=>entry.scheduled&&removedById.has(entry.itemId));
+      for(const entry of removedConfirmations) {
+        if(entry.source==='inspection') throw new HttpError(409,'请通过检验待定项目的撤销入口处理');
+        const item=removedById.get(entry.itemId);
+        if(!['待开工','待领料'].includes(item.status)||item.startAt||item.startedBy||item.finishAt||item.finishedBy||item.inspectedAt||item.inspectedBy)
+          throw new HttpError(409,'仅待开工的客户确认项目可直接删除');
+      }
+      if(removedConfirmations.length) {
+        const retained=pending.items.filter(entry=>!removedConfirmations.includes(entry));
+        await writePendingRepairs(client,id,retained);
+      }
     }
 
     if(pendingRepair) {
@@ -131,6 +145,7 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
     if(input.action==='assign') await markDispatchPlan(client,id);
     const detail={photoWaiver:photoWaiverActions.includes(input.action)?next.repairPhotoWaivers?.find(entry=>input.action==='request-photo-waiver'?entry.applicantId===actor.id:entry.id===input.waiverId):undefined,deferredItemIds:input.deferredItemIds,deferredReason:input.deferredReason,preparationGroups,partsPreparation:input.partsPreparation,partsIssue:input.partsIssue,reassignItemIds:input.reassignItemIds,previousItems:input.repairItems||['send-review','reassign','inspect'].includes(input.action)?task.items:undefined,partsRequirement:parts,roundKind:next.roundKind,repairRound:next.repairRound,items:next.items,reworkItemIds:input.reworkItemIds,additionalItems:input.additionalItems,workHours:next.workHours,previousWorkHours:task.workHours,executionMode:next.executionMode,contractor:next.contractor,outsourcingMode:next.outsourcingMode,stage:next.stage,note:input.note,reason:input.reason,pauseReason:input.pauseReason,itemId:input.itemId,rejectedItemIds:input.rejectedItemIds,
       technicianName:next.technicianName,previousTechnicianName:task.technicianName,inspectorName:next.inspectorName,dueAt:next.dueAt,urgent:next.urgent,previousDueAt:task.dueAt};
+    if(removedConfirmations.length) detail.removedConfirmations=removedConfirmations;
     const {rows:[event]}=await client.query(`insert into dispatch_events(order_id,actor_id,actor_name,request_id,request_body,action,detail) values($1,$2,$3,$4,$5,$6,$7) returning id`,[id,actor.id,actor.name,input.requestId,JSON.stringify(input),input.action,JSON.stringify(detail)]);
     if(input.deferredItemIds?.length)await enqueueDeferredNotifications(client,task,next,event.id,currentActor,'deferred',input.deferredItemIds,input.deferredReason,people,input.requestId);
     if(['inspect','complete-outsourced'].includes(input.action)&&next.stage==='维修完成')await enqueueRepairWriteback(client,next,event.id);
@@ -163,7 +178,6 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
     const add=(recipient,kind)=>{ if(recipient) recipients.push({recipient,kind}); };
     const handlers=t=>t.executionMode==='outsourced' ? people.filter(p=>p.active && p.id===t.assignedBy).map(p=>p.id) : technicianIds(t);
     const addHandlers=(t,kind)=>handlers(t).forEach(id=>add(id,kind));
-    const removedProjects=input.repairItems?task.items.filter(item=>!next.items.some(current=>current.id===item.id)):[];
     const removedFor=recipient=>removedProjects.filter(item=>item.responsibleId?item.responsibleId===recipient:technicianIds(task).includes(recipient));
     const removedRecipients=new Set(removedProjects.flatMap(item=>item.responsibleId?[item.responsibleId]:technicianIds(task)));
     removedRecipients.forEach(recipient=>add(recipient,'维修项目已删除'));
@@ -211,7 +225,8 @@ export async function executeDispatchActionInTransaction(client,actor,id,raw,pen
       const owners=new Set(next.items.filter(item=>input.rejectedItemIds.includes(item.id)).map(item=>item.responsibleId).filter(Boolean));
       owners.forEach(owner=>add(owner,'退回返工'));
     }
-    if(['submit-order','submit-review'].includes(input.action)&&hasPendingInspection(next)&&next.inspectorId)add(next.inspectorId,'待检验');
+    if(['submit-order','submit-review'].includes(input.action)&&hasPendingInspection(next)
+      && canReceiveInspectionNotification(next,people.find(person=>person.id===next.inspectorId))) add(next.inspectorId,'待检验');
     if(input.action==='remind') {
       const targets=hasPendingInspection(task)?[task.inspectorId]:hasDeclinedWork(task)?[task.assignedBy]:handlers(task);
       if(!targets.length) throw new HttpError(409,'没有可催办的处理人');

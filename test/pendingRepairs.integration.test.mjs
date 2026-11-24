@@ -244,5 +244,35 @@ test('pending repairs persist, enforce ownership, schedule once, and preserve cl
   }
 
 
+  {
+   const {getDispatchTask}=await import('../server/repositories/dispatchRepository.mjs');
+   const {executeDispatchAction}=await import('../server/services/dispatchService.mjs');
+   for(const started of [false,true]) {
+    const orderId='p-remove-confirmed-'+started;
+    await pool.query("insert into work_orders(id,status,advisor,technician,inspector,shop_id,old_parts_handling) values($1,'维修中','顾问','维修工','检验员','shop-hq','客户带走')",[orderId]);
+    const passed={id:1,name:'已通过项目',status:'已完工',responsibleId:tech.id,inspectedBy:manager.id};
+    await saveDispatchTask(pool,{orderId,shopId:tech.shopId,stage:'维修中',version:1,technicianIds:[tech.id],technicianId:tech.id,items:[passed],acceptedAt:new Date().toISOString()});
+    const registered=await s.pendingRepairCommand(manager,orderId,{action:'add',name:'追加工序',reason:'等待客户确认',requestId:randomUUID(),expectedVersion:0});
+    const confirmed=await s.pendingRepairCommand(manager,orderId,{action:'approve-and-schedule',id:registered.items[0].id,technicianId:tech.id,requestId:randomUUID(),expectedVersion:registered.version});
+    let current=await getDispatchTask(pool,orderId,manager);
+    if(started) current=(await executeDispatchAction(tech,orderId,{action:'start-order',expectedVersion:current.version,requestId:randomUUID()})).task;
+    const edit={action:'edit-repair-items',repairItems:[{id:passed.id,name:passed.name,responsibleId:tech.id}],expectedVersion:current.version,requestId:randomUUID()};
+    if(started) {
+     await assert.rejects(()=>executeDispatchAction(manager,orderId,edit),/仅待开工/);
+     assert.equal((await s.pendingRepairList(manager,orderId)).version,confirmed.version);
+     assert.equal((await getDispatchTask(pool,orderId,manager)).items.length,2);
+     continue;
+    }
+    const saved=(await executeDispatchAction(manager,orderId,edit)).task;
+    assert.deepEqual(saved.items,current.items.filter(item=>item.id===passed.id));
+    assert.equal(saved.stage,'维修完成');
+    await executeDispatchAction(manager,orderId,edit);
+    assert.deepEqual(await s.pendingRepairList(manager,orderId),{items:[],version:confirmed.version+1});
+    const {rows:[event]}=await pool.query('select detail from dispatch_events where order_id=$1 and request_id=$2',[orderId,edit.requestId]);
+    assert.deepEqual(event.detail.removedConfirmations,confirmed.items);
+    const {rows:[job]}=await pool.query('select snapshot from repair_writebacks where order_id=$1',[orderId]);
+    assert.deepEqual(job.snapshot.items.map(item=>item.id),[passed.id]);
+   }
+  }
  }finally{if(pool)await pool.end();await Promise.all(connectionsClosed);await admin.query(`drop database if exists "${name}" with (force)`);await admin.end();}
 });

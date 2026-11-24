@@ -5,6 +5,7 @@ import {useVehicleLicenseHistory} from '../vehicle-license-history/useVehicleLic
 import {isUnsignedOrderEditable} from '../../../../shared/workOrderEditPolicy.mjs';
 import { useArchiveFilters } from "./useArchiveFilters";
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
+import { isOrderAdvisor } from "../../../../shared/orderOwnership.mjs";
 import { usePaperOrderPhotos } from "../work-orders/hooks/usePaperOrderPhotos";
 import {isCurrentVehicleLicenseException} from '../work-orders/domain/vehicleLicenseException';
 import {createRequestId} from '../../shared/api/requestId';
@@ -79,7 +80,7 @@ export function useWorkbenchController() {
     lookupVehicleLicense,
     lookupVehicleLicenseForDevelopment,
     selectVehicleReference
-  } = useVehicleIdentityRecognition({ setDraft });
+  } = useVehicleIdentityRecognition({ draft, setDraft });
   const { ocrState, vehicleLicenseOcr, vehicleLicenseFileId, isUploading: isVehicleLicenseUploading, resetOcr, scanVehicleLicense, confirmVehicleLicenseOcr } =
     useVehicleLicenseOcr({ actor, draft, setDraft, onRecognized: lookupVehicleLicense });
   const visibleNavItems = useMemo(() => {
@@ -92,7 +93,7 @@ export function useWorkbenchController() {
   const canEditForm = canCreateOrder(role) && (
     !selectedOrder || (
       isUnsignedOrderEditable(selectedOrder) && selectedOrder.shop.id === currentUser?.shopId
-      && (role === "manager" || selectedOrder.advisor === currentUser?.name)
+      && (role === "manager" || isOrderAdvisor(selectedOrder.advisorUserId, selectedOrder.advisor, currentUser))
     )
   );
   const licenseHistory=useVehicleLicenseHistory({plate:draft.vehicle.plate,vin:draft.vehicle.vin,fileId:vehicleLicenseFileId||draft.inspection.vehicleLicenseFileId,orderId:selectedId||undefined,userId:currentUser?.id,
@@ -127,7 +128,7 @@ export function useWorkbenchController() {
   function openTodo(stage:string) {
     homeScroll.current=window.scrollY;
     const nav=stage==='待客户签字'||!dispatchEnabled?'工单全览':stage==='待检验'&&hasAnyRole(currentUser,['manager','inspector'])?'检验任务':'派工台';
-    const url=new URL(location.href);for(const key of ['dispatchOrder','dispatchSection','workOrder','paperOrder'])url.searchParams.delete(key);history.replaceState(null,'',url);
+    const url=new URL(location.href);for(const key of ['dispatchOrder','dispatchSection','partsOwnerId','workOrder','paperOrder'])url.searchParams.delete(key);history.replaceState(null,'',url);
     setLinkedOrderDetail(undefined);
     if(nav==='工单全览')archive.setFilters({...defaultArchiveFilters(),statuses:[stage]});
     setTodoEntry({stage,nav,key:Date.now()});setActiveNav(nav);window.scrollTo(0,0);
@@ -301,7 +302,8 @@ export function useWorkbenchController() {
     const params=new URLSearchParams(location.search);
     const paperLink=params.has('paperOrder'),orderLink=params.has('workOrder'),dispatchLink=params.has('dispatchOrder');
     const procurementLink=params.has('procurementTender')||params.has('procurementReport');
-    const landing=params.has('vehicleTrip')?'出车申请':nextRole==='employee'||(hasRole(user,'technician')&&!user.legacyEmployeeCode)?'出车申请':procurementLink&&['manager','warehouse'].includes(nextRole)?'配件竞价':(paperLink||orderLink)&&['advisor','manager'].includes(nextRole)?'工作台':nextRole==='warehouse'?'配件申请':nextRole==='technician'?'我的维修':nextRole==='inspector'?'检验任务':dispatchLink&&['advisor','manager'].includes(nextRole)?'派工台':user.homeRoute==='order-create'?'委托开单':'工作台';
+    const partsLink=dispatchLink&&params.has('partsOwnerId')&&hasRole(user,'warehouse');
+    const landing=params.has('vehicleTrip')?'出车申请':partsLink?'配件申请':nextRole==='employee'||(hasRole(user,'technician')&&!user.legacyEmployeeCode)?'出车申请':procurementLink&&hasAnyRole(user,['manager','warehouse'])?'配件竞价':(paperLink||orderLink)&&['advisor','manager'].includes(nextRole)?'工作台':nextRole==='warehouse'?'配件申请':nextRole==='technician'?'我的维修':nextRole==='inspector'?'检验任务':dispatchLink&&['advisor','manager'].includes(nextRole)?'派工台':user.homeRoute==='order-create'?'委托开单':'工作台';
     if (!preserveEditor) setActiveNav(!dispatchEnabled && isDispatchNavigation(landing) ? "工作台" : landing);
     setDraft((current) => ({ ...current, advisor: user.name }));
     return true;
@@ -363,7 +365,7 @@ export function useWorkbenchController() {
     resetOcr(order.ocrRecords.filter(record => !order.inspection.replacedPhotoIds?.includes(record.fileId)), order.inspection.vehicleLicenseFileId || order.files?.find(file => file.kind === "vehicle_license" && !order.inspection.replacedPhotoIds?.includes(file.id))?.id);
     resetVehicleIdentityRecognition();
     if (isUnsignedOrderEditable(order) && canCreateOrder(role) && order.shop.id === currentUser?.shopId
-      && (role === "manager" || order.advisor === currentUser?.name) && order.paperOrder?.mode !== "pending") {
+      && (role === "manager" || isOrderAdvisor(order.advisorUserId, order.advisor, currentUser)) && order.paperOrder?.mode !== "pending") {
       void lookupDraftVehicle(order.vehicle, order.customer.legacyCode, order.vehicle.modelLegacyCode);
     }
   }
@@ -443,7 +445,7 @@ export function useWorkbenchController() {
 
   async function deleteDraft(order: WorkOrder) {
     if (order.status !== "草稿") return "只能删除草稿";
-    if (role !== "manager" && order.advisor !== currentUser?.name) return "只能删除自己创建的草稿";
+    if (role !== "manager" && !isOrderAdvisor(order.advisorUserId, order.advisor, currentUser)) return "只能删除自己创建的草稿";
     setActionLoading("delete");
     try {
       await workOrderApi.deleteDraft(order.id);
@@ -554,7 +556,7 @@ export function useWorkbenchController() {
 
   function openDispatch(orderId: string, section?: 'repairs') {
     if (!dispatchEnabled) return;
-    const url=new URL(location.href);url.searchParams.delete('workOrder');url.searchParams.delete('paperOrder');url.searchParams.set('dispatchOrder',orderId);
+    const url=new URL(location.href);url.searchParams.delete('workOrder');url.searchParams.delete('paperOrder');url.searchParams.delete('partsOwnerId');url.searchParams.set('dispatchOrder',orderId);
     if(section) url.searchParams.set('dispatchSection',section); else url.searchParams.delete('dispatchSection');
     history.replaceState(null,'',url);setActiveNav('派工台');
   }

@@ -67,7 +67,7 @@ export function filterDispatchTasks(tasks, actor, query={}, projections=new Map(
     if(query.overdue==='true' && !t.overdue) return false;
     if(query.search && ![t.orderId,t.dispatchNo,t.plate].some(v=>v.toLowerCase().includes(query.search.toLowerCase()))) return false;
     if(workloadOrders)return true;
-    if(!personal&&hasRole(actor, 'warehouse')&&!hasAnyRole(actor,['manager','advisor','inspector'])) return true;
+    if(!personal&&hasRole(actor, 'warehouse')&&(query.partsStatus||!hasAnyRole(actor,['manager','advisor','inspector']))) return true;
     if(query.includeCompleted!=='true' && isRepairCompleted(t.stage,t.orderStatus) && !['已完成','完成','维修完成','待结算','待客户确认','待定'].includes(query.stage) && query.metric!=='completed') return false;
     if(query.metric) return dispatchMetric(t,query.metric,range.from,range.to);
     // The unified completed view includes all dates unless a date range is chosen.

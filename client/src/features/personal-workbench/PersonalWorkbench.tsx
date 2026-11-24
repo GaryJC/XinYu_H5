@@ -7,8 +7,9 @@ import './personalWorkbench.css';
 export type PersonalWorkbenchController=ReturnType<typeof usePersonalWorkbench>;
 export function openPersonalTarget(target:PersonalBusinessTarget) {
  const url=new URL(location.href);
- for(const key of ['dispatchOrder','dispatchSection','workOrder','paperOrder','vehicleTrip','procurementTender','procurementReport'])url.searchParams.delete(key);
+ for(const key of ['dispatchOrder','dispatchSection','partsOwnerId','workOrder','paperOrder','vehicleTrip','procurementTender','procurementReport'])url.searchParams.delete(key);
  url.searchParams.set(target.targetKey,target.targetId);
+ if(target.targetKey==='dispatchOrder'&&target.partsOwnerId!==undefined)url.searchParams.set('partsOwnerId',target.partsOwnerId);
  location.assign(url.href);
 }
 export function PersonalMessageBell({controller:c,onOpen}:{controller:PersonalWorkbenchController;onOpen:()=>void}) {

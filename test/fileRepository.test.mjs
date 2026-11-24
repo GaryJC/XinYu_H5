@@ -87,7 +87,7 @@ test("assigned mechanics can preview reception photos without access to other sh
 
 test('warehouse reads only signed same-shop parts photos and cannot modify files',async()=>{
  const user={id:'w',role:'warehouse',active:true,shopId:'shop-hq'};
- const file={kind:'repair_parts_photo',status:'维修中',shop_id:'shop-hq'};
+ const file={kind:'repair_parts_photo',order_id:'o',status:'维修中',shop_id:'shop-hq'};
  const database={query:async()=>({rows:[file]})};
  await assertFileReadAccess('parts',user,database);
  for(const kind of ['vehicle_license','signature_image','repair_progress_photo','other']) {
@@ -98,8 +98,18 @@ test('warehouse reads only signed same-shop parts photos and cannot modify files
  file.shop_id='shop-hq';await assert.rejects(()=>assertFileAccess('parts',user,database),e=>e.status===403);
 });
 
+test('warehouse photo sharing starts when a photo belongs to a signed work order',async()=>{
+ const warehouse={id:'warehouse',role:'warehouse',active:true,shopId:'shop'};
+ for(const kind of ['repair_parts_photo','vehicle_nameplate_photo']) {
+  for(const [order_id,status] of [[null,null],['paper','待处理纸质委托书']]) {
+   const db={query:async()=>({rows:[{kind,order_id,status,shop_id:'shop',uploaded_by:'tech'}]})};
+   await assert.rejects(()=>assertFileReadAccess('photo',warehouse,db),error=>error.status===403);
+  }
+ }
+});
+
 test('nameplate images are shared with assigned coworkers and same-shop warehouse only',async()=>{
- const file={kind:'vehicle_nameplate_photo',status:'维修中',shop_id:'s',technician_ids:['a','b'],uploaded_by:'a'};
+ const file={kind:'vehicle_nameplate_photo',order_id:'o',status:'维修中',shop_id:'s',technician_ids:['a','b'],uploaded_by:'a'};
  const database={query:async()=>({rows:[file]})};
  for(const user of [{id:'b',role:'technician'},{id:'w',role:'warehouse'}]) {
   await assertFileReadAccess('nameplate',{...user,active:true,shopId:'s'},database);

@@ -1,3 +1,4 @@
+import { isOrderAdvisor } from "../../shared/orderOwnership.mjs";
 import {getDispatchTask} from './dispatchRepository.mjs';
 import {canInspect} from '../domain/dispatchPolicy.mjs';
 import {hasPendingInspection} from '../../shared/repairProgress.mjs';
@@ -77,16 +78,16 @@ export async function attachFileToOrder(fileId, orderId, runTransaction = transa
 
 export async function assertFileReadAccess(fileId, user, database = pool) {
   const file = await findFileAccess(fileId, database);
+  if (String(file.kind).startsWith("trip_")) throw new HttpError(403, "出车附件只能通过出车申请访问");
   if (user.active && user.id && hasAnyRole(user, ["advisor", "manager"]) && file.paper_order && file.shop_id !== user.shopId) {
     const notification = await database.query("select 1 from dispatch_notifications where order_id=$1 and recipient_id=$2 and kind='纸质委托书已创建' limit 1", [file.order_id, user.id]);
     if (notification.rows.length) return;
   }
-  if (String(file.kind).startsWith("trip_")) throw new HttpError(403, "出车附件只能通过出车申请访问");
   if (!user.shopId || file.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店文件");
   if (hasRole(user, 'manager')) return;
-  if (user.id && file.uploaded_by === user.id || user.name && file.advisor === user.name) return;
+  if (user.id && file.uploaded_by === user.id || isOrderAdvisor(file.advisor_user_id, file.advisor, user)) return;
   if (hasRole(user, 'advisor') && file.advisor) return;
-  if (user.active && hasRole(user, 'warehouse') && ["repair_parts_photo","vehicle_nameplate_photo"].includes(file.kind) && !["草稿","待客户签字"].includes(file.status)) return;
+  if (user.active && hasRole(user, 'warehouse') && file.order_id && file.status && ["repair_parts_photo","vehicle_nameplate_photo"].includes(file.kind) && !["草稿","待客户签字","待处理纸质委托书"].includes(file.status)) return;
   if(user.active&&hasRole(user,'warehouse')&&file.order_id&&['vehicle_license','repair_order_photo','damage_photo','other','repair_progress_photo','repair_completed_photo'].includes(file.kind)) {
     await getDispatchTask(database,file.order_id,user);
     return;
@@ -104,14 +105,14 @@ export async function assertFileAccess(fileId, user, database = pool) {
   if (String(file.kind).startsWith("trip_")) throw new HttpError(403, "出车附件只能通过出车申请访问");
   if (!user.shopId || file.shop_id !== user.shopId) throw new HttpError(403, "无权访问其他门店文件");
   if (hasRole(user, 'manager')) return;
-  if ((user.id && file.uploaded_by === user.id || user.name && file.advisor === user.name)) return;
+  if ((user.id && file.uploaded_by === user.id || isOrderAdvisor(file.advisor_user_id, file.advisor, user))) return;
   throw new HttpError(403, "无权访问该文件");
 }
 
 async function findFileAccess(fileId, database) {
   const { rows } = await database.query(
     `
-      select f.uploaded_by, f.order_id, f.kind, wo.advisor, wo.status, wo.paper_order, coalesce(wo.shop_id,u.shop_id) as shop_id, dt.technician_id, dt.data->'technicianIds' as technician_ids, dt.inspector_id, dt.stage, dt.data->'participantIds' as participant_ids, dt.data->'items' as items, dt.data->>'executionMode' as execution_mode, dt.data->'needsReview' as needs_review
+      select f.uploaded_by, f.order_id, f.kind, wo.advisor, wo.advisor_user_id, wo.status, wo.paper_order, coalesce(wo.shop_id,u.shop_id) as shop_id, dt.technician_id, dt.data->'technicianIds' as technician_ids, dt.inspector_id, dt.stage, dt.data->'participantIds' as participant_ids, dt.data->'items' as items, dt.data->>'executionMode' as execution_mode, dt.data->'needsReview' as needs_review
       from files f
       left join work_orders wo on wo.id = f.order_id
       left join users u on u.id=f.uploaded_by

@@ -1,3 +1,4 @@
+import { isOrderAdvisor } from "../../shared/orderOwnership.mjs";
 import {selectSingleVehicleLicense,assertLicenseReuseIdentity} from './vehicleLicenseHistoryRepository.mjs';
 import { hasRole, hasAnyRole } from "../../shared/roles.mjs";
 import { HttpError } from "../http/HttpError.mjs";
@@ -73,7 +74,7 @@ async function lockPhotoOrder(client, id, actor) {
   if (!order) throw new HttpError(404, "委托单不存在");
   if (!actor?.active || !actor.shopId || actor.shopId !== order.shop_id
       || !hasAnyRole(actor, ["manager", "advisor"])
-      || (!hasRole(actor, 'manager') && hasRole(actor, 'advisor') && actor.name !== order.advisor)) throw new HttpError(403, "无权更新该委托单照片");
+      || (!hasRole(actor, 'manager') && hasRole(actor, 'advisor') && !isOrderAdvisor(order.advisor_user_id, order.advisor, actor))) throw new HttpError(403, "无权更新该委托单照片");
   if (order.status === "草稿") throw new HttpError(409, "草稿请在开单页面上传照片并保存");
   return order;
 }

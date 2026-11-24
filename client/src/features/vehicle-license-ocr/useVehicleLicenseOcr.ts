@@ -90,6 +90,7 @@ export function useVehicleLicenseOcr({ actor, draft, setDraft, onRecognized }: O
         }
       }
       if (session !== generation.current) return;
+      const vehicleBeforeRecord = draftRef.current.vehicle;
       const record = await workOrderApi.createOcrRecord(
         undefined,
         "vehicleLicense",
@@ -100,6 +101,14 @@ export function useVehicleLicenseOcr({ actor, draft, setDraft, onRecognized }: O
       );
 
       if (session !== generation.current) return;
+      // Saving the OCR record can be slow. Keep identifier corrections made in
+      // the form during that request, including intentionally cleared values.
+      const liveVehicle = draftRef.current.vehicle;
+      const lookupResult = {
+        ...result,
+        plate: liveVehicle.plate !== vehicleBeforeRecord.plate ? liveVehicle.plate : result.plate,
+        vin: liveVehicle.vin !== vehicleBeforeRecord.vin ? liveVehicle.vin : result.vin
+      };
       setOcrRecordIds((current) => ({ ...current, vehicleLicense: record.id }));
       setVehicleLicenseOcr(result);
       setOcrState((current) => ({
@@ -114,8 +123,8 @@ export function useVehicleLicenseOcr({ actor, draft, setDraft, onRecognized }: O
         ...current,
         vehicle: {
           ...current.vehicle,
-          plate: result.plate || current.vehicle.plate,
-          vin: result.vin || current.vehicle.vin,
+          plate: lookupResult.plate || current.vehicle.plate,
+          vin: lookupResult.vin || current.vehicle.vin,
           model: result.model || current.vehicle.model,
           modelLegacyCode: result.model ? "" : current.vehicle.modelLegacyCode,
           purchaseDate: normalizeOcrDate(result.registerDate) || current.vehicle.purchaseDate
@@ -123,11 +132,11 @@ export function useVehicleLicenseOcr({ actor, draft, setDraft, onRecognized }: O
         customer: {
           ...current.customer,
           name: result.owner || current.customer.name,
-          legacyCode: "",
+          legacyCode: result.owner ? "" : current.customer.legacyCode,
           address: result.address || current.customer.address
         }
       }));
-      await onRecognized?.(result);
+      await onRecognized?.(lookupResult);
     } catch (error) {
       if (session !== generation.current) return;
       setOcrState((current) => ({

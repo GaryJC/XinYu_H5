@@ -33,10 +33,11 @@ export async function processSchedulerNotifications({database=pool,runTransactio
     const shopId=tasks[0].shop_id;
     const ids=notificationConfiguration(env)==='dingtalk'?await sync(shopId):undefined;
     await runTransaction(async client=>{
-      const {rows:orders}=await client.query('select id,advisor from work_orders where id=$1 for update',[job.order_id]);
+      const {rows:orders}=await client.query('select id,advisor,advisor_user_id from work_orders where id=$1 for update',[job.order_id]);
       const {rows:current}=await client.query('select lease_id from dispatch_scheduler_notifications where event_id=$1 for update',[job.event_id]);
       if(current[0]?.lease_id!==lease)return;
-      const {rows:owners}=await client.query("select id from users where active and shop_id=$1 and name=$2 and btrim(name)<>'' and (role in ('advisor','manager') or roles && array['advisor','manager']::text[])",[shopId,orders[0]?.advisor]);
+      const {rows:owners}=await client.query(`select id from users where active and shop_id=$1
+        and (id=$3 or ($3::text is null and name=$2 and btrim(name)<>'')) and (role in ('advisor','manager') or roles && array['advisor','manager']::text[])`,[shopId,orders[0]?.advisor,orders[0]?.advisor_user_id??null]);
       const recipients=owners.filter(p=>!ids||ids.includes(p.id));
       if(!recipients.length)throw new Error('本单暂无有效经办服务顾问或管理员，请核对经办人及钉钉角色后重试');
       for(const p of recipients) {
@@ -54,7 +55,7 @@ export async function validateSchedulerRecipient(notification,user,{database=poo
   if(!user?.active || user.id!==notification.recipient_id || !hasAnyRole(user, ['advisor','manager']))return false;
   const {rows}=await database.query(`select 1 from work_orders w join users u on u.id=$2
     where w.id=$1 and w.shop_id=$3 and u.shop_id=w.shop_id and u.active
-      and u.name=w.advisor and btrim(u.name)<>''
+      and (u.id=w.advisor_user_id or (w.advisor_user_id is null and u.name=w.advisor and btrim(u.name)<>''))
       and (u.role in ('advisor','manager') or u.roles && array['advisor','manager']::text[])`,[notification.order_id,user.id,user.shopId]);
   return rows.length>0;
 }

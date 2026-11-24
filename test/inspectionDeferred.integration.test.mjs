@@ -106,8 +106,18 @@ test('inspection deferred lifecycle persists atomically, dispatches directly and
   const dual={...inspector,id:'deferred-dual',name:'兼任检验维修',roles:['inspector','technician']};
   const peer={...tech,id:'deferred-peer',name:'维修乙'};
   for(const p of [dual,peer])await pool.query("insert into users(id,name,role,roles,shop_id,active,legacy_employee_code,legacy_employee_name,legacy_employee_department,legacy_employee_bound_at) values($1,$2,$3,$4,'shop-hq',true,$5,$6,'test',now())",[p.id,p.name,p.role,p.roles||[p.role],p===dual?'D02':'D03',p.name]);
-  for(const assignee of [dual,peer])await t.test(`deferred scheduling to ${assignee.id} reconciles pending inspection ownership`,async()=>{
-   const id=`deferred-claim-${assignee.id}`;
+  const {readPersonalWorkbench}=await import('../server/repositories/personalWorkbenchRepository.mjs');
+  const {processInspectionNotifications}=await import('../server/workers/inspectionNotifications.mjs');
+  const cases=[
+   {name:'dual-role claimant becomes a repair owner',assignee:dual,claimant:dual,retained:true},
+   {name:'another repair owner joins',assignee:peer,claimant:dual,retained:true},
+   {name:'claimant inspector membership revoked',assignee:peer,claimant:{...dual,inspectorRoleMember:false},retained:false},
+   {name:'claimant inspector role removed',assignee:peer,claimant:{...dual,roles:['technician']},retained:false},
+   {name:'claimant disabled',assignee:peer,claimant:{...dual,active:false},retained:false},
+  ];
+  for(const [index,{name,assignee,claimant,retained}] of cases.entries())await t.test(`deferred scheduling: ${name}`,async()=>{
+   const id=`deferred-claim-${index}`;
+   await pool.query('update users set roles=$2,active=$3,inspector_role_member=$4 where id=$1',[dual.id,claimant.roles,claimant.active,claimant.inspectorRoleMember??true]);
    const original={id:3,name:'重新安排的待定维修',status:'待检验',responsibleId:tech.id};
    const entry={id:'deferred-entry',itemId:3,name:original.name,reason:'等待材料',source:'inspection',sourceInspectorId:inspector.id,sourceInspectorName:inspector.name,state:'pending',scheduled:false,inspectionState:'pending',originalItem:original,history:[]};
    await pool.query("insert into work_orders(id,status,advisor,technician,inspector,shop_id,old_parts_handling,vehicle_plate,arrival_date,pending_repairs) values($1,'维修中','顾问','维修工','检验员','shop-hq','客户带走','沪DTEST','2026-10-27',$2)",[id,JSON.stringify([entry])]);
@@ -118,21 +128,37 @@ test('inspection deferred lifecycle persists atomically, dispatches directly and
    await pendingRepairCommand(inspector,id,command);
    const after=await getDispatchTask(pool,id,inspector);
    assert.deepEqual(after.items[0],before.items[0]);assert.equal(after.items[2].status,'待开工');
-   assert.equal(after.inspectorId,assignee===dual?undefined:dual.id);
-   assert.equal(after.inspectionClaimedAt,assignee===dual?undefined:before.inspectionClaimedAt);
+   assert.equal(after.inspectorId,retained?dual.id:undefined);
+   assert.equal(after.inspectionClaimedAt,retained?before.inspectionClaimedAt:undefined);
    await pendingRepairCommand(inspector,id,command);
    const jobs=(await pool.query('select event_id from dispatch_inspection_notifications where order_id=$1',[id])).rows;
-   assert.equal(jobs.length,assignee===dual?1:0);
-   if(assignee===dual){
-    const {processInspectionNotifications}=await import('../server/workers/inspectionNotifications.mjs');
+   assert.equal(jobs.length,retained?0:1,'idempotent scheduling queues a replacement audience only when inspection permission is lost');
+   const inboxRecipients=async()=>(await pool.query("select recipient_id from personal_inbox where target_id=$1 and title='待检验' order by recipient_id",[id])).rows.map(row=>row.recipient_id);
+   const inboxBeforeDelivery=await inboxRecipients();
+   assert.deepEqual(inboxBeforeDelivery,retained?[]:[inspector.id],'station inbox follows the current inspection role and claim before delivery runs');
+   const inspectionTodo=async user=>(await readPersonalWorkbench(user,pool)).todos.some(todo=>todo.targetId===id&&todo.category==='待检验');
+   assert.equal(await inspectionTodo(claimant),retained);
+   assert.equal(await inspectionTodo(inspector),!retained);
+   const assignment=(await pool.query("select * from dispatch_notifications where order_id=$1 and kind='待定项目派工'",[id])).rows;
+   assert.equal(assignment.length,1);assert.equal(assignment[0].recipient_id,assignee.id);
+   assert.equal(await validateDeferredNotification(assignment[0],assignee,pool),true);
+   if(retained) {
+    assert.equal((await pool.query("select 1 from dispatch_notifications where order_id=$1 and kind='待检验'",[id])).rowCount,0);
+    await assert.rejects(()=>transaction(c=>executeDispatchActionInTransaction(c,inspector,id,{action:'claim-inspection',expectedVersion:after.version,requestId:randomUUID()})),/已被领取/);
+    await assert.rejects(()=>transaction(c=>executeDispatchActionInTransaction(c,inspector,id,{action:'inspect',expectedVersion:after.version,requestId:randomUUID()})),e=>e.status===403);
+    await transaction(c=>executeDispatchActionInTransaction(c,dual,id,{action:'inspect',expectedVersion:after.version,requestId:randomUUID()}));
+   } else {
     for(let attempts=0;attempts<20;attempts++)if(!await processInspectionNotifications())break;
     const recipients=(await pool.query("select recipient_id from dispatch_notifications where event_id=$1 and kind='待检验'",[jobs[0].event_id])).rows.map(row=>row.recipient_id);
     assert.ok(recipients.includes(inspector.id));assert.ok(!recipients.includes(dual.id));
+    assert.deepEqual(await inboxRecipients(),inboxBeforeDelivery,'delivery must not duplicate transactional inbox notices');
+    await assert.rejects(()=>transaction(c=>executeDispatchActionInTransaction(c,claimant,id,{action:'claim-inspection',expectedVersion:after.version,requestId:randomUUID()})),e=>e.status===403);
     await transaction(c=>executeDispatchActionInTransaction(c,inspector,id,{action:'claim-inspection',expectedVersion:after.version,requestId:randomUUID()}));
     const claimed=await getDispatchTask(pool,id,inspector);
     await transaction(c=>executeDispatchActionInTransaction(c,inspector,id,{action:'inspect',expectedVersion:claimed.version,requestId:randomUUID()}));
-    assert.equal((await getDispatchTask(pool,id,inspector)).items[0].status,'已完工');
    }
+   assert.equal((await getDispatchTask(pool,id,inspector)).items[0].status,'已完工');
+   assert.equal(await inspectionTodo(claimant),false);assert.equal(await inspectionTodo(inspector),false);
   });
 
  } finally {await pool?.end();await Promise.all(connectionsClosed);await admin.query(`drop database if exists "${dbName}" with (force)`);await admin.end();}

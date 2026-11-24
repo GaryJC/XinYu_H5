@@ -66,8 +66,30 @@ test('personal inbox commits independently, deduplicates and isolates read state
   const inspectUser={...user('i'),role:'inspector',roles:['inspector']};
   const before=await readPersonalWorkbench(inspectUser,db);assert.equal(before.todos.length,1);
   await markInboxRead(inspectUser,{through:'999999'},db);assert.equal((await readPersonalWorkbench(inspectUser,db)).todos.length,1);
+  for(const status of ['待结算','完成']){
+   await db.query("update work_orders set status=$1 where id='o'",[status]);
+   assert.deepEqual((await readPersonalWorkbench(inspectUser,db)).todos.map(t=>t.category),['待检验']);
+  }
   await db.query("update dispatch_tasks set stage='维修完成',data=jsonb_set(data,'{items,0,status}','\"已完工\"') where order_id='o'");
   assert.equal((await readPersonalWorkbench(inspectUser,db)).todos.length,0);
+  const {queryDispatchTasks}=await import('../server/services/dispatchService.mjs');
+  const part={mode:'list',items:[{name:'滤芯',quantity:1,unit:'个'}]};
+  await db.query("update dispatch_tasks set stage='维修中',data=data || $1::jsonb where order_id='o'",[JSON.stringify({
+   acceptedAt:'2026-11-16T08:00:00Z',partsRequirement:part,partsRequests:[
+    {...part,ownerId:'w',items:[...part.items,{...part.items[0],preparedAt:'2026-11-16T09:00:00Z'}]},
+    {...part,ownerId:'a',preparedAt:'2026-11-16T09:00:00Z'}
+   ]
+  })]);
+  for(const roles of [['warehouse'],['manager','warehouse']]){
+   const warehouse={...user('warehouse'),role:roles[0],roles};
+   const pending=await queryDispatchTasks(warehouse,{partsStatus:'待备料'});
+   const partial=await queryDispatchTasks(warehouse,{partsStatus:'部分备齐'});
+   const listed=[...pending.items,...partial.items].map(t=>[t.orderId,t.partsRequirement.ownerId||'']);
+   const todo=(await readPersonalWorkbench(warehouse,db)).todos.filter(t=>t.category==='配件待备齐');
+   assert.deepEqual(listed,[['o',''],['o','w']]);
+   assert.equal(todo.length,pending.counts['待备料']+pending.counts['部分备齐']);
+   assert.deepEqual(todo.map(t=>[t.targetId,t.partsOwnerId]),listed);
+  }
   const tender=randomUUID();await db.query("insert into procurement_tenders(id,shop_id,created_by,request_id,request_body,data) values($1,'shop-hq','warehouse',$2,'{}','{\"partName\":\"测试配件\"}')",[tender,randomUUID()]);
   await db.query("insert into procurement_notification_jobs(id,shop_id,tender_id,payload) values($1,'shop-hq',$2,'{\"title\":\"报价收齐\",\"recipientRole\":\"warehouse\"}')",[randomUUID(),tender]);
   assert.equal((await readInbox(user('warehouse'),{},db)).items.length,1);
@@ -86,6 +108,25 @@ test('personal inbox commits independently, deduplicates and isolates read state
   const {readPersonalMessages}=await import('../server/services/personalWorkbenchService.mjs');
   await assert.rejects(readPersonalMessages(applicant,{id:'invalid',through:'1'}),e=>e.status===400);
   assert.deepEqual((await readPersonalWorkbench(applicant,db,{includeTodos:false})).todos,[]);
+
+  const owner={...applicant,name:'已改名'},namesake={...applicant,id:'same-name'};
+  await db.query("insert into users(id,name,role,roles,shop_id) values($1,$2,'advisor',array['advisor'],$3)",[namesake.id,namesake.name,namesake.shopId]);
+  await db.query('update users set name=$2 where id=$1',[owner.id,owner.name]);
+  await db.query("update work_orders set advisor_user_id=$1,status='待客户签字' where id='o'",[owner.id]);
+  const todoCategories=async u=>(await readPersonalWorkbench(u,db)).todos.filter(t=>t.targetId==='o').map(t=>t.category);
+  assert.deepEqual(await todoCategories(owner),['待客户签字']);
+  assert.deepEqual(await todoCategories(namesake),[]);
+  const refusal=await event('decline');
+  await db.query("insert into dispatch_scheduler_notifications(event_id,order_id,kind,payload) values($1,'o','无法接单','{}')",[refusal]);
+  const inboxRecipients=async()=>(await db.query('select recipient_id from personal_inbox where event_key=$1',[`dispatch:${refusal}:无法接单`])).rows.map(r=>r.recipient_id);
+  assert.deepEqual(await inboxRecipients(),[owner.id]);
+  const {processSchedulerNotifications,validateSchedulerRecipient}=await import('../server/workers/schedulerNotifications.mjs');
+  while(await processSchedulerNotifications({env:{DISPATCH_NOTIFICATION_MODE:'disabled'}})){}
+  const {rows:notices}=await db.query("select * from dispatch_notifications where event_id=$1 and kind='无法接单'",[refusal]);
+  assert.deepEqual(notices.map(n=>n.recipient_id),[owner.id]);
+  assert.equal(await validateSchedulerRecipient(notices[0],owner,{database:db}),true);
+  assert.equal(await validateSchedulerRecipient({...notices[0],recipient_id:namesake.id},namesake,{database:db}),false);
+  assert.deepEqual(await inboxRecipients(),[owner.id]);
 
  }finally{await pool?.end();await db?.end();await admin.query(`drop database if exists "${name}" with (force)`);await admin.end();}
 });

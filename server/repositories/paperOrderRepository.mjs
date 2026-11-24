@@ -1,4 +1,5 @@
 import { hasAnyRole } from "../../shared/roles.mjs";
+import { isOrderAdvisor } from "../../shared/orderOwnership.mjs";
 import { randomUUID } from 'node:crypto';
 import { HttpError } from '../http/HttpError.mjs';
 
@@ -28,7 +29,7 @@ export async function lockPaperOrder(client, id, actor) {
   const { rows } = await client.query('select * from work_orders where id=$1 for update',[id]);
   const order=rows[0];
   if (!order) throw new HttpError(404,'委托单不存在');
-  if (!actor?.active || (!hasAnyRole(actor, ['advisor','manager']) && order.advisor!==actor.name) || !actor.shopId || order.shop_id!==actor.shopId) throw new HttpError(403,'无权处理此纸质委托书');
+  if (!actor?.active || (!hasAnyRole(actor, ['advisor','manager']) && !isOrderAdvisor(order.advisor_user_id,order.advisor,actor)) || !actor.shopId || order.shop_id!==actor.shopId) throw new HttpError(403,'无权处理此纸质委托书');
   if (!order.paper_order) throw new HttpError(409,'此委托单不是纸质委托书');
   return order;
 }
@@ -51,7 +52,8 @@ export async function assertPaperDraftUnsubmitted(client, order) {
 }
 export async function setPaperMode(client,id,mode,status,actor) {
   await client.query(`update work_orders set paper_order=jsonb_set(paper_order,'{mode}',to_jsonb($2::text)),
-    status=$3,advisor=case when $2='dingtalk' then $4 else advisor end,updated_at=now() where id=$1`,[id,mode,status,actor.name]);
+    status=$3,advisor=case when $2='dingtalk' then $4 else advisor end,
+    advisor_user_id=case when $2='dingtalk' then $5 else advisor_user_id end,updated_at=now() where id=$1`,[id,mode,status,actor.name,actor.id]);
   await client.query('insert into audit_logs(order_id,actor,action) values($1,$2,$3)',[id,actor.name,mode==='runfeng'?'纸质委托书关联润丰派工单':'纸质委托书选择在钉钉创建']);
 }
 

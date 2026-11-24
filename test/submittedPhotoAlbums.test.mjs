@@ -5,6 +5,7 @@ import {createRequire} from 'node:module';
 import vm from 'node:vm';
 import ts from 'typescript';
 import {hasRole} from '../shared/roles.mjs';
+import {isOrderAdvisor} from '../shared/orderOwnership.mjs';
 const require=createRequire(import.meta.url);
 const compile=path=>ts.transpileModule(readFileSync(new URL(path,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;
 const collectionExports={};vm.runInNewContext(compile('../client/src/features/work-order-photos/photoCollections.ts'),{exports:collectionExports});
@@ -17,6 +18,7 @@ function setup(section='all',paperMode) {
   const upload={uploading:'',error:'',async upload(...args){calls.push(args);return true;},async uploadMany(...args){calls.push(args);return true;},async remove(ids){calls.push(['delete',ids]);return true;}};
   vm.runInNewContext(code,{exports,require(name){
     if(name.endsWith('roles.mjs'))return{hasRole};
+    if(name.endsWith('orderOwnership.mjs'))return{isOrderAdvisor};
     if(name==='antd')return{Alert:'Alert'};
     if(name==='./OrderPhotoGallery')return{OrderPhotoGallery:'Gallery'};
     if(name.endsWith('PreRepairPhotos'))return{PreRepairPhotos:'PreRepair'};
@@ -61,4 +63,11 @@ test('album unification preserves readonly permissions and editor section has no
   const nodes=h.render(),repair=nodes.find(node=>node.type==='PreRepair');
   assert.equal(repair.props.disabled,true);assert.equal(repair.props.controls,undefined);
   assert.ok(!nodes.some(node=>node.type==='Gallery'));
+});
+test('photo controls use the owner ID even when advisor names match or change',()=>{
+  const h=setup('repair');h.order.advisorUserId='owner';
+  assert.equal(h.render().find(node=>node.type==='PreRepair').props.controls,undefined);
+  h.user.id='owner';h.user.name='已更名顾问';
+  assert.ok(h.render().find(node=>node.type==='PreRepair').props.controls);
+  h.user.role='technician';assert.equal(h.render().find(node=>node.type==='PreRepair').props.controls,undefined);
 });

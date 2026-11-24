@@ -1,4 +1,5 @@
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
+import { isOrderAdvisor } from "../../../../shared/orderOwnership.mjs";
 import { useEffect, useRef, useState } from "react";
 import type { UserProfile, WorkOrder } from "../../../../shared/types";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
@@ -17,7 +18,7 @@ export function useArchiveLegacyRefresh(user: UserProfile | undefined, onUpdated
   }, [user?.id]);
   function canRefresh(order: WorkOrder) {
     return Boolean(user && user.shopId === order.shop.id && hasAnyRole(user, ["manager", "advisor"])
-      && (hasRole(user, 'manager') || order.advisor === user.name)
+      && (hasRole(user, 'manager') || isOrderAdvisor(order.advisorUserId, order.advisor, user))
       && order.legacySyncStatus === "synced" && !["草稿", "待客户签字"].includes(order.status));
   }
   async function refresh(orders?: WorkOrder[]) {

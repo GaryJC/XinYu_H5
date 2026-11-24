@@ -20,6 +20,13 @@ import { HttpError } from '../http/HttpError.mjs';
 export const DISPATCH_ROLES = ['manager','advisor','technician','inspector','warehouse','outsourcing'];
 export const technicianIds = task => task.technicianIds ?? (task.technicianId ? [task.technicianId] : []);
 export const canInspect = (task, actor) => actor?.active && (hasRole(actor, 'manager')||actor.inspectorRoleMember!==false) && hasAnyRole(actor, ['inspector','manager']) && actor.shopId===task.shopId && allowsInspectionParticipation(task,actor);
+function reconcileInspectionClaim(task, action, people) {
+  if(['reassign','edit-repair-items','finish','submit-order'].includes(action)&&task.inspectorId&&hasPendingInspection(task)
+    &&!canInspect(task,people.find(person=>person.id===task.inspectorId))) {
+    delete task.inspectorId;delete task.inspectorName;delete task.inspectionClaimedAt;
+  }
+  return task;
+}
 const scheduling = ['manager','advisor'];
 const fail = (message, status = 409) => { throw new HttpError(status, message); };
 export function assertDispatchAccess(task, actor) {
@@ -106,7 +113,7 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
   }
   if(task.executionMode==='outsourced'&&['accept','record-parts'].includes(input.action)&&input.partsOwnerId!==undefined)fail('外包配件须由派工人按整单申请',400);
   const individual=applyIndividualAction(task,input,actor,people,now,(...args)=>applyDispatchAction(...args,{personalEditing,sharedPartsRequirement:task.partsRequirement}),{personalEditing});
-  if(individual)return individual;
+  if(individual)return reconcileInspectionClaim(individual,input.action,people);
   let next = structuredClone(task);
   if(input.action==='reopen-repair') next=reopenRepairTask(task,input,actor,now);
   const action = input.action;
@@ -423,11 +430,8 @@ export function applyDispatchAction(task, input, actor, people, now = new Date()
     const retained=new Set(technicianIds(next));
     for(const key of ['workerPauses','workerOffers'])if(next[key])next[key]=Object.fromEntries(Object.entries(next[key]).filter(([id])=>retained.has(id)));
   }
-  if(['reassign','edit-repair-items'].includes(action)&&next.inspectorId&&hasPendingInspection(next)
-    &&!canInspect(next,people.find(person=>person.id===next.inspectorId))) {
-    // Release claims only when current role/shop/participation policy no longer permits inspection.
-    delete next.inspectorId;delete next.inspectorName;delete next.inspectionClaimedAt;
-  }
+  // Role loss releases the pending batch; repair participation alone does not.
+  reconcileInspectionClaim(next,action,people);
   if(['finish','submit-order'].includes(action)&&!hasPendingInspection(task)&&hasPendingInspection(next)) {
     // A new batch needs a new claim; adding work to an active batch preserves its inspector.
     delete next.inspectorId;delete next.inspectorName;delete next.inspectionClaimedAt;

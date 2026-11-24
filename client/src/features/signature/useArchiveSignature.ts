@@ -1,4 +1,5 @@
 import { hasRole, hasAnyRole } from "../../../../shared/roles.mjs";
+import { isOrderAdvisor } from "../../../../shared/orderOwnership.mjs";
 import { useRef, useState } from "react";
 import type { UserProfile, WorkOrder } from "../../../../shared/types";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
@@ -12,7 +13,7 @@ export function useArchiveSignature(user: UserProfile | undefined, onUpdated: (o
   const running = useRef(false);
   function canSign(order: WorkOrder) {
     return Boolean(user?.active && user.shopId === order.shop.id && hasAnyRole(user, ["advisor", "manager"])
-      && (hasRole(user, 'manager') || order.advisor === user.name)
+      && (hasRole(user, 'manager') || isOrderAdvisor(order.advisorUserId, order.advisor, user))
       && !order.customerSignatureFileId);
   }
   async function start(order: WorkOrder) {

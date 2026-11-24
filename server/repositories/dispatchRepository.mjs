@@ -14,7 +14,7 @@ import {canReceiveInspectionNotification} from '../domain/inspectionNotification
 const projection = `select wo.id as order_id, wo.shop_id, wo.vehicle_plate, wo.dispatch_no, wo.arrival_date, wo.created_at,
   (select count(*)::integer from jsonb_array_elements(wo.pending_repairs) p where p->>'state'='pending' and coalesce(p->>'source','customer')<>'inspection') as pending_repair_count,
   (select count(*)::integer from jsonb_array_elements(wo.pending_repairs) p where p->>'source'='inspection' and p->>'inspectionState' in ('pending','scheduled')) as inspection_deferred_count,
-  wo.vehicle_vin,wo.vehicle_model,wo.vehicle_mileage,wo.customer_name,wo.advisor,wo.status as order_status, wo.fault_description, wo.technician as legacy_technician,
+  wo.vehicle_vin,wo.vehicle_model,wo.vehicle_mileage,wo.customer_name,wo.advisor,wo.advisor_user_id,wo.status as order_status, wo.fault_description, wo.technician as legacy_technician,
   exists(select 1 from dispatch_events e where e.order_id=wo.id and e.action in ('accept','record-parts','edit-parts') and e.detail->'partsRequirement' is not null) as has_parts_history,
   dt.technician_id, dt.inspector_id, dt.stage, dt.version, dt.data,
   coalesce((select jsonb_agg(jsonb_build_object('id',ri.client_item_id,'name',ri.name,
@@ -22,7 +22,7 @@ const projection = `select wo.id as order_id, wo.shop_id, wo.vehicle_plate, wo.d
     from repair_items ri where ri.order_id=wo.id),'[]'::jsonb) as repair_items
   from work_orders wo left join dispatch_tasks dt on dt.order_id=wo.id`;
 export function mapTask(row) {
-  const task = { hasPartsHistory:Boolean(row.has_parts_history), items:row.repair_items, ...row.data, vehicleVin:row.vehicle_vin||'',vehicleModel:row.vehicle_model||'',vehicleMileage:row.vehicle_mileage||'',customerName:row.customer_name||'',advisor:row.advisor||'', orderId:row.order_id, shopId:row.shop_id,
+  const task = { hasPartsHistory:Boolean(row.has_parts_history), items:row.repair_items, ...row.data, vehicleVin:row.vehicle_vin||'',vehicleModel:row.vehicle_model||'',vehicleMileage:row.vehicle_mileage||'',customerName:row.customer_name||'',advisor:row.advisor||'',advisorUserId:row.advisor_user_id??undefined, orderId:row.order_id, shopId:row.shop_id,
     technicianId:row.technician_id || undefined, inspectorId:row.inspector_id || undefined,
     stage:['草稿','待客户签字'].includes(row.order_status)?row.order_status:row.stage || (['待结算','完成'].includes(row.order_status)?'维修完成':row.order_status==='维修中'?'维修中':'待派工'),
     version:row.version || 0, plate:row.vehicle_plate, dispatchNo:row.dispatch_no || '', arrivalDate:row.arrival_date, createdAt:row.created_at ? new Date(row.created_at).toISOString() : undefined,
@@ -107,7 +107,7 @@ const pendingPeopleReads=createPendingRead();
 export const readDispatchPeople=actor=>pendingPeopleReads(actor.shopId,()=>dispatchPeople(actor));
 export async function saveDispatchTask(client, task, { metadataOnly = false, techniciansOnly = false } = {}) {
   if(task.repairPhotoWaivers)task.repairPhotoWaivers=task.repairPhotoWaivers.filter(entry=>currentPhotoWaiver(task,entry.applicantId)===entry);
-  const {inspectionDeferredCount,hasPartsHistory,pendingRepairCount,orderId,shopId,technicianId,inspectorId,stage,version,plate,dispatchNo,arrivalDate,orderStatus,faultDescription,overdue,repairCatalog,vehicleVin,vehicleModel,vehicleMileage,customerName,advisor,...data}=task;
+  const {inspectionDeferredCount,hasPartsHistory,pendingRepairCount,orderId,shopId,technicianId,inspectorId,stage,version,plate,dispatchNo,arrivalDate,orderStatus,faultDescription,overdue,repairCatalog,vehicleVin,vehicleModel,vehicleMileage,customerName,advisor,advisorUserId,...data}=task;
   await client.query(`insert into dispatch_tasks(order_id,shop_id,technician_id,inspector_id,stage,version,data)
     values($1,$2,$3,$4,$5,$6,$7) on conflict(order_id) do update set technician_id=excluded.technician_id,
     inspector_id=excluded.inspector_id,stage=excluded.stage,version=excluded.version,data=excluded.data,updated_at=now()`,

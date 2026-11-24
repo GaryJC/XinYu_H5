@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>鑫裕数字化平台 · 代码审查与修复</title>
+  <style>
+    :root { color-scheme: light; font: 16px/1.7 system-ui, sans-serif; color: #233548; background: #f2f5f8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 760px; margin: 28px auto; padding: 28px clamp(18px, 4vw, 38px); background: white; border-radius: 12px; }
+    h1, h2, h3 { line-height: 1.4; }
+    h1 { margin: 0 0 4px; font-size: clamp(23px, 4vw, 32px); }
+    header p { margin: 0; color: #536273; }
+    h2 { margin: 24px 0 8px; font-size: 20px; }
+    h3 { margin: 0 0 4px; font-size: 17px; }
+    section { padding: 14px 0; border-bottom: 1px solid #e2e8ee; }
+    p { margin: 4px 0; }
+    ul { margin: 4px 0; padding-left: 22px; }
+    li + li { margin-top: 6px; }
+    @media (max-width: 600px) { main { margin: 0; border-radius: 0; } }
+  </style>
+</head>
+<body><main>
+  <header>
+    <h1>鑫裕数字化平台 · 代码审查与修复</h1>
+    <p>2026 年 11 月 19 日 · 本地 main 分支 · 审查起点 544b9dd</p>
+  </header>
+  <h2>已修复的问题</h2>
+  <section>
+    <h3>同店同名员工的工单权限</h3>
+    <p>在新建工单上，服务端记录登录员工的账号 ID。草稿编辑、删除、现场签字、远程签字确认、照片和客户资料更新，以及给经办人发送的通知和待办，都以该账号识别人。同名同事无法代办，原经办人改名后仍能处理。纸质单由另一名顾问接手时同步更新经办人姓名和 ID。</p>
+  </section>
+  <section>
+    <h3>换牌车辆录入</h3>
+    <p>单独扫描车牌或车架号时，查询润丰会同时携带表单里的另一项标识。两者与档案不一致时保留输入并显示冲突原因。保存行驶证识别记录期间手动修改或清空的标识也会保留。识别结果缺少所属单位时，保留原单位编码。</p>
+  </section>
+  <section>
+    <h3>客户签字时的维修清单</h3>
+    <p>原先只有待客户确认项目的工单可以发起签字，但现场和远程页面都可能展示空清单。两处现按同一规则展示项目名称和状态，提醒客户哪些维修仍需另行确认。公开签字页面只收到展示所需字段。</p>
+  </section>
+  <section>
+    <h3>配件申请和个人待办</h3>
+    <p>纯仓管与兼任仓管的员工统一按待备料和部分备齐的申请计数。打开待办时会进入配件申请页，同一工单有多位申请人时，所选申请排在最前。</p>
+  </section>
+  <section>
+    <h3>追加维修和检验通知</h3>
+    <p>原单已待结算或完成、追加维修仍在进行时，检验待办按当前维修任务纳入。检验员曾代办外包开工、完工，仍可检验追加的店内项目。其他技师提检或提交回审时，有资格的原领取人保留任务。原领取人已停用、调店或失去资格时，任务重新开放领取。管理员可以保留有效领取，检验通知按收件人的检验员身份发送。</p>
+  </section>
+  <section>
+    <h3>工单详情的只读权限</h3>
+    <p>归档和详情使用同一读取规则。获授权的跨店纸质单收件人、已分配的技师和已领取的检验员可以打开列表里的对应工单。测试分别核对了详情、签字凭证和编辑权限。</p>
+  </section>
+  <section>
+    <h3>车辆铭牌及配件照片</h3>
+    <p>通用开单上传接口只接收公开的上传字段。铭牌照片须经过维修任务的人员、状态和轮次校验。仓管通过岗位共享读取铭牌或配件照片时，照片必须已关联符合条件的委托单。</p>
+  </section>
+  <h2>历史工单归属</h2>
+  <p>业务方已确认同店经办人不会重名。仅存姓名的旧单继续按同店经办人姓名匹配，新单按员工账号 ID 匹配。</p>
+  <h2>验证范围</h2>
+  <ul>
+    <li>常规检查共 1,205 项，1,165 项通过，40 项按环境条件跳过。TypeScript、生产构建和包体预算检查通过。</li>
+    <li>另在一次性 PostgreSQL 17 中运行数据库测试，35 组、237 项全部通过。钉钉通知使用模拟发送，润丰写回关闭。</li>
+    <li>Chrome 下，360 和 390 像素宽度的现场、远程签字页面上，长项目名分别折为四行和三行，状态和确认说明位于签名区之前。390 像素宽度下，多人配件申请待办打开后显示对应申请人。</li>
+    <li>行驶证历史排序在首轮数据库测试中出现一次不同结果，随后独立运行 18 次均通过。回归用例已明确设置旧照片的历史时间，并验证重新保存旧单时该时间保持原值。首次差异的具体原因尚未证实。</li>
+    <li>变更仅在本地验证。上线时需先执行本次两项数据库迁移，依次增加经办人 ID 并更新站内信收件人匹配。迁移不批量改写历史工单。生产负载下的延迟未实测。</li>
+  </ul>
+</main></body>
+</html>

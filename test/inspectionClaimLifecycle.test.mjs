@@ -28,3 +28,13 @@ test('legacy submit cannot replace a claimed inspector without an inspection han
  assert.deepEqual(t,before);
  assert.equal(act(t,tech,'submit',{inspectorId:inspector.id}).inspectorId,inspector.id);
 });
+test('legacy per-item completion releases a revoked partial claim without changing inspection history',()=>{
+ const original=claimed(),snapshot=structuredClone(original);
+ const roster=[tech,{...inspector,inspectorRoleMember:false},other];
+ const next=applyDispatchAction(original,{action:'finish',itemId:2,expectedVersion:original.version,requestId:'revoked-finish'},tech,roster);
+ for(const key of ['inspectorId','inspectorName','inspectionClaimedAt'])assert.equal(next[key],undefined,key);
+ assert.deepEqual(original,snapshot);
+ assert.deepEqual(next.items[0],original.items[0]);
+ const claimedNext=applyDispatchAction(next,{action:'claim-inspection',expectedVersion:next.version,requestId:'replacement-claim'},other,roster);
+ assert.equal(claimedNext.inspectorId,other.id);
+});

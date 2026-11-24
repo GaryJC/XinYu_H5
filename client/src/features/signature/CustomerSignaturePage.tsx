@@ -1,6 +1,7 @@
 import { Alert, Button, Card, Checkbox, Spin } from 'antd';
 import { SignaturePad } from './SignaturePad';
 import { useCustomerSignature } from './useCustomerSignature';
+import { SignatureRepairItems } from './SignatureRepairItems';
 import './customer-signature.css';
 
 export function CustomerSignaturePage() {
@@ -25,8 +26,7 @@ export function CustomerSignaturePage() {
             <dt>旧件处置</dt><dd>{order.oldPartsHandling}</dd>
             <dt>预计交车</dt><dd>{order.estimatedDeliveryAt || '待沟通'}</dd>
           </dl>
-          <h2>维修项目</h2>
-          <div className="public-items">{order.repairItems.map((item, i) => <div key={i}><span>{item.name}</span><strong>¥{item.laborFee.toFixed(2)}</strong></div>)}</div>
+          <SignatureRepairItems items={order.repairItems} showFees/>
           <p className="signature-field-label">电子签名 <Button type="link" disabled={c.busy} onClick={() => c.setLandscape(true)}>横屏签字</Button></p>
           <SignaturePad value={c.image} onChange={c.setImage} disabled={c.busy}/>
           <Checkbox checked={c.confirmed} disabled={c.busy} onChange={event => c.setConfirmed(event.target.checked)}>我已核对以上委托信息，并确认提交本人签名。</Checkbox>

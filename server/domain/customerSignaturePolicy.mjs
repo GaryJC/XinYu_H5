@@ -1,4 +1,5 @@
 import { HttpError } from '../http/HttpError.mjs';
+import { signatureRepairItems } from '../../shared/signatureRepairItems.mjs';
 
 export function isRemoteSignatureToken(token) {
   return typeof token === 'string' && /^sig_[a-f0-9]{64}$/.test(token);
@@ -19,7 +20,7 @@ export function customerSignatureSession(order) {
       shop: { name: order.shop.name, address: order.shop.address, phone: order.shop.phone },
       vehicle: { plate: order.vehicle.plate, model: order.vehicle.model, mileage: order.vehicle.mileage },
       customerName: order.customer.name, faultDescription: order.faultDescription,
-      repairItems: order.repairItems.map(item => ({ name: item.name, laborFee: item.laborFee })),
+      repairItems: signatureRepairItems(order),
       estimatedFee: order.estimatedFee || order.repairItems.reduce((sum, item) => sum + item.laborFee, 0),
       feeNote: order.feeNote, oldPartsHandling: order.oldPartsHandling, estimatedDeliveryAt: order.estimatedDeliveryAt
     }

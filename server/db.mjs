@@ -1,13 +1,15 @@
 import { archiveQuery, workOrderPageRows, archiveMetadata, refreshTargetIds } from './repositories/workOrderListRepository.mjs';
 import { saveDraftPendingRepairs } from './repositories/pendingRepairsRepository.mjs';
-import { userRoles, hasRole, hasAnyRole } from "../shared/roles.mjs";
+import { hasRole, hasAnyRole } from "../shared/roles.mjs";
+import { isOrderAdvisor } from "../shared/orderOwnership.mjs";
 import { queueCustomerSignatureReview } from "./repositories/customerSignatureReviewRepository.mjs";
 import { isRemoteSignatureToken } from "./domain/customerSignaturePolicy.mjs";
 import { assertPaperPhotoIds, attachPaperPhotos, recordPaperRecipients } from "./repositories/paperOrderRepository.mjs";
 import { attachDraftVehicleLicense } from "./repositories/draftVehicleLicenseRepository.mjs";
 import { assertNoActiveRepair } from './repositories/repairRoundRepository.mjs';
 import {readLicenseExceptions} from './repositories/vehicleLicenseExceptionRepository.mjs';
-import {assertWorkOrderReadAccess} from './repositories/accessRepository.mjs';
+import { assertWorkOrderReadAccess, assertOrderWriteOwner, roleFilter } from './repositories/accessRepository.mjs';
+export { roleFilter };
 import { attachPreRepairPhotos } from "./repositories/preRepairPhotoRepository.mjs";
 import { assertPreRepairPhotosReady } from "./domain/preRepairPhotos.mjs";
 import { getDispatchTask, assertInspectionCompleted } from './repositories/dispatchRepository.mjs';
@@ -42,8 +44,6 @@ import {
 } from "./domain/workOrderPolicy.mjs";
 import { enqueueLegacySyncEvent } from "./repositories/legacySyncOutboxRepository.mjs";
 
-const validRoles = new Set(["advisor", "technician", "inspector", "manager"]);
-
 export async function healthCheck() {
   await pool.query("select 1");
   return { ok: true, database: "postgres" };
@@ -57,7 +57,7 @@ export async function listWorkOrders(role = "manager", user, query = {}) {
     const { rows, ...result } = await workOrderPageRows(scope, query);
     if(query.view==='summary') return {...result,items:rows.map(row=>{
       const order={...rowToWorkOrder(row,[],[],[],[],[],[],[]),dispatchStage:row.dispatch_stage||undefined};
-      return Object.fromEntries(['id', 'dispatchNo', 'arrivalDate', 'status', 'createdAt', 'updatedAt', 'createdAtIso', 'updatedAtIso', 'shop', 'vehicle', 'customer', 'advisor', 'technician', 'dispatchStage', 'customerSignatureReview', 'isBaiyuanOrder', 'paperOrder', 'legacyApproved', 'legacySyncStatus', 'legacySyncRevision', 'legacySyncedAt', 'legacySyncError', 'customerVehicleUpdatedAt', 'customerVehicleUpdatedBy', 'estimatedFee', 'settlementAmount'].map(key=>[key,order[key]]));
+      return Object.fromEntries(['id', 'dispatchNo', 'arrivalDate', 'status', 'createdAt', 'updatedAt', 'createdAtIso', 'updatedAtIso', 'shop', 'vehicle', 'customer', 'advisor', 'advisorUserId', 'technician', 'dispatchStage', 'customerSignatureReview', 'isBaiyuanOrder', 'paperOrder', 'legacyApproved', 'legacySyncStatus', 'legacySyncRevision', 'legacySyncedAt', 'legacySyncError', 'customerVehicleUpdatedAt', 'customerVehicleUpdatedBy', 'estimatedFee', 'settlementAmount'].map(key=>[key,order[key]]));
     })};
     const orders = await hydrateOrders(rows);
     return { ...result, items: sanitizeVisibleOrders(orders.map((order, index) => ({ ...order, dispatchStage: rows[index].dispatch_stage || undefined })), role, user) };
@@ -87,7 +87,7 @@ export function sanitizeVisibleOrders(orders, role, user) {
   // Paper-order recipient records grant cross-shop read access even when pushes
   // are suppressed, never a signing capability.
   return orders.map((order) => user?.shopId && order.shop?.id === user.shopId
-    && (hasRole(user, 'manager') || user.name && order.advisor === user.name)
+    && (hasRole(user, 'manager') || isOrderAdvisor(order.advisorUserId, order.advisor, user))
     ? order
     : { ...order, signatureToken: undefined, signatureTokenUsed: undefined });
 }
@@ -104,6 +104,7 @@ export async function createWorkOrder(draft, actor, actorUser) {
   return transaction(async (client) => {
     const order = {
       ...createOrderFromDraft(draft),
+      advisorUserId: actorUser?.id,
       dispatchNo: "",
       ...(draft.paperOrder ? { status: "待处理纸质委托书", vehicle: {}, customer: {}, department: { code: "", name: "" }, faultDescription: "", estimatedFee: 0, settlementAmount: 0, feeNote: "", estimatedDeliveryAt: "", repairItems: [], dispatchPlan: null, signatures: {}, inspection: { belongings: [], fuelLevel: "1/2", exteriorIssues: [] } } : {})
     };
@@ -123,7 +124,7 @@ export async function createWorkOrder(draft, actor, actorUser) {
 
 export async function updateWorkOrder(order, actor, action, actorUser) {
   return transaction(async (client) => {
-    const existing = await findWorkOrderById(client, order.id, true);
+    const existing = await findWorkOrderById(client, order.id, true, actorUser);
     if (!existing) throw new HttpError(404, "委托单不存在");
     assertDraftEditable(existing.status,existing);
     if(existing.status==='待客户签字') {
@@ -137,6 +138,7 @@ export async function updateWorkOrder(order, actor, action, actorUser) {
       id: existing.id,
       createdAt: existing.createdAt,
       advisor: existing.advisor,
+      advisorUserId: existing.advisorUserId,
       shop: existing.shop,
       technician: existing.technician,
       inspector: existing.inspector,
@@ -161,14 +163,15 @@ export async function updateWorkOrder(order, actor, action, actorUser) {
   });
 }
 
-export async function deleteDraftWorkOrder(id, runTransaction = transaction) {
+export async function deleteDraftWorkOrder(id, runTransaction = transaction, user) {
   return runTransaction(async (client) => {
     const existing = await client.query(
-      "select id, status from work_orders where id = $1 for update",
+      "select id, status, shop_id, advisor, advisor_user_id from work_orders where id = $1 for update",
       [id]
     );
     const order = existing.rows[0];
     if (!order) throw new HttpError(404, "委托单不存在");
+    if (user) assertOrderWriteOwner(order, user);
     if (order.status !== "草稿") throw new HttpError(409, `当前状态“${order.status}”不能删除，只能删除草稿`);
     const deleted = await client.query("delete from work_orders where id = $1 returning id", [id]);
     return { id: deleted.rows[0].id };
@@ -196,10 +199,10 @@ export async function transitionWorkOrder(id, status, actor, action, patch = {})
   });
 }
 
-export async function createSignatureTokenForOrder(id, actor, { renew = false, signatureMode } = {}) {
+export async function createSignatureTokenForOrder(id, actor, { renew = false, signatureMode, user } = {}) {
   if (signatureMode !== undefined && !["onsite", "remote"].includes(signatureMode)) throw new HttpError(400, "请选择有效的客户签字方式");
   return transaction(async (client) => {
-    let order = await findWorkOrderById(client, id, true);
+    let order = await findWorkOrderById(client, id, true, user);
     if (!order) throw new HttpError(404, "委托单不存在");
     const supplemental = Boolean(order.paperOrder || !["草稿", "待客户签字"].includes(order.status) || order.customerSignatureReview?.supplemental);
     const purpose = supplemental ? "supplement" : "authorization";
@@ -279,6 +282,11 @@ export async function signWorkOrderByToken(token, signature, signatureFileId, cr
     if (tokenRow.used) throw new HttpError(409, "签字链接已使用");
 
     const supplemental = tokenRow.purpose === "supplement";
+    if (!createSignatureFile && onsiteActor && (!onsiteActor.active || onsiteActor.shopId !== order.shop.id
+      || !hasAnyRole(onsiteActor, ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"])
+      || !hasRole(onsiteActor,'manager') && !isOrderAdvisor(order.advisorUserId, order.advisor, onsiteActor))) {
+      throw new HttpError(403,'仅负责此单的服务顾问或本店管理员可以提交现场签字');
+    }
     if (order.customerSignatureFileId || !supplemental && (!["草稿", "待客户签字"].includes(order.status) || order.paperOrder)) throw new HttpError(409, "当前委托单已签字或不能签字");
     if (!supplemental) {
       if (createSignatureFile && order.status !== '待客户签字') throw new HttpError(409, '尚未选择远程签字，请联系服务顾问');
@@ -323,8 +331,6 @@ export async function signWorkOrderByToken(token, signature, signatureFileId, cr
     // Public remote signatures continue through independent staff review.
     const onsite = !createSignatureFile && onsiteActor && (supplemental || order.status === '草稿');
     if (onsite) {
-      if (!onsiteActor.active || onsiteActor.shopId !== order.shop.id || !hasAnyRole(onsiteActor, ["employee", "advisor", "manager", "technician", "inspector", "warehouse", "outsourcing"])
-        || !hasRole(onsiteActor,'manager') && onsiteActor.name !== order.advisor) throw new HttpError(403,'仅负责此单的服务顾问或本店管理员可以提交现场签字');
       const at=new Date().toISOString();
       const review={state:'confirmed',signedAt:at,confirmedAt:at,confirmedBy:onsiteActor.name,mode:'onsite',...(supplemental?{supplemental:true}:{})};
       await client.query('update work_orders set status=$2,customer_signature_review=$3::jsonb,updated_at=now() where id=$1',[order.id,supplemental?order.status:'已委托',JSON.stringify(review)]);
@@ -344,7 +350,7 @@ export async function confirmCustomerSignature(id, actor) {
     const order = await findWorkOrderById(client, id, true);
     if (!order) throw new HttpError(404, "委托单不存在");
     if (!actor?.active || actor.shopId !== order.shop.id || !hasAnyRole(actor, ["advisor", "manager"])
-      || !hasRole(actor, 'manager') && hasRole(actor, 'advisor') && actor.name !== order.advisor) throw new HttpError(403, "仅负责此单的服务顾问或本店管理员可以确认签字");
+      || !hasRole(actor, 'manager') && !isOrderAdvisor(order.advisorUserId, order.advisor, actor)) throw new HttpError(403, "仅负责此单的服务顾问或本店管理员可以确认签字");
     if (order.customerSignatureReview?.state === "confirmed") return order;
     if ((!order.customerSignatureReview?.supplemental && order.status !== "待客户签字") || order.customerSignatureReview?.state !== "pending"
       || !order.signatures.customer || !order.customerSignatureFileId) throw new HttpError(409, "当前委托单没有待确认的客户签字");
@@ -449,7 +455,7 @@ export async function dashboardSummary(role = "manager", user) {
   };
 }
 
-export async function findWorkOrderById(client, id, forUpdate = false) {
+export async function findWorkOrderById(client, id, forUpdate = false, writeUser) {
   const { rows } = await client.query(
     `
       select wo.*, (select stage from dispatch_tasks where order_id=wo.id) as dispatch_stage, st.token as signature_token, st.used as signature_token_used
@@ -466,6 +472,7 @@ export async function findWorkOrderById(client, id, forUpdate = false) {
     `,
     [id]
   );
+  if (rows[0] && writeUser) assertOrderWriteOwner(rows[0], writeUser);
   return (await hydrateOrders(rows, client))[0];
 }
 
@@ -592,7 +599,7 @@ export async function upsertWorkOrder(client, order) {
         customer_name, customer_legacy_code, customer_phone, customer_contact, customer_address,
         inspection, fault_description, estimated_fee, old_parts_handling,
         estimated_delivery_at, settlement_amount, fee_note, platform_order_no,
-        created_at, updated_at, paper_order, vehicle_is_military, is_baiyuan_order
+        created_at, updated_at, paper_order, vehicle_is_military, is_baiyuan_order, advisor_user_id
       ) values (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10, $11, $12, $13,
@@ -600,7 +607,7 @@ export async function upsertWorkOrder(client, order) {
         $20, $21, $22, $23, $24,
         $25::jsonb, $26, $27, $28,
         $29, $30, $31, $32,
-        $33, $34, $35::jsonb, $36, $37
+        $33, $34, $35::jsonb, $36, $37, $38
       )
       on conflict (id) do update set
         status = excluded.status,
@@ -705,28 +712,6 @@ async function replaceSignatures(client, orderId, signatures) {
 
 async function addAudit(client, orderId, actor, action) {
   await client.query("insert into audit_logs (order_id, actor, action) values ($1, $2, $3)", [orderId, actor || "系统", action || "更新委托单"]);
-}
-
-export function roleFilter(role, user) {
-  const memberships = userRoles(user);
-  if (memberships.length > 1) {
-    const filters = memberships.map(member => roleFilter(member, {...user, role: member, roles: [member], outsourcingRoleMember: false}));
-    return {where: 'where (' + filters.map(filter => '(' + filter.where.replace(/^where /, '') + ')').join(' or ') + ')',
-      params: filters.reduce((longest, filter) => filter.params.length > longest.length ? filter.params : longest, [])};
-  }
-  if (memberships.length === 1) role = memberships[0];
-  const ownOrder = "nullif($2::text,'') is not null and nullif($3::text,'') is not null and wo.advisor=$3";
-  if (user?.shopId && ["employee", "warehouse", "outsourcing"].includes(role)) return { where: `where wo.shop_id=$1 and (${ownOrder})`, params: [user.shopId,user.id,user.name] };
-  if (!validRoles.has(role) || !user?.shopId) return { where: "where false", params: [] };
-  const base = "where wo.shop_id = $1";
-  if (role === "technician") return { where: `${base} and ((${ownOrder}) or exists (select 1 from dispatch_tasks dt where dt.order_id=wo.id and (dt.technician_id=$2 or dt.data->'technicianIds' ? $2)))`, params: [user.shopId,user.id,user.name] };
-  if (role === "inspector") return { where: `${base} and ((${ownOrder}) or exists (select 1 from dispatch_tasks dt where dt.order_id=wo.id and dt.inspector_id=$2))`, params: [user.shopId,user.id,user.name] };
-  if (user.id && ["advisor", "manager"].includes(role)) return {
-    where: `where (wo.shop_id = $1 or (wo.paper_order is not null and exists (
-      select 1 from dispatch_notifications n where n.order_id=wo.id and n.recipient_id=$2 and n.kind='纸质委托书已创建'
-    )))`, params: [user.shopId, user.id]
-  };
-  return { where: base, params: [user.shopId] };
 }
 
 async function upsertOutboundOrder(client, orderId, dispatchNo, platformOrderNo, repairItems, technician) {

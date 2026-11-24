@@ -5,6 +5,7 @@ process.env.DATABASE_URL||='postgresql://test:test@127.0.0.1:5432/test';
 const {executeDispatchActionInTransaction}=await import('../server/services/dispatchService.mjs');
 const {processInspectionNotifications}=await import('../server/workers/inspectionNotifications.mjs');
 const {processNotification}=await import('../server/workers/dispatchNotifications.mjs');
+const {applyDispatchAction}=await import('../server/domain/dispatchPolicy.mjs');
 const tech={id:'t',name:'技师',role:'technician',shopId:'s',active:true};
 const tech2={...tech,id:'t2',name:'技师二'};
 const inspector={...tech,id:'i',name:'检验员',role:'inspector'};
@@ -13,7 +14,7 @@ function database(task,{photo=true,members=people}={}) {
  const calls=[];
  return {calls,async query(sql,params=[]) {
   calls.push({sql,params});
-  if(sql.includes('from work_orders wo left join dispatch_tasks'))return {rows:[{order_id:'o',shop_id:'s',order_status:'维修中',stage:task.stage,version:task.version,technician_id:'t',data:task,repair_items:[]}]};
+  if(sql.includes('from work_orders wo left join dispatch_tasks'))return {rows:[{order_id:'o',shop_id:'s',order_status:'维修中',stage:task.stage,version:task.version,technician_id:'t',inspector_id:task.inspectorId,data:task,repair_items:[]}]};
   if(sql.includes('select id,name,role,active,shop_id'))return {rows:members.map(p=>({...p,shop_id:p.shopId,inspector_role_member:p.inspectorRoleMember}))};
   if(sql.includes('select 1 from files'))return {rows:photo?[{}]:[]};
   if(sql.includes('insert into dispatch_events'))return {rows:[{id:99}]};
@@ -59,6 +60,38 @@ for(const action of ['submit','reassign-inspection'])test(`${action}: only assig
   assert.equal(queued(db,'dispatch_scheduler_notifications').length,0);
   const notices=queued(db,'dispatch_notifications').filter(n=>n.params[4]==='待检验');
   assert.deepEqual(notices.map(n=>n.params[3]),roles.includes('inspector')?[target.id]:[]);
+ }
+});
+for(const action of ['submit-order','submit-review'])for(const multi of [false,true])test(`${action}: ${multi?'multiple':'single'} worker submission retains only eligible claims and notifications`,async()=>{
+ for(const [target,retained,notified] of [
+  [{...inspector},true,true],
+  [{...inspector,role:'manager',roles:['manager'],inspectorRoleMember:false},true,false],
+  [{...inspector,role:'manager',roles:['manager','inspector'],inspectorRoleMember:true},true,true],
+  [{...inspector,inspectorRoleMember:false},false,false],
+  [{...inspector,roles:['technician']},false,false],
+  [{...inspector,active:false},false,false],
+  [{...inspector,shopId:'other'},false,false],
+ ]) {
+  const task={...initial(),stage:action==='submit-review'?'回审':'维修中',inspectorId:target.id,inspectorName:target.name,inspectionClaimedAt:'claimed',workerSubmissions:{t:{at:'submitted',note:''}}};
+  task.items[1].status='维修中';
+  if(!multi) {task.technicianIds=[tech.id];task.items[1].responsibleId=tech.id;delete task.workerSubmissions;}
+  const replacement={...inspector,id:'replacement'};
+  const roster=[tech,tech2,target,replacement],db=database(task,{members:roster});
+  await executeDispatchActionInTransaction(db,multi?tech2:tech,'o',input(task,action));
+  const save=db.calls.find(c=>c.sql.includes('insert into dispatch_tasks('));
+  assert.equal(save.params[3],retained?target.id:null,'only current inspection permission preserves the claim');
+  const savedData=JSON.parse(save.params[6]);
+  assert.equal(savedData.inspectorName,retained?target.name:undefined);
+  assert.equal(savedData.inspectionClaimedAt,retained?'claimed':undefined);
+  const notices=queued(db,'dispatch_notifications').filter(n=>n.params[4]==='待检验');
+  assert.deepEqual(notices.map(n=>n.params[3]),notified?[target.id]:[]);
+  const saved={...savedData,orderId:'o',shopId:'s',orderStatus:'维修中',technicianId:save.params[2],inspectorId:save.params[3]||undefined,stage:save.params[4],version:save.params[5]};
+  const reclaim=()=>applyDispatchAction(saved,input(saved,'claim-inspection'),replacement,roster);
+  if(retained)assert.throws(reclaim,/已被领取/);
+  else {
+   assert.equal(queued(db,'dispatch_inspection_notifications').length,1,'released inspection returns to the audience queue');
+   assert.equal(reclaim().inspectorId,replacement.id,'another eligible inspector can claim the pending work');
+  }
  }
 });
 for(const mode of ['mock','dingtalk']) test(`inspection worker requires an active same-shop inspector role in ${mode} mode`,async()=>{

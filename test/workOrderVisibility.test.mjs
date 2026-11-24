@@ -30,6 +30,13 @@ test("cross-shop read access never exposes signing tokens, even to managers or n
   assert.equal(sanitizeVisibleOrders([{ signatureToken: "secret" }], "advisor", {})[0].signatureToken, undefined);
 });
 
+test("signing tokens on identified orders follow the advisor ID across name changes", () => {
+  const order = { shop: { id: "s" }, advisor: "张三", advisorUserId: "owner", signatureToken: "sig-test" };
+  const tokenFor = (id, name) => sanitizeVisibleOrders([order], "advisor", { id, name, shopId: "s", role: "advisor" })[0].signatureToken;
+  assert.equal(tokenFor("namesake", "张三"), undefined);
+  assert.equal(tokenFor("owner", "张三改名"), "sig-test");
+});
+
 test("only draft work orders can be deleted", async () => {
   const draftClient = fakeDeleteClient("草稿");
   assert.deepEqual(

@@ -31,6 +31,30 @@ test('signature recovery and handover transactions',{skip:!adminUrl,timeout:1200
       for(const [file,kind] of [[front,'repair_order_photo'],[rear,'repair_order_photo'],[signature,'signature_image'],[randomUUID(),'vehicle_license'],[randomUUID(),'vehicle_nameplate_photo']])await pool.query("insert into files(id,order_id,kind,storage_provider,bucket,object_key,mime_type,size_bytes,uploaded_by) values($1,$2,$3,'local','','fixture','image/png',8,'m')",[file,id,kind]);
       return signature;
     }
+    await t.test('identified signature orders reject same-name advisors and route review to the renamed owner',async()=>{
+      const owner={id:'sign-owner',name:'改名顾问',shopId:'shop-hq',role:'advisor',active:true};
+      const namesake={...owner,id:'sign-namesake',name:'原顾问'};
+      for(const user of [owner,namesake])await pool.query("insert into users(id,name,role,shop_id) values($1,$2,'advisor','shop-hq')",[user.id,user.name]);
+      const {validateSignatureReviewRecipient}=await import('../server/repositories/customerSignatureReviewRepository.mjs');
+      for(const mode of ['onsite','remote']){
+        const id=`sign-identities-${mode}`,file=await seed(id);
+        await pool.query('update work_orders set advisor=$2,advisor_user_id=$3 where id=$1',[id,namesake.name,owner.id]);
+        const {signatureToken}=await db.createSignatureTokenForOrder(id,owner.name,{signatureMode:mode});
+        await assert.rejects(()=>db.signWorkOrderByToken(signatureToken,'客户',file,undefined,namesake),e=>e.status===403);
+        assert.equal((await db.findWorkOrderById(pool,id)).customerSignatureFileId,undefined);
+        if(mode==='onsite'){
+          assert.equal((await db.signWorkOrderByToken(signatureToken,'客户',file,undefined,owner)).status,'已委托');
+        }else{
+          await db.signWorkOrderByToken(signatureToken,null,null,async()=>({id:file}));
+          const {rows}=await pool.query("select * from dispatch_notifications where order_id=$1 and kind='需确认用户签字'",[id]);
+          assert.deepEqual(rows.map(r=>r.recipient_id),[owner.id]);
+          assert.equal(await validateSignatureReviewRecipient(rows[0],owner,pool),true);
+          assert.equal(await validateSignatureReviewRecipient({...rows[0],recipient_id:namesake.id},namesake,pool),false);
+          await assert.rejects(()=>db.confirmCustomerSignature(id,namesake),e=>e.status===403);
+          assert.equal((await db.confirmCustomerSignature(id,owner)).status,'已委托');
+        }
+      }
+    });
     await t.test('authenticated onsite signing confirms and enqueues once; remote signing still awaits review',async()=>{
       const file=await seed('onsite-auto');
       const session=await db.createSignatureTokenForOrder('onsite-auto',manager.name,{signatureMode:'onsite'});

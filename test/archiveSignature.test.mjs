@@ -1,4 +1,5 @@
 import * as rolePermissions from "../shared/roles.mjs";
+import * as orderOwnership from "../shared/orderOwnership.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -18,6 +19,7 @@ function setup(api = {}, account = user) {
   const exports = {};
   vm.runInNewContext(compiled, { exports, require(name) {
     if (name.endsWith("shared/roles.mjs")) return rolePermissions;
+    if (name.endsWith("shared/orderOwnership.mjs")) return orderOwnership;
     if (name === "react") return {
       useState(initial) { const i = state.length; state.push(initial); return [initial, value => { state[i] = value; }]; },
       useRef(value) { return { current: value }; }
@@ -69,6 +71,17 @@ test("archive permits the owning advisor or manager and hides signing for signed
   assert.equal(h.actions.canSign({ ...pending, status: "已委托" }), true);
   assert.equal(setup({}, { active:true, role: "manager", name: "经理", shopId: "shop-hq" }).actions.canSign(pending), true);
   assert.equal(setup({}, { active:true, role: "technician", name: "张三" }).actions.canSign(pending), false);
+});
+
+test("archive signature uses advisor identity before its historical name", async()=>{
+  const order={...pending,advisorUserId:'owner'},calls=[];
+  const namesake=setup({createSignatureToken:async()=>{calls.push('namesake');return order;}},{...user,id:'another'});
+  assert.equal(namesake.actions.canSign(order),false);await namesake.actions.start(order);
+  const renamed=setup({createSignatureToken:async()=>{calls.push('owner');return order;}},{...user,id:'owner',name:'新姓名'});
+  assert.equal(renamed.actions.canSign(order),true);await renamed.actions.start(order);
+  assert.deepEqual(calls,['owner']);
+  assert.equal(setup({}, {...user,id:'owner',name:'新姓名',shopId:'other'}).actions.canSign(order),false);
+  assert.equal(setup({}, {...user,id:'owner',name:'新姓名',active:false}).actions.canSign(order),false);
 });
 
 test("stale sessions and server validation failures stay visible and do not open a signing dialog", async () => {

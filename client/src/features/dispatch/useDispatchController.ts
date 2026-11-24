@@ -90,12 +90,13 @@ export function useDispatchController(user:UserProfile,view:string,initialOrderI
     document.addEventListener('visibilitychange',update);window.addEventListener('focus',update);
     return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',update);window.removeEventListener('focus',update);};
   },[refresh,refreshDetail]);
-  function select(id?:string) {
+  function select(id?:string,partsOwnerId?:string) {
     if(selection.current===id)return;
     detailFlights.current.clear();
     selection.current=id;detailGeneration.current++;setDetail(undefined);
     pending.current=undefined;setDetailLoading(Boolean(id));setSelectedId(id);setError('');
     const url=new URL(location.href);url.searchParams.delete('dispatchSection');if(id) url.searchParams.set('dispatchOrder',id);else url.searchParams.delete('dispatchOrder');
+    if(id&&partsOwnerId!==undefined)url.searchParams.set('partsOwnerId',partsOwnerId);else url.searchParams.delete('partsOwnerId');
     history.replaceState(null,'',url);
   }
   async function act(input:ActionInput):Promise<boolean> {

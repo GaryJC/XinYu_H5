@@ -175,9 +175,10 @@ test('pending legacy parts block work but do not block personal pause, resume or
 });
 test('last worker submission preserves an active inspection claim',()=>{
  const inspector={...a,id:'i',role:'inspector',name:'检验员'};
+ const roster=[...people,inspector];
  let task=act(base(),a,'submit-order');
- task=applyDispatchAction(task,{action:'claim-inspection',expectedVersion:task.version,requestId:'claim-team-test'},inspector,[...people,inspector],'claimed');
- task=act(task,b,'submit-order');
+ task=applyDispatchAction(task,{action:'claim-inspection',expectedVersion:task.version,requestId:'claim-team-test'},inspector,roster,'claimed');
+ task=applyDispatchAction(task,{action:'submit-order',expectedVersion:task.version,requestId:'final-team-submit'},b,roster);
  assert.equal(task.stage,'待检验');assert.equal(task.inspectorId,'i');assert.equal(task.inspectionClaimedAt,'claimed');
 });
 test('a fresh partial submission clears a completed inspection claim',()=>{

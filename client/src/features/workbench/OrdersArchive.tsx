@@ -1,4 +1,5 @@
 import {RefreshButton} from '../../shared/ui/RefreshButton';
+import { isOrderAdvisor } from "../../../../shared/orderOwnership.mjs";
 const ArchiveOrderTable=lazy(()=>import("./ArchiveOrderTable").then(m=>({default:m.ArchiveOrderTable})));
 import { lazy } from "../../shared/ui/recoverableLazy";
 import { workOrderApi } from "../work-orders/api/workOrderApi";
@@ -105,12 +106,12 @@ export function OrdersArchive({ controller, overview = false }: { controller: Wo
 
   const canManageDraft = Boolean(
     detailOrder?.status === "草稿" && detailOrder.shop.id === currentUser?.shopId
-    && (role === "manager" || detailOrder.advisor === currentUser?.name)
+    && (role === "manager" || isOrderAdvisor(detailOrder.advisorUserId, detailOrder.advisor, currentUser))
   );
 
   const canEditUnsigned = Boolean(detailOrder && isUnsignedOrderEditable(detailOrder)
     && detailOrder.shop.id === currentUser?.shopId
-    && (role === "manager" || (role === "advisor" && detailOrder.advisor === currentUser?.name)));
+    && (role === "manager" || (role === "advisor" && isOrderAdvisor(detailOrder.advisorUserId, detailOrder.advisor, currentUser))));
 
   async function handleDeleteDraft(order: WorkOrder) {
     setDeleteError("");

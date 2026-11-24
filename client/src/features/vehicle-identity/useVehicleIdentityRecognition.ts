@@ -22,10 +22,13 @@ const initialRecognitionState: Record<IdentifierKind, IdentifierRecognitionState
 };
 
 type Options = {
+  draft: WorkOrderDraft;
   setDraft: Dispatch<SetStateAction<WorkOrderDraft>>;
 };
 
-export function useVehicleIdentityRecognition({ setDraft }: Options) {
+export function useVehicleIdentityRecognition({ draft, setDraft }: Options) {
+  const vehicleRef = useRef(draft.vehicle);
+  vehicleRef.current = draft.vehicle;
   const [identifierRecognition, setIdentifierRecognition] = useState(initialRecognitionState);
   const [vehicleHistory, setVehicleHistory] = useState<VehicleHistoryLookupResult>();
   const [vehicleHistoryLoading, setVehicleHistoryLoading] = useState(false);
@@ -92,17 +95,21 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
       return;
     }
 
-    await runVehicleLookup({ [kind]: value }, current);
+    await runVehicleLookup({ plate: vehicleRef.current.plate, vin: vehicleRef.current.vin, [kind]: value }, current);
   }
 
   async function lookupDraftVehicle({ plate, vin }: VehicleLookupInput, savedOrganizationCode?: string, savedModelCode?: string) {
-    if (plate?.trim() || vin?.trim()) await runVehicleLookup({ plate, vin }, beginRequest(), savedOrganizationCode, savedModelCode);
+    if (!plate?.trim() && !vin?.trim()) {
+      resetVehicleIdentityRecognition();
+      return;
+    }
+    await runVehicleLookup({ plate, vin }, beginRequest(), savedOrganizationCode, savedModelCode);
   }
 
   async function lookupVehicleLicense(result: VehicleLicenseOcrResult) {
     const current = beginRequest();
-    const plate = result.plate.trim().toUpperCase();
-    const vin = normalizeIdentifier(result.vin);
+    const plate = (result.plate || vehicleRef.current.plate).trim().toUpperCase();
+    const vin = normalizeIdentifier(result.vin || vehicleRef.current.vin);
     setIdentifierRecognition((current) => ({
       plate: plate ? { status: "已识别", value: plate } : current.plate,
       vin: vin ? { status: "已识别", value: vin } : current.vin
@@ -112,8 +119,8 @@ export function useVehicleIdentityRecognition({ setDraft }: Options) {
 
   async function lookupVehicleLicenseForDevelopment(input: VehicleLookupInput) {
     const current = beginRequest();
-    const plate = (input.plate || "").trim().toUpperCase();
-    const vin = normalizeIdentifier(input.vin || "");
+    const plate = (input.plate || vehicleRef.current.plate).trim().toUpperCase();
+    const vin = normalizeIdentifier(input.vin || vehicleRef.current.vin);
     setIdentifierRecognition((current) => ({
       plate: plate ? { status: "已识别", value: plate } : current.plate,
       vin: vin ? { status: "已识别", value: vin } : current.vin
