@@ -677,7 +677,7 @@ export type CompanyVehicle = {
 export type CompanyVehicleInput = Pick<CompanyVehicle, "plate" | "brand" | "model" | "active" | "insuranceStart" | "insuranceEnd" | "insuranceDetails">;
 export type VehicleTripStatus = "待审批" | "待出车" | "用车中" | "待收车审核" | "已还车" | "已驳回" | "已取消";
 export type VehicleTripStage = "departure" | "return" | "signature";
-export type VehicleTripAction = "approve" | "reject" | "cancel" | "depart" | "return" | "approve-return" | "reject-return";
+export type VehicleTripAction = "approve" | "reject" | "cancel" | "depart" | "return" | "proxy-return" | "approve-return" | "reject-return";
 export type VehicleTripAttachment = { fileId: string; stage: VehicleTripStage; confirmed: boolean; returnRound: number };
 export type VehicleTrip = {
   id: string; shopId: string; applicantId: string; applicantName: string; vehicleId: string;
@@ -685,6 +685,7 @@ export type VehicleTrip = {
   reason: string; note: string; status: VehicleTripStatus; createdAt: string;
   approvedBy?: string; approvedName?: string; approvedAt?: string;
   departureAt?: string; returnAt?: string; rejectionReason?: string;
+  proxyReturnedBy?: string; proxyReturnedName?: string;
   departureEvidence: "license" | "mileage";
   returnRound: number; returnReviewedBy?: string; returnReviewedName?: string; returnReviewedAt?: string; returnRejectionReason?: string;
 };
@@ -692,6 +693,13 @@ export type VehicleTripDetail = VehicleTrip & {
   attachments: VehicleTripAttachment[];
   history: Array<{ action: string; actorName: string; at: string }>;
 };
+export type MissedReturnCount = Pick<VehicleTrip, "applicantId" | "applicantName"> & { count: number };
+export type MissedReturnSummary = { items: MissedReturnCount[] };
+export type VehicleUsageCount = Pick<VehicleTrip, "applicantId" | "applicantName"> & {
+  tripCount: number; missedReturnCount: number;
+};
+export type VehicleUsageSummary = { items: VehicleUsageCount[] };
+export type VehicleTripOccupancyConflict = { occupyingTripId: string };
 export type VehicleTripCreateInput = { requestId: string; vehicleId: string; reason: string; note: string; departurePhotos: string[] };
 export type VehicleTripActionInput = { requestId: string; fileIds?: string[]; reason?: string; returnRound?: number };
 export type VehicleTripUploadInput = { requestId: string; stage: Exclude<VehicleTripStage, "signature">; imageBase64: string; returnRound?: number };

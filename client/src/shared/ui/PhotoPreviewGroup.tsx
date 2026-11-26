@@ -1,7 +1,7 @@
 import { Alert, Button, Dropdown, Image, message } from "antd";
 import { useState, type ReactElement, type ReactNode } from "react";
 
-import { canCopyImage, copyImage } from "../browser/copyImage";
+import { canCopyImage, copyImage, ImageClipboardUnavailableError } from "../browser/copyImage";
 import { downloadImage } from "../browser/downloadImage";
 
 const isMobileClient = () => /Android|iPhone|iPad|iPod|HarmonyOS/i.test(navigator.userAgent);
@@ -50,8 +50,12 @@ export function PhotoPreviewActions({ source, children }: { source: string; chil
 export function PhotoContextMenu({ source, children }: { source: string; children: ReactElement }) {
   const [messages, holder] = message.useMessage();
   const [busy, setBusy] = useState(false);
-  const [nativeMenu, setNativeMenu] = useState(false);
-  if (isMobileClient() || nativeMenu) return <>{holder}{children}</>;
+  const [clipboardUnavailable, setClipboardUnavailable] = useState(false);
+  // Leave the first contextmenu on the loaded image to the host when only
+  // its native Copy Image command can write pixels to the clipboard.
+  if (isMobileClient() || (source && (clipboardUnavailable || !canCopyImage()))) {
+    return <>{holder}{children}</>;
+  }
   async function copy() {
     if (busy || !source) return;
     setBusy(true);
@@ -59,20 +63,17 @@ export function PhotoContextMenu({ source, children }: { source: string; childre
       await copyImage(source);
       void messages.success("图片已复制，可粘贴到聊天或 Word");
     } catch (reason) {
+      if (reason instanceof ImageClipboardUnavailableError) setClipboardUnavailable(true);
       void messages.error(reason instanceof Error ? reason.message : "复制失败，请保存图片后使用。", 6);
     } finally { setBusy(false); }
   }
   return <>{holder}<Dropdown trigger={["contextMenu"]} styles={{ root: { zIndex: 2000 } }} menu={{
     items: [
-      { key: "copy", label: busy ? "正在复制…" : "复制图片", disabled: busy || !source || !canCopyImage() },
-      { key: "download", label: "下载图片", disabled: busy || !source },
-      { key: "native", label: "复制不成功？使用原生右键菜单", disabled: busy }
+      { key: "copy", label: busy ? "正在复制…" : "复制图片", disabled: busy || !source },
+      { key: "download", label: "下载图片", disabled: busy || !source }
     ],
     onClick: ({ key }) => {
-      if (key === "native") {
-        setNativeMenu(true);
-        void messages.info("请再次右键点击照片；若菜单提供“复制图片”，请选择该项。没有该项时请使用预览工具栏的“下载图片”。", 8);
-      } else if (key === "download") {
+      if (key === "download") {
         try {
           downloadImage(source);
           void messages.info("已尝试启动下载，请查看下载列表；若没有反应，请在外部浏览器打开后下载。", 6);

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>电脑钉钉为什么复制不了照片</title>
+<style>
+  * { box-sizing: border-box }
+  body { margin: 0; background: #f5f7f9; color: #1b2d40; font: 16px/1.75 system-ui, sans-serif }
+  main { max-width: 800px; margin: 36px auto; padding: 32px 40px; background: white; border: 1px solid #dbe2e8 }
+  h1 { margin: 4px 0 16px; font-size: clamp(24px, 4vw, 34px); line-height: 1.35 }
+  h2 { margin: 30px 0 8px; font-size: 21px }
+  h3 { margin: 16px 0 2px; font-size: 17px }
+  p { margin: 0 0 10px }
+  time, footer { color: #526478; font-size: 14px }
+  a { color: #14518d; text-underline-offset: 3px }
+  ul { padding-left: 1.3em }
+  li + li { margin-top: 7px }
+  footer { border-top: 1px solid #dbe2e8; margin-top: 24px; padding-top: 14px }
+  @media (max-width: 620px) { main { margin: 0; padding: 22px 18px; border: none } }
+</style>
+<main>
+  <time datetime="2026-11-26">2026 年 11 月 26 日</time>
+  <h1>电脑钉钉为什么复制不了照片</h1>
+  <h2>本地修复与实测</h2>
+  <p>新版会在原图加载好后选择可用的右键菜单。截图对应的情况会在第一次右键时直接打开客户端菜单，在 Mac 钉钉中点「拷贝图像」，然后到聊天框按 ⌘V。支持网页图片剪贴板的桌面客户端继续显示「复制图片」。派工单接车、维修过程和历史维修轮次也已接入共享预览。</p>
+  <p>在这台 Mac 上，钉钉从工单照片拷出的图像可粘贴为 1600×1200 PNG。另从新版相册复制合成测试图，在钉钉「文件小助手」输入框确认出现图像附件，随后清空草稿。修复已通过项目检查，尚未发布。</p>
+  <h2>修复前的现场表现</h2>
+  <p>系统的几个照片页面用了不同的大图预览。在派工单里打开接车照片，系统自己的右键菜单不会出现。用同一张测试图打开工单相册，右键就能看到「复制图片」。这个差异在桌面 Chrome 中也能复现。</p>
+  <h2>按电脑上的表现判断</h2>
+  <h3>放大照片后，右键没有「复制图片」</h3>
+  <p>派工单接车照片、维修过程照片、历次维修记录使用了默认预览组。点击图片后由外层相册显示大图，单张图片配置的复制菜单没有生效。这时能否通过右键复制，取决于客户端自己的菜单。工单相册接入了系统菜单，入口在放大后的照片上。<a href="../client/src/features/dispatch/DispatchSheetSummary.tsx">派工单接车照片</a> · <a href="../client/src/features/dispatch/RepairPhotoPanel.tsx">维修过程照片</a> · <a href="../client/src/features/dispatch/RepairRoundHistory.tsx">历次维修记录</a></p>
+  <h3>有「复制图片」，但它是灰色的</h3>
+  <p>工单相册先显示缩略图，再加载原图。原图还没到或加载失败时，复制和下载会同时变灰，预览仍可能看得见。若下载可用而复制变灰，页面还会检查当前窗口是否为安全上下文，以及客户端是否提供图片剪贴板接口。<a href="../client/src/shared/ui/AuthenticatedImage.tsx">原图加载逻辑</a> · <a href="../client/src/shared/ui/PhotoPreviewGroup.tsx">菜单启用条件</a></p>
+  <h3>能点「复制图片」，但粘贴失败</h3>
+  <p>系统会把原图转成 PNG 并请求写入剪贴板。若出现「未允许写入剪贴板」，说明写入请求被拒绝。若提示「图片已复制」，说明网页的写入调用已成功返回；还需要确认粘贴目标和钉钉版本，才能定位图片在哪一步没有出现。<a href="../client/src/shared/browser/copyImage.ts">图片写入实现</a> · <a href="https://developer.chrome.com/blog/web-custom-formats-for-async-clipboard-api">Chrome 图片剪贴板文档</a></p>
+  <h2>修复前的对照验证</h2>
+  <p>本机桌面 Chrome 运行当前项目的派工单接车照片和工单相册组件，分别打开同一张测试图。前者没有系统提供的复制项，后者有且可点。随后分别模拟原图请求失败、浏览器缺少图片剪贴板接口，两次都能复现工单相册的复制项变灰。另有 6 项剪贴板模拟测试通过。</p>
+  <p>最初的对照只验证了本地代码和 Chrome 的菜单表现。后续 Mac 钉钉实测见本文开头。</p>
+  <footer>排查时，先看放大后的照片上能否右键看到「复制图片」，再看同一菜单的「下载图片」是否可用。</footer>
+</main>
+</html>

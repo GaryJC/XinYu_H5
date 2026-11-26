@@ -22,6 +22,14 @@ export async function prepareTripImage(input, stage) {
   } catch { throw new HttpError(400, '照片无法读取，请重新拍摄或选择 JPEG、PNG 图片'); }
 }
 
+async function assertVehicleAvailable(repo, vehicleId, user, exceptTripId) {
+  const occupied = await repo.occupyingTrip(vehicleId, exceptTripId);
+  if (!occupied) return;
+  const details = occupied.shop_id === user.shopId && hasRole(user, 'manager')
+    ? { occupyingTripId: occupied.id } : undefined;
+  throw new HttpError(409, '车辆正在使用中或等待收车审核，请在归还后再出车', details);
+}
+
 export function createVehicleTripService(repository = new VehicleTripRepository(), saveFile = saveUploadedFile) {
   async function operation(user, input, action, tripId, run) {
     requireTripUser(user);
@@ -39,6 +47,12 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
       await enqueueTripNotification(repo.database,user,requestId,action,result);
       return result;
     });
+  }
+  async function monthlyReport(user, query = {}, missedOnly) {
+    requireVehicleManager(user);
+    if (typeof query.month !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(query.month) || query.month.startsWith('0000')) throw new HttpError(400, '月份无效');
+    const applicantId = query.applicantId === undefined ? undefined : tripText(query.applicantId, '用车人', 100);
+    return repository.monthlyReport(user, query.month, applicantId, query, missedOnly);
   }
   return {
     async vehicles(user, all = false) { requireTripUser(user); return repository.listVehicles(user, all); },
@@ -76,6 +90,8 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
       });
     },
     async list(user, query) { requireTripUser(user); return repository.listTrips(user, query); },
+    missedReturns(user, query) { return monthlyReport(user, query, true); },
+    usage(user, query) { return monthlyReport(user, query, false); },
     async detail(user, id) {
       const trip = await repository.getTrip(id);
       assertTripAccess(trip, user);
@@ -92,7 +108,7 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
         const car = await repo.getVehicle(normalized.vehicleId, true);
         if (!car || car.shopId !== user.shopId || !car.active) throw new HttpError(409, '车辆不存在或已停用，请重新选择');
         assertVehicleInsured(car);
-        if (await repo.isVehicleInUse(car.id)) throw new HttpError(409, '车辆正在使用中或等待收车审核，请选择其他车辆');
+        await assertVehicleAvailable(repo, car.id, user);
         const trip = await repo.createTrip(`trip_${randomUUID()}`, user, car, normalized);
         const ids = [];
         for (const imageBase64 of photos) {
@@ -115,15 +131,23 @@ export function createVehicleTripService(repository = new VehicleTripRepository(
           if (!car?.active) throw new HttpError(409, '车辆已停用，不能出车');
           assertVehicleInsured(car);
           // The vehicle lock serializes departures across different applications.
-          if (await repo.isVehicleInUse(trip.vehicleId, id)) throw new HttpError(409, '车辆正在使用中或等待收车审核，请等待审核通过后再出车');
+          await assertVehicleAvailable(repo, trip.vehicleId, user, id);
         }
         if (['approve-return', 'reject-return'].includes(action) && input.returnRound !== trip.returnRound) throw new HttpError(409, '还车资料已更新，请刷新后重新审核');
-        if (['depart', 'approve', 'return'].includes(action)) {
-          const stage = action === 'return' ? 'return' : 'departure';
+        if (action === 'proxy-return' && input.returnRound !== undefined && input.returnRound !== trip.returnRound) throw new HttpError(409, '还车资料已更新，请刷新后重试');
+        if (['depart', 'approve', 'return', 'proxy-return'].includes(action)) {
+          const proxyReturn = action === 'proxy-return';
+          const stage = action === 'return' || proxyReturn ? 'return' : 'departure';
           const submitted = stage === 'departure' ? (await repo.attachments(id, user)).filter(photo => photo.stage === 'departure' && photo.confirmed) : [];
-          const ids = submitted.length ? submitted.map(photo => photo.fileId) : input.fileIds;
-          if (!Array.isArray(ids) || !ids.length || ids.length > 9 || ids.some(id => typeof id !== 'string') || new Set(ids).size !== ids.length) throw new HttpError(400, `请先上传${stage === 'departure' && trip.departureEvidence === 'license' ? '行驶证' : '公里数'}照片（最多 9 张）`);
-          if (await repo.confirmAttachments(id, stage, trip.applicantId, ids, trip.returnRound) !== ids.length) throw new HttpError(400, '附件不属于本次申请、本次还车或不是申请人上传');
+          const { fileIds = [] } = input;
+          const ids = submitted.length ? submitted.map(photo => photo.fileId) : fileIds;
+          if (!Array.isArray(ids) || (!ids.length && !proxyReturn) || ids.length > 9 || ids.some(id => typeof id !== 'string' || !id) || new Set(ids).size !== ids.length) {
+            throw new HttpError(400, `请先上传${stage === 'departure' && trip.departureEvidence === 'license' ? '行驶证' : '公里数'}照片（最多 9 张）`);
+          }
+          const uploaderId = proxyReturn ? user.id : trip.applicantId;
+          if (ids.length && await repo.confirmAttachments(id, stage, uploaderId, ids, trip.returnRound) !== ids.length) {
+            throw new HttpError(400, '附件不属于本次申请、本次还车或对应上传人');
+          }
         }
         const reason = ['reject', 'reject-return'].includes(action) ? tripText(input.reason, '退回原因') : '';
         return repo.changeTrip(id, action, user, reason);

@@ -13,10 +13,12 @@ import type { UserProfile, VehicleTripStage } from '../../../../shared/types';
 import { AuthenticatedImage } from '../../shared/ui/AuthenticatedImage';
 import { useVehicleTrips } from './useVehicleTrips';
 import { TripCameraInput } from './TripCameraInput';
+import { ProxyReturnDialog } from './ProxyReturnDialog';
+import { VehicleUsageReport } from './VehicleUsageReport';
+import { tripTime as time } from './tripTime';
 import './vehicle-trips.css';
 
-const time = (value?: string) => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '—';
-const actions: Record<string, string> = { create: '提交申请', approve: '批准申请', reject: '驳回', cancel: '取消申请', depart: '确认出车', return: '提交还车', 'approve-return': '收车审核通过', 'reject-return': '收车审核退回' };
+const actions: Record<string, string> = { create: '提交申请', approve: '批准申请', reject: '驳回', cancel: '取消申请', depart: '确认出车', return: '提交还车', 'proxy-return': '管理员代登记还车', 'approve-return': '收车审核通过', 'reject-return': '收车审核退回' };
 export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserProfile; initialScope?:string }) {
   const feedback = useActionFeedback();
   const state = useVehicleTrips(initialScope);
@@ -26,15 +28,24 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
   const [rejectForm] = Form.useForm<{ reason: string }>();
   const rejectReason = Form.useWatch('reason', rejectForm) || '';
   const [excluded, setExcluded] = useState<string[]>([]);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [proxyOpen, setProxyOpen] = useState(false);
+  const [approvalId, setApprovalId] = useState<string>();
   const manager = hasRole(user, 'manager');
+  const showingReport = manager && reportOpen;
   const detail = state.detail;
   const mine = detail?.applicantId === user.id;
   const stage = detail && ['待审批', '待出车'].includes(detail.status) ? 'departure' : detail?.status === '用车中' ? 'return' : undefined;
   const photoIds = detail?.attachments.filter(a => a.stage === stage && (stage !== 'return' || a.returnRound === detail.returnRound) && !excluded.includes(a.fileId)).map(a => a.fileId) || [];
   const hasApplicationPhotos = detail?.attachments.some(a => a.stage === 'departure' && a.confirmed);
-  function open(id: string) { setRejectOpen(false); rejectForm.resetFields(); setExcluded([]); state.select(id); }
+  function open(id: string) { setProxyOpen(false); setRejectOpen(false); rejectForm.resetFields(); setExcluded([]); state.select(id); }
+  const occupyingId = manager && state.occupyingTripId;
+  const errorAlert = state.error && <Alert className="trip-error" type="error" showIcon title={state.error} action={occupyingId && <Button disabled={state.busy} onClick={() => {
+    if (detail?.status === '待审批') setApprovalId(detail.id);
+    open(occupyingId);
+  }}>查看占用车辆的原单</Button>} />;
   function photos(phase: VehicleTripStage, title: string, returnRound?: number) {
-    const items = detail?.attachments.filter(a => a.stage === phase && (returnRound === undefined || a.returnRound === returnRound)) || [];
+    const items = detail?.attachments.filter(a => a.stage === phase && (mine || a.confirmed) && (returnRound === undefined || a.returnRound === returnRound)) || [];
     return items.length ? <section className="trip-section"><h3>{title}</h3><div className="trip-photos">{items.map(a => <div key={a.fileId}>
       <AuthenticatedImage fileId={a.fileId} alt={title} width={140} height={100} />
       {!a.confirmed && mine && stage === phase && <Button size="small" disabled={state.busy} onClick={() => setExcluded(current => current.includes(a.fileId) ? current.filter(id => id !== a.fileId) : [...current, a.fileId])}>{excluded.includes(a.fileId) ? '重新选用' : '不使用此照片'}</Button>}
@@ -42,7 +53,7 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
   }
   return <section className="trip-page" aria-label="出车申请">
     <header className="trip-page-heading"><div><h2>出车申请</h2></div><RefreshButton loading={state.pending === 'list'} disabled={state.busy} onClick={() => void state.refresh()} label="刷新申请"/></header>
-    {state.error && <Alert type="error" showIcon title={state.error} />}
+    {!state.selectedId && errorAlert}
     <Card className="trip-create-card" title={<span className="trip-section-heading"><CarFront size={20} />申请用车</span>}>
       <p>驾驶员：{user.name}</p>
       <Form name="vehicle-trip-create" form={form} layout="vertical" disabled={state.busy} onFinishFailed={() => feedback.warning("请选择车辆并填写用车事由")} onFinish={async values => { if (await state.create(values)) form.resetFields(); }}>
@@ -62,9 +73,13 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
         <Button type="primary" htmlType="submit" loading={state.pending === 'create'} disabled={state.busy || !state.vehicles.length}>提交出车申请</Button>
       </Form>
     </Card>
-    <div className="trip-list-heading"><div><h3>{manager ? '本店申请记录' : '我的申请记录'}</h3><span className="trip-muted">共 {state.list.total} 条申请</span></div>
-      <Select aria-label="筛选出车申请" value={scope} onChange={setScope} style={{ width: 140 }} options={[{ value: 'all', label: '全部记录' }, { value: 'mine', label: '我的申请' }, { value: 'pending', label: '待审批' }, { value: 'using', label: '用车中' }]} />
+    <div className="trip-list-heading"><div><h3>{showingReport ? '用车统计' : manager ? '本店申请记录' : '我的申请记录'}</h3>{!showingReport && <span className="trip-muted">共 {state.list.total} 条申请</span>}</div>
+      <div className="trip-list-tools">
+        {manager && <Button onClick={() => setReportOpen(value => !value)}>{showingReport ? '返回申请记录' : '用车统计'}</Button>}
+        {!showingReport && <Select aria-label="筛选出车申请" value={scope} onChange={setScope} style={{ width: 140 }} options={[{ value: 'all', label: '全部记录' }, { value: 'mine', label: '我的申请' }, { value: 'pending', label: '待审批' }, { value: 'using', label: '用车中' }]} />}
+      </div>
     </div>
+    {showingReport ? <VehicleUsageReport key={`${user.shopId}:${user.id}`} mobile={state.mobile} busy={state.busy} onOpenTrip={open} /> : <>
     {!state.busy && !state.trips.length && <Empty description="暂无出车申请" />}
     {state.pending === 'list' && <LoadingState label="正在加载出车申请…" />}
     <div className="trip-card-grid">{state.trips.map(t => <Card className="trip-record-card" role="button" tabIndex={state.busy ? -1 : 0} aria-label={`查看申请：${t.vehicle.plate}，${t.applicantName}，${t.status}`} aria-disabled={state.busy}
@@ -75,14 +90,16 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
       <div className="trip-record-footer"><span><Clock3 size={14} />{time(t.createdAt)}</span></div>
     </Card>)}</div>
     <ListPagination mobile={state.mobile} page={state.list.page} total={state.list.total} loaded={state.trips.length} loading={state.busy} onPage={state.list.setPage} onMore={state.list.loadMore}/>
-    <Drawer className="trip-detail" title="出车申请详情" open={Boolean(state.selectedId)} size="large" onClose={() => !state.busy && state.select()}>
-      {state.error && <Alert type="error" showIcon title={state.error} />}
+    </>}
+    <Drawer className="trip-detail" title="出车申请详情" open={Boolean(state.selectedId)} size="large" onClose={() => { if (!state.busy) { setApprovalId(undefined); state.select(); } }}
+      extra={approvalId && <Button disabled={state.busy} onClick={() => { open(approvalId); setApprovalId(undefined); }}>返回待审批申请</Button>}>
+      {errorAlert}
       {state.pending === 'detail' && <LoadingState label="正在加载申请详情…" />}
       {detail && <>
         <div className="trip-vehicle-summary">
           <div className="trip-vehicle-icon"><CarFront size={26} /></div>
           <div><span className="trip-eyebrow">出车申请</span><h2>{detail.vehicle.plate}</h2><p>{detail.vehicle.brand} {detail.vehicle.model}</p></div>
-          <Tag color={['待审批', '待收车审核'].includes(detail.status) ? 'orange' : detail.status === '用车中' ? 'blue' : detail.status === '已还车' ? 'green' : 'default'}>{detail.status}</Tag>
+          <Tag color={['待审批', '待收车审核'].includes(detail.status) ? 'orange' : detail.status === '用车中' ? 'blue' : detail.status === '已还车' ? 'green' : 'default'}>{detail.proxyReturnedBy ? '已还车 · 管理员代登记' : detail.status}</Tag>
         </div>
         <section className="trip-section"><h3 className="trip-section-heading"><ClipboardCheck size={18} />申请信息</h3>
           <dl className="trip-info-grid">
@@ -94,7 +111,8 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
         <section className="trip-section"><h3 className="trip-section-heading"><Clock3 size={18} />行程与收车</h3>
           <dl className="trip-info-grid">
             <div><dt>出车时间</dt><dd>{detail.departureAt ? time(detail.departureAt) : '尚未出车'}</dd></div>
-            <div><dt>还车提交时间</dt><dd>{detail.returnAt ? time(detail.returnAt) : '尚未还车'}</dd></div>
+            <div><dt>{detail.proxyReturnedBy ? '代登记时间' : '还车提交时间'}</dt><dd>{detail.returnAt ? time(detail.returnAt) : '尚未还车'}</dd></div>
+            {detail.proxyReturnedBy && <div><dt>代登记人</dt><dd>{detail.proxyReturnedName}</dd></div>}
             <div className="trip-info-wide"><dt>出车审批</dt><dd>{detail.approvedName ? `${detail.approvedName} · ${time(detail.approvedAt)}` : detail.status === '待审批' ? '等待管理员审批' : '—'}</dd></div>
 
           </dl>
@@ -111,6 +129,9 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
           </div>
         </section>}
         {mine && manager && detail.status === '待审批' && <Alert type="info" title="请等待另一名门店管理员审批出车" />}
+        {manager && !mine && detail.status === '用车中' && <section className="trip-section">
+          <Button type="primary" disabled={state.busy} onClick={() => setProxyOpen(true)}>代登记还车</Button>
+        </section>}
         {mine && stage && (detail.status !== '待审批' || !hasApplicationPhotos) && <section className="trip-section">
           <h3>{detail.status === '待审批' ? '补充申请照片' : stage === 'departure' ? '出车登记' : '还车登记'}</h3>
           {(stage === 'return' || !hasApplicationPhotos) && <div className="trip-capture-section">
@@ -124,6 +145,11 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
         <NotificationRecords key={detail.id} source="vehicle-trip" resourceId={detail.id}/>
       </>}
     </Drawer>
+    {proxyOpen && manager && detail && !mine && detail.status === '用车中' && <ProxyReturnDialog
+      trip={detail} busy={state.busy} pending={state.pending} error={state.error} onCancel={() => setProxyOpen(false)}
+      onUpload={file => void state.upload(file, 'return')} onSubmit={async fileIds => {
+        if (await state.act('proxy-return', { fileIds })) setProxyOpen(false);
+      }} />}
     <Modal className="trip-reject-modal" centered width={480} title={<span className="trip-reject-title"><span><CircleAlert size={22} /></span>驳回申请</span>} open={rejectOpen && Boolean(detail) && detail?.status === '待审批'}
       okText="确认驳回" cancelText="取消" okButtonProps={{ danger: true }} confirmLoading={state.pending === 'reject'}
       onOk={() => rejectForm.submit()} onCancel={() => { if (!state.busy) setRejectOpen(false); }}>

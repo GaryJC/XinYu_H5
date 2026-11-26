@@ -18,7 +18,10 @@ function load(filename) {
   mod.require=name=>{
     if(name.endsWith('.css'))return {};
     if(name.endsWith('/dispatchApi'))return {dispatchApi:{}};
-    if(name.endsWith('/AuthenticatedImage'))return {AuthenticatedImage:({alt})=>React.createElement('img',{alt})};
+    if(name.endsWith('/AuthenticatedImage'))return {
+      AuthenticatedImage:({alt})=>React.createElement('img',{alt}),
+      AuthenticatedImagePreviewGroup:({children})=>children
+    };
     if(name.startsWith('.')) {
       const base=resolve(dirname(filename),name),local=[base,base+'.tsx',base+'.ts'].find(existsSync);
       if(local&&/\.tsx?$/.test(local))return load(local);

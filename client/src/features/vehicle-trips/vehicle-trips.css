@@ -17,6 +17,9 @@
 .trip-page .ant-input-textarea-show-count .ant-input-data-count { bottom: -20px; }
 .trip-page .ant-btn { min-height: 40px; border-radius: 8px; }
 .trip-list-heading { margin: 30px 0 16px; }
+.trip-list-heading, .trip-list-tools { flex-wrap: wrap; }
+.trip-list-tools, .trip-report-controls { display: flex; align-items: center; gap: 10px; }
+.trip-list-tools { max-width: 100%; }
 .trip-list-heading h3 { margin: 0 0 4px; font-size: 17px; }
 .trip-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr)); gap: 16px; margin: 16px 0; }
 .trip-record-card.ant-card { border-radius: 14px; border-color: #e4eaf1; overflow: hidden; }
@@ -39,6 +42,8 @@
 .trip-vehicle-summary h2 { font-size: 25px; letter-spacing: .5px; margin: 3px 0 4px; line-height: 1.2; }
 .trip-vehicle-summary p { margin: 0; font-size: 13px; color: #647990; }
 .trip-vehicle-summary > .ant-tag { margin-left: auto; align-self: flex-start; margin-right: 0; }
+.trip-vehicle-summary { flex-wrap: wrap; }
+.trip-vehicle-summary h2 { overflow-wrap: anywhere; }
 .trip-section { background: #fff; border: 1px solid #e5eaf1; border-radius: 14px; padding: 22px; margin: 16px 0; }
 .trip-section h3 { margin: 0 0 18px; font-size: 15px; font-weight: 600; }
 .trip-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 24px; margin: 0; }
@@ -78,6 +83,29 @@
 .trip-reject-count { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: 12px; line-height: 1.6; color: #8b96a6; }
 .trip-reject-modal .ant-modal-footer { display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid #edf0f4; margin-top: 24px; padding-top: 20px; }
 .trip-reject-modal .ant-modal-footer > .ant-btn { min-height: 42px; min-width: 98px; margin-inline-start: 0; padding: 8px 20px; border-radius: 9px; }
+.trip-error.ant-alert { flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.trip-error .ant-alert-content { min-width: min(160px,100%); overflow-wrap: anywhere; }
+.trip-error .ant-alert-actions { margin-inline-start: 0; }
+.trip-proxy-modal .ant-modal-container { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.trip-proxy-modal .trip-info-grid { margin: 18px 0 12px; padding: 14px 16px; background: #f4f6f9; border-radius: 8px; }
+.trip-proxy-modal p { margin: 12px 0; line-height: 1.7; }
+.trip-proxy-capture { border-block: 1px solid #e5eaf1; }
+.trip-proxy-capture summary { cursor: pointer; padding: 12px 0; }
+.trip-proxy-capture[open] { padding-bottom: 14px; }
+.trip-proxy-modal .ant-alert { margin-top: 12px; }
+.trip-report-controls { flex-wrap: wrap; margin-bottom: 16px; }
+.trip-report-controls h4 { margin: 0; overflow-wrap: anywhere; }
+.trip-report-controls .ant-btn { margin-left: auto; }
+.trip-report-list { margin: 0; padding: 0; list-style: none; }
+.trip-report-list > li + li { border-top: 1px solid #e4eaf1; }
+.trip-report-list button { display: block; width: 100%; border: 0; border-radius: 6px; padding: 14px 6px; background: transparent; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.trip-report-list button:focus-visible { outline: 2px solid #1677ff; outline-offset: 2px; }
+.trip-report-list button:hover { background: #f6f9fc; }
+.trip-report-list .trip-report-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.trip-report-row strong { overflow-wrap: anywhere; }
+.trip-report-row > span { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; color: #31649c; }
+.trip-report-facts { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 5px 14px; margin-top: 10px; font-size: 13px; overflow-wrap: anywhere; }
+.trip-report-facts > :nth-child(odd) { color: #65768a; }
 @media (max-width: 600px) {
   .trip-page-heading h2 { font-size: 23px; }
   .trip-create-card .ant-card-body { padding: 18px; }
@@ -89,6 +117,9 @@
   .trip-section { padding: 18px; }
   .trip-info-grid { gap: 18px 14px; }
   .trip-info-grid dd { font-size: 13px; }
+  .trip-list-heading { gap: 8px; }
+  .trip-list-tools { gap: 8px; }
+  .trip-detail .ant-drawer-header .ant-btn { padding-inline: 10px; }
   .trip-reject-modal.ant-modal { max-width: calc(100vw - 32px); }
   .trip-reject-modal .ant-modal-container { padding: 22px 20px; }
   .trip-reject-modal .ant-modal-footer > .ant-btn { flex: 1; min-height: 44px; }
@@ -102,3 +133,13 @@
 .trip-mileage-example img { display: block; width: 100%; height: auto; }
 .trip-mileage-example > span { position: absolute; top: 10px; left: 10px; padding: 4px 9px; border-radius: 6px; background: #ffffffed; color: #415570; font-size: 11px; }
 .trip-upload .trip-upload-action { display: flex; align-items: center; gap: 8px; font-size: 15px; color: #356797; }
+
+.trip-usage-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-variant-numeric: tabular-nums; }
+.trip-usage-table th, .trip-usage-table td { text-align: center; border-bottom: 1px solid #e4eaf1; padding: 6px 4px; }
+.trip-usage-table th:first-child { width: 44%; text-align: left; overflow-wrap: anywhere; }
+.trip-usage-table thead th { font-size: 13px; color: #65768a; font-weight: 500; }
+.trip-usage-table tbody th { font-weight: 500; }
+.trip-usage-total { background: #f4f7fa; font-weight: 600; }
+.trip-usage-table .trip-usage-total > * { padding-block: 12px; }
+.trip-usage-table button { min-width: 44px; min-height: 40px; color: #1668c4; border: 0; border-radius: 6px; background: transparent; font: inherit; cursor: pointer; }
+.trip-usage-table button:focus-visible { outline: 2px solid #1677ff; }

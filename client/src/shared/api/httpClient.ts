@@ -202,7 +202,9 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     const payload = await response.json().catch(() => null);
     if (session) checkSession(session, response.status);
     if (!response.ok) {
-      throw Object.assign(new Error(payload?.error ?? `API request failed: ${response.status}`), { status: response.status });
+      throw Object.assign(new Error(payload?.error ?? `API request failed: ${response.status}`), {
+        status: response.status, details: payload?.details
+      });
     }
     succeeded = true;
     return payload as T;

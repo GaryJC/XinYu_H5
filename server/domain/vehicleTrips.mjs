@@ -27,17 +27,17 @@ export function assertTripAccess(trip, user) {
 }
 export function assertTripAction(trip, user, action) {
   assertTripAccess(trip, user);
-  const approval = ['approve', 'reject', 'approve-return', 'reject-return'].includes(action);
-  if (approval) {
+  if (['approve', 'reject', 'approve-return', 'reject-return', 'proxy-return'].includes(action)) {
     requireVehicleManager(user);
+    if (action === 'proxy-return' && trip.applicantId === user.id) throw new HttpError(403, '本人用车请按正常流程还车');
     if (trip.applicantId === user.id) throw new HttpError(403, '不能审核自己的申请或还车');
   } else if (trip.applicantId !== user.id) throw new HttpError(403, '仅申请人可操作出车、还车或取消');
-  const states = { approve: ['待审批'], reject: ['待审批'], cancel: ['待审批', '待出车'], depart: ['待出车'], return: ['用车中'], 'approve-return': [], 'reject-return': [] };
+  const states = { approve: ['待审批'], reject: ['待审批'], cancel: ['待审批', '待出车'], depart: ['待出车'], return: ['用车中'], 'proxy-return': ['用车中'], 'approve-return': [], 'reject-return': [] };
   if (!Object.hasOwn(states, action)) throw new HttpError(400, '不支持的操作');
   if (!states[action].includes(trip.status)) throw new HttpError(409, '申请状态已变化，请刷新后重试');
 }
 export function assertTripUpload(trip, user, stage) {
-  const action = { departure: 'depart', return: 'return' }[stage];
+  const action = { departure: 'depart', return: trip?.applicantId === user.id ? 'return' : 'proxy-return' }[stage];
   if (!action) throw new HttpError(400, '附件用途无效');
   if (stage === 'departure' && trip?.status === '待审批') {
     assertTripAccess(trip, user);

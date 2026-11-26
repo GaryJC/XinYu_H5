@@ -3,10 +3,10 @@ import {hasApprovedPhotoWaiver} from '../../../../shared/repairPhotoWaiver.mjs';
 import {RepairPhotoWaiverPanel} from './RepairPhotoWaiverPanel';
 import { PhotoRemoveButton } from '../../shared/ui/PhotoRemoveButton';
 import { useEffect, useState } from 'react';
-import { Button, Image, Alert, Checkbox, Modal } from 'antd';
+import { Button, Alert, Checkbox, Modal } from 'antd';
 import { Trash2 } from 'lucide-react';
 import { ImageSourcePicker } from '../../shared/ui/ImageSourcePicker';
-import { AuthenticatedImage } from '../../shared/ui/AuthenticatedImage';
+import { AuthenticatedImage, AuthenticatedImagePreviewGroup } from '../../shared/ui/AuthenticatedImage';
 import { usePhotoSelection } from '../../shared/ui/PhotoBatchActions';
 import { useRepairPhotos } from './useRepairPhotos';
 import { displayTime } from './dispatchLabels';
@@ -41,13 +41,13 @@ export function RepairPhotoPanel({controller,user,editable,onBlocked,ownerId}:{c
       <span>已选 {selection.selectedIds.length} 张</span>
       <PhotoRemoveButton disabled={busy||!selection.selectedIds.length} onClick={()=>setConfirmIds([...selection.selectedIds])}>删除所选</PhotoRemoveButton>
     </div>}
-    <Image.PreviewGroup><div className="repair-photo-grid">{photos.map(photo=><div key={photo.id} className={selection.selectedIds.includes(photo.id)?'repair-photo-card is-selected':'repair-photo-card'}>
+    <AuthenticatedImagePreviewGroup fileIds={photos.map(photo => photo.id)}><div className="repair-photo-grid">{photos.map(photo=><div key={photo.id} className={selection.selectedIds.includes(photo.id)?'repair-photo-card is-selected':'repair-photo-card'}>
       <div className="repair-photo-thumbnail"><AuthenticatedImage fileId={photo.id} alt="维修过程照片" width="100%" height={100}/>
         {managing&&eligibleIds.includes(photo.id)&&<Checkbox className="repair-photo-check" aria-label={`选择维修照片 ${photo.originalName||photo.id}`} disabled={busy} checked={selection.selectedIds.includes(photo.id)} onChange={event=>selection.toggle(photo.id,event.target.checked)}/>}
       </div>
       <small>维修时 · {photo.repairRound?`返工第 ${photo.repairRound} 轮`:'原维修'} · 已保存 · {photo.uploadedName||'维修人员'}<br/>{displayTime(photo.createdAt)}</small>
       {editable&&!managing&&eligibleIds.includes(photo.id)?<PhotoRemoveButton disabled={busy} onClick={()=>setConfirmIds([photo.id])}>删除照片</PhotoRemoveButton>:null}
-    </div>)}</div></Image.PreviewGroup>
+    </div>)}</div></AuthenticatedImagePreviewGroup>
     {uploads.map(row=><div key={row.id} className="repair-photo-upload" role="status">{row.state==='uploading'?<span>照片上传中…</span>:<><Alert type="error" showIcon title="照片上传失败" description={row.error}/><Button onClick={()=>void retry(row)} disabled={!editable}>重试</Button><PhotoRemoveButton onClick={()=>remove(row.id)}>移除失败照片</PhotoRemoveButton></>}</div>)}
     {editable&&!currentPhotos.length?<p role="status">本轮尚未上传维修照片</p>:null}
     {!editable&&!photos.length&&!uploads.length?<p className="dispatch-muted">暂无维修照片</p>:null}

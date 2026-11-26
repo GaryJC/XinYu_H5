@@ -11,6 +11,7 @@ function trip(row) {
     vehicleId: row.vehicle_id, vehicle: row.vehicle_snapshot, reason: row.reason, note: row.note, status: row.status,
     approvedBy: row.approved_by, approvedName: row.approved_name, approvedAt: iso(row.approved_at),
     departureAt: iso(row.departure_at), returnAt: iso(row.return_at), rejectionReason: row.rejection_reason, createdAt: iso(row.created_at),
+    proxyReturnedBy: row.proxy_returned_by ?? undefined, proxyReturnedName: row.proxy_returned_name ?? undefined,
     departureEvidence: row.departure_evidence, returnRound: row.return_round, returnReviewedBy: row.return_reviewed_by, returnReviewedName: row.return_reviewed_name,
     returnReviewedAt: iso(row.return_reviewed_at), returnRejectionReason: row.return_rejection_reason };
 }
@@ -24,9 +25,11 @@ export class VehicleTripRepository {
   async getVehicle(id, lock = false) {
     return vehicle((await this.database.query(`select *,insurance_start::text,insurance_end::text from company_vehicles where id=$1${lock ? ' for update' : ''}`, [id])).rows[0]);
   }
-  async isVehicleInUse(vehicleId, exceptTripId) {
-    const {rows}=await this.database.query("select 1 from vehicle_trip_requests where vehicle_id=$1 and status in ('用车中','待收车审核') and ($2::text is null or id<>$2) limit 1",[vehicleId,exceptTripId]);
-    return rows.length>0;
+  async occupyingTrip(vehicleId, exceptTripId) {
+    const { rows } = await this.database.query(`select id, shop_id from vehicle_trip_requests
+      where vehicle_id=$1 and status in ('用车中','待收车审核') and ($2::text is null or id<>$2)
+      order by departure_at desc nulls last, id limit 1`, [vehicleId, exceptTripId]);
+    return rows[0];
   }
   async saveVehicle(id, shopId, input, existing) {
     const values = [id, shopId, input.plate, input.brand, input.model, input.active, input.insuranceStart, input.insuranceEnd, JSON.stringify(input.insuranceDetails)];
@@ -51,18 +54,45 @@ export class VehicleTripRepository {
   async getTrip(id, lock = false) {
     return trip((await this.database.query(`select * from vehicle_trip_requests where id=$1${lock ? ' for update' : ''}`, [id])).rows[0]);
   }
+  async monthlyReport(user, month, applicantId, query, missedOnly) {
+    // Keep departure_at unmodified so the partial shop/month index supplies both bounds.
+    const monthWhere = `from vehicle_trip_requests
+      where shop_id=$1 ${missedOnly ? 'and proxy_returned_by is not null' : ''}
+      and departure_at >= ($2::date::timestamp at time zone 'Asia/Shanghai')
+      and departure_at < (($2::date + interval '1 month') at time zone 'Asia/Shanghai')`;
+    const params = [user.shopId, month + '-01'];
+    if (applicantId === undefined) {
+      const counts = missedOnly ? 'count(*)::integer as count'
+        : 'count(*)::integer as "tripCount", count(proxy_returned_by)::integer as "missedReturnCount"';
+      const { rows } = await this.database.query(`select applicant_id as "applicantId",
+        (array_agg(applicant_name order by departure_at desc, id desc))[1] as "applicantName",
+        ${counts} ${monthWhere}
+        group by applicant_id order by count(*) desc, "applicantName", applicant_id`, params);
+      return { items: rows };
+    }
+    const { page: requested, pageSize } = pagination(query);
+    const personWhere = monthWhere + ' and applicant_id=$3';
+    params.push(applicantId);
+    const { rows: [count] } = await this.database.query(`select count(*)::integer as total ${personWhere}`, params);
+    const page = Math.min(requested, Math.max(1, Math.ceil(count.total / pageSize)));
+    const { rows } = await this.database.query(`select * ${personWhere}
+      order by departure_at desc, id desc limit $4 offset $5`, [...params, pageSize, (page - 1) * pageSize]);
+    return { items: rows.map(trip), total: count.total, page, pageSize };
+  }
   async createTrip(id, user, car, input) {
     await this.database.query(`insert into vehicle_trip_requests(id,shop_id,applicant_id,applicant_name,vehicle_id,vehicle_snapshot,reason,note,status,departure_evidence) values($1,$2,$3,$4,$5,$6,$7,$8,'待审批','mileage')`,
       [id, user.shopId, user.id, user.name, car.id, JSON.stringify({ plate: car.plate, brand: car.brand, model: car.model }), input.reason, input.note]);
     return this.getTrip(id);
   }
   async changeTrip(id, action, user, note) {
+    const returned = "status='已还车',return_at=now(),return_reviewed_by=null,return_reviewed_name=null,return_reviewed_at=null,return_rejection_reason=null";
     const changes = { approve: "status='用车中',approved_by=$2,approved_name=$3,approved_at=now(),departure_at=now()", reject: "status='已驳回',rejection_reason=$2",
       cancel: "status='已取消'", depart: "status='用车中',departure_at=now()",
-      return: "status='已还车',return_at=now(),return_reviewed_by=null,return_reviewed_name=null,return_reviewed_at=null,return_rejection_reason=null",
+      return: returned,
+      'proxy-return': returned + ',proxy_returned_by=$2,proxy_returned_name=$3',
       'approve-return': "status='已还车',return_reviewed_by=$2,return_reviewed_name=$3,return_reviewed_at=now()",
       'reject-return': "status='用车中',return_at=null,return_round=return_round+1,return_reviewed_by=$2,return_reviewed_name=$3,return_reviewed_at=now(),return_rejection_reason=$4" };
-    const args = ['approve', 'approve-return'].includes(action) ? [id, user.id, user.name] : action === 'reject-return' ? [id, user.id, user.name, note] : action === 'reject' ? [id, note] : [id];
+    const args = ['approve', 'approve-return', 'proxy-return'].includes(action) ? [id, user.id, user.name] : action === 'reject-return' ? [id, user.id, user.name, note] : action === 'reject' ? [id, note] : [id];
     await this.database.query(`update vehicle_trip_requests set ${changes[action]} where id=$1`, args);
     return this.getTrip(id);
   }

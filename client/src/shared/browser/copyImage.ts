@@ -26,12 +26,15 @@ function imageAsPng(source: string): Promise<Blob> {
 }
 
 export function canCopyImage(): boolean {
-  return window.isSecureContext && !!navigator.clipboard?.write && typeof ClipboardItem !== "undefined";
+  return window.isSecureContext && typeof navigator.clipboard?.write === "function"
+    && typeof ClipboardItem === "function" && (ClipboardItem.supports?.("image/png") ?? true);
 }
+
+export class ImageClipboardUnavailableError extends Error {}
 
 export async function copyImage(source: string): Promise<void> {
   if (!canCopyImage()) {
-    throw new Error("当前客户端不支持复制图片，请使用“发送到 / 保存图片”，保存后插入聊天或 Word；也可在新版浏览器中打开。");
+    throw new ImageClipboardUnavailableError("当前窗口无法直接写入图片。请右键照片，用客户端的菜单复制或保存图片。");
   }
   // Pass the conversion promise directly: clipboard.write must start inside
   // the original click activation, before image decoding or canvas conversion.
@@ -47,8 +50,8 @@ export async function copyImage(source: string): Promise<void> {
       await navigator.clipboard.write([new ClipboardItem({ "image/png": await png })]);
     }
   } catch (error) {
-    if (error instanceof Error && ["NotAllowedError", "SecurityError"].includes(error.name)) {
-      throw new Error("钉钉或浏览器未允许写入剪贴板。请保持窗口在前台后重试，或保存图片后插入聊天 / Word。");
+    if (error instanceof Error && ["NotAllowedError", "SecurityError", "NotSupportedError"].includes(error.name)) {
+      throw new ImageClipboardUnavailableError("当前窗口未允许写入剪贴板。请再次右键照片，选择「复制图片」或「拷贝图像」。");
     }
     throw error;
   }

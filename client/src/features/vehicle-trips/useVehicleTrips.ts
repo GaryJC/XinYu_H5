@@ -2,7 +2,7 @@ import { Grid } from 'antd';
 import { usePagedList } from '../../shared/hooks/usePagedList';
 import { useActionFeedback } from "../../shared/ui/useActionFeedback";
 import { useEffect, useRef, useState } from 'react';
-import type { CompanyVehicle, VehicleTripDetail, VehicleTripAction, VehicleTripStage } from '../../../../shared/types';
+import type { CompanyVehicle, VehicleTripDetail, VehicleTripAction, VehicleTripStage, VehicleTripOccupancyConflict } from '../../../../shared/types';
 import { createRequestId } from '../../shared/api/requestId';
 import { prepareUploadPhoto } from '../../shared/images/prepareOcrImage';
 import { companyVehicleApi } from '../company-vehicles/companyVehicleApi';
@@ -20,6 +20,7 @@ export function useVehicleTrips(initialScope = 'all') {
   const [pending, setPending] = useState('list');
   const [selectedId, setSelectedId] = useState<string | undefined>(() => new URLSearchParams(location.search).get('vehicleTrip') || undefined);
   const [error, setError] = useState('');
+  const [occupyingTripId, setOccupyingTripId] = useState<string>();
   const [departurePhotos, setDeparturePhotos] = useState<string[]>([]);
   const requests = useRef(new Map<string, string>());
   const running = useRef(false);
@@ -31,9 +32,19 @@ export function useVehicleTrips(initialScope = 'all') {
   }
   async function run(action: () => Promise<void>, success?: string, operation = 'list') {
     if (running.current) return false;
-    running.current = true; setBusy(true); setPending(operation); setError('');
+    running.current = true; setBusy(true); setPending(operation); setError(''); setOccupyingTripId(undefined);
     try { await action(); if (success) feedback.success(success); return true; }
-    catch (e) { feedback.error(e); setError(e instanceof Error ? e.message : '操作失败，请重试'); return false; }
+    catch (e) {
+      const failure = e as { status?: number; details?: Partial<VehicleTripOccupancyConflict> } | null;
+      const occupyingId = failure?.status === 409 && failure.details?.occupyingTripId;
+      if (typeof occupyingId === 'string' && occupyingId) setOccupyingTripId(occupyingId);
+      else feedback.error(e);
+      if (failure?.status === 409 && detail && (operation === 'return' || operation === 'proxy-return')) {
+        // A different employee may have finished the same trip from another device.
+        await Promise.allSettled([list.refresh(), vehicleTripApi.detail(detail.id).then(setDetail)]);
+      }
+      setError(e instanceof Error ? e.message : '操作失败，请重试'); return false;
+    }
     finally { running.current = false; setBusy(false); setPending(''); }
   }
   async function refreshData() {
@@ -45,7 +56,7 @@ export function useVehicleTrips(initialScope = 'all') {
     if(id)url.searchParams.set('vehicleTrip',id);else url.searchParams.delete('vehicleTrip');
     history.replaceState(null,'',url);
     const revision = ++selection.current;
-    setSelectedId(id); setDetail(undefined); setError('');
+    setSelectedId(id); setDetail(undefined); setError(''); setOccupyingTripId(undefined);
     if (id) void run(async () => { const next = await vehicleTripApi.detail(id); if (selection.current === revision) setDetail(next); }, undefined, 'detail');
   }
   useEffect(() => {
@@ -61,7 +72,7 @@ export function useVehicleTrips(initialScope = 'all') {
     const key = JSON.stringify({ id, stage, imageBase64, returnRound });
     return vehicleTripApi.upload(id, { stage, imageBase64, returnRound, requestId: requestId(key) });
   }
-  return { scope,setScope,list,mobile,vehicles, trips, detail, selectedId, busy:busy||list.loading, pending, error:error||list.error, select,
+  return { scope,setScope,list,mobile,vehicles, trips, detail, selectedId, busy:busy||list.loading, pending, error:error||list.error, occupyingTripId, select,
     departurePhotos,
     addDeparturePhoto: (file: File) => run(async () => {
       if (departurePhotos.length >= 9) throw new Error('最多拍摄 9 张照片');
@@ -87,12 +98,12 @@ export function useVehicleTrips(initialScope = 'all') {
     act: (action: VehicleTripAction, options: { reason?: string; fileIds?: string[] } = {}) => run(async () => {
       if (!detail) return;
       const fileIds = options.fileIds;
-      const input = { fileIds, reason: options.reason, ...(['approve-return', 'reject-return'].includes(action) ? { returnRound: detail.returnRound } : {}) };
+      const input = { fileIds, reason: options.reason, ...(['proxy-return', 'approve-return', 'reject-return'].includes(action) ? { returnRound: detail.returnRound } : {}) };
       const key = JSON.stringify({ id: detail.id, action, ...input });
       const item = await vehicleTripApi.act(detail.id, action, { ...input, requestId: requestId(key) });
       await list.refresh();
       setDetail(current => current && current.id === item.id ? { ...current, ...item } : current);
-      feedback.success(({ approve: '已批准并出车', reject: '申请已驳回', cancel: '申请已取消', depart: '出车登记成功，已记录出车时间', return: '还车已完成，收车时间已记录', 'approve-return': '收车审核通过', 'reject-return': '收车已退回，请申请人重新拍照提交' })[action]);
+      feedback.success(({ approve: '已批准并出车', reject: '申请已驳回', cancel: '申请已取消', depart: '出车登记成功，已记录出车时间', return: '还车已完成，收车时间已记录', 'proxy-return': '已代登记还车', 'approve-return': '收车审核通过', 'reject-return': '收车已退回，请申请人重新拍照提交' })[action]);
       setDetail(await vehicleTripApi.detail(item.id));
     }, undefined, action)
   };

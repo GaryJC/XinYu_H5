@@ -216,17 +216,27 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
     // All employees may use trips and order entry; dispatch still requires its own permissions/binding.
     const { handleApiRequest } = await import('../server/routes/apiRouter.mjs');
     const { serveStatic } = await import('../server/http/staticFiles.mjs');
+    const { sendError } = await import('../server/http/response.mjs');
     const { createTokenForUser } = await import('../server/auth.mjs');
     const { createAuthSession } = await import('../server/repositories/userRepository.mjs');
     server = createServer(async (req, res) => {
       try { if (!await handleApiRequest(req, res, new URL(req.url, 'http://localhost'))) { if(process.env.VEHICLE_TRIP_UI_TEST==='true')await serveStatic(res,new URL(req.url,'http://localhost').pathname,path.resolve(process.env.DISPATCH_TEST_DIST_DIR||'dist'));else {res.statusCode = 404; res.end();} } }
-      catch (e) { res.statusCode = e.status || 500; res.end(JSON.stringify({ error: e.message })); }
+      catch (error) { sendError(res, error); }
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const base = `http://127.0.0.1:${server.address().port}`;
     async function tokenFor(user) { const token = createTokenForUser(user.id); await createAuthSession({ token, userId: user.id, expiresAt: new Date(Date.now() + 300000) }); return token; }
     const token = await tokenFor(employee), techToken = await tokenFor(technician);
     const get = (route, bearer = token) => fetch(base + route, { headers: { Authorization: `Bearer ${bearer}` } });
+    const reportPath = '/api/vehicle-trip-requests/missed-returns?month=2024-01';
+    const reportManagerToken = await tokenFor(manager);
+    assert.equal((await get(reportPath)).status, 403);
+    const emptyReport = await get(reportPath, reportManagerToken);
+    assert.equal(emptyReport.status, 200);
+    assert.deepEqual((await emptyReport.json()).items, []);
+    const emptyDetail = await get(reportPath + '&applicantId=' + encodeURIComponent(employee.id), reportManagerToken);
+    assert.equal(emptyDetail.status, 200);
+    assert.equal((await emptyDetail.json()).total, 0);
     assert.equal((await get('/api/vehicle-trip-requests')).status, 200);
     assert.equal((await get('/api/company-vehicles', techToken)).status, 200);
     assert.equal((await get('/api/work-orders')).status, 200);
@@ -327,6 +337,85 @@ test('company fleet and vehicle trips: migrations, auth, transaction retries, ph
         await reviewer.screenshot({path:'output/playwright/trip-approval-correction/insurance-vehicle-mobile.png',animations:'disabled'});
         const denied=await openNotice(other,'create',created,true);
         await denied.getByText('申请不存在或无权访问',{exact:true}).first().waitFor();
+
+        const borrower = { ...other, name: '客户现场支援组夜班值班驾驶员王师傅' };
+        await pool.query('update users set name=$2 where id=$1', [borrower.id, borrower.name]);
+        const firstTrip = await create(borrower, { ...key(), vehicleId: cars[5].id, reason });
+        const nextTrip = await create(employee, { ...key(), vehicleId: cars[5].id, reason: '下一趟送件' });
+        await svc.act(manager2, firstTrip.id, 'approve', key());
+        const fleet = await openNotice(manager2, 'create', nextTrip, true);
+        await fleet.setViewportSize({ width: 360, height: 800 });
+        const tripPanel = fleet.getByRole('dialog', { name: '出车申请详情', exact: true });
+        const approveButton = tripPanel.getByRole('button', { name: '批准并出车' });
+        await approveButton.click();
+        await tripPanel.getByRole('button', { name: '查看占用车辆的原单' }).click();
+        await tripPanel.getByRole('button', { name: '代登记还车', exact: true }).click();
+        const confirm = fleet.getByRole('dialog', { name: '代登记还车', exact: true });
+        await confirm.getByText(borrower.name, { exact: true }).waitFor();
+        assert.equal(await confirm.locator('input[type=file]').inputValue(), '');
+        assert.equal(await confirm.evaluate(el => el.scrollWidth <= el.clientWidth), true);
+        const screenshots = 'output/playwright/trip-proxy-return';
+        await fs.mkdir(screenshots, { recursive: true });
+        const handoverButton = confirm.getByRole('button', { name: '确认已交车' });
+        await handoverButton.click({ trial: true });
+        await fleet.waitForFunction(() => {
+          const panel = document.querySelector('.trip-proxy-modal .ant-modal-container');
+          return panel && panel.offsetWidth > 300 &&
+            Math.abs(panel.getBoundingClientRect().width - panel.offsetWidth) < 1 &&
+            !panel.closest('[class*="zoom-appear"], [class*="zoom-enter"]');
+        });
+        await fleet.screenshot({ path: path.join(screenshots, 'confirm-360.png') });
+        await handoverButton.click();
+        await confirm.waitFor({ state: 'hidden' });
+        const proxyTrip = await svc.detail(manager2, firstTrip.id);
+        assert.equal(proxyTrip.proxyReturnedBy, manager2.id);
+        assert.equal(proxyTrip.attachments.filter(a => a.stage === 'return').length, 0);
+        await tripPanel.getByRole('button', { name: '返回待审批申请' }).click();
+        await approveButton.click();
+        await tripPanel.getByText('用车中', { exact: true }).waitFor();
+        await tripPanel.getByRole('button', { name: '关闭', exact: true }).click();
+        await fleet.setViewportSize({ width: 390, height: 844 });
+        await fleet.getByRole('button', { name: '用车统计', exact: true }).click();
+        const report = fleet.getByRole('region', { name: '用车统计', exact: true });
+        const usage = report.getByRole('button', { name: `查看${borrower.name}的 1 次用车` });
+        await usage.waitFor();
+        const sortControl = report.getByRole('combobox', { name: '排序', exact: true });
+        const rows = report.locator('tbody tr');
+        const orderByColumn = async column => rows.locator(`td:nth-child(${column})`).allTextContents()
+          .then(values => values.slice(1).map(Number));
+        const usageCounts = await orderByColumn(2);
+        assert.deepEqual(usageCounts, [...usageCounts].sort((a,b) => b-a));
+        for (const [label, column, direction] of [
+          ['用车次数从少到多', 2, 1], ['漏还车次数从少到多', 3, 1],
+          ['用车次数从多到少', 2, -1], ['漏还车次数从多到少', 3, -1]
+        ]) {
+          await sortControl.click();
+          await fleet.locator('.ant-select-item-option').filter({ hasText: label }).click();
+          const counts = await orderByColumn(column);
+          assert.deepEqual(counts, [...counts].sort((a,b) => direction * (a-b)));
+          assert.equal(await rows.first().locator('th').innerText(), '本店合计');
+        }
+        assert.equal(await rows.nth(1).locator('th').innerText(), borrower.name);
+        await fleet.locator('.ant-select-dropdown:visible').waitFor({ state: 'hidden' });
+        await report.evaluate(el => el.scrollIntoView({ block: 'start', behavior: 'instant' }));
+        await report.screenshot({ path: path.join(screenshots, 'usage-390.png') });
+        await usage.click();
+        await report.getByRole('heading', { name: `${borrower.name}的用车明细` }).waitFor();
+        await report.getByRole('button', { name: '返回人员统计' }).click();
+        await usage.waitFor();
+        assert.equal(await rows.nth(1).locator('th').innerText(), borrower.name);
+        await report.getByRole('button', { name: `查看${borrower.name}的 1 次漏还车` }).click();
+        const original = report.getByRole('button', { name: /^查看原单/ });
+        await original.scrollIntoViewIfNeeded();
+        await original.getByText(manager2.name, { exact: true }).waitFor();
+        assert.equal(await report.evaluate(el => el.scrollWidth <= el.clientWidth), true);
+        assert.equal(await fleet.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        await report.evaluate(el => el.scrollIntoView({ block: 'start', behavior: 'instant' }));
+        await original.locator('time').last().click({ trial: true });
+        await report.screenshot({ path: path.join(screenshots, 'details-390.png') });
+        await original.click();
+        await tripPanel.getByRole('definition').filter({ hasText: borrower.name }).waitFor();
+        assert.equal(new URL(fleet.url()).searchParams.get('vehicleTrip'), firstTrip.id);
       } finally {await browser.close();}
     }
     const XLSX=await import('xlsx');

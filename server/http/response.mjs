@@ -33,7 +33,8 @@ async function parseJson(req) {
 export function sendError(res, error) {
   const expected = error instanceof HttpError;
   sendJson(res, expected ? error.status : 500, {
-    error: expected ? error.message : "服务器处理失败，请稍后重试"
+    error: expected ? error.message : "服务器处理失败，请稍后重试",
+    details: expected ? error.details : undefined
   });
 }
 
