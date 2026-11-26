@@ -1,7 +1,8 @@
 import React from "react";
 import {RecoveryBoundary} from "./shared/ui/recoverableLazy";
 import ReactDOM from "react-dom/client";
-import { BusinessThemeProvider } from "./shared/ui/BusinessForm";
+import { BusinessThemeProvider } from "./shared/ui/BusinessThemeProvider";
+import "./shared/ui/business-form.css";
 import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
 import { App } from "./App";

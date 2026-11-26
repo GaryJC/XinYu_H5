@@ -1,26 +1,5 @@
 import { useEffect, useId, useState, type PropsWithChildren, type ReactNode } from "react";
-import { App as AntApp, Card, ConfigProvider, Grid, Modal, type ModalProps } from "antd";
-import zhCN from "antd/locale/zh_CN";
-import "./business-form.css";
-
-export function BusinessThemeProvider({ children }: PropsWithChildren) {
-  const screens = Grid.useBreakpoint();
-  const mobile = !screens.md;
-  return <ConfigProvider locale={zhCN} theme={{
-    token: {
-      colorPrimary: "#2563eb", colorBgLayout: "#f4f6fa", colorBorder: "#dce2ea",
-      colorText: "#243247", colorTextSecondary: "#657085",
-      borderRadius: 10, borderRadiusLG: 16,
-      controlHeight: mobile ? 44 : 36, controlHeightLG: 44,
-      fontSize: mobile ? 16 : 14,
-    },
-    components: {
-      Message: { zIndexPopup: 4000 },
-      Card: { borderRadiusLG: 16 },
-      Form: { itemMarginBottom: 16, verticalLabelPadding: "0 0 8px" },
-    },
-  }}><AntApp message={{ maxCount: 3, top: mobile ? 20 : 32 }}>{children}</AntApp></ConfigProvider>;
-}
+import { Card, Grid, Modal, type ModalProps } from "antd";
 
 export function FormSurface({ children, className = "" }: PropsWithChildren<{ className?: string }>) {
   return <Card className={`business-form-surface ${className}`}>{children}</Card>;
