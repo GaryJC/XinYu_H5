@@ -1,10 +1,11 @@
 import { Alert, Button, Dropdown, Image, message } from "antd";
-import { useState, type ReactElement, type ReactNode } from "react";
+import { cloneElement, useLayoutEffect, useState, type ReactElement, type ReactNode } from "react";
 
 import { canCopyImage, copyImage, ImageClipboardUnavailableError } from "../browser/copyImage";
 import { downloadImage } from "../browser/downloadImage";
 
 const isMobileClient = () => /Android|iPhone|iPad|iPod|HarmonyOS/i.test(navigator.userAgent);
+export const isDesktopDingTalk = () => !isMobileClient() && /DingTalk/i.test(navigator.userAgent);
 
 export function PhotoPreviewActions({ source, children }: { source: string; children: ReactNode }) {
   const [busy, setBusy] = useState(false);
@@ -47,14 +48,29 @@ export function PhotoPreviewActions({ source, children }: { source: string; chil
   </div>;
 }
 
-export function PhotoContextMenu({ source, children }: { source: string; children: ReactElement }) {
+function NativeCopyImage({ blob, children }: { blob: Blob; children: ReactElement }) {
+  const [image, setImage] = useState<{ blob: Blob; url: string }>();
+  useLayoutEffect(() => {
+    const url = URL.createObjectURL(blob);
+    setImage({ blob, url });
+    return () => URL.revokeObjectURL(url);
+  }, [blob]);
+
+  if (image?.blob !== blob) return null;
+  // Preserve the preview's image ref, zoom, rotation and pointer handlers.
+  return cloneElement(children as ReactElement<{ src: string }>, { src: image.url, key: image.url });
+}
+
+export function PhotoContextMenu({ source, blob, children }: { source: string; blob?: Blob; children: ReactElement }) {
   const [messages, holder] = message.useMessage();
   const [busy, setBusy] = useState(false);
   const [clipboardUnavailable, setClipboardUnavailable] = useState(false);
-  // Leave the first contextmenu on the loaded image to the host when only
-  // its native Copy Image command can write pixels to the clipboard.
-  if (isMobileClient() || (source && (clipboardUnavailable || !canCopyImage()))) {
-    return <>{holder}{children}</>;
+  if (isMobileClient()) return <>{holder}{children}</>;
+  if (source && (clipboardUnavailable || !canCopyImage())) {
+    // Mac DingTalk also pastes the img's source as text when it is a data URL.
+    const useBlob = isDesktopDingTalk() && blob
+      && /^image\/(?:jpeg|png|webp|gif|bmp|tiff|heic|heif)$/i.test(blob.type);
+    return <>{holder}{useBlob ? <NativeCopyImage blob={blob}>{children}</NativeCopyImage> : children}</>;
   }
   async function copy() {
     if (busy || !source) return;

@@ -18,7 +18,7 @@ import { useWorkbenchController } from "./useWorkbenchController";
 
 const TechnicianCompletedProjects = lazy(() => import('../dispatch/TechnicianCompletedProjects').then(m => ({ default: m.TechnicianCompletedProjects })));
 
-const BusinessAnalyticsPage = lazy(() => import('../business-analytics/BusinessAnalyticsPage').then(m=>({default:m.BusinessAnalyticsPage})));
+const ManagementDashboard = lazy(() => import('../operations-dashboard/ManagementDashboard').then(m=>({default:m.ManagementDashboard})));
 const VehicleTripsPage = lazy(() => import('../vehicle-trips/VehicleTripsPage').then(m => ({ default: m.VehicleTripsPage })));
 const CompanyVehiclesPage = lazy(() => import('../company-vehicles/CompanyVehiclesPage').then(m => ({ default: m.CompanyVehiclesPage })));
 
@@ -89,7 +89,7 @@ export function WorkbenchPage() {
         {navigation}
       </Drawer>
 
-      <Layout.Content className="main">
+      <Layout.Content className={activeNav === '数据看板' ? 'main dashboard-workspace' : 'main'}>
         <header className="topbar">
           <div className="topbar-title">
             <div>
@@ -104,7 +104,7 @@ export function WorkbenchPage() {
               <Select
                 className="dev-persona-switcher"
                 aria-label="切换本地测试身份"
-                placeholder="选择测试身份"
+                placeholder={activeNav === '数据看板' ? '切换身份' : '选择测试身份'}
                 loading={devLoginLoading}
                 disabled={devLoginLoading}
                 value={devPersona}
@@ -127,7 +127,7 @@ export function WorkbenchPage() {
                 ]}
               />
             ) : null}
-            {import.meta.env.DEV ? <Space className="role-switcher">
+            {import.meta.env.DEV && activeNav !== '数据看板' ? <Space className="role-switcher">
               <UserRound size={16} />
               <span>{currentUser ? userRoles(currentUser).map(role=>roles[role].name).join(" · ") : "未登录"}</span>
             </Space> : null}
@@ -182,7 +182,7 @@ export function WorkbenchPage() {
           <Suspense fallback={<LoadingState label="正在加载配件竞价…" />}><ProcurementPage key={currentUser.id} user={currentUser}/></Suspense>
         ) : null}
 
-        {!bindingRequired && activeNav === "数据看板" && currentUser && hasRole(currentUser,'manager') && <Suspense fallback={<LoadingState label="正在加载运营看板…"/>}><BusinessAnalyticsPage key={currentUser.id}/></Suspense>}
+        {!bindingRequired && activeNav === "数据看板" && currentUser && hasRole(currentUser,'manager') && <Suspense fallback={<LoadingState label="正在加载运营看板…"/>}><ManagementDashboard key={`${currentUser.shopId}:${currentUser.id}`} user={currentUser}/></Suspense>}
 
         {!bindingRequired && currentUser && (activeNav === "权限设置") ? (
           <Suspense fallback={<LoadingState label="正在加载功能模块…" />}>

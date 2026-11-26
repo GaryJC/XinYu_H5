@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildBusinessAnalytics as build} from '../server/domain/businessAnalytics.mjs';
+import {analyticsOrderPage, analyticsPeriod, buildBusinessAnalytics as build} from '../server/domain/businessAnalytics.mjs';
 const now=new Date('2026-11-02T04:00:00Z');
 const order=(id,createdAt,extra={})=>({id,createdAt,status:'维修中',plate:id,customer:'车队',completionDates:[],...extra});
 const run=rows=>build(rows,{days:7,now});
@@ -41,4 +41,77 @@ test('12-month trend crosses years and explicitly marks the unfinished month',()
 test('invalid and pre-creation completion timestamps do not produce negative cycle times',()=>{
  const r=run([order('a','2026-10-28',{stage:'维修完成',completionDates:['bad','2026-10-20','2027-01-01']})]);
  assert.equal(r.kpis.completed.value,0);assert.equal(r.kpis.cycleDays.samples,0);assert.equal(r.quality.missingCompletion,1);
+});
+
+test('current month includes all completed Shanghai days but short-month growth uses matching days', () => {
+  const now = new Date('2026-03-30T16:01:00Z');
+  const rows = [
+    order('baseline', '2026-02-28T15:59:59Z', {completionDates:['2026-02-28T15:59:59Z']}),
+    order('early', '2026-02-28T16:00:00Z', {completionDates:['2026-03-02T16:00:00Z']}),
+    order('late', '2026-03-28T16:00:00Z', {completionDates:['2026-03-29T16:00:00Z']}),
+    order('today', '2026-03-30T16:00:00Z')
+  ];
+  const result = build(rows, {month:'2026-03', now});
+  assert.deepEqual(result.range, {month:'2026-03', days:30, from:'2026-03-01', to:'2026-03-30',
+    previousFrom:'2026-02-01', previousTo:'2026-02-28', comparableTo:'2026-03-28'});
+  for (const key of ['orders', 'vehicles', 'completed']) {
+    assert.deepEqual(result.kpis[key], {value:2, previous:1, comparableValue:1, change:0});
+  }
+  assert.deepEqual(result.kpis.cycleDays, {value:1.5, previous:0, comparableValue:2, samples:2});
+  assert.equal(result.daily.at(-3).previous, 1);
+  assert.equal(result.daily.at(-2).previous, null);
+  assert.equal(result.daily.at(-1).previousDate, '');
+  assert.deepEqual(result.monthly.at(-1), {month:'2026-03', value:2, partial:true});
+});
+
+test('closed months compare to the entire previous month across leap years and year boundaries', () => {
+  const february = build([
+    order('jan', '2024-01-31T15:59:59Z'), order('feb', '2024-02-29T15:59:59Z'),
+    order('march', '2024-02-29T16:00:00Z')
+  ], {month:'2024-02', now});
+  assert.deepEqual(february.range, {month:'2024-02', days:29, from:'2024-02-01', to:'2024-02-29',
+    previousFrom:'2024-01-01', previousTo:'2024-01-31', comparableTo:'2024-02-29'});
+  assert.deepEqual(february.kpis.orders, {value:1, previous:1, comparableValue:1, change:0});
+  assert.equal(february.daily.at(-1).created, 1);
+  assert.deepEqual(february.monthly.at(-1), {month:'2024-02', value:1, partial:false});
+  assert.equal(february.monthly[0].month, '2023-03');
+  assert.equal(build([], {month:'2026-01', now}).range.previousFrom, '2025-12-01');
+});
+
+test('first day in Shanghai gives a zero-day latest report and invalid months fail validation', () => {
+  const now = new Date('2026-10-31T16:00:00Z');
+  const rows = [order('oct', '2026-10-31T15:59:59Z'), order('nov', now)];
+  const result = build(rows, {month:'2026-11', now});
+  assert.deepEqual(result.range, {month:'2026-11', days:0, from:'2026-11-01', to:'',
+    previousFrom:'2026-10-01', previousTo:'', comparableTo:''});
+  assert.deepEqual(result.kpis.orders, {value:0, previous:0, comparableValue:0, change:null});
+  assert.deepEqual(result.daily, []);
+  assert.deepEqual(result.monthly.at(-1), {month:'2026-11', value:0, partial:true});
+  assert.equal(result.monthly.at(-2).value, 1);
+  for (const month of ['2026-12', '2026-00', '2026-13', '2026-1', '2026-10-01', '', null]) {
+    assert.throws(() => build([], {month, now}), error => error.status === 400);
+  }
+});
+
+test('monthly drilldowns use the KPI cohort, earliest valid completion and stable pages', () => {
+  const opts = {month:'2026-10', now};
+  const period = analyticsPeriod(opts, now);
+  const rows = [
+    order('z', '2026-10-01', {dispatchNo:'A-z', stage:'维修中', completionDates:['bad','2026-09-29','2026-10-29','2026-11-01']}),
+    order('a', '2026-10-01', {status:'待客户签字', completionDates:['2026-10-29']}),
+    order('old', '2026-09-01', {status:'完成', completionDates:['2026-09-30', '2026-10-30']}),
+    order('prior', '2026-09-01', {completionDates:['2026-10-28']}),
+    order('draft', '2026-10-28', {status:'草稿', completionDates:['2026-10-29']})
+  ];
+  const report = build(rows, opts);
+  for (const [metric, ids] of [['orders',['a','z']], ['completed',['a','z','prior']]]) {
+    const options = {metric, pageSize:1};
+    const pages = ids.map((_, index) => analyticsOrderPage(rows, {...options, page:index+1}, period, now));
+    assert.equal(pages[0].total, report.kpis[metric].value);
+    assert.deepEqual(pages.map(p => p.items[0].id), ids);
+    assert.equal(analyticsOrderPage(rows, {...options, page:99}, period, now).page, ids.length);
+    assert.equal(pages[0].items[0].stage, '待客户签字');
+    assert.equal(pages[1].items[0].dispatchNo, 'A-z');
+    assert.equal(pages[1].items[0].firstCompletedAt, '2026-10-29T00:00:00.000Z');
+  }
 });

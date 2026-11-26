@@ -1,7 +1,8 @@
 import { handlePurchaseDocuments } from './purchaseDocumentRouter.mjs';
 import { handleNotifications } from './notificationRouter.mjs';
 import { isOrderEntryRequest } from "../domain/orderEntryAccess.mjs";
-import { businessAnalytics } from '../services/businessAnalyticsService.mjs';
+import { businessAnalytics, businessAnalyticsOrders } from '../services/businessAnalyticsService.mjs';
+import { onsiteDashboard } from '../services/onsiteDashboardService.mjs';
 import { operationsDashboard } from "../services/operationsDashboardService.mjs";
 import { handleVehicleTrips } from "./vehicleTripRouter.mjs";
 import { handleOrderOverview, handleOrderPhotoDownload } from './orderOverviewRouter.mjs';
@@ -162,7 +163,22 @@ export async function handleApiRequest(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/dashboard/analytics") {
     requireManager(currentUser);
-    sendJson(res,200,await businessAnalytics(currentUser,Number(url.searchParams.get("days")||30)));
+    const period = url.searchParams.has("month")
+      ? {month:url.searchParams.get("month")}
+      : Number(url.searchParams.get("days")||30);
+    sendJson(res,200,await businessAnalytics(currentUser,period));
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/dashboard/analytics/orders") {
+    requireManager(currentUser);
+    sendJson(res,200,await businessAnalyticsOrders(currentUser,Object.fromEntries(url.searchParams)));
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/dashboard/onsite") {
+    requireManager(currentUser);
+    sendJson(res,200,await onsiteDashboard(currentUser,Object.fromEntries(url.searchParams)));
     return true;
   }
 

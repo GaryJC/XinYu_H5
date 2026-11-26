@@ -19,9 +19,13 @@ import { tripTime as time } from './tripTime';
 import './vehicle-trips.css';
 
 const actions: Record<string, string> = { create: '提交申请', approve: '批准申请', reject: '驳回', cancel: '取消申请', depart: '确认出车', return: '提交还车', 'proxy-return': '管理员代登记还车', 'approve-return': '收车审核通过', 'reject-return': '收车审核退回' };
-export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserProfile; initialScope?:string }) {
+export function VehicleTripsPage({ user, initialScope = "all", reportMonth, onTripChanged }: { user: UserProfile; initialScope?:string; reportMonth?:string; onTripChanged?:()=>void }) {
   const feedback = useActionFeedback();
-  const state = useVehicleTrips(initialScope);
+  const [reportRevision,setReportRevision] = useState(0);
+  const state = useVehicleTrips(initialScope, Boolean(reportMonth), () => {
+    setReportRevision(n => n+1);
+    onTripChanged?.();
+  });
   const [form] = Form.useForm();
   const {scope,setScope}=state;
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -32,7 +36,7 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
   const [proxyOpen, setProxyOpen] = useState(false);
   const [approvalId, setApprovalId] = useState<string>();
   const manager = hasRole(user, 'manager');
-  const showingReport = manager && reportOpen;
+  const showingReport = manager && (reportOpen || Boolean(reportMonth));
   const detail = state.detail;
   const mine = detail?.applicantId === user.id;
   const stage = detail && ['待审批', '待出车'].includes(detail.status) ? 'departure' : detail?.status === '用车中' ? 'return' : undefined;
@@ -51,7 +55,8 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
       {!a.confirmed && mine && stage === phase && <Button size="small" disabled={state.busy} onClick={() => setExcluded(current => current.includes(a.fileId) ? current.filter(id => id !== a.fileId) : [...current, a.fileId])}>{excluded.includes(a.fileId) ? '重新选用' : '不使用此照片'}</Button>}
     </div>)}</div></section> : null;
   }
-  return <section className="trip-page" aria-label="出车申请">
+  return <section className="trip-page" aria-label={reportMonth ? '按月查看用车' : '出车申请'}>
+    {!reportMonth && <>
     <header className="trip-page-heading"><div><h2>出车申请</h2></div><RefreshButton loading={state.pending === 'list'} disabled={state.busy} onClick={() => void state.refresh()} label="刷新申请"/></header>
     {!state.selectedId && errorAlert}
     <Card className="trip-create-card" title={<span className="trip-section-heading"><CarFront size={20} />申请用车</span>}>
@@ -79,7 +84,8 @@ export function VehicleTripsPage({ user, initialScope = "all" }: { user: UserPro
         {!showingReport && <Select aria-label="筛选出车申请" value={scope} onChange={setScope} style={{ width: 140 }} options={[{ value: 'all', label: '全部记录' }, { value: 'mine', label: '我的申请' }, { value: 'pending', label: '待审批' }, { value: 'using', label: '用车中' }]} />}
       </div>
     </div>
-    {showingReport ? <VehicleUsageReport key={`${user.shopId}:${user.id}`} mobile={state.mobile} busy={state.busy} onOpenTrip={open} /> : <>
+    </>}
+    {showingReport ? <VehicleUsageReport key={`${user.shopId}:${user.id}`} initialMonth={reportMonth} revision={reportRevision} mobile={state.mobile} busy={state.busy} onOpenTrip={open} /> : <>
     {!state.busy && !state.trips.length && <Empty description="暂无出车申请" />}
     {state.pending === 'list' && <LoadingState label="正在加载出车申请…" />}
     <div className="trip-card-grid">{state.trips.map(t => <Card className="trip-record-card" role="button" tabIndex={state.busy ? -1 : 0} aria-label={`查看申请：${t.vehicle.plate}，${t.applicantName}，${t.status}`} aria-disabled={state.busy}

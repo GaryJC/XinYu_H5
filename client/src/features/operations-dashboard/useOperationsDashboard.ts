@@ -1,9 +1,31 @@
-import {useCallback,useEffect,useRef,useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {request} from '../../shared/api/httpClient';
 import type {OperationsDashboard} from '../../../../shared/types';
-export function useOperationsDashboard(refreshKey?:string,endpoint='/api/dashboard/operations',enabled=true){
- const [data,setData]=useState<OperationsDashboard>();const [error,setError]=useState('');const [loading,setLoading]=useState(false);const sequence=useRef(0);
- const refresh=useCallback(async()=>{const id=++sequence.current;setLoading(true);setError('');try{const result=await request<OperationsDashboard>(endpoint);if(id===sequence.current)setData(result);}catch(e){if(id===sequence.current)setError(e instanceof Error?e.message:'看板加载失败');}finally{if(id===sequence.current)setLoading(false);}},[endpoint]);
- useEffect(()=>{if(!enabled)return;void refresh();return()=>{sequence.current++;};},[refresh,refreshKey,enabled]);
- return {data,error,loading,refresh};
+
+export function useOperationsDashboard(refreshKey?:string,endpoint='/api/dashboard/operations',enabled=true) {
+  const [data,setData] = useState<OperationsDashboard>();
+  const [error,setError] = useState('');
+  const [loading,setLoading] = useState(false);
+  const active = useRef<AbortController | undefined>(undefined);
+  const refresh = useCallback(async () => {
+    active.current?.abort();
+    const controller = new AbortController();
+    active.current = controller;
+    setLoading(true);
+    setError('');
+    try {
+      const result = await request<OperationsDashboard>(endpoint,{signal:controller.signal});
+      if (!controller.signal.aborted) setData(result);
+    } catch (e) {
+      if (!controller.signal.aborted) setError(e instanceof Error ? e.message : '看板加载失败');
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
+  },[endpoint]);
+  useEffect(() => {
+    if (!enabled) {setLoading(false);return;}
+    void refresh();
+    return () => active.current?.abort();
+  },[refresh,refreshKey,enabled]);
+  return {data,error,loading,refresh};
 }

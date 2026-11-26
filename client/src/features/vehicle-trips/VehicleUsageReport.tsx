@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, DatePicker, Empty, Select } from 'antd';
 import { ChevronRight } from 'lucide-react';
 import dayjs from 'dayjs';
@@ -62,12 +62,18 @@ function ApplicantTotals({ month, sort, onSelect }: { month: string; sort: Usage
   </>;
 }
 
-function ApplicantTrips({ month, person, kind, mobile, busy, onOpenTrip, onBack }: ReportProps & {
-  month: string; person: VehicleUsageCount; kind: DetailKind; onBack: () => void;
+function ApplicantTrips({ month, person, kind, mobile, busy, onOpenTrip, onBack, revision }: ReportProps & {
+  month: string; person: VehicleUsageCount; kind: DetailKind; onBack: () => void; revision:number;
 }) {
   const list = usePagedList(`${month}:${person.applicantId}:${kind}`,
     (page, signal) => vehicleTripApi.reportTrips(month, person.applicantId, kind, page, signal),
     mobile, true, trip => trip.id);
+  const lastRevision = useRef(revision);
+  useEffect(() => {
+    if (lastRevision.current === revision) return;
+    lastRevision.current = revision;
+    void list.refresh(true);
+  }, [revision,list.refresh]);
   return <>
     <header className="trip-report-controls"><h4>{person.applicantName}的{kind === 'usage' ? '用车' : '漏还车'}明细</h4><Button type="link" onClick={onBack}>返回人员统计</Button></header>
     {list.error && <Alert type="error" showIcon title={list.error} action={<Button onClick={() => void list.refresh()}>重试</Button>} />}
@@ -91,8 +97,8 @@ function ApplicantTrips({ month, person, kind, mobile, busy, onOpenTrip, onBack 
   </>;
 }
 
-export function VehicleUsageReport(props: ReportProps) {
-  const [month, setMonth] = useState(() => new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 7));
+export function VehicleUsageReport({initialMonth,revision=0,...props}: ReportProps & {initialMonth?:string; revision?:number}) {
+  const [month, setMonth] = useState(() => initialMonth ?? new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 7));
   const [selection, setSelection] = useState<Selection>();
   const [sort, setSort] = useState<UsageSort>('usage-desc');
   const [refresh, setRefresh] = useState(0);
@@ -108,7 +114,7 @@ export function VehicleUsageReport(props: ReportProps) {
       <Select<UsageSort> id="vehicle-usage-sort" value={sort} options={sortOptions} onChange={setSort}
         showSearch={false} style={{ width: 216, maxWidth: '100%' }} />
     </div>}
-    {selection ? <ApplicantTrips key={refresh} month={month} {...selection} onBack={() => setSelection(undefined)} {...props} />
-      : <ApplicantTotals key={`${month}:${refresh}`} month={month} sort={sort} onSelect={setSelection} />}
+    {selection ? <ApplicantTrips key={refresh} month={month} revision={revision} {...selection} onBack={() => setSelection(undefined)} {...props} />
+      : <ApplicantTotals key={`${month}:${refresh}:${revision}`} month={month} sort={sort} onSelect={setSelection} />}
   </section>;
 }

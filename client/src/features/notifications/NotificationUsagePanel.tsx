@@ -1,5 +1,6 @@
 import {RefreshButton} from '../../shared/ui/RefreshButton';
 import {Alert,Button,Spin} from 'antd';
+import {BellRing,ChevronDown} from 'lucide-react';
 import {CopyTextButton} from '../../shared/ui/CopyTextButton';
 import {useNotificationUsage} from './useNotificationUsage';
 import './notification-usage.css';
@@ -7,7 +8,7 @@ const outcomes:Record<string,string>={started:'中断待确认',ok:'调用成功
 export function NotificationUsagePanel(){
  const c=useNotificationUsage(),d=c.data,selected=d?.daily.find(day=>day.date===c.date);
  return <details className="notification-usage" open={c.open} onToggle={e=>{if(e.currentTarget.open!==c.open)c.setOpen(e.currentTarget.open);}}>
-  <summary>钉钉通知用量 · 日均目标 300 次</summary>
+  <summary><BellRing size={17} aria-hidden="true"/><span>系统用量 · 钉钉通知</span><ChevronDown size={16} aria-hidden="true"/></summary>
   {c.open&&<div className="notification-usage-body">
    <div className="notification-usage-controls"><label>查看日期<input aria-label="通知用量日期" type="date" value={c.date} onChange={e=>{if(e.target.value)c.setDate(e.target.value);}}/></label><RefreshButton disabled={c.loading} onClick={c.refresh} label="刷新"/></div>
    {c.error&&<Alert showIcon type="error" title={c.error} action={<Button onClick={c.refresh}>重试</Button>}/>}

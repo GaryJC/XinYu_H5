@@ -1,7 +1,7 @@
 import { Image, Skeleton } from "antd";
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { requestCachedImage } from "../api/httpClient";
-import { PhotoContextMenu, PhotoPreviewActions } from "./PhotoPreviewGroup";
+import { isDesktopDingTalk, PhotoContextMenu, PhotoPreviewActions } from "./PhotoPreviewGroup";
 
 type AuthenticatedImageProps = {
   fileId: string;
@@ -10,8 +10,10 @@ type AuthenticatedImageProps = {
   height: number | string;
 };
 
+type FullPhoto = { dataUrl: string; blob?: Blob };
+
 type PreviewContext = {
-  fullSources: Record<string, string>;
+  fullSources: Record<string, FullPhoto>;
   loadFull: (fileId: string) => void;
   setThumbnail: (fileId: string, url: string) => void;
 };
@@ -34,7 +36,7 @@ function imagePath(fileId: string, thumbnail = false) {
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
-    // DingTalk's native image menu cannot resolve browser-owned blob URLs.
+    // Mobile WebViews use an inline image for long-press and file sharing.
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
     reader.onerror = () => reject(new Error("图片加载失败"));
@@ -42,50 +44,55 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+async function loadFullPhoto(fileId: string): Promise<FullPhoto> {
+  const blob = await requestCachedImage(imagePath(fileId));
+  return { dataUrl: await blobToDataUrl(blob), blob: isDesktopDingTalk() ? blob : undefined };
+}
+
 export function AuthenticatedImagePreviewGroup({ fileIds, children }: { fileIds: string[]; children: ReactNode }) {
   const authRevision = useAuthRevision();
-  const [fullSources, setFullSources] = useState<Record<string, string>>({});
+  const [fullSources, setFullSources] = useState<Record<string, FullPhoto>>({});
   const [thumbnailSources, setThumbnailSources] = useState<Record<string, string>>({});
-  const urls = useRef(new Map<string, string>());
+  const loadedPhotos = useRef(new Map<string, FullPhoto>());
   const currentPreview=useRef("");
   const pending = useRef(new Set<string>());
   const generation = useRef(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     generation.current += 1;
     setFullSources({});
     setThumbnailSources({});
     return () => {
       generation.current += 1;
-      urls.current.clear();
+      loadedPhotos.current.clear();
       pending.current.clear();
     };
   }, [authRevision]);
 
-  useEffect(()=>{
+  useLayoutEffect(()=>{
     generation.current++;pending.current.clear();
     const allowed=new Set(fileIds);
-    for(const id of urls.current.keys())if(!allowed.has(id))urls.current.delete(id);
-    setFullSources(Object.fromEntries(urls.current));
+    for(const id of loadedPhotos.current.keys())if(!allowed.has(id))loadedPhotos.current.delete(id);
+    setFullSources(Object.fromEntries(loadedPhotos.current));
   },[fileIds.join('\0')]);
 
   function releaseFull() {
-    generation.current++;pending.current.clear();urls.current.clear();setFullSources({});
+    generation.current++;pending.current.clear();loadedPhotos.current.clear();setFullSources({});
   }
   function loadFull(fileId: string) {
     currentPreview.current=fileId;
-    if (!fileId || urls.current.has(fileId) || pending.current.has(fileId)) return;
+    if (!fileId || loadedPhotos.current.has(fileId) || pending.current.has(fileId)) return;
     pending.current.add(fileId);
     const currentGeneration = generation.current;
-    void requestCachedImage(imagePath(fileId)).then(blobToDataUrl).then((url) => {
+    void loadFullPhoto(fileId).then((photo) => {
       if (currentGeneration !== generation.current) return;
-      urls.current.set(fileId, url);
-      while(urls.current.size>3) {
-        const oldest=[...urls.current.keys()].find(id=>id!==currentPreview.current);
+      loadedPhotos.current.set(fileId, photo);
+      while(loadedPhotos.current.size>3) {
+        const oldest=[...loadedPhotos.current.keys()].find(id=>id!==currentPreview.current);
         if(!oldest)break;
-        urls.current.delete(oldest);
+        loadedPhotos.current.delete(oldest);
       }
-      setFullSources(Object.fromEntries(urls.current));
+      setFullSources(Object.fromEntries(loadedPhotos.current));
     }).catch(() => {
       // The thumbnail stays visible if the full image cannot be loaded.
     }).finally(() => { if (currentGeneration === generation.current) pending.current.delete(fileId); });
@@ -103,11 +110,14 @@ export function AuthenticatedImagePreviewGroup({ fileIds, children }: { fileIds:
   }
 
   return <previewContext.Provider value={{ fullSources, loadFull, setThumbnail }}>
-    <Image.PreviewGroup items={fileIds.map((fileId) => fullSources[fileId] || thumbnailSources[fileId] || "")} preview={{
-      imageRender: (original, info) => <PhotoContextMenu source={fullSources[fileIds[info.current ?? 0]] || ""}>{original}</PhotoContextMenu>,
+    <Image.PreviewGroup items={fileIds.map((fileId) => fullSources[fileId]?.dataUrl || thumbnailSources[fileId] || "")} preview={{
+      imageRender: (original, info) => {
+        const photo = fullSources[fileIds[info.current ?? 0]];
+        return <PhotoContextMenu source={photo?.dataUrl || ""} blob={photo?.blob}>{original}</PhotoContextMenu>;
+      },
       onOpenChange: (open, info) => { if (open) loadFull(fileIds[info.current ?? 0]); else releaseFull(); },
       onChange: (current) => loadFull(fileIds[current]),
-      actionsRender: (actions, info) => <PhotoPreviewActions source={fullSources[fileIds[info.current ?? 0]] || ""}>{actions}</PhotoPreviewActions>
+      actionsRender: (actions, info) => <PhotoPreviewActions source={fullSources[fileIds[info.current ?? 0]]?.dataUrl || ""}>{actions}</PhotoPreviewActions>
     }}>{children}</Image.PreviewGroup>
   </previewContext.Provider>;
 }
@@ -126,18 +136,17 @@ export function AuthenticatedImage({ fileId, alt, width, height }: Authenticated
     return()=>observer.disconnect();
   },[]);
   const [source, setSource] = useState("");
-  const [fullSource, setFullSource] = useState("");
+  const [fullPhoto, setFullPhoto] = useState<FullPhoto>();
   const [error, setError] = useState("");
-  const fullUrl = useRef("");
   const fullPending = useRef(false);
   const generation = useRef(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     generation.current += 1;
     let active = true;
     setSource("");
     setError("");
-    setFullSource("");
+    setFullPhoto(undefined);
     fullPending.current = false;
     if(!visible)return;
     void requestCachedImage(imagePath(fileId, true))
@@ -154,7 +163,6 @@ export function AuthenticatedImage({ fileId, alt, width, height }: Authenticated
       generation.current += 1;
       active = false;
       group?.setThumbnail(fileId, "");
-      fullUrl.current = "";
       fullPending.current = false;
     };
   }, [fileId, authRevision, visible]);
@@ -164,13 +172,12 @@ export function AuthenticatedImage({ fileId, alt, width, height }: Authenticated
       group.loadFull(fileId);
       return;
     }
-    if (fullUrl.current || fullPending.current) return;
+    if (fullPhoto || fullPending.current) return;
     fullPending.current = true;
     const currentGeneration = generation.current;
-    void requestCachedImage(imagePath(fileId)).then(blobToDataUrl).then((nextUrl) => {
+    void loadFullPhoto(fileId).then((photo) => {
       if (currentGeneration !== generation.current) return;
-      fullUrl.current = nextUrl;
-      setFullSource(nextUrl);
+      setFullPhoto(photo);
     }).catch(() => {
       // Keep the thumbnail visible if the full image cannot be loaded.
     }).finally(() => { if (currentGeneration === generation.current) fullPending.current = false; });
@@ -179,9 +186,9 @@ export function AuthenticatedImage({ fileId, alt, width, height }: Authenticated
   return <div ref={container} className="authenticated-image" style={{ width, height }}>
     <Image width={width} height={height} src={source || undefined} alt={alt}
       placeholder={!source ? <Skeleton.Image active style={{ width, height }} /> : undefined}
-      preview={{ onOpenChange: open => {if(!group&&!open){generation.current++;fullUrl.current="";fullPending.current=false;setFullSource("");}}, src: group?.fullSources[fileId] || fullSource || source,
-        imageRender: group ? undefined : (original) => <PhotoContextMenu source={fullSource}>{original}</PhotoContextMenu>,
-        actionsRender: group ? undefined : (actions) => <PhotoPreviewActions source={fullSource}>{actions}</PhotoPreviewActions> }}
+      preview={{ onOpenChange: open => {if(!group&&!open){generation.current++;fullPending.current=false;setFullPhoto(undefined);}}, src: group?.fullSources[fileId]?.dataUrl || fullPhoto?.dataUrl || source,
+        imageRender: group ? undefined : (original) => <PhotoContextMenu source={fullPhoto?.dataUrl || ""} blob={fullPhoto?.blob}>{original}</PhotoContextMenu>,
+        actionsRender: group ? undefined : (actions) => <PhotoPreviewActions source={fullPhoto?.dataUrl || ""}>{actions}</PhotoPreviewActions> }}
       onClick={loadFull}
       onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") loadFull(); }} />
     {error ? <div className="authenticated-image-error" role="alert" title={error}>图片加载失败</div> : null}

@@ -8,17 +8,17 @@ import { prepareUploadPhoto } from '../../shared/images/prepareOcrImage';
 import { companyVehicleApi } from '../company-vehicles/companyVehicleApi';
 import { vehicleTripApi } from './vehicleTripApi';
 
-export function useVehicleTrips(initialScope = 'all') {
+export function useVehicleTrips(initialScope = 'all', reportOnly = false, onTripChanged?:()=>void) {
   const feedback = useActionFeedback();
   const [vehicles, setVehicles] = useState<CompanyVehicle[]>([]);
   const [scope,setScope]=useState(initialScope);
   const mobile=!Grid.useBreakpoint().md;
-  const list=usePagedList(scope,page=>vehicleTripApi.page(page,scope),mobile,true,trip=>trip.id);
+  const list=usePagedList(scope,(page,signal)=>vehicleTripApi.page(page,scope,signal),mobile,!reportOnly,trip=>trip.id);
   const trips=list.items;
   const [detail, setDetail] = useState<VehicleTripDetail>();
-  const [busy, setBusy] = useState(true);
-  const [pending, setPending] = useState('list');
-  const [selectedId, setSelectedId] = useState<string | undefined>(() => new URLSearchParams(location.search).get('vehicleTrip') || undefined);
+  const [busy, setBusy] = useState(!reportOnly);
+  const [pending, setPending] = useState(reportOnly ? '' : 'list');
+  const [selectedId, setSelectedId] = useState<string | undefined>(() => reportOnly ? undefined : new URLSearchParams(location.search).get('vehicleTrip') || undefined);
   const [error, setError] = useState('');
   const [occupyingTripId, setOccupyingTripId] = useState<string>();
   const [departurePhotos, setDeparturePhotos] = useState<string[]>([]);
@@ -41,7 +41,10 @@ export function useVehicleTrips(initialScope = 'all') {
       else feedback.error(e);
       if (failure?.status === 409 && detail && (operation === 'return' || operation === 'proxy-return')) {
         // A different employee may have finished the same trip from another device.
-        await Promise.allSettled([list.refresh(), vehicleTripApi.detail(detail.id).then(setDetail)]);
+        await Promise.allSettled([list.refresh(), vehicleTripApi.detail(detail.id).then(next => {
+          setDetail(next);
+          if (next.status !== detail.status || next.returnRound !== detail.returnRound || next.proxyReturnedBy !== detail.proxyReturnedBy) onTripChanged?.();
+        })]);
       }
       setError(e instanceof Error ? e.message : '操作失败，请重试'); return false;
     }
@@ -52,14 +55,17 @@ export function useVehicleTrips(initialScope = 'all') {
   }
 
   function select(id?: string) {
-    const url=new URL(location.href);
-    if(id)url.searchParams.set('vehicleTrip',id);else url.searchParams.delete('vehicleTrip');
-    history.replaceState(null,'',url);
+    if (!reportOnly) {
+      const url=new URL(location.href);
+      if(id)url.searchParams.set('vehicleTrip',id);else url.searchParams.delete('vehicleTrip');
+      history.replaceState(null,'',url);
+    }
     const revision = ++selection.current;
     setSelectedId(id); setDetail(undefined); setError(''); setOccupyingTripId(undefined);
     if (id) void run(async () => { const next = await vehicleTripApi.detail(id); if (selection.current === revision) setDetail(next); }, undefined, 'detail');
   }
   useEffect(() => {
+    if (reportOnly) return;
     const revision=selection.current;mounted.current=true;
     const id=new URLSearchParams(location.search).get('vehicleTrip');
     void run(async()=>{
@@ -67,7 +73,7 @@ export function useVehicleTrips(initialScope = 'all') {
       if(id){const next=await vehicleTripApi.detail(id);if(mounted.current&&selection.current===revision)setDetail(next);}
     },undefined,id?'detail':'list');
     return()=>{mounted.current=false;};
-  }, []);
+  }, [reportOnly]);
   async function uploadImage(id: string, stage: Exclude<VehicleTripStage, "signature">, imageBase64: string, returnRound: number) {
     const key = JSON.stringify({ id, stage, imageBase64, returnRound });
     return vehicleTripApi.upload(id, { stage, imageBase64, returnRound, requestId: requestId(key) });
@@ -101,6 +107,7 @@ export function useVehicleTrips(initialScope = 'all') {
       const input = { fileIds, reason: options.reason, ...(['proxy-return', 'approve-return', 'reject-return'].includes(action) ? { returnRound: detail.returnRound } : {}) };
       const key = JSON.stringify({ id: detail.id, action, ...input });
       const item = await vehicleTripApi.act(detail.id, action, { ...input, requestId: requestId(key) });
+      onTripChanged?.();
       await list.refresh();
       setDetail(current => current && current.id === item.id ? { ...current, ...item } : current);
       feedback.success(({ approve: '已批准并出车', reject: '申请已驳回', cancel: '申请已取消', depart: '出车登记成功，已记录出车时间', return: '还车已完成，收车时间已记录', 'proxy-return': '已代登记还车', 'approve-return': '收车审核通过', 'reject-return': '收车已退回，请申请人重新拍照提交' })[action]);

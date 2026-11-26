@@ -738,13 +738,25 @@ export type OperationsDashboard = {
   counts:Record<OperationsMetric,number>; workers:OperationsWorker[]; projects:OperationsProject[];
 };
 
+export type OnsiteCategory = 'aged' | 'overdue' | 'parts' | 'inspection';
+export type OnsiteOrder = {
+  orderId:string; dispatchNo:string; plate:string; stage:string; createdAt:string; dueAt?:string;
+  projects:Array<{name:string; ownerName:string; waitingSince?:string}>;
+};
+export type OnsiteDashboard = PageResult<OnsiteOrder> & {
+  generatedAt:string; category:OnsiteCategory; counts:Record<OnsiteCategory,number>;
+  vehicle:{month:string; tripCount:number; missedReturnCount:number};
+};
+export type AnalyticsOrderRow = {
+  id:string;dispatchNo:string;plate:string;stage:string;createdAt:string;firstCompletedAt:string|null;
+};
 export type AnalyticsCount = {name:string;value:number};
-export type AnalyticsComparison = {value:number;previous:number;change:number|null};
+export type AnalyticsComparison = {value:number;previous:number;change:number|null;comparableValue?:number};
 export type BusinessAnalytics = {
   generatedAt:string;
-  range:{days:number;from:string;to:string;previousFrom:string;previousTo:string};
-  kpis:{orders:AnalyticsComparison;completed:AnalyticsComparison;vehicles:AnalyticsComparison;cycleDays:{value:number|null;previous:number|null;samples:number}};
-  daily:Array<{date:string;previousDate:string;created:number;previous:number;completed:number}>;
+  range:{month?:string;days:number;from:string;to:string;previousFrom:string;previousTo:string;comparableTo?:string};
+  kpis:{orders:AnalyticsComparison;completed:AnalyticsComparison;vehicles:AnalyticsComparison;cycleDays:{value:number|null;comparableValue?:number|null;previous:number|null;samples:number}};
+  daily:Array<{date:string;previousDate:string;created:number;previous:number|null;completed:number}>;
   monthly:Array<{month:string;value:number;partial:boolean}>;
   customers:AnalyticsCount[];customerCount:number;vehicleMix:AnalyticsCount[];status:AnalyticsCount[];
   aging:AnalyticsCount[];cycleBuckets:AnalyticsCount[];execution:AnalyticsCount[];liveCount:number;

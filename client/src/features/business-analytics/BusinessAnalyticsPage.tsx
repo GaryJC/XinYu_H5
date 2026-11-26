@@ -1,69 +1,136 @@
-import {RefreshButton} from '../../shared/ui/RefreshButton';
-import {NotificationUsagePanel} from '../notifications/NotificationUsagePanel';
-import {useMemo,useState,type ReactNode} from 'react';
-import {Alert,Button,Empty,Select,Skeleton} from 'antd';
-import {ArrowDownRight,ArrowUpRight} from 'lucide-react';
+import {memo, useState, type ReactNode} from 'react';
+import {Alert, Button, DatePicker, Empty, Skeleton} from 'antd';
+import {ArrowLeftRight, ArrowUpRight, CalendarDays, CalendarRange, CarFront, ChevronDown, ChevronRight, Table2, Wrench, type LucideIcon} from 'lucide-react';
+import dayjs from 'dayjs';
 import type {EChartsCoreOption} from 'echarts/core';
-import type {AnalyticsComparison} from '../../../../shared/types';
+import type {AnalyticsComparison, AnalyticsCount, BusinessAnalytics} from '../../../../shared/types';
 import {Chart} from '../../shared/charts/Chart';
-import {useOperationsDashboard} from '../operations-dashboard/useOperationsDashboard';
+import {RefreshButton} from '../../shared/ui/RefreshButton';
+import {AnalyticsOrderList, orderLabels, type OrderMetric} from './AnalyticsOrderList';
+import {barOption, donutOption, monthOption, trendOption} from './chartOptions';
 import {useBusinessAnalytics} from './useBusinessAnalytics';
-import {barOption,donutOption,monthOption,trendOption} from './chartOptions';
 import './business-analytics.css';
-import {WorkerLoadChart} from '../operations-dashboard/WorkerLoadChart';
 
-type ChartPanelProps={title:string;description:string;option:EChartsCoreOption;rows:Array<Array<string|number>>;columns:string[];empty?:boolean;height?:number;children?:ReactNode;className?:string};
-function ChartPanel({title,description,option,rows,columns,empty,height,children,className=''}:ChartPanelProps){
-  return <section className={`analytics-panel ${className}`}><header><div><h3>{title}</h3><p>{description}</p></div>{children}</header>
-    {empty?<div className="analytics-empty"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="此范围内暂无可统计数据"/></div>:<Chart option={option} label={`${title}。${description}`} height={height}/>}
-    <details className="analytics-data"><summary>查看图表数据</summary><div className="analytics-data-scroll"><table><thead><tr>{columns.map(c=><th key={c}>{c}</th>)}</tr></thead><tbody>{rows.map((row,i)=><tr key={i}>{row.map((cell,j)=><td key={j}>{cell}</td>)}</tr>)}</tbody></table></div></details>
+type ChartPanelProps = {
+  title:string; description?:string; option:EChartsCoreOption;
+  rows:Array<Array<string|number>>; columns:string[]; empty?:boolean; children?:ReactNode;
+  variant?:'main'|'inset';
+};
+function ChartPanel({title, description, option, rows, columns, empty, children, variant}:ChartPanelProps) {
+  return <section className={'analytics-panel' + (variant ? ' analytics-panel-' + variant : '')} aria-label={title}>
+    <header><div>{variant !== 'inset' && <h3>{title}</h3>}{description && <p>{description}</p>}</div>{children}</header>
+    {empty ? <div className="analytics-empty"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="本期暂无数据"/></div> : <>
+      <Chart option={option} label={title} height={variant === 'main' ? 282 : 228}/>
+      <details className="analytics-data"><summary><Table2 size={14} aria-hidden="true"/>查看图表数据<ChevronDown size={14} aria-hidden="true"/></summary>
+        <div className="analytics-data-scroll"><table>
+          <thead><tr>{columns.map(c=><th scope="col" key={c}>{c}</th>)}</tr></thead>
+          <tbody>{rows.map((row,i)=><tr key={i}>{row.map((cell,j)=><td key={j}>{cell}</td>)}</tr>)}</tbody>
+        </table></div>
+      </details>
+    </>}
   </section>;
 }
-function Comparison({metric}:{metric:AnalyticsComparison}){
-  const {change,value,previous}=metric;
-  return <span className={`analytics-change ${change===null||change===0?'is-flat':change>0?'is-up':'is-down'}`}>
-    {change!==null&&change!==0&&(change>0?<ArrowUpRight size={14}/>:<ArrowDownRight size={14}/>)}
-    {change===null?(value>0?'上期为 0，新增 '+value:'两期均为 0'):change===0?'与上期持平':`${Math.abs(change)}%`}
-    <small>上期 {previous}</small>
+
+function Comparison({metric, shortened}:{metric:AnalyticsComparison; shortened:boolean}) {
+  const value = metric.comparableValue ?? metric.value;
+  const delta = value - metric.previous;
+  const change = metric.change;
+  return <span className="analytics-change">
+    <span className="analytics-change-value">{delta === 0 ? '持平' : change === null ? `新增 ${value}` : `${delta > 0 ? '+' : '−'}${Math.abs(change)}%`}</span>
+    <small>{shortened ? `可比 ${value} / 上月 ${metric.previous}` : `上月 ${metric.previous}`}</small>
   </span>;
 }
-export function BusinessAnalyticsPage(){
-  const [days,setDays]=useState(30),[compare,setCompare]=useState(false);
-  const c=useBusinessAnalytics(days),load=useOperationsDashboard();const d=c.data;
-  const charts=useMemo(()=>d?{trend:trendOption(d,compare),month:monthOption(d),customers:barOption(d.customers,true),mix:donutOption(d.vehicleMix),cycle:barOption(d.cycleBuckets,false,'#2ba69a'),aging:barOption(d.aging,false,'#e7b35a'),status:donutOption(d.status),execution:donutOption(d.execution)}:undefined,[d,compare]);
-  const workers=load.data?.workers||[];
-  const countRows=(rows:Array<{name:string;value:number}>)=>rows.map(r=>[r.name,r.value]);
-  return <div className="business-analytics">
-    <header className="analytics-heading"><div><h2>门店经营概览</h2></div><div className="analytics-controls"><Select aria-label="经营分析统计周期" value={days} onChange={setDays} options={[7,30,90,180,365].map(value=>({value,label:`近 ${value} 天`}))}/><RefreshButton aria-label="刷新经营分析" loading={c.loading||load.loading} onClick={()=>{void c.refresh();void load.refresh();}} label="刷新"/></div></header>
-    <NotificationUsagePanel/>
-    {c.error&&<Alert type="error" showIcon title="经营数据加载失败" description={c.error} action={<Button onClick={()=>void c.refresh()}>重试</Button>}/>}
-    {c.loading&&<Skeleton active paragraph={{rows:8}}/>}
-    {d&&charts&&<>
-      <div className="analytics-range"><span>{d.range.from} — {d.range.to}</span><span>对比 {d.range.previousFrom} — {d.range.previousTo} · 北京时间 · 不含今天</span></div>
-      <section className="analytics-kpis" aria-label="经营核心指标">
-        {([{key:'orders',label:'新建委托单',unit:'单'},{key:'completed',label:'首次完工委托单',unit:'单'},{key:'vehicles',label:'服务车辆',unit:'辆'}] as const).map(({key,label,unit})=><article className={`analytics-kpi ${key==='orders'?'is-primary':''}`} key={key}><span>{label}</span><strong>{d.kpis[key].value}<small>{unit}</small></strong><Comparison metric={d.kpis[key]}/></article>)}
-        <article className="analytics-kpi"><span>维修周转中位数</span><strong>{d.kpis.cycleDays.value??'—'}<small>天</small></strong><span className="analytics-cycle-note">上期 {d.kpis.cycleDays.previous??'—'} 天 · 本期 {d.kpis.cycleDays.samples} 个样本</span></article>
-      </section>
-      <div className="analytics-insight"><span className="analytics-insight-dot"/><p>{d.kpis.orders.previous===0?`本期新增 ${d.kpis.orders.value} 张委托单，上期为 0，暂不计算增长率。`:`本期开单量较上期${d.kpis.orders.value>=d.kpis.orders.previous?'增加':'减少'} ${Math.abs(d.kpis.orders.value-d.kpis.orders.previous)} 单（${Math.abs(d.kpis.orders.change||0)}%）。`} 本期首次完工 {d.kpis.completed.value} 单，当前尚未维修结束 {d.liveCount} 单。</p></div>
-      <div className="analytics-section-title"><h3>业务趋势</h3><span>期间发生量 · 与上期比较</span></div>
-      <div className="analytics-grid analytics-trends">
-        <ChartPanel title="开单与完工趋势" description={compare?'上期按第 1 天起对齐；具体日期可展开数据查看。':'按天统计新建和首次完工；两条序列对应各自发生时间。'} option={charts.trend} empty={!d.daily.some(r=>r.created||r.completed||r.previous)} columns={['日期','新建','首次完工','对比日期','上期新建']} rows={d.daily.map(r=>[r.date,r.created,r.completed,r.previousDate,r.previous])} height={320}><Button size="small" aria-pressed={compare} onClick={()=>setCompare(v=>!v)}>{compare?'查看开单 / 完工':'对比上期'}</Button></ChartPanel>
-        <ChartPanel title="过去 12 个月开单量" description="固定 12 个月视角；* 为尚未结束的当月。" option={charts.month} empty={!d.monthly.some(r=>r.value)} columns={['月份','新建委托单']} rows={d.monthly.map(r=>[r.month+(r.partial?'（未结束）':''),r.value])} height={320}/>
-      </div>
-      <div className="analytics-section-title"><h3>业务来自哪里</h3><span>所选期间新建委托单</span></div>
-      <div className="analytics-grid">
-        <ChartPanel title="托修单位贡献" description={`按委托单量排序，共 ${d.customerCount} 个已登记单位；显示前 6 名，其余合并。`} option={charts.customers} empty={!d.customers.length} columns={['托修单位','委托单量']} rows={countRows(d.customers)}/>
-        <ChartPanel title="首次记录与历史到店车辆" description="VIN 优先、车牌兜底去重；本期首次出现在系统中的车辆算首次记录，不等同于新客户。" option={charts.mix} empty={!d.kpis.vehicles.value} columns={['车辆类型','车辆数']} rows={countRows(d.vehicleMix)}/>
-        <ChartPanel title="维修方式构成" description="按所选期间新建委托单的当前维修方式分类。" option={charts.execution} empty={!d.execution.length} columns={['维修方式','委托单量']} rows={countRows(d.execution)}/>
-        <ChartPanel title="维修周转分布" description="本期首次完工样本：从建单到首次维修完成的日历时长，含等待时间，不代表实际工时。" option={charts.cycle} empty={!d.kpis.cycleDays.samples} columns={['周转时间','完工单量']} rows={countRows(d.cycleBuckets)}/>
-      </div>
-      <div className="analytics-section-title"><h3>当前运营压力</h3><span>当前快照 · 不随日期筛选变化</span></div>
-      <div className="analytics-grid">
-        <ChartPanel title="未结束工单账龄" description={`当前 ${d.liveCount} 单尚未维修结束，按建单至今时长分组，包含待签字和待派工。`} option={charts.aging} empty={!d.liveCount} columns={['建单时长','未结束单量']} rows={countRows(d.aging)}/>
-        <ChartPanel title="全部委托单当前状态" description="系统内全部有效委托单的当前状态分布，含已维修完成工单。" option={charts.status} empty={!d.status.length} columns={['当前状态','委托单量']} rows={countRows(d.status)}/>
-      </div>
-      {load.error?<Alert type="warning" title="人员负荷暂未更新" description={load.error}/>:load.loading&&!load.data?<Skeleton active/>:<section className="analytics-panel"><WorkerLoadChart workers={workers}/></section>}
-      <footer className="analytics-method"><h4>数据口径</h4><p>数据更新于 {new Date(d.generatedAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})}，点击页面顶部刷新可重新获取。</p><p>开单按系统创建时间统计，排除草稿和待处理纸质委托书；补录历史单会体现在补录日期。首次完工合并任务、维修轮次和操作记录，每张委托单只计一次，返工不重复增加完工单量。</p><p>当前数据中有 {d.quality.missingCompletion} 张已完工单缺少有效完工时间，未计入完工趋势及周期；本期 {d.quality.missingVehicle} 单缺少车辆标识，未计入车辆去重。{d.quality.invalidCreated>0?`${d.quality.invalidCreated} 单缺少有效建单时间，未计入分析。`:''}所有图表均包含系统内测试记录，请在解读正式业务趋势时留意。</p><p>本版展示业务量与周转变化。现有金额尚未确认结算、收款口径，因此暂不展示营业收入、利润或增长预测。</p></footer>
+
+const countRows = (rows:AnalyticsCount[]) => rows.map(r=>[r.name,r.value]);
+
+function OptionalChart({title, icon:Icon, children}:{title:string; icon:LucideIcon; children:()=>ReactNode}) {
+  const [open, setOpen] = useState(false);
+  return <details className="analytics-optional" onToggle={event=>setOpen(event.currentTarget.open)}>
+    <summary><Icon size={17} aria-hidden="true"/>{title}<ChevronDown size={15} aria-hidden="true"/></summary>
+    {open && children()}
+  </details>;
+}
+
+const MonthCharts = memo(function MonthCharts({data:d}:{data:BusinessAnalytics}) {
+  const [compare,setCompare] = useState(false);
+  return <>
+    <ChartPanel variant="main" title={compare ? '本月与上月开单趋势' : '开单与完工趋势'} option={trendOption(d,compare)}
+      description={compare ? '按月内同一天对齐。' : undefined}
+      empty={!d.daily.some(r=>r.created || (compare ? r.previous : r.completed))}
+      columns={['日期','新建','首次完工','对比日期','上月新建']}
+      rows={d.daily.map(r=>[r.date,r.created,r.completed,r.previousDate || '—',r.previous ?? '—'])}>
+      <button type="button" className="analytics-compare" aria-pressed={compare} onClick={()=>setCompare(value=>!value)}><ArrowLeftRight size={14} aria-hidden="true"/>{compare?'查看开单与完工':'对比上月开单'}</button>
+    </ChartPanel>
+    <div className="analytics-grid">
+      <ChartPanel title="托修单位贡献" description={`本期共 ${d.customerCount} 个已登记单位。按新建委托单量列前 6 名，其余合并。`} option={barOption(d.customers,true)}
+        empty={!d.customers.length} columns={['单位','委托单量']} rows={countRows(d.customers)}/>
+      <ChartPanel title="维修周转分布" description="从建单到首次完工的日历天数，包含等待时间。" option={barOption(d.cycleBuckets,false,'#326d86')}
+        empty={!d.kpis.cycleDays.samples} columns={['周转时间','完工单量']} rows={countRows(d.cycleBuckets)}/>
+    </div>
+    <div className="analytics-options">
+      <OptionalChart title="12 个月开单趋势" icon={CalendarRange}>{()=> <ChartPanel variant="inset" title="月度开单量" description="星号表示尚未结束的月份。"
+        option={monthOption(d)} empty={!d.monthly.some(r=>r.value)} columns={['月份','开单量']} rows={d.monthly.map(r=>[r.month+(r.partial?'（未结束）':''),r.value])}/>}</OptionalChart>
+      <OptionalChart title="车辆构成" icon={CarFront}>{()=> <ChartPanel variant="inset" title="首次记录与历史到店车辆" description="按首次记录和历史到店分类，以 VIN 优先、车牌兜底去重。"
+        option={donutOption(d.vehicleMix)} empty={!d.kpis.vehicles.value} columns={['车辆类型','车辆数']} rows={countRows(d.vehicleMix)}/>}</OptionalChart>
+      <OptionalChart title="维修方式" icon={Wrench}>{()=> <ChartPanel variant="inset" title="维修方式构成" description="按本期新建工单的当前维修方式统计。"
+        option={donutOption(d.execution)} empty={!d.execution.length} columns={['维修方式','工单量']} rows={countRows(d.execution)}/>}</OptionalChart>
+    </div>
+  </>;
+});
+
+export function BusinessAnalyticsPage({onOpenOrder}:{onOpenOrder:(id:string)=>void}) {
+  const currentMonth = new Date(Date.now()+8*3600000).toISOString().slice(0,7);
+  const [month,setMonth] = useState(currentMonth);
+  const [metric,setMetric] = useState<OrderMetric>();
+  const report = useBusinessAnalytics(month);
+  const d = report.data;
+  const shorter = Boolean(d?.range.comparableTo && d.range.comparableTo !== d.range.to);
+  function selectMonth(next:string) {
+    setMetric(undefined);
+    setMonth(next);
+  }
+
+  return <section className="business-analytics" aria-label="经营复盘">
+    <div className="analytics-overview">
+      <header className="analytics-report-head">
+        <div className="analytics-controls">
+          <label htmlFor="monthly-analytics-period" className="analytics-month-icon"><CalendarDays size={20} aria-hidden="true"/><span className="analytics-sr-only">统计月份</span></label>
+          <DatePicker id="monthly-analytics-period" picker="month" format="YYYY年MM月" value={dayjs(month+'-01')}
+            maxDate={dayjs(currentMonth+'-01').endOf('month')} allowClear={false} inputReadOnly variant="borderless" suffixIcon={<ChevronDown size={16}/>}
+            onChange={value=>{if(value) selectMonth(value.format('YYYY-MM'));}}/>
+          <RefreshButton loading={report.loading} onClick={report.refresh} label="刷新经营复盘"/>
+        </div>
+        {d && d.range.days > 0 && <div className="analytics-range"><span>{d.range.from} 至 {d.range.to} · 北京时间{month === currentMonth ? '，截至昨天' : '，整月'}</span>
+          <span>对比 {d.range.previousFrom} 至 {d.range.previousTo}</span>
+          {shorter && <span>本期环比截至 {d.range.comparableTo}</span>}
+        </div>}
+      </header>
+      {report.error && <Alert type="error" showIcon title="经营数据加载失败" description={report.error} action={<Button onClick={report.refresh}>重试</Button>}/>}
+      {report.loading && !d && <Skeleton active paragraph={{rows:5}}/>}
+      {d && (d.range.days === 0 ? <Empty description="本月尚无完整自然日，可先查看上月经营数据。">
+        <Button onClick={()=>selectMonth(dayjs(month+'-01').subtract(1,'month').format('YYYY-MM'))}>查看上月</Button>
+      </Empty> :
+        <section className="analytics-kpis" aria-label="经营核心指标">
+          {(['orders','completed'] as const).map(key=><button type="button" key={key} className="analytics-kpi analytics-kpi-action"
+            aria-label={`查看${orderLabels[key]}明细，共 ${d.kpis[key].value} 单`} onClick={()=>setMetric(key)}>
+            <span>{orderLabels[key]}<ArrowUpRight size={15} aria-hidden="true"/></span>
+            <strong>{d.kpis[key].value}<small>单</small></strong><Comparison metric={d.kpis[key]} shortened={shorter}/>
+          </button>)}
+          <article className="analytics-kpi"><span>服务车辆</span><strong>{d.kpis.vehicles.value}<small>辆</small></strong>
+            <Comparison metric={d.kpis.vehicles} shortened={shorter}/></article>
+          <article className="analytics-kpi"><span>维修周转中位数</span><strong>{d.kpis.cycleDays.value ?? '—'}<small>天</small></strong>
+            <span className="analytics-cycle-note">{shorter && `可比 ${d.kpis.cycleDays.comparableValue ?? '—'} 天 / `}上月 {d.kpis.cycleDays.previous ?? '—'} 天 · 本期 {d.kpis.cycleDays.samples} 单</span></article>
+        </section>
+      )}
+    </div>
+    {d && d.range.days > 0 && <>
+      <MonthCharts data={d}/>
+      <details className="analytics-method"><summary>数据口径<ChevronRight size={15} aria-hidden="true"/></summary>
+        <p>开单按系统建单日期统计，历史单补录计入补录当天。统计排除草稿和待处理纸质委托书。首次完工取任务、维修轮次和操作记录中最早的有效完工时间，每张委托单只计一次。</p>
+        <p>全店有 {d.quality.missingCompletion} 张已完工单缺少有效完工时间，完工趋势与周转时长已排除这些记录。本期有 {d.quality.missingVehicle} 单缺少车辆标识，服务车辆数已排除这些记录。{d.quality.invalidCreated > 0 && `全店另有 ${d.quality.invalidCreated} 张单缺少有效建单时间，已排除。`}</p>
+        <p>业务量和周转指标包含系统内的测试记录。营业收入、利润和增长预测需另行确认结算与收款口径。数据更新于 {new Date(d.generatedAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})}。</p>
+      </details>
     </>}
-  </div>;
+    {metric && <AnalyticsOrderList month={month} metric={metric} onClose={()=>setMetric(undefined)} onOpenOrder={onOpenOrder}/>}
+  </section>;
 }

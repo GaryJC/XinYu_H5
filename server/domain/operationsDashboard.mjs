@@ -10,19 +10,17 @@ function materialProgress(parts,ownerId,shared=false) {
  return {waiting:items.some(item=>!item.issuedAt&&!item.preparedAt&&!parts.preparedAt),
   pickup:items.some(item=>!item.issuedAt&&(item.preparedAt||parts.preparedAt))};
 }
-export function buildOperationsDashboard(tasks,people,now=new Date()) {
- const projects=[],workers=new Map();let uncertain=0;
- for(const p of people)if(p.active&&hasRole(p,'technician'))workers.set(p.id,{id:p.id,name:p.name,assignable:true,vehicles:0,counts:empty()});
- const live=tasks.filter(t=>!['草稿','待客户签字','待处理纸质委托书'].includes(t.orderStatus)&&t.stage!=='维修完成');
- for(const task of live){
-  if(task.needsReview){uncertain++;continue;}
+// Used by both the per-person workload chart and the per-order onsite dashboard.
+export function openTaskProjects(task,peopleById,now) {
+ const projects=[];
+ if(task.needsReview||['草稿','待客户签字','待处理纸质委托书'].includes(task.orderStatus)||task.stage==='维修完成')return projects;
   const ids=task.technicianIds??(task.technicianId?[task.technicianId]:[]);
   for(const item of task.items){
    if(item.status==='已完工')continue;
    const external=task.executionMode==='outsourced';
    const ownerId=external?undefined:item.responsibleId||(ids.length===1?ids[0]:undefined);
-   const person=people.find(p=>p.id===ownerId);
-   const ownerName=external?`外包 · ${task.contractor||'未记录'}`:person?.name||item.responsibleName||'待指定';
+   const person=peopleById.get(ownerId);
+   const ownerName=external?`外包 · ${task.contractor||'未记录'}`:person?.name||item.responsibleName||(ids.length===1&&ids[0]===ownerId&&task.technicianName)||'待指定';
    const pause=ownerId&&task.workerPauses?.[ownerId];
    const parts=(task.partsRequests||[]).filter(p=>external||p.ownerId===ownerId).map(p=>({...materialProgress(p,ownerId),recordedAt:p.recordedAt}));
    if(task.partsRequirement)parts.push({...materialProgress(task.partsRequirement,ownerId,!external),recordedAt:task.partsRequirement.recordedAt});
@@ -39,9 +37,31 @@ export function buildOperationsDashboard(tasks,people,now=new Date()) {
    }
    if(task.dueAt&&Date.parse(task.dueAt)<now.getTime())flags.push('overdue');
    const note=inspection?'等待检验':pause?.pauseReason|| (task.stage==='暂停'?task.pauseReason:'') || (waitingParts.length?(pickup?'部分备齐，等待出库':'等待仓库备料'):pickup?'已备齐，等待出库':task.stage==='待接单'?'等待接单':'');
-   const waitingSince=inspection?item.finishAt:pause?.pausedAt||(task.stage==='暂停'?task.pausedAt:undefined)||waitingParts.map(p=>p.recordedAt).filter(Boolean).sort()[0]|| (task.stage==='待接单'?task.assignedAt:undefined);
-   projects.push({key:`${task.orderId}:${task.repairRound||0}:${item.id}`,orderId:task.orderId,plate:task.plate,dispatchNo:task.dispatchNo,createdAt:task.createdAt,name:item.name,ownerId,ownerName,status:inspection?'待检验':flags.includes('paused')?'暂停':item.status,dueAt:task.dueAt,flags,waitingSince,note});
-   if(ownerId&&!workers.has(ownerId))workers.set(ownerId,{id:ownerId,name:ownerName,assignable:!!person?.active&&hasRole(person,'technician'),vehicles:0,counts:empty()});
+   // Keep each wait clock separate when an owner is both paused and short of parts.
+   let partsWaitingSince;
+   for(const part of waitingParts){
+    const time=Date.parse(part.recordedAt);
+    if(Number.isFinite(time)&&(!partsWaitingSince||time<Date.parse(partsWaitingSince)))partsWaitingSince=part.recordedAt;
+   }
+   const waitingSince=inspection?item.finishAt:pause?.pausedAt||(task.stage==='暂停'?task.pausedAt:undefined)||partsWaitingSince|| (task.stage==='待接单'?task.assignedAt:undefined);
+   projects.push({key:`${task.orderId}:${task.repairRound||0}:${item.id}`,orderId:task.orderId,plate:task.plate,dispatchNo:task.dispatchNo,createdAt:task.createdAt,name:item.name,ownerId,ownerName,status:inspection?'待检验':flags.includes('paused')?'暂停':item.status,dueAt:task.dueAt,flags,waitingSince,partsWaitingSince,note});
+  }
+ return projects;
+}
+export function buildOperationsDashboard(tasks,people,now=new Date()) {
+ const peopleById=new Map(people.map(person=>[person.id,person]));
+ const projects=[],workers=new Map();let uncertain=0;
+ for(const p of people)if(p.active&&hasRole(p,'technician'))workers.set(p.id,{id:p.id,name:p.name,assignable:true,vehicles:0,counts:empty()});
+ const live=tasks.filter(t=>!['草稿','待客户签字','待处理纸质委托书'].includes(t.orderStatus)&&t.stage!=='维修完成');
+ for(const task of live){
+  if(task.needsReview){uncertain++;continue;}
+  for(const {partsWaitingSince,...project} of openTaskProjects(task,peopleById,now)){
+   projects.push(project);
+   const {ownerId,ownerName}=project;
+   if(ownerId&&!workers.has(ownerId)){
+    const person=peopleById.get(ownerId);
+    workers.set(ownerId,{id:ownerId,name:ownerName,assignable:!!person?.active&&hasRole(person,'technician'),vehicles:0,counts:empty()});
+   }
   }
  }
  const counts=empty();for(const p of projects)for(const flag of p.flags)counts[flag]++;

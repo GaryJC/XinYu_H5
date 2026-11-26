@@ -2,7 +2,7 @@ import type { VehicleUsageSummary, PageResult, VehicleTrip, VehicleTripDetail, V
 import { request } from '../../shared/api/httpClient';
 const root = '/api/vehicle-trip-requests';
 export const vehicleTripApi = {
-  page:(page:number,scope:string)=>request<PageResult<VehicleTrip>>(`${root}?${new URLSearchParams({page:String(page),pageSize:'20',scope})}`),
+  page:(page:number,scope:string,signal?:AbortSignal)=>request<PageResult<VehicleTrip>>(`${root}?${new URLSearchParams({page:String(page),pageSize:'20',scope})}`,{signal}),
   list: () => request<VehicleTrip[]>(root),
   usageSummary: (month: string, signal?: AbortSignal) =>
     request<VehicleUsageSummary>(`${root}/usage?${new URLSearchParams({ month })}`, { signal }),
